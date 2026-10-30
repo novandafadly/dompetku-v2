@@ -3,7 +3,7 @@
 import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { groupByDay } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
-import { addMonths, monthName } from '@dompetku/domain';
+import { addMonths, monthName, monthYearLabel } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,7 @@ function MonthNav({
         }}
       />
       <p aria-live="polite" className="text-lg font-semibold text-text">
-        {`${monthName(month)} ${month.slice(0, 4)}`}
+        {monthYearLabel(month)}
       </p>
       <IconButton
         label="Bulan berikutnya"

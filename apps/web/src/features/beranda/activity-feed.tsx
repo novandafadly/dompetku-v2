@@ -1,7 +1,7 @@
 'use client';
 
 import { activityFeed } from '@dompetku/demo-data';
-import { dayLabel } from '@dompetku/domain';
+import { dayLabel, timeLabelWIB } from '@dompetku/domain';
 import { MoneyText } from '@/components/ui/money-text';
 import type { BerandaContext } from './context';
 import { BerandaSection } from './section';
@@ -32,7 +32,7 @@ export function ActivityFeed({ state, today }: BerandaContext) {
                   <span className="font-semibold">{a.actor.name}</span> {a.text}
                 </p>
                 <p className="text-sm text-text-muted">
-                  {dayLabel(a.at.slice(0, 10), today)} {a.at.slice(11, 16).replace(':', '.')}
+                  {dayLabel(a.at.slice(0, 10), today)} {timeLabelWIB(a.at)}
                 </p>
               </div>
               {a.amount !== undefined ? <MoneyText value={a.amount} /> : null}
