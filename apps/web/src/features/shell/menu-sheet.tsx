@@ -2,7 +2,6 @@
 
 import { Sheet } from '@/components/ui/sheet';
 import { focusRing } from '@/components/ui/styles';
-import { useDemo } from './demo-provider';
 
 const MENU_ITEMS = ['Trip', 'Kategori', 'Kontak', 'Export', 'Analisis', 'Pengaturan'];
 
@@ -13,9 +12,8 @@ export function MenuSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { ruang } = useDemo();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Menu" tint={ruang}>
+    <Sheet open={open} onOpenChange={onOpenChange} title="Menu">
       <ul className="flex flex-col">
         {MENU_ITEMS.map((name) => (
           <li key={name} className="border-b border-hairline last:border-b-0">
@@ -23,10 +21,10 @@ export function MenuSheet({
             <button
               type="button"
               aria-disabled="true"
-              className={`flex min-h-11 w-full items-center justify-between rounded-field px-2 text-left text-base text-text-muted ${focusRing}`}
+              className={`flex min-h-12 w-full items-center justify-between rounded-field px-2 text-left text-base text-text-muted ${focusRing}`}
             >
               {name}
-              <span className="rounded-pill bg-surface-2 px-2 text-sm text-text-muted">Segera</span>
+              <span className="text-sm">Segera</span>
             </button>
           </li>
         ))}

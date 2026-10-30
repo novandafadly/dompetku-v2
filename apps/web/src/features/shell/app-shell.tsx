@@ -44,7 +44,9 @@ export function AppShell({
             setMenuOpen(true);
           }}
         />
-        <main className="mx-auto max-w-2xl px-4 pt-4 pb-24 lg:pb-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-4 pt-4 pb-tabbar sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">
+          {children}
+        </main>
         <TabBar />
         {menuMounted ? <MenuSheet open={menuOpen} onOpenChange={setMenuOpen} /> : null}
         <Toaster />

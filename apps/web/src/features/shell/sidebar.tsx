@@ -22,12 +22,13 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
   return (
     <aside
       aria-label="Sidebar"
-      className="fixed inset-y-0 left-0 hidden w-62 flex-col gap-4 border-r border-hairline bg-accent-tint p-4 lg:flex"
+      className="fixed inset-y-0 left-0 hidden w-62 flex-col gap-4 border-r border-hairline bg-surface p-4 lg:flex"
     >
-      <p className="text-xl font-bold text-text">DompetKu</p>
+      <p className="px-1 text-xl font-bold text-text">DompetKu</p>
       <SpaceSwitcher />
       <Button
         data-catat-trigger=""
+        className="min-h-12"
         onPointerEnter={preloadCatat}
         onFocus={preloadCatat}
         onClick={() => {
@@ -45,14 +46,18 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
               key={tab}
               href={href(ruang, tab)}
               aria-current={current ? 'page' : undefined}
-              className={`${row} ${current ? 'bg-surface font-semibold text-accent' : 'text-text hover:bg-surface'}`}
+              className={`${row} ${current ? 'bg-surface-2 font-semibold text-accent' : 'text-text-muted hover:bg-surface-2 hover:text-text'}`}
             >
               <Icon size={20} weight={current ? 'fill' : 'regular'} aria-hidden="true" />
               {label}
             </Link>
           );
         })}
-        <button type="button" onClick={onMenu} className={`${row} text-text hover:bg-surface`}>
+        <button
+          type="button"
+          onClick={onMenu}
+          className={`${row} text-text-muted hover:bg-surface-2 hover:text-text`}
+        >
           <ListIcon size={20} aria-hidden="true" />
           Menu
         </button>

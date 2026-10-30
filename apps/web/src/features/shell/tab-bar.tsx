@@ -9,7 +9,7 @@ import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
 
-const slot = `flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 text-sm ${focusRing}`;
+const slot = `flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-field text-sm ${focusRing}`;
 
 export function TabBar() {
   const { ruang, href } = useDemo();
@@ -27,7 +27,7 @@ export function TabBar() {
       onClick={() => {
         openCatat();
       }}
-      className={`${slot} w-14 flex-none rounded-field bg-accent font-semibold text-on-accent`}
+      className={`${slot} my-1 w-14 flex-none rounded-card bg-accent font-semibold text-on-accent active:brightness-90`}
     >
       <PlusIcon size={24} weight="bold" aria-hidden="true" />
       Catat
@@ -40,7 +40,7 @@ export function TabBar() {
         key={tab}
         href={href(ruang, tab)}
         aria-current={current ? 'page' : undefined}
-        className={`${slot} flex-1 ${current ? 'font-semibold text-accent' : 'text-text-muted'}`}
+        className={`${slot} flex-1 ${current ? 'font-semibold text-accent' : 'text-text-muted hover:text-text active:bg-surface-2'}`}
       >
         <Icon size={24} weight={current ? 'fill' : 'regular'} aria-hidden="true" />
         {label}
@@ -53,7 +53,7 @@ export function TabBar() {
     <nav
       aria-label="Tab utama"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed inset-x-0 bottom-0 z-10 flex items-stretch border-t border-hairline bg-surface lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-10 flex items-stretch border-t border-hairline bg-surface px-1 lg:hidden"
     >
       {[...links.slice(0, mid), catat, ...links.slice(mid)]}
     </nav>

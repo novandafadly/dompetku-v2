@@ -8,12 +8,15 @@ import { RUANG_LABEL, tabFromPathname } from './hrefs';
 
 const RUANGS = ['pribadi', 'bersama'] as const;
 
-/** Dua tautan bergaya segmented control; ruang aktif ditandai teks tebal dan aria-current. */
+/** Dua tautan bergaya segmented control; ruang aktif ditandai lapisan naik, batas, teks tebal, dan aria-current. */
 export function SpaceSwitcher() {
   const { ruang, href } = useDemo();
   const tab = tabFromPathname(usePathname());
   return (
-    <nav aria-label="Ruang" className="inline-flex rounded-field bg-surface-2 p-1">
+    <nav
+      aria-label="Ruang"
+      className="inline-flex rounded-field border border-hairline bg-surface p-1"
+    >
       {RUANGS.map((r) => {
         const current = r === ruang;
         return (
@@ -21,8 +24,10 @@ export function SpaceSwitcher() {
             key={r}
             href={href(r, tab)}
             aria-current={current ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center rounded-field px-4 text-base ${focusRing} ${
-              current ? 'bg-surface font-semibold text-text' : 'text-text-muted hover:text-text'
+            className={`inline-flex min-h-11 items-center rounded-field border px-4 text-base ${focusRing} ${
+              current
+                ? 'border-border bg-surface-2 font-semibold text-text'
+                : 'border-transparent text-text-muted hover:text-text active:bg-bg'
             }`}
           >
             {RUANG_LABEL[r]}
