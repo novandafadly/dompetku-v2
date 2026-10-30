@@ -1,4 +1,4 @@
-# DESIGN.md — arah visual DompetKu v2
+# DESIGN.md: arah visual DompetKu v2
 
 Sumber: jawaban pemilik 2026-10-30 ("semuanya jadul", pilih **gelap premium**, warna ruang **ganti, usulkan baru**). Palet di bawah adalah usulan agen atas permintaan pemilik; ganti bebas setelah dilihat di pratinjau. Menggantikan arah "buku kas" (kertas krem, nila/bata, serif) di `docs/spec/ui-ux.md` Lampiran A.
 
