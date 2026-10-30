@@ -143,6 +143,25 @@ test.describe('Catat 390', () => {
     await expect(first).toContainText('35.000');
   });
 
+  test('Bersama expense under ?today shows in Aktivitas as Hari ini, not a future date', async ({
+    page,
+  }) => {
+    await page.goto(`/bersama/beranda?${q}`);
+    await openCatat(page).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Bersama' });
+    await expect(sheet.getByLabel('Nominal', { exact: true })).toBeFocused();
+    await page.keyboard.type('35000');
+    await sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first().click();
+    await sheet.getByRole('button', { name: 'Simpan' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    const feed = page.getByRole('main').getByRole('region', { name: 'Aktivitas' });
+    const first = feed.getByRole('listitem').first();
+    await expect(first).toContainText('Pengeluaran:');
+    await expect(first).toContainText('Hari ini');
+    await expect(first).toContainText(/\d{2}\.\d{2}/);
+  });
+
   test('undo', async ({ page }) => {
     await page.goto(`/pribadi/beranda?${q}`);
     const main = page.getByRole('main');

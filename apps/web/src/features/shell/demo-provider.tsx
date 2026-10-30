@@ -1,6 +1,6 @@
 'use client';
 
-import { addDays, todayWIB } from '@dompetku/domain';
+import { addDays, isoAtWIB, todayWIB } from '@dompetku/domain';
 import type { IsoDate } from '@dompetku/domain';
 import { createDemoStore, createSeed } from '@dompetku/demo-data';
 import type { DemoState, DemoStore, Ruang } from '@dompetku/demo-data';
@@ -67,7 +67,7 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
       hero,
       keypad,
       query: keptQuery(params),
-      store: createDemoStore(createSeed({ today, variant })),
+      store: createDemoStore(createSeed({ today, variant }), { clock: () => isoAtWIB(today) }),
     } as const;
   });
 
