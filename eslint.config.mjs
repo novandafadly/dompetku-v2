@@ -89,7 +89,10 @@ export default tseslint.config(
           ],
           patterns: [
             { group: ['date-fns/*', 'moment/*'], message: 'Pakai packages/domain/src/date.ts.' },
-            { group: ['@radix-ui/*'], message: 'Paket @radix-ui/* hanya boleh diimpor dari apps/web/src/components/ui.' },
+            {
+              group: ['@radix-ui/*'],
+              message: 'Paket @radix-ui/* hanya boleh diimpor dari apps/web/src/components/ui.',
+            },
           ],
         },
       ],
