@@ -82,6 +82,24 @@ export function nowIsoWIB(now: Date = new Date()): string {
   return date + 'T' + time + '+07:00';
 }
 
+/** Jam WIB sekarang dengan tanggal yang ditentukan, untuk jam demo di bawah `?today=`. */
+export function isoAtWIB(date: IsoDate, now: Date = new Date()): string {
+  parse(date);
+  const p = jakartaParts(now);
+  return (
+    date + 'T' + part(p, 'hour') + ':' + part(p, 'minute') + ':' + part(p, 'second') + '+07:00'
+  );
+}
+
+const TIME_RE = /T(\d{2}):(\d{2})/;
+
+/** "10.32": jam dan menit dari stempel waktu ISO. */
+export function timeLabelWIB(iso: string): string {
+  const match = TIME_RE.exec(iso);
+  if (!match) throw new RangeError(`Invalid ISO timestamp: ${iso}`);
+  return (match[1] ?? '') + '.' + (match[2] ?? '');
+}
+
 export function addDays(d: IsoDate, n: number): IsoDate {
   return fromMs(utcMs(d) + n * MS_DAY);
 }
@@ -147,4 +165,10 @@ export function addMonths(ym: string, n: number): string {
 /** "Oktober": nama bulan lengkap tanpa tahun. */
 export function monthName(ym: string): string {
   return MONTH_NAMES[parseMonth(ym).m - 1] ?? '';
+}
+
+/** "Oktober 2026": nama bulan lengkap dengan tahun. */
+export function monthYearLabel(ym: string): string {
+  const { y, m } = parseMonth(ym);
+  return (MONTH_NAMES[m - 1] ?? '') + ' ' + String(y);
 }

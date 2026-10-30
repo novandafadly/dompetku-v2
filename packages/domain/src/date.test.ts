@@ -5,10 +5,13 @@ import {
   dayLabel,
   daysInclusive,
   endOfMonth,
+  isoAtWIB,
   monthName,
+  monthYearLabel,
   nowIsoWIB,
   nowTimeWIB,
   shortDateLabel,
+  timeLabelWIB,
   todayWIB,
 } from './date';
 
@@ -101,5 +104,41 @@ describe('addMonths / monthName', () => {
   it('rejects invalid months', () => {
     expect(() => monthName('2026-13')).toThrow(RangeError);
     expect(() => addMonths('2026-1', 1)).toThrow(RangeError);
+  });
+});
+
+describe('isoAtWIB', () => {
+  it('keeps the given date with the WIB time of day', () => {
+    expect(isoAtWIB('2026-10-17', new Date('2026-10-30T03:32:09Z'))).toBe(
+      '2026-10-17T10:32:09+07:00',
+    );
+  });
+  it('uses the WIB clock even when UTC is still the previous day', () => {
+    expect(isoAtWIB('2026-10-31', new Date('2026-10-30T17:05:00Z'))).toBe(
+      '2026-10-31T00:05:00+07:00',
+    );
+  });
+  it('rejects an invalid date', () => {
+    expect(() => isoAtWIB('2026-02-30')).toThrow(RangeError);
+  });
+});
+
+describe('timeLabelWIB', () => {
+  it('formats HH.mm from an ISO timestamp', () => {
+    expect(timeLabelWIB('2026-10-30T10:32:09+07:00')).toBe('10.32');
+    expect(timeLabelWIB('2026-10-30T00:05:00+07:00')).toBe('00.05');
+  });
+  it('rejects a malformed timestamp', () => {
+    expect(() => timeLabelWIB('nope')).toThrow(RangeError);
+  });
+});
+
+describe('monthYearLabel', () => {
+  it('formats full month name and year', () => {
+    expect(monthYearLabel('2026-10')).toBe('Oktober 2026');
+    expect(monthYearLabel('2027-01')).toBe('Januari 2027');
+  });
+  it('rejects an invalid month', () => {
+    expect(() => monthYearLabel('2026-13')).toThrow(RangeError);
   });
 });
