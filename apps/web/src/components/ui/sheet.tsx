@@ -73,6 +73,13 @@ export function Sheet({
               target.focus();
             }
           }}
+          onEscapeKeyDown={(e) => {
+            // Radix mendengar Escape di fase capture; komponen yang menangani Escape sendiri
+            // (mis. Combobox) menandai dirinya agar sheet tidak ikut tertutup.
+            if (e.target instanceof Element && e.target.closest('[data-own-escape]')) {
+              e.preventDefault();
+            }
+          }}
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             returnFocusTo.current?.focus();

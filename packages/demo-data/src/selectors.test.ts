@@ -337,6 +337,24 @@ describe('suggestCategories', () => {
   });
 });
 
+describe('seed', () => {
+  it('latest live Pribadi operasional entry is on BCA (default Catat wallet)', () => {
+    const s = full();
+    const operasional = new Set(
+      s.accounts
+        .filter((a) => a.ruang === 'pribadi' && a.pocket === 'operasional')
+        .map((a) => a.id),
+    );
+    const latest = s.entries
+      .filter((e) => e.voidedAt === undefined && operasional.has(e.accountId))
+      .reduce<Entry | undefined>(
+        (m, e) => (m === undefined || e.createdAt > m.createdAt ? e : m),
+        undefined,
+      );
+    expect(latest?.accountId).toBe('acc-bca');
+  });
+});
+
 describe('store', () => {
   it('addEntry with a seen clientId returns the existing entry without duplicating', () => {
     const store = createDemoStore(full(), { clock: () => '2026-10-17T09:00:00+07:00' });

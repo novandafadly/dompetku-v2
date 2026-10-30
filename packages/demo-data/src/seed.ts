@@ -697,6 +697,21 @@ export function createSeed(opts: { today: IsoDate; variant: 'empty' | 'full' }):
     }
   }
 
+  // BCA dompet harian utama: entri Pribadi operasional terakhir hari ini selalu di BCA,
+  // sehingga dompet bawaan sheet Catat (terakhir dipakai) = BCA. Ditaruh setelah semua
+  // undian lain agar urutan acak entri sebelumnya tidak bergeser.
+  push({
+    ruang: 'pribadi',
+    kind: 'expense',
+    occurredOn: today,
+    createdBy: NOVANDA.id,
+    accountId: 'acc-bca',
+    categoryId: 'cp-kopi',
+    amount: 22_000,
+    description: 'Kopi sore (QRIS)',
+    hours: [21, 21],
+  });
+
   const budgets: Budget[] = [];
   for (let off = -2; off <= 0; off += 1) {
     const month = monthStart(today, off);

@@ -1,7 +1,7 @@
+import { parseRupiah } from '@dompetku/domain';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-// Di seed tanggal ini dompet operasional Pribadi terakhir dipakai = BCA (bawaan sheet).
-const q = 'today=2026-10-16';
+const q = 'today=2026-10-17';
 
 /** Hitung aksi pointer di seluruh halaman (definisi "ketukan" ui-ux R3). */
 async function countTaps(page: Page) {
@@ -64,15 +64,49 @@ test.describe('Catat 390', () => {
 
   test('undo', async ({ page }) => {
     await page.goto(`/pribadi/beranda?${q}`);
-    const recent = page.getByRole('main').getByRole('region', { name: 'Terakhir' });
+    const main = page.getByRole('main');
+    const recent = main.getByRole('region', { name: 'Terakhir' });
     await expect(recent.getByRole('listitem')).toHaveCount(5);
     const before = await recent.innerText();
+    const saldoRow = main.getByRole('table').getByRole('row', { name: /Saldo operasional/ });
+    const saldo = async () => {
+      const match = /Rp\s?[\d.]+/.exec(await saldoRow.innerText());
+      const amount = match ? parseRupiah(match[0]) : null;
+      if (amount === null) throw new Error('saldo tidak terbaca');
+      return amount;
+    };
+    const saldo0 = await saldo();
 
     await saveFirstChip(page);
     await expect(recent).not.toHaveText(before);
+    await expect.poll(saldo).toBe(saldo0 - 35_000);
 
     await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
     await expect.poll(() => recent.innerText()).toBe(before);
+    await expect.poll(saldo).toBe(saldo0);
+  });
+
+  test('Escape in Kategori lain closes only the search', async ({ page }) => {
+    await page.goto(`/pribadi/beranda?${q}`);
+    await openCatat(page).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await page.keyboard.type('35000');
+    const more = sheet.getByRole('button', { name: 'Kategori lain…' });
+    await more.click();
+    await expect(sheet.getByRole('combobox', { name: 'Cari kategori' })).toBeFocused();
+    await page.keyboard.press('Escape');
+
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('combobox', { name: 'Cari kategori' })).toHaveCount(0);
+    await expect(sheet.getByLabel('Nominal', { exact: true })).toHaveValue('35.000');
+    await expect(more).toBeFocused();
+
+    await more.click();
+    await sheet.getByRole('button', { name: 'Batal' }).click();
+    await expect(sheet.getByRole('combobox', { name: 'Cari kategori' })).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
   test('switch space resets wallet and category', async ({ page }) => {

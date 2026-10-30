@@ -22,13 +22,16 @@ export function CategoryChips({
   onChange: (categoryId: string) => void;
 }) {
   const [searching, setSearching] = useState(false);
-  const refocus = useRef(false);
+  // Setelah pencarian ditutup, fokus pindah ke chip terpilih (pilih) atau "Kategori lain…" (batal).
+  const refocus = useRef<'chosen' | 'more' | null>(null);
   const groupRef = useRef<HTMLDivElement>(null);
-  // Setelah memilih dari pencarian, fokus pindah ke chip terpilih (combobox sudah hilang).
+  const moreRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (!refocus.current) return;
-    refocus.current = false;
-    groupRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    const target = refocus.current;
+    if (target === null) return;
+    refocus.current = null;
+    if (target === 'more') moreRef.current?.focus();
+    else groupRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
   const extra =
     value !== undefined && !chips.some((c) => c.id === value)
@@ -61,11 +64,16 @@ export function CategoryChips({
           onSelect={(id) => {
             onChange(id);
             setSearching(false);
-            refocus.current = true;
+            refocus.current = 'chosen';
+          }}
+          onCancel={() => {
+            setSearching(false);
+            refocus.current = 'more';
           }}
         />
       ) : (
         <button
+          ref={moreRef}
           type="button"
           onClick={() => {
             setSearching(true);

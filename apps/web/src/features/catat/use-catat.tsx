@@ -126,11 +126,11 @@ export function useCatat({ state, store, today, ruang, hourWIB }: UseCatatArgs) 
     update((d) => clear({ ...d, type }, { category: true, counter: true }));
     setChips(chipsFor(state, draft.ruang, type, hour));
   };
-  /** Dompet dan kategori milik ruang lama tidak sah di ruang baru; nominal tetap. */
+  /** Dompet dan kategori milik ruang lama tidak sah di ruang baru; nominal tetap. Ruang baru = niat baru, jadi clientId baru. */
   const switchRuang = (next: Ruang) => {
     update((d) =>
       clear(
-        { ...d, ruang: next, accountId: defaultAccountId(state, next) },
+        { ...d, ruang: next, accountId: defaultAccountId(state, next), clientId: newClientId() },
         { category: true, counter: true },
       ),
     );

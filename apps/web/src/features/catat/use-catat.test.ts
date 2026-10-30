@@ -4,8 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { useCatat } from './use-catat';
 
-// Di seed tanggal ini dompet operasional Pribadi terakhir dipakai = BCA.
-const TODAY = '2026-10-16';
+const TODAY = '2026-10-17';
 const full = (): DemoState => createSeed({ today: TODAY, variant: 'full' });
 
 function setup(store: DemoStore, ruang: Ruang) {
@@ -44,13 +43,14 @@ describe('useCatat', () => {
     expect(result.current.draft.categoryId).toBeUndefined();
   });
 
-  it('switchRuang resets wallet and category to the new ruang, keeps the amount', () => {
+  it('switchRuang resets wallet, category and clientId; keeps the amount', () => {
     const store = createDemoStore(full());
     const { result } = setup(store, 'bersama');
     expect(result.current.accounts.map((a) => a.name)).toEqual(['Kas Rumah', 'Tabungan Liburan']);
     act(() => {
       result.current.setAmount(35_000);
     });
+    const id0 = result.current.draft.clientId;
     const bersamaCat = result.current.chips[0];
     if (!bersamaCat) throw new Error('no chip');
     act(() => {
@@ -65,6 +65,8 @@ describe('useCatat', () => {
     expect(d.accountId).toBe('acc-bca');
     expect(d.categoryId).toBeUndefined();
     expect(d.amount).toBe(35_000);
+    // Ruang baru = niat baru: kunci idempoten baru.
+    expect(d.clientId).not.toBe(id0);
     expect(result.current.chips.every((c) => c.ruang === 'pribadi')).toBe(true);
     expect(result.current.canSave).toBe(false);
   });
