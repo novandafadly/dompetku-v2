@@ -24,6 +24,20 @@ pnpm e2e            # butuh `pnpm build` lebih dulu
 pnpm --filter @dompetku/web dev
 ```
 
+## Pratinjau
+
+Prototipe M0a bisa dijalankan lokal dengan data demo (tanpa DB):
+
+```sh
+pnpm install
+NEXT_PUBLIC_PROTOTYPE=1 pnpm build
+NEXT_PUBLIC_PROTOTYPE=1 pnpm --filter @dompetku/web start
+```
+
+Buka `http://localhost:3000`. `NEXT_PUBLIC_PROTOTYPE` dibaca saat build, jadi setel di kedua perintah.
+
+Pratinjau daring lewat Vercel dijelaskan di `docs/adr/0003-preview.md`. Formulir penilaian ada di `docs/review/m0a-penilaian.md`.
+
 ## Struktur
 
 - `apps/web` Next.js (App Router)
