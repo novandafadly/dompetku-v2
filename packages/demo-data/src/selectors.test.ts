@@ -5,9 +5,11 @@ import {
   activityFeed,
   balances,
   budgetProgress,
+  entryTitle,
   groupByDay,
   monthSummary,
   safeToSpend,
+  signedAmount,
   suggestCategories,
 } from './selectors';
 import { createDemoStore } from './store';
@@ -676,5 +678,71 @@ describe('monthSummary', () => {
     expect(r.selisih).toBe(r.pemasukan - r.pengeluaran);
     expect(r.kantor).toBeGreaterThan(0);
     expect(r.transfer).toBeGreaterThan(0);
+  });
+});
+
+describe('entryTitle', () => {
+  const base = {
+    id: 'x',
+    ruang: 'pribadi',
+    accountId: 'acc-bca',
+    amount: 1000,
+    occurredOn: TODAY,
+    createdAt: '2026-10-17T09:00:00+07:00',
+    createdBy: 'm1',
+  } as const;
+  const e = (over: Partial<Entry>): Entry => ({ ...base, kind: 'expense', ...over });
+
+  it('prefers description, then category name, then a fallback', () => {
+    const s = full();
+    const cat = s.categories[0];
+    if (!cat) throw new Error('no category');
+    expect(entryTitle(s, e({ description: 'Bakso', categoryId: cat.id }))).toBe('Bakso');
+    expect(entryTitle(s, e({ categoryId: cat.id }))).toBe(cat.name);
+    expect(entryTitle(s, e({}))).toBe('Tanpa kategori');
+  });
+  it('labels opening balance and transfer', () => {
+    const s = full();
+    expect(entryTitle(s, e({ kind: 'opening_balance' }))).toBe('Saldo awal');
+    expect(entryTitle(s, e({ kind: 'transfer' }))).toBe('Pindah dompet');
+    expect(entryTitle(s, e({ kind: 'transfer', description: 'Isi e-wallet' }))).toBe(
+      'Isi e-wallet',
+    );
+  });
+  it('space_transfer: sharedNote, then description, then direction fallback', () => {
+    const s = full();
+    const st = (over: Partial<Entry>) => e({ kind: 'space_transfer', direction: 'in', ...over });
+    expect(entryTitle(s, st({ sharedNote: 'Bulanan', description: 'x' }))).toBe('Bulanan');
+    expect(entryTitle(s, st({ description: 'Catatan saya' }))).toBe('Catatan saya');
+    expect(entryTitle(s, st({}))).toBe('Setoran dari Pribadi');
+    expect(entryTitle(s, st({ direction: 'out' }))).toBe('Setoran ke Bersama');
+  });
+});
+
+describe('signedAmount', () => {
+  const mk = (over: Partial<Entry>): Entry => ({
+    id: 'x',
+    ruang: 'pribadi',
+    accountId: 'acc-bca',
+    kind: 'expense',
+    amount: 5000,
+    occurredOn: TODAY,
+    createdAt: '2026-10-17T09:00:00+07:00',
+    createdBy: 'm1',
+    ...over,
+  });
+
+  it('signs by kind', () => {
+    expect(signedAmount(mk({ kind: 'income' }))).toEqual({ value: 5000, kind: 'income' });
+    expect(signedAmount(mk({ kind: 'expense' }))).toEqual({ value: -5000, kind: 'expense' });
+    expect(signedAmount(mk({ kind: 'transfer' }))).toEqual({ value: 5000, kind: 'neutral' });
+    expect(signedAmount(mk({ kind: 'opening_balance' }))).toEqual({
+      value: 5000,
+      kind: 'neutral',
+    });
+  });
+  it('space_transfer: in is positive, out is negative', () => {
+    expect(signedAmount(mk({ kind: 'space_transfer', direction: 'in' })).value).toBe(5000);
+    expect(signedAmount(mk({ kind: 'space_transfer', direction: 'out' })).value).toBe(-5000);
   });
 });

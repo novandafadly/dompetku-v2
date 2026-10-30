@@ -1,29 +1,13 @@
 'use client';
 
 import { ClockIcon } from '@phosphor-icons/react';
+import { entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import type { Route } from 'next';
 import Link from 'next/link';
-import { MoneyText, type MoneyKind } from '@/components/ui/money-text';
+import { MoneyText } from '@/components/ui/money-text';
 import { focusRing } from '@/components/ui/styles';
 import { accountName, entryCategoryName } from './filters';
-
-export function entryTitle(state: DemoState, e: Entry): string {
-  switch (e.kind) {
-    case 'opening_balance':
-      return 'Saldo awal';
-    case 'transfer':
-      return e.description ?? 'Pindah dompet';
-    case 'space_transfer':
-      return (
-        e.sharedNote ??
-        e.description ??
-        (e.direction === 'in' ? 'Setoran dari Pribadi' : 'Setoran ke Bersama')
-      );
-    default:
-      return e.description ?? entryCategoryName(state, e) ?? 'Tanpa kategori';
-  }
-}
 
 export function entryKindLabel(state: DemoState, e: Entry): string {
   switch (e.kind) {
@@ -35,19 +19,6 @@ export function entryKindLabel(state: DemoState, e: Entry): string {
       return 'Antar ruang';
     default:
       return entryCategoryName(state, e) ?? 'Tanpa kategori';
-  }
-}
-
-export function signedAmount(e: Entry): { value: number; kind: MoneyKind } {
-  switch (e.kind) {
-    case 'income':
-      return { value: e.amount, kind: 'income' };
-    case 'expense':
-      return { value: -e.amount, kind: 'expense' };
-    case 'space_transfer':
-      return { value: e.direction === 'in' ? e.amount : -e.amount, kind: 'neutral' };
-    default:
-      return { value: e.amount, kind: 'neutral' };
   }
 }
 

@@ -1,12 +1,12 @@
 'use client';
 
 import { CaretLeftIcon } from '@phosphor-icons/react';
-import { balances, groupByDay } from '@dompetku/demo-data';
-import type { Account, DemoState, Entry } from '@dompetku/demo-data';
+import { balances, entryTitle, groupByDay, signedAmount } from '@dompetku/demo-data';
+import type { Account, AmountKind, DemoState, Entry } from '@dompetku/demo-data';
 import type { Route } from 'next';
 import Link from 'next/link';
 import { useId } from 'react';
-import { MoneyText, type MoneyKind } from '@/components/ui/money-text';
+import { MoneyText } from '@/components/ui/money-text';
 import { focusRing } from '@/components/ui/styles';
 import { EmptyState } from '@/components/ui/state';
 import { POCKET_LABEL, WALLET_TYPE_LABEL, type DompetContext } from './context';
@@ -16,37 +16,12 @@ function categoryName(state: DemoState, e: Entry): string | null {
   return state.categories.find((c) => c.id === e.categoryId)?.name ?? null;
 }
 
-function title(state: DemoState, e: Entry): string {
-  switch (e.kind) {
-    case 'opening_balance':
-      return 'Saldo awal';
-    case 'transfer':
-      return e.description ?? 'Pindah dompet';
-    case 'space_transfer':
-      return (
-        e.sharedNote ??
-        e.description ??
-        (e.direction === 'in' ? 'Setoran dari Pribadi' : 'Setoran ke Bersama')
-      );
-    default:
-      return e.description ?? categoryName(state, e) ?? 'Tanpa kategori';
-  }
-}
-
 /** Efek entri pada dompet ini: transfer keluar mengurangi, transfer masuk menambah. */
-function effect(e: Entry, accountId: string): { value: number; kind: MoneyKind } {
-  switch (e.kind) {
-    case 'income':
-      return { value: e.amount, kind: 'income' };
-    case 'expense':
-      return { value: -e.amount, kind: 'expense' };
-    case 'transfer':
-      return { value: e.accountId === accountId ? -e.amount : e.amount, kind: 'neutral' };
-    case 'space_transfer':
-      return { value: e.direction === 'in' ? e.amount : -e.amount, kind: 'neutral' };
-    default:
-      return { value: e.amount, kind: 'neutral' };
+function effect(e: Entry, accountId: string): { value: number; kind: AmountKind } {
+  if (e.kind === 'transfer') {
+    return { value: e.accountId === accountId ? -e.amount : e.amount, kind: 'neutral' };
   }
+  return signedAmount(e);
 }
 
 export function AccountHistory({
@@ -110,7 +85,7 @@ export function AccountHistory({
                     >
                       <span className="min-w-0">
                         <span className="block text-base break-words text-text">
-                          {title(state, e)}
+                          {entryTitle(state, e)}
                         </span>
                         {category !== null && e.description !== undefined ? (
                           <span className="block text-sm break-words text-text-muted">

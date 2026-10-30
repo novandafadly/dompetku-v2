@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeftIcon, ProhibitIcon } from '@phosphor-icons/react';
+import { entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { Entry } from '@dompetku/demo-data';
 import { dayLabel, formatRupiah } from '@dompetku/domain';
 import Link from 'next/link';
@@ -11,7 +12,7 @@ import { MoneyText } from '@/components/ui/money-text';
 import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import { RUANG_NAME, type TransaksiContext } from './context';
-import { entryKindLabel, entryTitle, signedAmount } from './entry-row';
+import { entryKindLabel } from './entry-row';
 import { accountName } from './filters';
 import { VoidDialog } from './void-dialog';
 
