@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayLabel, daysInclusive, endOfMonth, nowTimeWIB, todayWIB } from './date';
+import {
+  addDays,
+  dayLabel,
+  daysInclusive,
+  endOfMonth,
+  nowIsoWIB,
+  nowTimeWIB,
+  todayWIB,
+} from './date';
 
 describe('todayWIB', () => {
   it('uses Asia/Jakarta day boundary', () => {
@@ -55,5 +63,16 @@ describe('invalid IsoDate', () => {
     expect(() => addDays('2026-13-01', 1)).toThrow(RangeError);
     expect(() => endOfMonth('2026-02-30')).toThrow(RangeError);
     expect(() => dayLabel('nope', '2026-10-31')).toThrow(RangeError);
+  });
+});
+
+describe('nowIsoWIB', () => {
+  it('formats with +07:00 offset', () => {
+    expect(nowIsoWIB(new Date('2026-10-30T03:32:09Z'))).toBe('2026-10-30T10:32:09+07:00');
+  });
+  it('rolls the date across UTC midnight', () => {
+    expect(nowIsoWIB(new Date('2026-10-30T17:05:00Z'))).toBe('2026-10-31T00:05:00+07:00');
+    expect(nowIsoWIB(new Date('2026-12-31T16:59:59Z'))).toBe('2026-12-31T23:59:59+07:00');
+    expect(nowIsoWIB(new Date('2026-12-31T17:00:00Z'))).toBe('2027-01-01T00:00:00+07:00');
   });
 });

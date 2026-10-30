@@ -49,6 +49,7 @@ const jakartaFmt = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
+  second: '2-digit',
   hourCycle: 'h23',
 });
 
@@ -72,6 +73,13 @@ export function todayWIB(now: Date = new Date()): IsoDate {
 export function nowTimeWIB(now: Date = new Date()): string {
   const p = jakartaParts(now);
   return part(p, 'hour') + '.' + part(p, 'minute');
+}
+
+export function nowIsoWIB(now: Date = new Date()): string {
+  const p = jakartaParts(now);
+  const date = part(p, 'year') + '-' + part(p, 'month') + '-' + part(p, 'day');
+  const time = part(p, 'hour') + ':' + part(p, 'minute') + ':' + part(p, 'second');
+  return date + 'T' + time + '+07:00';
 }
 
 export function addDays(d: IsoDate, n: number): IsoDate {

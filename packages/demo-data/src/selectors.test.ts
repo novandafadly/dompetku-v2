@@ -218,6 +218,22 @@ describe('safeToSpend', () => {
   });
 });
 
+describe('bill vs wajib budget', () => {
+  it('never counts one obligation as both an unposted bill and a wajib budget', () => {
+    const s = full();
+    const wajib = new Set(
+      s.budgets.filter((b) => b.wajib).map((b) => b.ruang + ':' + b.categoryId),
+    );
+    const unposted = s.bills.filter((b) => !b.posted);
+    expect(unposted.length).toBeGreaterThan(0);
+    for (const bill of unposted) {
+      const paid = s.entries.filter((e) => e.ruang === bill.ruang && e.description === bill.name);
+      expect(paid.length).toBeGreaterThan(0);
+      for (const e of paid) expect(wajib.has(e.ruang + ':' + (e.categoryId ?? ''))).toBe(false);
+    }
+  });
+});
+
 describe('groupByDay', () => {
   it('sorts descending, nets income minus expense, labels via dayLabel', () => {
     const s = full();
@@ -305,6 +321,20 @@ describe('suggestCategories', () => {
 });
 
 describe('store', () => {
+  it('voids and restores both legs of a space_transfer, and default clock is +07:00', () => {
+    const store = createDemoStore(full());
+    const leg = store.getState().entries.find((e) => e.kind === 'space_transfer');
+    if (!leg) throw new Error('no leg');
+    const legs = () => store.getState().entries.filter((e) => e.linkId === leg.linkId);
+    expect(legs()).toHaveLength(2);
+    store.voidEntry(leg.id);
+    expect(legs().every((e) => e.voidedAt !== undefined)).toBe(true);
+    expect(legs()[0]?.voidedAt).toMatch(/\+07:00$/);
+    const other = legs().find((e) => e.id !== leg.id);
+    store.restoreEntry(other?.id ?? '');
+    expect(legs().every((e) => e.voidedAt === undefined)).toBe(true);
+  });
+
   it('voidEntry then restoreEntry restores balances; updates are immutable', () => {
     const clock = () => '2026-10-17T09:00:00+07:00';
     const store = createDemoStore(full(), { clock });

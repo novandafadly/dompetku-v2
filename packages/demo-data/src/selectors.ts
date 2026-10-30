@@ -129,6 +129,12 @@ function hourDistance(a: number, b: number): number {
   return Math.min(d, 24 - d);
 }
 
+function compareNames(a: string, b: string): number {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 export function suggestCategories(
   state: DemoState,
   ruang: Ruang,
@@ -153,7 +159,7 @@ export function suggestCategories(
     .filter((c) => c.ruang === ruang && c.type === 'expense')
     .sort((a, b) => {
       const diff = (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0);
-      return diff !== 0 ? diff : a.name.localeCompare(b.name, 'id');
+      return diff !== 0 ? diff : compareNames(a.name, b.name);
     })
     .slice(0, SUGGESTION_COUNT);
 }

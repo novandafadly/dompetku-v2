@@ -1,3 +1,4 @@
+import { nowIsoWIB } from '@dompetku/domain';
 import type { Rupiah } from '@dompetku/domain';
 import type { Account, DemoState, Entry } from './types';
 
@@ -15,13 +16,22 @@ export interface DemoStoreOptions {
 }
 
 export function createDemoStore(seed: DemoState, opts: DemoStoreOptions = {}): DemoStore {
-  const clock = opts.clock ?? (() => new Date().toISOString());
+  const clock = opts.clock ?? (() => nowIsoWIB());
   let state = seed;
   const listeners = new Set<() => void>();
 
   const commit = (next: DemoState) => {
     state = next;
     for (const fn of [...listeners]) fn();
+  };
+
+  const linked = (id: string): Set<string> => {
+    const ids = new Set([id]);
+    const self = state.entries.find((e) => e.id === id);
+    if (self?.linkId !== undefined) {
+      for (const e of state.entries) if (e.linkId === self.linkId) ids.add(e.id);
+    }
+    return ids;
   };
 
   const nextEntryId = () => 'e' + String(state.entries.length + 1);
@@ -41,18 +51,22 @@ export function createDemoStore(seed: DemoState, opts: DemoStoreOptions = {}): D
     },
     voidEntry(id) {
       const at = clock();
-      if (!state.entries.some((e) => e.id === id && e.voidedAt === undefined)) return;
+      const ids = linked(id);
+      if (!state.entries.some((e) => ids.has(e.id) && e.voidedAt === undefined)) return;
       commit({
         ...state,
-        entries: state.entries.map((e) => (e.id === id ? { ...e, voidedAt: at } : e)),
+        entries: state.entries.map((e) =>
+          ids.has(e.id) && e.voidedAt === undefined ? { ...e, voidedAt: at } : e,
+        ),
       });
     },
     restoreEntry(id) {
-      if (!state.entries.some((e) => e.id === id && e.voidedAt !== undefined)) return;
+      const ids = linked(id);
+      if (!state.entries.some((e) => ids.has(e.id) && e.voidedAt !== undefined)) return;
       commit({
         ...state,
         entries: state.entries.map((e) => {
-          if (e.id !== id) return e;
+          if (!ids.has(e.id) || e.voidedAt === undefined) return e;
           const restored = { ...e };
           delete restored.voidedAt;
           return restored;

@@ -697,7 +697,7 @@ export function createSeed(opts: { today: IsoDate; variant: 'empty' | 'full' }):
     mk('pribadi', 'cp-transport', 700_000, false);
     mk('pribadi', 'cp-langganan', 200_000, true);
     mk('bersama', 'cb-sewa', 4_500_000, true);
-    mk('bersama', 'cb-listrik', 800_000, true);
+    mk('bersama', 'cb-listrik', 800_000, false);
     mk('bersama', 'cb-dapur', 3_000_000, false);
     mk('bersama', 'cb-makanluar', 1_000_000, false);
   }
