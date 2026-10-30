@@ -1,6 +1,6 @@
 'use client';
 
-import { addDays, isoAtWIB, todayWIB } from '@dompetku/domain';
+import { addDays, isoAtWIB, nowIsoWIB, todayWIB } from '@dompetku/domain';
 import type { IsoDate } from '@dompetku/domain';
 import { createDemoStore, createSeed } from '@dompetku/demo-data';
 import type { DemoState, DemoStore, Ruang } from '@dompetku/demo-data';
@@ -53,6 +53,21 @@ function validToday(raw: string | null): IsoDate {
   }
 }
 
+/**
+ * Jam toko demo: tanggal mengikuti `today`, jam mengikuti WIB sekarang. Entri baru tidak
+ * boleh terurut di bawah entri yang sudah ada di hari yang sama (jam seed bisa lebih
+ * larut dari jam sekarang), jadi hasilnya minimal satu detik setelah createdAt terbaru.
+ */
+function demoClock(today: IsoDate, store: () => DemoStore): () => string {
+  return () => {
+    const candidate = isoAtWIB(today);
+    let latest = '';
+    for (const e of store().getState().entries) if (e.createdAt > latest) latest = e.createdAt;
+    if (candidate > latest) return candidate;
+    return nowIsoWIB(new Date(Date.parse(latest) + 1000));
+  };
+}
+
 function DemoProviderInner({ children }: { children: ReactNode }) {
   const params = useSearchParams();
   const pathname = usePathname();
@@ -62,13 +77,10 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
     const variant = params.get('seed') === 'empty' ? 'empty' : 'full';
     const hero = params.get('hero') === 'sans' ? 'sans' : 'serif';
     const keypad = params.get('keypad') === 'app' ? 'app' : 'os';
-    return {
-      today,
-      hero,
-      keypad,
-      query: keptQuery(params),
-      store: createDemoStore(createSeed({ today, variant }), { clock: () => isoAtWIB(today) }),
-    } as const;
+    const store: DemoStore = createDemoStore(createSeed({ today, variant }), {
+      clock: demoClock(today, () => store),
+    });
+    return { today, hero, keypad, query: keptQuery(params), store } as const;
   });
 
   useLayoutEffect(() => {
