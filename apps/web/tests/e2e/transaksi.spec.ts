@@ -254,6 +254,12 @@ test.describe('Transaksi 390', () => {
     await main.getByRole('radio', { name: 'Ringkasan' }).click();
     const s = monthSummary(full, 'pribadi', '2026-10');
     await expect(main.getByText('Oktober 2026')).toBeVisible();
+    // Angka tertulis langsung (dari halaman yang tampil), bukan hanya dari selector.
+    await expect(main.getByRole('row', { name: /Pengeluaran/ })).toContainText('Rp 2.427.000');
+    await expect(main.getByRole('row', { name: /Selisih/ })).toContainText('\u2212Rp 2.427.000');
+    await expect(
+      main.getByText('Tidak termasuk: Kas kantor Rp 334.000, Transfer internal Rp 1.000.000'),
+    ).toBeVisible();
     await expect(main.getByRole('row', { name: /Pemasukan/ })).toContainText(
       formatRupiah(s.pemasukan),
     );
