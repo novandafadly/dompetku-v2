@@ -43,16 +43,16 @@ test.describe('mobile 390', () => {
     await expect(header.getByText('Bersama', { exact: true })).toBeVisible();
   });
 
-  test('query seed/today/hero ikut saat pindah tab dan ruang', async ({ page }) => {
-    await page.goto('/pribadi/beranda?seed=full&today=2026-10-30&hero=sans');
+  test('query seed/today/theme ikut saat pindah tab dan ruang', async ({ page }) => {
+    await page.goto('/pribadi/beranda?seed=full&today=2026-10-30&theme=light');
     await page
       .getByRole('navigation', { name: 'Tab utama' })
       .getByRole('link', { name: 'Dompet' })
       .click();
-    await expect(page).toHaveURL(/\/pribadi\/dompet\?seed=full&today=2026-10-30&hero=sans$/);
+    await expect(page).toHaveURL(/\/pribadi\/dompet\?seed=full&today=2026-10-30&theme=light$/);
     await page.getByRole('banner').getByRole('link', { name: 'Bersama' }).click();
-    await expect(page).toHaveURL(/\/bersama\/dompet\?seed=full&today=2026-10-30&hero=sans$/);
-    await expect(page.locator('html')).toHaveAttribute('data-hero', 'sans');
+    await expect(page).toHaveURL(/\/bersama\/dompet\?seed=full&today=2026-10-30&theme=light$/);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   });
 
   test('Menu membuka sheet; item non-M0a berlabel Segera', async ({ page }) => {
@@ -152,20 +152,6 @@ test('c di dalam field teks tidak membuka Catat', async ({ page }) => {
   await page.keyboard.press('c');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#probe')).toHaveValue('c');
-});
-
-test('?hero mengganti font angka hero', async ({ page }) => {
-  const family = async (hero: string) => {
-    await page.goto(`/pribadi/beranda?hero=${hero}`);
-    await expect(page.locator('html')).toHaveAttribute('data-hero', hero);
-    return page
-      .getByTestId('hero-amount')
-      .locator('.font-hero')
-      .evaluate((el) => getComputedStyle(el).fontFamily);
-  };
-  const serif = await family('serif');
-  const sans = await family('sans');
-  expect(sans).not.toBe(serif);
 });
 
 test('ruang tidak dikenal menghasilkan 404', async ({ page }) => {

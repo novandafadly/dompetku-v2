@@ -3,8 +3,8 @@ import { formatRupiah, formatRupiahCompact, spokenRupiah, type Rupiah } from '@d
 export type MoneyKind = 'income' | 'expense' | 'neutral';
 
 const sizes = {
-  list: 'text-base font-medium',
-  hero: 'font-hero text-3xl font-semibold',
+  list: 'text-base font-semibold',
+  hero: 'text-hero font-bold',
 } as const;
 
 const tones: Record<MoneyKind, string> = {

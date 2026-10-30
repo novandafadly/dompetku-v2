@@ -24,8 +24,6 @@ export interface AppRoute {
   path: string;
   /** Rute utama: ikut dipotret untuk docs/screenshots/m0a. */
   screenshot: boolean;
-  /** Rute beranda berisi juga dipotret dengan `hero=sans`. */
-  heroVariants: boolean;
   /** Halaman panjang dipotret sebatas viewport agar ukuran repo terkendali. */
   fullPage: boolean;
 }
@@ -51,7 +49,6 @@ function route(name: string, path: string, seed: 'full' | 'empty' = 'full'): App
     name,
     path: `${path}?seed=${seed}&today=${TODAY}`,
     screenshot: SCREENSHOT_ROUTES.has(name),
-    heroVariants: path.endsWith('/beranda') && seed === 'full',
     fullPage: !LONG_PAGE.test(path),
   };
 }

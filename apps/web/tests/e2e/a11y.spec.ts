@@ -20,20 +20,25 @@ async function animationsDone(el: Locator) {
   );
 }
 
-for (const colorScheme of ['light', 'dark'] as const) {
+/** Tema lewat ?theme (bawaan gelap); preferensi sistem tidak dipakai. */
+const themed = (path: string, theme: 'light' | 'dark') =>
+  theme === 'light' ? `${path}&theme=light` : path;
+
+for (const theme of ['light', 'dark'] as const) {
   for (const width of [390, 1280]) {
-    test.describe(`axe ${colorScheme} ${String(width)}`, () => {
-      test.use({ colorScheme, viewport: { width, height: width === 390 ? 844 : 800 } });
+    test.describe(`axe ${theme} ${String(width)}`, () => {
+      test.use({ viewport: { width, height: width === 390 ? 844 : 800 } });
 
       for (const route of ROUTES) {
         test(route.name, async ({ page }) => {
-          await open(page, route.path);
+          await open(page, themed(route.path, theme));
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
           await expectNoSeriousViolations(page, { tags: WCAG_TAGS });
         });
       }
 
       test('sheet Catat terbuka', async ({ page }) => {
-        await open(page, `/pribadi/beranda?seed=full&today=${TODAY}`);
+        await open(page, themed(`/pribadi/beranda?seed=full&today=${TODAY}`, theme));
         await catatButton(page).click();
         const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
         await expect(sheet.getByLabel('Nominal', { exact: true })).toBeFocused();

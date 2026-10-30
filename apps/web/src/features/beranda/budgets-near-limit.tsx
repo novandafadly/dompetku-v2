@@ -18,7 +18,7 @@ export function BudgetsNearLimit({ state, ruang, today }: BerandaContext) {
             <Row key={p.budget.categoryId}>
               <span className="min-w-0 text-base break-words text-text">{p.category.name}</span>
               <span
-                className={`flex shrink-0 items-center gap-1 text-base font-medium ${p.pct >= 100 ? 'text-danger' : 'text-warning'}`}
+                className={`flex shrink-0 items-center gap-1 text-base font-semibold ${p.pct >= 100 ? 'text-danger' : 'text-warning'}`}
               >
                 <WarningIcon size={20} weight="fill" aria-hidden="true" />
                 <span>{`${String(p.pct)}% terpakai`}</span>

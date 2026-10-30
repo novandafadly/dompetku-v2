@@ -24,7 +24,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
       aria-label="Sidebar"
       className="fixed inset-y-0 left-0 hidden w-62 flex-col gap-4 border-r border-hairline bg-accent-tint p-4 lg:flex"
     >
-      <p className="font-hero text-xl font-semibold text-text">DompetKu</p>
+      <p className="text-xl font-bold text-text">DompetKu</p>
       <SpaceSwitcher />
       <Button
         data-catat-trigger=""

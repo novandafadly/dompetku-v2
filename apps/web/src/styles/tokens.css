@@ -1,61 +1,46 @@
-/* Sumber tunggal token warna (ui-ux.md Lampiran A.1). Dibaca juga oleh contrast.test.ts. */
+/* Sumber tunggal token warna (DESIGN.md, ADR 0005). Dibaca juga oleh contrast.test.ts. */
+/* Gelap adalah bawaan tanpa media query; terang hanya lewat html[data-theme='light'] (?theme=light). */
 :root {
-  color-scheme: light;
-  --bg: #f6f4ef;
-  --surface: #ffffff;
-  --surface-2: #efece5;
-  --text: #1c1b18;
-  --text-muted: #5e5a52;
-  --border: #8c877c;
-  --hairline: #e3dfd6;
-  --space-pribadi: #2b3f8f;
-  --space-pribadi-tint: #e6e9f5;
-  --space-bersama: #a3461e;
-  --space-bersama-tint: #f5e6dc;
-  --income: #1f6b45;
-  --danger: #b3261e;
-  --warning: #8a5a00;
-  --on-accent: #ffffff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --bg: #121210;
-    --surface: #1a1a17;
-    --surface-2: #23221f;
-    --text: #edeae3;
-    --text-muted: #a8a398;
-    --border: #6e6a61;
-    --hairline: #2c2b27;
-    --space-pribadi: #9daef0;
-    --space-pribadi-tint: #1e2233;
-    --space-bersama: #f0a07a;
-    --space-bersama-tint: #2e241e;
-    --income: #6fd39a;
-    --danger: #ff8a80;
-    --warning: #f2c14e;
-    --on-accent: #121210;
-  }
-}
-
-:root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #121210;
-  --surface: #1a1a17;
-  --surface-2: #23221f;
-  --text: #edeae3;
-  --text-muted: #a8a398;
-  --border: #6e6a61;
-  --hairline: #2c2b27;
-  --space-pribadi: #9daef0;
-  --space-pribadi-tint: #1e2233;
-  --space-bersama: #f0a07a;
-  --space-bersama-tint: #2e241e;
-  --income: #6fd39a;
-  --danger: #ff8a80;
-  --warning: #f2c14e;
-  --on-accent: #121210;
+  --bg: #0d0e11;
+  --surface: #15171c;
+  --surface-2: #1d2027;
+  --text: #f2f3f5;
+  --text-muted: #a0a6b2;
+  --border: #69707d;
+  --hairline: #262a33;
+  --space-pribadi: #6cb4ff;
+  --space-pribadi-tint: #132235;
+  --space-bersama: #f4b860;
+  --space-bersama-tint: #2a2113;
+  --income: #5bd69a;
+  --danger: #ff7a72;
+  --warning: #ff9b5e;
+  --on-accent: #0d0e11;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-color: rgb(0 0 0 / 0.5);
+}
+
+/* Hue sama dengan tema gelap, digelapkan sampai lolos 4,5:1 di semua permukaan terang. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef0f3;
+  --surface: #f8f9fb;
+  --surface-2: #ffffff;
+  --text: #15171c;
+  --text-muted: #545a66;
+  --border: #767d8a;
+  --hairline: #d9dde3;
+  --space-pribadi: #1b5fad;
+  --space-pribadi-tint: #e3eefb;
+  --space-bersama: #85590f;
+  --space-bersama-tint: #f8eedc;
+  --income: #147045;
+  --danger: #b8322a;
+  --warning: #a8460b;
+  --on-accent: #ffffff;
+  --scrim: rgb(13 14 17 / 0.4);
+  --shadow-color: rgb(13 14 17 / 0.18);
 }
 
 /* Aksen mengikuti ruang aktif; juga per subtree (sheet Catat bisa menulis ke ruang lain). */

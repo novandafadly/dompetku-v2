@@ -23,9 +23,8 @@ function block(selector: string): string {
   return css.slice(open + 1, css.indexOf('}', open));
 }
 
-const light = declarations(block(':root'));
-const dark = declarations(block(":root[data-theme='dark']"));
-const darkMedia = declarations(block(":root:not([data-theme='light'])"));
+const dark = declarations(block(':root'));
+const light = declarations(block(":root[data-theme='light']"));
 
 function luminance(hex: string): number {
   const [r = 0, g = 0, b = 0] = [1, 3, 5].map((i) => {
@@ -42,16 +41,30 @@ function ratio(a: string, b: string): number {
 }
 
 describe('tokens.css', () => {
-  it('tema gelap lewat atribut sama dengan lewat prefers-color-scheme', () => {
-    expect(darkMedia).toEqual(dark);
+  it('tema terang mendefinisikan ulang setiap token tema gelap', () => {
+    expect(Object.keys(light).sort()).toEqual(Object.keys(dark).sort());
   });
 
-  it('memuat nilai Lampiran A.1', () => {
-    expect(light.bg).toBe('#F6F4EF');
-    expect(light['space-pribadi']).toBe('#2B3F8F');
-    expect(light['space-bersama']).toBe('#A3461E');
-    expect(dark.bg).toBe('#121210');
-    expect(dark['on-accent']).toBe('#121210');
+  it('tema gelap memuat nilai DESIGN.md', () => {
+    expect(dark).toMatchObject({
+      bg: '#0D0E11',
+      surface: '#15171C',
+      'surface-2': '#1D2027',
+      text: '#F2F3F5',
+      'text-muted': '#A0A6B2',
+      'space-pribadi': '#6CB4FF',
+      'space-pribadi-tint': '#132235',
+      'space-bersama': '#F4B860',
+      'space-bersama-tint': '#2A2113',
+      'on-accent': '#0D0E11',
+      income: '#5BD69A',
+      danger: '#FF7A72',
+      warning: '#FF9B5E',
+    });
+  });
+
+  it('tidak ada tema yang bergantung pada prefers-color-scheme', () => {
+    expect(css).not.toContain('prefers-color-scheme');
   });
 });
 

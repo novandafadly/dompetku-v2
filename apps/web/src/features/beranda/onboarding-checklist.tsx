@@ -32,7 +32,7 @@ export function OnboardingChecklist({
     (e) => e.ruang === ruang && e.kind === 'expense' && e.voidedAt === undefined,
   );
   const Heading = walletDone ? 'h2' : 'h1';
-  const linkClass = 'inline-flex min-h-11 items-center text-base font-medium text-accent underline';
+  const linkClass = 'inline-flex min-h-11 items-center text-base font-semibold text-text underline';
 
   const steps: Step[] = [
     { key: 'aman', done: true, label: 'Akun aman' },

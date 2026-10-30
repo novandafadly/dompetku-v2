@@ -1,4 +1,4 @@
-/** Pasangan warna yang wajib lulus WCAG; dibaca oleh contrast.test.ts. */
+/** Pasangan warna yang wajib lulus WCAG di kedua tema; dibaca oleh contrast.test.ts. */
 export interface Pair {
   fg: string;
   bg: string;
@@ -9,24 +9,25 @@ export interface Pair {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 
-const textOn = (fg: string, backgrounds: string[]): Pair[] =>
-  backgrounds.map((bg) => ({ fg, bg, min: TEXT, note: `${fg} di ${bg}` }));
+const on = (fg: string, backgrounds: string[], min = TEXT): Pair[] =>
+  backgrounds.map((bg) => ({ fg, bg, min, note: `${fg} di ${bg}` }));
+
+/** Permukaan tempat teks biasa bisa muncul, termasuk kartu saldo bertint ruang. */
+const SURFACES = ['bg', 'surface', 'surface-2', 'space-pribadi-tint', 'space-bersama-tint'];
 
 export const pairs: Pair[] = [
-  ...textOn('text', ['bg', 'surface', 'surface-2', 'space-pribadi-tint', 'space-bersama-tint']),
-  ...textOn('text-muted', [
-    'bg',
-    'surface',
-    'surface-2',
-    'space-pribadi-tint',
-    'space-bersama-tint',
-  ]),
-  { fg: 'border', bg: 'bg', min: NON_TEXT, note: 'border di bg' },
-  { fg: 'border', bg: 'surface', min: NON_TEXT, note: 'border di surface' },
-  ...textOn('on-accent', ['space-pribadi', 'space-bersama']),
-  ...textOn('space-pribadi', ['space-pribadi-tint', 'surface']),
-  ...textOn('space-bersama', ['space-bersama-tint', 'surface']),
-  ...textOn('income', ['surface']),
-  ...textOn('danger', ['surface']),
-  ...textOn('warning', ['surface']),
+  ...on('text', SURFACES),
+  ...on('text-muted', SURFACES),
+  // Batas field, chip, dan kontrol; field ada di halaman (bg), baris (surface), dan sheet (surface-2).
+  ...on('border', ['bg', 'surface', 'surface-2'], NON_TEXT),
+  // Chip terpilih dan toast memakai warna terbalik.
+  ...on('bg', ['text']),
+  // Tombol Catat/primer dan tombol bahaya.
+  ...on('on-accent', ['space-pribadi', 'space-bersama', 'danger']),
+  // Tab aktif (bg, surface) dan kartu saldo (tint).
+  ...on('space-pribadi', ['bg', 'surface', 'space-pribadi-tint']),
+  ...on('space-bersama', ['bg', 'surface', 'space-bersama-tint']),
+  ...on('income', SURFACES),
+  ...on('danger', SURFACES),
+  ...on('warning', SURFACES),
 ];

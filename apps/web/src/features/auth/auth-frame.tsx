@@ -8,9 +8,9 @@ export function AuthFrame({ children }: { children: ReactNode }) {
       <DemoBanner />
       <main className="mx-auto flex max-w-sm flex-col gap-6 px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-hero text-2xl font-semibold text-accent">DompetKu</p>
+          <p className="text-2xl font-bold text-text">DompetKu</p>
           <p className="rounded-pill border border-warning px-3 py-1 text-sm font-semibold text-text">
-            Prototipe — belum aktif
+            Prototipe: belum aktif
           </p>
         </div>
         {children}

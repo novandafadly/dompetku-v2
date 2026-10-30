@@ -20,13 +20,29 @@
   --color-accent: var(--accent);
   --color-accent-tint: var(--accent-tint);
   --color-on-accent: var(--on-accent);
+  --color-scrim: var(--scrim);
 
   --spacing: 4px;
 
   --radius-*: initial;
-  --radius-field: 8px;
-  --radius-sheet: 16px;
+  --radius-field: 10px;
+  --radius-card: 16px;
+  --radius-sheet: 20px;
   --radius-pill: 9999px;
+
+  --shadow-*: initial;
+  --shadow-sheet: 0 -4px 24px var(--shadow-color);
+  --shadow-dialog: 0 8px 32px var(--shadow-color);
+
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Angka saldo: 28 px di 320, sampai 42 px di desktop. */
+  --text-hero: clamp(1.75rem, 1rem + 3.6vw, 2.8rem);
+  --text-hero--line-height: 1.1;
+  --text-hero--letter-spacing: -0.01em;
 
   --breakpoint-dialog: 600px;
 
@@ -67,6 +83,20 @@
     color: var(--text);
   }
 
+  button:not(:disabled),
+  [role='button'],
+  a[href],
+  summary,
+  select,
+  label[for] {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -81,18 +111,17 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-@utility font-hero {
-  font-family: var(--font-hero), serif;
+/* Ruang untuk tab bar mobile (56 px + jarak) di atas inset aman perangkat. */
+@utility pb-tabbar {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+@utility bottom-tabbar {
+  bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 
 @media (max-width: 1023px) {
   html {
-    scroll-padding-bottom: 6rem;
+    scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
-}
-
-/* ?hero=sans: angka hero memakai sans 600 alih-alih serif. */
-html[data-hero='sans'] .font-hero {
-  font-family: var(--font-sans), system-ui, sans-serif;
-  font-weight: 600;
 }

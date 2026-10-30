@@ -115,7 +115,7 @@ export function MoneyInput({
           onChange={handleChange}
           onPaste={handlePaste}
           className={`num min-h-11 w-full min-w-0 bg-transparent text-text outline-none ${
-            size === 'hero' ? 'font-hero text-3xl' : 'text-lg'
+            size === 'hero' ? 'text-hero font-bold' : 'text-lg'
           } disabled:cursor-not-allowed disabled:text-text-muted`}
         />
       </div>

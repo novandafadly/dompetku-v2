@@ -114,7 +114,7 @@ test.describe('Catat 390', () => {
       await route.continue();
     });
     await page.goto(`/pribadi/beranda?${q}`);
-    await expect(page.locator('html')).toHaveAttribute('data-hero', 'serif');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await openCatat(page).click();
     const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
     await expect(sheet.getByLabel('Nominal', { exact: true })).toBeFocused();

@@ -32,7 +32,8 @@ interface DemoValue {
   store: DemoStore;
   ruang: Ruang;
   today: IsoDate;
-  hero: 'serif' | 'sans';
+  /** Tema tampilan: gelap bawaan, terang lewat `?theme=light` (sampai Pengaturan ada). */
+  theme: 'dark' | 'light';
   /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
   keypad: 'os' | 'app';
   query: string;
@@ -75,17 +76,17 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
   const [boot] = useState(() => {
     const today = validToday(params.get('today'));
     const variant = params.get('seed') === 'empty' ? 'empty' : 'full';
-    const hero = params.get('hero') === 'sans' ? 'sans' : 'serif';
+    const theme = params.get('theme') === 'light' ? 'light' : 'dark';
     const keypad = params.get('keypad') === 'app' ? 'app' : 'os';
     const store: DemoStore = createDemoStore(createSeed({ today, variant }), {
       clock: demoClock(today, () => store),
     });
-    return { today, hero, keypad, query: keptQuery(params), store } as const;
+    return { today, theme, keypad, query: keptQuery(params), store } as const;
   });
 
   useLayoutEffect(() => {
-    document.documentElement.dataset.hero = boot.hero;
-  }, [boot.hero]);
+    document.documentElement.dataset.theme = boot.theme;
+  }, [boot.theme]);
 
   const segment = pathname.split('/')[1];
   const ruang: Ruang = isRuang(segment) ? segment : 'pribadi';

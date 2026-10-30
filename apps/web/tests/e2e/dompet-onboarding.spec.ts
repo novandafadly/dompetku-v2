@@ -22,6 +22,17 @@ async function noHorizontalScroll(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
+/** Ganti tema di halaman yang sudah terbuka, setara dengan memuat ulang dengan ?theme. */
+async function setTheme(page: Page, theme: 'light' | 'dark') {
+  await page.evaluate((t) => {
+    document.documentElement.dataset.theme = t;
+  }, theme);
+  await expect(page.locator('body')).toHaveCSS(
+    'background-color',
+    theme === 'light' ? 'rgb(238, 240, 243)' : 'rgb(13, 14, 17)',
+  );
+}
+
 test.describe('Dompet', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -97,7 +108,7 @@ test.describe('Dompet', () => {
     await expect(page.getByTestId('net-worth')).toBeVisible();
     await expectNoSeriousViolations(page);
     await noHorizontalScroll(page);
-    await page.emulateMedia({ colorScheme: 'dark' });
+    await setTheme(page, 'light');
     await expectNoSeriousViolations(page);
   });
 });
@@ -204,7 +215,7 @@ test.describe('Layar auth tiruan', () => {
   async function open(page: Page, path: string, heading: string | RegExp) {
     await page.goto(`${path}?${q}`);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-    await expect(page.getByText('Prototipe — belum aktif')).toBeVisible();
+    await expect(page.getByText('Prototipe: belum aktif')).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Tab utama' })).toHaveCount(0);
   }
 
@@ -216,11 +227,13 @@ test.describe('Layar auth tiruan', () => {
     await expect(password).toHaveAccessibleDescription('Prototipe: jangan isi kata sandi asli.');
   }
 
+  /** Axe di tema gelap (bawaan) dan terang, lalu kembali ke gelap. */
   async function check(page: Page) {
     await expectNoSeriousViolations(page);
     await noHorizontalScroll(page);
-    await page.emulateMedia({ colorScheme: 'dark' });
+    await setTheme(page, 'light');
     await expectNoSeriousViolations(page);
+    await setTheme(page, 'dark');
   }
 
   test('masuk', async ({ page }) => {
@@ -237,14 +250,12 @@ test.describe('Layar auth tiruan', () => {
     await open(page, '/amankan', 'Amankan akunmu');
     await expect(page.getByText('Langkah 1 dari 2')).toBeVisible();
     await check(page);
-    await page.emulateMedia({ colorScheme: 'light' });
     await page.getByRole('button', { name: 'Buat passkey' }).click();
     await expect(page.getByText('Langkah 2 dari 2')).toBeVisible();
     const code = page.getByLabel('Kode 6 angka');
     await expect(code).toHaveAttribute('inputmode', 'numeric');
     await expect(code).toHaveAttribute('autocomplete', 'one-time-code');
     await check(page);
-    await page.emulateMedia({ colorScheme: 'light' });
     await page.getByRole('button', { name: 'Simpan dan lanjut' }).click();
     await expect(page.getByText('Masukkan 6 angka.')).toBeVisible();
     await code.fill('123456');
@@ -260,7 +271,6 @@ test.describe('Layar auth tiruan', () => {
     await open(page, '/undang', 'Undang Farida');
     await expect(page.getByText('Tautan berlaku 72 jam, sekali pakai.')).toBeVisible();
     await check(page);
-    await page.emulateMedia({ colorScheme: 'light' });
     await page.getByRole('button', { name: 'Buat tautan undangan' }).click();
     await expect(page.getByText('Isi email Farida.')).toBeVisible();
     await page.getByLabel('Email Farida').fill('farida@example.com');
