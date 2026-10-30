@@ -43,6 +43,8 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     plugins: { boundaries },
     settings: {
+      // Tanpa resolver, impor lewat alias `@/` tidak terdeteksi oleh boundaries.
+      'import/resolver': { typescript: { project: 'apps/web/tsconfig.json' } },
       'boundaries/elements': [
         { type: 'ui', pattern: 'apps/web/src/components/ui/**' },
         {
@@ -63,7 +65,13 @@ export default tseslint.config(
             {
               from: 'feature',
               disallow: [['feature', { feature: '!{{from.feature}}' }]],
-              message: 'features/* tidak boleh mengimpor internal fitur lain; pakai index.ts.',
+              message:
+                'Fitur tidak boleh mengimpor fitur lain; sambungkan lewat app/ (props atau context).',
+            },
+            {
+              from: 'ui',
+              disallow: ['feature'],
+              message: 'components/ui tidak boleh mengimpor fitur; ui harus tetap generik.',
             },
           ],
         },
@@ -81,7 +89,7 @@ export default tseslint.config(
           ],
           patterns: [
             { group: ['date-fns/*', 'moment/*'], message: 'Pakai packages/domain/src/date.ts.' },
-            { group: ['@radix-ui/*'], message: 'Pakai paket radix-ui dari components/ui saja.' },
+            { group: ['@radix-ui/*'], message: 'Paket @radix-ui/* hanya boleh diimpor dari apps/web/src/components/ui.' },
           ],
         },
       ],
