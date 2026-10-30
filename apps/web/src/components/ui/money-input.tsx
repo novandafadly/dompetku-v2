@@ -1,6 +1,13 @@
 'use client';
 
-import { useId, useLayoutEffect, useRef, type ChangeEvent, type ClipboardEvent } from 'react';
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type RefObject,
+} from 'react';
 import { formatRibuan, parseRupiah, type Rupiah } from '@dompetku/domain';
 
 function display(value: Rupiah | null): string {
@@ -25,14 +32,25 @@ export function MoneyInput({
   onChange,
   label,
   disabled,
+  labelHidden = false,
+  inputMode = 'numeric',
+  size = 'base',
+  inputRef: externalRef,
 }: {
   value: Rupiah | null;
   onChange: (value: Rupiah | null) => void;
   label: string;
   disabled?: boolean;
+  /** Label hanya untuk pembaca layar, bila awalan "Rp" dan konteks sudah menjelaskan field. */
+  labelHidden?: boolean;
+  /** 'none' untuk keypad dalam aplikasi: keyboard OS tidak muncul, keyboard fisik tetap jalan. */
+  inputMode?: 'numeric' | 'none';
+  size?: 'base' | 'hero';
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const ownRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalRef ?? ownRef;
   // Jumlah angka di kiri caret yang harus dipertahankan setelah format ulang.
   const pendingDigits = useRef<number | null>(null);
 
@@ -79,7 +97,7 @@ export function MoneyInput({
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm text-text-muted">
+      <label htmlFor={id} className={labelHidden ? 'sr-only' : 'text-sm text-text-muted'}>
         {label}
       </label>
       <div className="flex min-h-11 items-center gap-2 rounded-field border border-border bg-surface px-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
@@ -90,13 +108,15 @@ export function MoneyInput({
           id={id}
           ref={inputRef}
           type="text"
-          inputMode="numeric"
+          inputMode={inputMode}
           autoComplete="off"
           disabled={disabled}
           value={display(value)}
           onChange={handleChange}
           onPaste={handlePaste}
-          className="num min-h-11 w-full min-w-0 bg-transparent text-lg text-text outline-none disabled:cursor-not-allowed disabled:text-text-muted"
+          className={`num min-h-11 w-full min-w-0 bg-transparent text-text outline-none ${
+            size === 'hero' ? 'font-hero text-3xl' : 'text-lg'
+          } disabled:cursor-not-allowed disabled:text-text-muted`}
         />
       </div>
     </div>

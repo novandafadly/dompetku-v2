@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { AppShell } from '@/features/shell/app-shell';
 import { isRuang } from '@/features/shell/hrefs';
+import { RuangShell } from './ruang-shell';
 
 // Segmen lain dijawab 404 sejak awal; Suspense di root layout membuat status stream 200 bila baru dilempar di render.
 export const dynamicParams = false;
@@ -19,5 +19,5 @@ export default async function RuangLayout({
 }) {
   const { ruang } = await params;
   if (!isRuang(ruang)) notFound();
-  return <AppShell ruang={ruang}>{children}</AppShell>;
+  return <RuangShell ruang={ruang}>{children}</RuangShell>;
 }

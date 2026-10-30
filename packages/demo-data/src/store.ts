@@ -46,6 +46,10 @@ export function createDemoStore(seed: DemoState, opts: DemoStoreOptions = {}): D
       };
     },
     addEntry(e) {
+      if (e.clientId !== undefined) {
+        const seen = state.entries.find((x) => x.clientId === e.clientId);
+        if (seen) return seen;
+      }
       const entry: Entry = { ...e, id: nextEntryId(), createdAt: clock() };
       commit({ ...state, entries: [...state.entries, entry] });
       return entry;

@@ -74,11 +74,11 @@ test.describe('mobile 390', () => {
       .getByRole('navigation', { name: 'Tab utama' })
       .getByRole('button', { name: 'Catat' })
       .click();
-    await expect(page.getByRole('dialog', { name: 'Catat' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.keyboard.press('c');
-    await expect(page.getByRole('dialog', { name: 'Catat' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' })).toBeVisible();
   });
 
   test('seed=empty menyembunyikan Rencana; seed=full menampilkannya', async ({ page }) => {

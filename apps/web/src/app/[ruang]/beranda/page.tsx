@@ -6,12 +6,12 @@ import { BudgetsNearLimit } from '@/features/beranda/budgets-near-limit';
 import { OnboardingChecklist } from '@/features/beranda/onboarding-checklist';
 import { RecentEntries } from '@/features/beranda/recent-entries';
 import { SafeToSpend } from '@/features/beranda/safe-to-spend';
-import { useCatat } from '@/features/shell/catat';
+import { useOpenCatat } from '@/features/shell/catat';
 import { useDemo } from '@/features/shell/demo-provider';
 
 export default function BerandaPage() {
   const demo = useDemo();
-  const { setOpen } = useCatat();
+  const openCatat = useOpenCatat();
   const { state, ruang } = demo;
   const hasOperasional = state.accounts.some(
     (a) => a.ruang === ruang && a.pocket === 'operasional',
@@ -23,7 +23,7 @@ export default function BerandaPage() {
         ruang={ruang}
         dompetHref={demo.href(ruang, 'dompet')}
         onCatat={() => {
-          setOpen(true);
+          openCatat();
         }}
       />
     );

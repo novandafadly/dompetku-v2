@@ -51,6 +51,8 @@ export interface Entry {
   direction?: 'out' | 'in';
   /** Catatan yang sengaja dibagikan ke ruang tujuan (kaki 'in'). */
   sharedNote?: string;
+  /** Kunci idempoten dari klien: simpan ulang dengan clientId sama tidak menggandakan entri. */
+  clientId?: string;
 }
 
 export interface Bill {

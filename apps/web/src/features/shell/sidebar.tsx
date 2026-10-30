@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { focusRing } from '@/components/ui/styles';
-import { useCatat } from './catat';
+import { useOpenCatat } from './catat';
 import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
@@ -17,7 +17,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
   const { ruang, href } = useDemo();
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
-  const { setOpen } = useCatat();
+  const openCatat = useOpenCatat();
   return (
     <aside
       aria-label="Sidebar"
@@ -27,7 +27,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
       <SpaceSwitcher />
       <Button
         onClick={() => {
-          setOpen(true);
+          openCatat();
         }}
       >
         <PlusIcon size={20} weight="bold" aria-hidden="true" />

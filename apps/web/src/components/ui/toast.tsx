@@ -66,7 +66,10 @@ export function Toaster() {
         </RadixToast.Root>
       ))}
       {/* Di atas tab bar mobile (tinggi tab bar + celah). */}
-      <RadixToast.Viewport className="fixed inset-x-0 bottom-24 z-50 m-0 mx-auto flex w-full max-w-md list-none flex-col gap-2 p-4 outline-none" />
+      <RadixToast.Viewport
+        label="Notifikasi ({hotkey})"
+        className="fixed inset-x-0 bottom-24 z-50 m-0 mx-auto flex w-full max-w-md list-none flex-col gap-2 p-4 outline-none"
+      />
     </RadixToast.Provider>
   );
 }

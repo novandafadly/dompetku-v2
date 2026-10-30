@@ -320,6 +320,16 @@ describe('suggestCategories', () => {
     expect(suggestCategories(s, 'pribadi', { hourWIB: 12, amount: 40_000 })).toHaveLength(6);
   });
 
+  it('type income lists the ruang income categories', () => {
+    const s = full();
+    const out = suggestCategories(s, 'pribadi', { hourWIB: 12, type: 'income' });
+    expect(out.length).toBeGreaterThan(0);
+    for (const c of out) {
+      expect(c.ruang).toBe('pribadi');
+      expect(c.type).toBe('income');
+    }
+  });
+
   it('prefers categories matching the hour', () => {
     const s = full();
     const noon = suggestCategories(s, 'pribadi', { hourWIB: 12 })[0];
@@ -328,6 +338,30 @@ describe('suggestCategories', () => {
 });
 
 describe('store', () => {
+  it('addEntry with a seen clientId returns the existing entry without duplicating', () => {
+    const store = createDemoStore(full(), { clock: () => '2026-10-17T09:00:00+07:00' });
+    const base = store.getState().entries[0];
+    if (!base) throw new Error('no entry');
+    const input = {
+      ruang: 'pribadi' as const,
+      kind: 'expense' as const,
+      occurredOn: TODAY,
+      createdBy: base.createdBy,
+      accountId: base.accountId,
+      amount: 35_000,
+      clientId: 'c-1',
+    };
+    const count = store.getState().entries.length;
+    const first = store.addEntry(input);
+    const again = store.addEntry({ ...input, amount: 99_000 });
+    expect(again).toBe(first);
+    expect(store.getState().entries).toHaveLength(count + 1);
+    expect(first.clientId).toBe('c-1');
+    const other = store.addEntry({ ...input, clientId: 'c-2' });
+    expect(other.id).not.toBe(first.id);
+    expect(store.getState().entries).toHaveLength(count + 2);
+  });
+
   it('voids and restores both legs of a space_transfer, and default clock is +07:00', () => {
     const store = createDemoStore(full());
     const leg = store.getState().entries.find((e) => e.kind === 'space_transfer');

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { handleRadioArrowKeys } from './radio-keys';
 import { focusRing } from './styles';
 
-/** Grup pilihan tunggal. Sebaiknya selalu ada satu chip terpilih (mis. "Semua"). */
+/** Grup pilihan tunggal. Bila belum ada chip terpilih, beri `focusable` pada chip pertama. */
 export function ChipGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     // eslint-disable-next-line jsx-a11y/interactive-supports-focus -- fokus ada di chip (roving tabindex)
@@ -23,11 +23,14 @@ export function Chip({
   selected,
   onSelect,
   disabled,
+  focusable = false,
   children,
 }: {
   selected: boolean;
   onSelect: () => void;
   disabled?: boolean;
+  /** Titik masuk Tab untuk grup tanpa pilihan (roving tabindex). */
+  focusable?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -35,7 +38,7 @@ export function Chip({
       type="button"
       role="radio"
       aria-checked={selected}
-      tabIndex={selected ? 0 : -1}
+      tabIndex={selected || focusable ? 0 : -1}
       disabled={disabled}
       onClick={onSelect}
       className={`inline-flex min-h-11 items-center rounded-pill border px-4 text-base disabled:cursor-not-allowed disabled:text-text-muted ${focusRing} ${

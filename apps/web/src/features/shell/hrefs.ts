@@ -11,7 +11,7 @@ export function isRuang(value: string | undefined): value is Ruang {
 }
 
 /** Query demo yang dipertahankan antar halaman agar tautan dan tes stabil. */
-export const KEPT_PARAMS = ['seed', 'today', 'hero'] as const;
+export const KEPT_PARAMS = ['seed', 'today', 'hero', 'keypad'] as const;
 
 export function keptQuery(params: URLSearchParams): string {
   const kept = new URLSearchParams();

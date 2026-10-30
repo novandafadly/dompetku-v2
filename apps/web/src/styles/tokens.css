@@ -58,14 +58,14 @@
   --on-accent: #121210;
 }
 
-/* Aksen mengikuti ruang aktif. */
+/* Aksen mengikuti ruang aktif; juga per subtree (sheet Catat bisa menulis ke ruang lain). */
 :root,
-:root[data-ruang='pribadi'] {
+[data-ruang='pribadi'] {
   --accent: var(--space-pribadi);
   --accent-tint: var(--space-pribadi-tint);
 }
 
-:root[data-ruang='bersama'] {
+[data-ruang='bersama'] {
   --accent: var(--space-bersama);
   --accent-tint: var(--space-bersama-tint);
 }

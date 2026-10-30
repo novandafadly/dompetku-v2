@@ -1,28 +1,29 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
-import { Sheet } from '@/components/ui/sheet';
+import type { Ruang } from '@dompetku/demo-data';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { shouldOpenCatat } from './catat-shortcut';
 import { useDemo } from './demo-provider';
 
-interface CatatValue {
-  open: boolean;
-  setOpen: (open: boolean) => void;
+export interface OpenCatatOptions {
+  /** Ruang tujuan; bawaan ruang di URL. */
+  ruang?: Ruang;
 }
 
-const CatatContext = createContext<CatatValue | null>(null);
+/** Props untuk sheet Catat yang dipasang app/ (shell tidak mengimpor fitur lain). */
+export interface CatatSheetSlotProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  ruang: Ruang;
+}
 
-export function useCatat(): CatatValue {
+type OpenCatat = (opts?: OpenCatatOptions) => void;
+
+const CatatContext = createContext<OpenCatat | null>(null);
+
+export function useOpenCatat(): OpenCatat {
   const ctx = useContext(CatatContext);
-  if (ctx === null) throw new Error('useCatat harus dipakai di dalam <CatatProvider>');
+  if (ctx === null) throw new Error('useOpenCatat harus dipakai di dalam <CatatProvider>');
   return ctx;
 }
 
@@ -40,20 +41,32 @@ function useCatatShortcut(open: () => void) {
   }, [open]);
 }
 
-export function CatatProvider({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function CatatProvider({
+  renderSheet,
+  children,
+}: {
+  renderSheet: (props: CatatSheetSlotProps) => ReactNode;
+  children: ReactNode;
+}) {
   const { ruang } = useDemo();
-  const show = useCallback(() => {
-    setOpen(true);
+  const [sheet, setSheet] = useState<{ open: boolean; ruang: Ruang }>({ open: false, ruang });
+  const openCatat = useCallback<OpenCatat>(
+    (opts) => {
+      setSheet({ open: true, ruang: opts?.ruang ?? ruang });
+    },
+    [ruang],
+  );
+  const shortcut = useCallback(() => {
+    openCatat();
+  }, [openCatat]);
+  useCatatShortcut(shortcut);
+  const onOpenChange = useCallback((open: boolean) => {
+    setSheet((s) => ({ ...s, open }));
   }, []);
-  useCatatShortcut(show);
-  const value = useMemo(() => ({ open, setOpen }), [open]);
   return (
-    <CatatContext.Provider value={value}>
+    <CatatContext.Provider value={openCatat}>
       {children}
-      <Sheet open={open} onOpenChange={setOpen} title="Catat" tint={ruang}>
-        <p className="text-base text-text-muted">Form catat menyusul.</p>
-      </Sheet>
+      {renderSheet({ open: sheet.open, onOpenChange, ruang: sheet.ruang })}
     </CatatContext.Provider>
   );
 }

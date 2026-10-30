@@ -22,6 +22,8 @@ interface DemoValue {
   ruang: Ruang;
   today: IsoDate;
   hero: 'serif' | 'sans';
+  /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
+  keypad: 'os' | 'app';
   query: string;
 }
 
@@ -46,9 +48,11 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
     const today = validToday(params.get('today'));
     const variant = params.get('seed') === 'empty' ? 'empty' : 'full';
     const hero = params.get('hero') === 'sans' ? 'sans' : 'serif';
+    const keypad = params.get('keypad') === 'app' ? 'app' : 'os';
     return {
       today,
       hero,
+      keypad,
       query: keptQuery(params),
       store: createDemoStore(createSeed({ today, variant })),
     } as const;
@@ -77,6 +81,7 @@ export function useDemo(): {
   store: DemoStore;
   ruang: Ruang;
   today: IsoDate;
+  keypad: 'os' | 'app';
   /** Alamat tab di ruang tertentu dengan query demo yang dipertahankan. */
   href: (ruang: Ruang, tab: Tab) => Route;
 } {
@@ -93,6 +98,7 @@ export function useDemo(): {
     store,
     ruang: ctx.ruang,
     today: ctx.today,
+    keypad: ctx.keypad,
     href: (ruang, tab) => buildHref(ruang, tab, query),
   };
 }

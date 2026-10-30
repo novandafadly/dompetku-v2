@@ -2,7 +2,7 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { XIcon } from '@phosphor-icons/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { IconButton } from './icon-button';
 
 const tints = {
@@ -34,12 +34,24 @@ export function Sheet({
   onOpenChange,
   title,
   tint,
+  headerAction,
+  footer,
+  initialFocus,
+  fill = false,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** Juga menyetel aksen ruang (`data-ruang`) untuk isi sheet. */
   tint?: 'pribadi' | 'bersama' | undefined;
+  headerAction?: ReactNode;
+  /** Tetap terlihat di bawah; hanya isi yang menggulir. */
+  footer?: ReactNode;
+  /** Elemen yang difokus saat sheet terbuka (bawaan: elemen fokusable pertama). */
+  initialFocus?: RefObject<HTMLElement | null> | undefined;
+  /** Pakai seluruh tinggi area terlihat (mis. di atas keyboard), bukan 90%. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const vvHeight = useVisualViewportHeight(open);
@@ -48,31 +60,41 @@ export function Sheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-text/40 data-[state=open]:animate-fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-20 bg-text/40 data-[state=open]:animate-fade-in" />
         <Dialog.Content
           aria-describedby={undefined}
-          onOpenAutoFocus={() => {
+          data-ruang={tint}
+          onOpenAutoFocus={(e) => {
             returnFocusTo.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const target = initialFocus?.current;
+            if (target) {
+              e.preventDefault();
+              target.focus();
+            }
           }}
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             returnFocusTo.current?.focus();
           }}
-          style={vvHeight === null ? undefined : { maxHeight: vvHeight * 0.9 }}
-          className="fixed inset-x-0 bottom-0 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet bg-surface text-text data-[state=open]:animate-sheet-in dialog:inset-x-auto dialog:top-1/2 dialog:bottom-auto dialog:left-1/2 dialog:w-full dialog:max-w-lg dialog:-translate-x-1/2 dialog:-translate-y-1/2 dialog:rounded-sheet"
+          style={vvHeight === null ? undefined : { maxHeight: fill ? vvHeight : vvHeight * 0.9 }}
+          className="fixed inset-x-0 bottom-0 z-20 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet bg-surface text-text data-[state=open]:animate-sheet-in dialog:inset-x-auto dialog:top-1/2 dialog:bottom-auto dialog:left-1/2 dialog:w-full dialog:max-w-lg dialog:-translate-x-1/2 dialog:-translate-y-1/2 dialog:rounded-sheet"
         >
           <header
-            className={`flex items-center justify-between border-b border-hairline py-1 pr-1 pl-4 ${
+            className={`flex items-center gap-2 border-b border-hairline py-1 pr-1 pl-4 ${
               tint ? tints[tint] : 'bg-surface'
             }`}
           >
-            <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
+            <Dialog.Title className="mr-auto text-lg/tight font-semibold">{title}</Dialog.Title>
+            {headerAction}
             <Dialog.Close asChild>
               <IconButton label="Tutup" icon={<XIcon size={24} />} />
             </Dialog.Close>
           </header>
-          <div className="overflow-y-auto p-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{children}</div>
+          {footer === undefined ? null : (
+            <div className="border-t border-hairline px-4 py-2">{footer}</div>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

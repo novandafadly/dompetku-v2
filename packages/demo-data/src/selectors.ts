@@ -165,13 +165,14 @@ function compareNames(a: string, b: string): number {
 export function suggestCategories(
   state: DemoState,
   ruang: Ruang,
-  opts: { amount?: Rupiah; hourWIB: number },
+  opts: { amount?: Rupiah; hourWIB: number; type?: Category['type'] },
 ): Category[] {
+  const type = opts.type ?? 'expense';
   const today = state.today;
   const since = addDays(today, -WINDOW_DAYS);
   const score = new Map<string, number>();
   for (const e of state.entries) {
-    if (!isLive(e) || e.ruang !== ruang || e.kind !== 'expense' || e.categoryId === undefined) {
+    if (!isLive(e) || e.ruang !== ruang || e.kind !== type || e.categoryId === undefined) {
       continue;
     }
     if (e.occurredOn <= since || e.occurredOn > today) continue;
@@ -183,7 +184,7 @@ export function suggestCategories(
     score.set(e.categoryId, (score.get(e.categoryId) ?? 0) + hourWeight * amountWeight);
   }
   return state.categories
-    .filter((c) => c.ruang === ruang && c.type === 'expense')
+    .filter((c) => c.ruang === ruang && c.type === type)
     .sort((a, b) => {
       const diff = (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0);
       return diff !== 0 ? diff : compareNames(a.name, b.name);
