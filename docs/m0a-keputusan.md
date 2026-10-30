@@ -1,0 +1,59 @@
+# Keputusan controller selama M0a
+
+Daftar lengkap keputusan yang diambil atas nama pemilik saat eksekusi plan M0a (urutan kronologis). Format: keputusan — alasan — risiko bila salah.
+
+- **T1 self** (copies docs/spec/*): skip copy step — already done — none
+- **T1↔T6** (alias @dompetku/demo-data): T1 sets workspace glob packages/*; T6 adds package — none
+- **T1↔T5** (smoke test expects "Data demo"): T1 temp page renders plain text "Data demo"; T5 replaces with component — none
+- **T4↔T5** (tnum.spec uses /dev/ui#angka): T4 creates minimal /dev/ui with #angka; T5 extends — none
+- **T4 self** (next/font Google downloads at build): use next/font/local with @fontsource files (Plus Jakarta Sans, Source Serif 4) — no network at build — slight setup cost
+- **T9 self** (keyboard emulation vague): test shrinks viewport height by 300px as keyboard proxy and asserts elements in viewport — may miss iOS specifics; real-device check in T13
+- **T13 self** (Vercel preview needs Vercel project/token): STOP point — ask owner before creating Vercel project
+- Node — sandbox has Node 22.22; .nvmrc=24, CI on 24, engines.node '>=22.12' so local dev works — if wrong, minor engines bump — low
+- commit trailer stays 'Claude Opus 5.5' for all commits (session-level attribution mandated by harness) — subagent model differs — cosmetic
+- dark `hairline` = #2C2B27 (spec A.1 gives light only; decorative, not a contrast pair) — gap in spec — cosmetic, easy to change
+- no data-theme default on <html>; system pref applies until Pengaturan sets it — my dispatch wording "set defaults" was ambiguous — none
+- env flag = NEXT_PUBLIC_PROTOTYPE (plan lines 149, 362); T4 used NEXT_PUBLIC_DEMO from my dispatch — T5 renames it — none
+- happy-dom instead of jsdom (jsdom 30 engines reject Node 22.22) — test env only — low
+- @phosphor-icons/react accepted — spec §9 picks Phosphor icons — none
+- T6 space_transfer = two Entry legs sharing `linkId`, with `direction: 'out'|'in'` (optional fields on Entry); out leg −amount in source ruang, in leg +amount in dest ruang, in leg description undefined — spec §9 two linked entries — adds 2 optional fields to contract
+- T6 variant 'empty' = members only, no accounts/entries/bills/budgets — plan T8/T11 empty checklist needs first wallet — none
+- T6 billsUntilEom = Σ unposted bills with dueOn ≤ endOfMonth(today) (overdue included); budgetWajibRemaining = Σ over wajib budgets for month of max(0, amount − spent) — spec "aman dipakai" — formula visible in M0a review
+- accept DemoState.today, createDemoStore(seed,{clock}), groupByDay drops voided (undo via toast restores), no addSpaceTransfer helper yet (T9 may add), budget-spent selector deferred to T11 if needed — consistent with brief — small API additions later
+- an obligation is either a bill or a wajib budget, never both; seed fixes data, formula unchanged — avoids double count — M2 real budgets need same rule (note for M2 spec)
+- fold into fix round: void/restore of one space_transfer leg also voids/restores the linked leg; drop localeCompare Intl in selectors — integrity + global constraint — small
+- T7 DemoProvider mounts in root app/layout.tsx (client boundary, Suspense for useSearchParams) so store survives ruang switch; seed/today/hero read once at mount — [ruang] layout remounts on segment change — none
+- T7 Catat opens placeholder Sheet titled "Catat"; T9 replaces content — T9 builds sheet — none
+- "Rencana hidden when empty" = ruang has no budgets and no bills — plan wording "belum ada isi" — minor
+- space switcher = two <Link>s (aria-current="page" on active) styled as segmented, not router.push — binding "all navigation <Link>" — none
+- fold in data-ruang/data-hero via useLayoutEffect (avoid wrong-tint flash on /bersama deep link) — visible in owner review — none
+- T8 adds to demo-data (tested): `budgetProgress(state, ruang, today)` → [{budget, category, spent, pct}] (same rollup as safeToSpend) and store `markNoSpendDay(ruang, date)` + `state.noSpendDays` — brief needs both, T6 had none — small API growth
+- T8 "Tagihan 7 hari" = unposted bills dueOn ≤ today+7 incl. overdue (labeled "Lewat N hari"); "hampir habis" = pct ≥ 80; "Terakhir" = 5 latest non-void entries — spec silent — owner review will tune
+- fold in activityFeed privacy test (no Pribadi description/amount ever in Bersama feed) — spec privacy rule, untested — none
+- R12 desktop two-column deferred to final polish / owner review note (plan has no R12 task; spec says "sebaiknya") — desktop review less polished — revisit after T12
+- T9 store.addEntry idempotent on optional Entry.clientId (same clientId → returns existing entry, no duplicate), tested in demo-data — mirrors M1 idempotency table — none
+- T9 transfer type = same-ruang only with "Ke dompet" picker; cross-ruang space_transfer stays out of Catat for M0a — scope — owner may ask for it
+- T9 default wallet = operasional account of the ruang with most recent non-void entry by createdAt, else first operasional, else first account; toast income "ke <dompet>", expense "dari <dompet>"
+- tests must use today=2026-10-17 like the rest; fix seed so last-used Pribadi operasional at 10-17 is BCA — one demo date across suite — goes into T9 fix round
+- "Menyimpan…" state deferred to M1 (sync demo store) — R3 — none in M0a
+- fold in switchRuang regenerates clientId (new ruang = new intent) — avoids M1 idempotency mismatch — none
+- T10 list is month-scoped (default month of today, prev/next month control), newest first, 50 per page + "Muat lagi"; filters: Operasional=operasional-pocket accounts, Kantor=kantor pocket, Menunggu reimburse=non-void reimbursable expenses — "di Oktober" copy implies month scope — owner may prefer infinite history
+- T10 Ubah and Pindahkan both toast "Segera di M1" (prefilled Catat would create a duplicate, not edit) — avoid fake edit semantics — owner sees no edit in M0a
+- T10 Ringkasan excludes kantor-pocket income/expense ("Kas kantor") and transfer/space_transfer ("Transfer internal"); opening_balance excluded silently from income — matches v1 audit fix — none
+- Bersama hides Kantor/Menunggu reimburse filters per ui-ux.md:18 (spec binds over controller) — my earlier ruling wrong — goes into T10 fix round; month moves to URL ?bulan=YYYY-MM so detail→back keeps it
+- voided entry by URL shows "Transaksi ini sudah dibatalkan." (not 404) — avoids not-found flash after void — none
+- fold in monthSummary counts space_transfer in-legs of receiving ruang in "Transfer internal" (money must be accounted somewhere) + void toast names ruang/amount like Catat — none
+- Task 10: fix round 2/5 (1 addressed, 0 open — Ringkasan literals; commits 98cf785..682e099). Ruling: re-review done by controller directly (6-line test-only diff; grep shows literals; transaksi.spec 13/13 run by controller) — subagent seat not worth it for this diff — low
+- T11 net worth (Dompet tab) = Σ balances of operasional+tabungan accounts of the ruang; Kas Kantor shown with its balance but excluded and labeled — company money is not personal wealth (v1 audit) — none
+- T11 adds @axe-core/playwright and an axe helper (serious/critical = 0) used for auth pages + Dompet; wallet history = /[ruang]/dompet/[id] — plan needs axe, none existed — new devDep
+- accept recovery-codes step + checklist-until-first-expense — spec design.md + brief flow — none
+- T12 fold in T11 MUST-FIX (mock password hint + autoComplete off) — preview URL will be shared — none
+- T12 budget 120 kB: measure first; if over, lazy-load Catat sheet/cmdk/Phosphor per-icon imports; if framework baseline alone > 120 kB, record measured baseline + ADR and set budget = baseline+margin — Next16/React19 baseline unknown — budget may move
+- T12 screenshots: hero=serif|sans variants only on beranda routes; other routes serif only — keeps PNG count sane — none
+- accept ADR 0002 budget 162 kB (route JS, prefetch excluded) — measured baseline, plan's 120 unattainable on stack — owner informed; M2 150 kB target needs re-decision at M2
+- screenshots of long pages (dompet/[id], transaksi) must be viewport-only to cap repo bloat — 1.4 MB each forever in git — into T12 fix round
+- budget gate stays route-only (prefetch excluded) — state explicitly in ADR 0002 + assert own ⊆ sizes — prefetch is post-load, not cold-load cost — none
+- fold in: always-mounted empty toast live region (a11y), skip hero=sans for empty seed, robust @screens gate (env var SCREENS=1), viewport-only shots for long pages
+- squashed 10e67c3+e21a6d9 into 3d8a43c before first push (keeps 9.7 MB of obsolete PNGs out of history; unpushed own branch) — none
+- T13 no preview.yml — Vercel Git integration deploys branch pushes; ADR numbering shifts (0002 = JS budget) → preview ADR 0003, results ADR 0004 — none
+- one fix wave covers findings 1,2,4,5,6,7,8 + ADR 0003 rewrite to Shareable Link option (owner confirms plan) — cheap, all in-scope — none
