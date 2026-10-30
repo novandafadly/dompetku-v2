@@ -104,3 +104,9 @@ export function dayLabel(d: IsoDate, today: IsoDate): string {
   const base = dow + ', ' + String(day) + ' ' + month;
   return y === parse(today).y ? base : base + ' ' + String(y);
 }
+
+/** "31 Okt": hari dan bulan saja, untuk judul dan label yang sudah jelas tahunnya. */
+export function shortDateLabel(d: IsoDate): string {
+  const { m, day } = parse(d);
+  return String(day) + ' ' + (MONTHS[m - 1] ?? '');
+}

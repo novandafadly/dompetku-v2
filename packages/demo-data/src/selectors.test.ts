@@ -1,7 +1,14 @@
 import { addDays, dayLabel, daysInclusive, endOfMonth } from '@dompetku/domain';
 import { describe, expect, it } from 'vitest';
 import { createSeed } from './seed';
-import { activityFeed, balances, groupByDay, safeToSpend, suggestCategories } from './selectors';
+import {
+  activityFeed,
+  balances,
+  budgetProgress,
+  groupByDay,
+  safeToSpend,
+  suggestCategories,
+} from './selectors';
 import { createDemoStore } from './store';
 import type { DemoState, Entry } from './types';
 
@@ -420,5 +427,66 @@ describe('store', () => {
     const op = store.getState().entries.at(-1);
     expect(op?.kind).toBe('opening_balance');
     expect(op?.ruang).toBe('bersama');
+  });
+});
+
+describe('budgetProgress', () => {
+  it('rolls children into parent, floors pct, covers this month only', () => {
+    const s = full();
+    const rows = budgetProgress(s, 'bersama', TODAY);
+    const month = '2026-10-01';
+    const budgets = s.budgets.filter((b) => b.ruang === 'bersama' && b.month === month);
+    expect(rows.map((r) => r.budget.categoryId).sort()).toEqual(
+      budgets.map((b) => b.categoryId).sort(),
+    );
+    const parentOf = new Map(s.categories.map((c) => [c.id, c.parentId]));
+    for (const r of rows) {
+      let spent = 0;
+      for (const e of s.entries) {
+        if (e.voidedAt !== undefined || e.ruang !== 'bersama' || e.kind !== 'expense') continue;
+        if (e.categoryId === undefined || !e.occurredOn.startsWith('2026-10')) continue;
+        if ((parentOf.get(e.categoryId) ?? e.categoryId) === r.budget.categoryId) spent += e.amount;
+      }
+      expect(r.spent).toBe(spent);
+      expect(r.pct).toBe(Math.floor((spent * 100) / r.budget.amount));
+      expect(r.category.id).toBe(r.budget.categoryId);
+    }
+    expect(rows.some((r) => r.pct >= 80)).toBe(true);
+  });
+
+  it('excludes voided entries and other ruang', () => {
+    const s = full();
+    const before = budgetProgress(s, 'bersama', TODAY);
+    const voided: DemoState = {
+      ...s,
+      entries: s.entries.map((e) =>
+        e.ruang === 'bersama' && e.kind === 'expense'
+          ? { ...e, voidedAt: '2026-10-17T10:00:00+07:00' }
+          : e,
+      ),
+    };
+    const after = budgetProgress(voided, 'bersama', TODAY);
+    expect(after.every((r) => r.spent === 0 && r.pct === 0)).toBe(true);
+    expect(before.some((r) => r.spent > 0)).toBe(true);
+    expect(
+      budgetProgress(createSeed({ today: TODAY, variant: 'empty' }), 'pribadi', TODAY),
+    ).toEqual([]);
+  });
+});
+
+describe('markNoSpendDay', () => {
+  it('persists, is idempotent, per ruang, and notifies once', () => {
+    const store = createDemoStore(full());
+    expect(store.getState().noSpendDays).toEqual([]);
+    let calls = 0;
+    store.subscribe(() => {
+      calls += 1;
+    });
+    store.markNoSpendDay('pribadi', TODAY);
+    store.markNoSpendDay('pribadi', TODAY);
+    expect(store.getState().noSpendDays).toEqual([{ ruang: 'pribadi', date: TODAY }]);
+    expect(calls).toBe(1);
+    store.markNoSpendDay('bersama', TODAY);
+    expect(store.getState().noSpendDays).toHaveLength(2);
   });
 });

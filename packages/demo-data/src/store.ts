@@ -1,6 +1,6 @@
 import { nowIsoWIB } from '@dompetku/domain';
 import type { Rupiah } from '@dompetku/domain';
-import type { Account, DemoState, Entry } from './types';
+import type { Account, DemoState, Entry, Ruang } from './types';
 
 export interface DemoStore {
   getState(): DemoState;
@@ -9,6 +9,7 @@ export interface DemoStore {
   voidEntry(id: string): void;
   restoreEntry(id: string): void;
   addAccount(a: Omit<Account, 'id'>, openingBalance: Rupiah): Account;
+  markNoSpendDay(ruang: Ruang, date: string): void;
 }
 
 export interface DemoStoreOptions {
@@ -72,6 +73,10 @@ export function createDemoStore(seed: DemoState, opts: DemoStoreOptions = {}): D
           return restored;
         }),
       });
+    },
+    markNoSpendDay(ruang, date) {
+      if (state.noSpendDays.some((d) => d.ruang === ruang && d.date === date)) return;
+      commit({ ...state, noSpendDays: [...state.noSpendDays, { ruang, date }] });
     },
     addAccount(a, openingBalance) {
       const account: Account = { ...a, id: 'acc-' + String(state.accounts.length + 1) };

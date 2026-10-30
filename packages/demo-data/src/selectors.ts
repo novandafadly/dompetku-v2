@@ -1,6 +1,6 @@
 import { addDays, dayLabel, daysInclusive, endOfMonth } from '@dompetku/domain';
 import type { IsoDate, Rupiah } from '@dompetku/domain';
-import type { Activity, Category, DemoState, Entry, Ruang } from './types';
+import type { Activity, Budget, Category, DemoState, Entry, Ruang } from './types';
 
 function isLive(e: Entry): boolean {
   return e.voidedAt === undefined;
@@ -35,6 +35,41 @@ export function balances(state: DemoState, ruang: Ruang): Map<string, Rupiah> {
   return map;
 }
 
+function monthSpentByRoot(state: DemoState, ruang: Ruang, monthKey: string): Map<string, Rupiah> {
+  const parentOf = new Map<string, string | null>();
+  for (const c of state.categories) parentOf.set(c.id, c.parentId);
+  const spent = new Map<string, Rupiah>();
+  for (const e of state.entries) {
+    if (!isLive(e) || e.ruang !== ruang || e.kind !== 'expense') continue;
+    if (e.categoryId === undefined || !e.occurredOn.startsWith(monthKey)) continue;
+    const root = parentOf.get(e.categoryId) ?? e.categoryId;
+    spent.set(root, (spent.get(root) ?? 0) + e.amount);
+  }
+  return spent;
+}
+
+export interface BudgetProgress {
+  budget: Budget;
+  category: Category;
+  spent: Rupiah;
+  /** Persen bulat, dibulatkan ke bawah. */
+  pct: number;
+}
+
+export function budgetProgress(state: DemoState, ruang: Ruang, today: IsoDate): BudgetProgress[] {
+  const monthKey = today.slice(0, 7);
+  const spent = monthSpentByRoot(state, ruang, monthKey);
+  const rows: BudgetProgress[] = [];
+  for (const budget of state.budgets) {
+    if (budget.ruang !== ruang || budget.month !== monthKey + '-01') continue;
+    const category = state.categories.find((c) => c.id === budget.categoryId);
+    if (!category) continue;
+    const s = spent.get(budget.categoryId) ?? 0;
+    rows.push({ budget, category, spent: s, pct: Math.floor((s * 100) / budget.amount) });
+  }
+  return rows;
+}
+
 export interface SafeToSpend {
   operasional: Rupiah;
   billsUntilEom: Rupiah;
@@ -61,15 +96,7 @@ export function safeToSpend(state: DemoState, ruang: Ruang, today: IsoDate): Saf
     if (b.ruang === ruang && !b.posted && b.dueOn <= until) billsUntilEom += b.amount;
   }
 
-  const parentOf = new Map<string, string | null>();
-  for (const c of state.categories) parentOf.set(c.id, c.parentId);
-  const spent = new Map<string, Rupiah>();
-  for (const e of state.entries) {
-    if (!isLive(e) || e.ruang !== ruang || e.kind !== 'expense') continue;
-    if (e.categoryId === undefined || !e.occurredOn.startsWith(monthKey)) continue;
-    const root = parentOf.get(e.categoryId) ?? e.categoryId;
-    spent.set(root, (spent.get(root) ?? 0) + e.amount);
-  }
+  const spent = monthSpentByRoot(state, ruang, monthKey);
   let budgetWajibRemaining = 0;
   for (const b of state.budgets) {
     if (b.ruang !== ruang || !b.wajib || b.month !== monthStart) continue;

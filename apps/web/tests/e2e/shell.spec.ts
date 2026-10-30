@@ -159,8 +159,8 @@ test('?hero mengganti font angka hero', async ({ page }) => {
     await page.goto(`/pribadi/beranda?hero=${hero}`);
     await expect(page.locator('html')).toHaveAttribute('data-hero', hero);
     return page
-      .locator('.font-hero:visible')
-      .first()
+      .getByTestId('hero-amount')
+      .locator('.font-hero')
       .evaluate((el) => getComputedStyle(el).fontFamily);
   };
   const serif = await family('serif');

@@ -88,4 +88,6 @@ export interface DemoState {
   entries: Entry[];
   bills: Bill[];
   budgets: Budget[];
+  /** Hari yang ditandai 'tidak ada pengeluaran'. */
+  noSpendDays: { ruang: Ruang; date: IsoDate }[];
 }

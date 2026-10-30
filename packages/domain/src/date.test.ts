@@ -6,6 +6,7 @@ import {
   endOfMonth,
   nowIsoWIB,
   nowTimeWIB,
+  shortDateLabel,
   todayWIB,
 } from './date';
 
@@ -31,6 +32,13 @@ describe('dayLabel', () => {
     ['2025-12-31', '2026-01-02', 'Rab, 31 Des 2025'],
   ])('%s vs %s -> %s', (d, today, expected) => {
     expect(dayLabel(d, today)).toBe(expected);
+  });
+});
+
+describe('shortDateLabel', () => {
+  it('hari dan bulan tanpa hari-pekan atau tahun', () => {
+    expect(shortDateLabel('2026-10-31')).toBe('31 Okt');
+    expect(shortDateLabel('2026-01-05')).toBe('5 Jan');
   });
 });
 

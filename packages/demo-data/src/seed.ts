@@ -334,7 +334,16 @@ export function createSeed(opts: { today: IsoDate; variant: 'empty' | 'full' }):
   const { today } = opts;
   const members = [NOVANDA, FARIDA];
   if (opts.variant === 'empty') {
-    return { today, members, accounts: [], categories: [], entries: [], bills: [], budgets: [] };
+    return {
+      today,
+      members,
+      accounts: [],
+      categories: [],
+      entries: [],
+      bills: [],
+      budgets: [],
+      noSpendDays: [],
+    };
   }
 
   const rng = mulberry32(SEED);
@@ -702,5 +711,14 @@ export function createSeed(opts: { today: IsoDate; variant: 'empty' | 'full' }):
     mk('bersama', 'cb-makanluar', 1_000_000, false);
   }
 
-  return { today, members, accounts, categories: CATEGORIES, entries, bills, budgets };
+  return {
+    today,
+    members,
+    accounts,
+    categories: CATEGORIES,
+    entries,
+    bills,
+    budgets,
+    noSpendDays: [],
+  };
 }

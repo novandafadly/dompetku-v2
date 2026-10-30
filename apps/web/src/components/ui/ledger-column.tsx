@@ -8,7 +8,15 @@ export interface LedgerRow {
 }
 
 /** Kolom buku kas: baris angka rata kanan, garis ganda di atas total. */
-export function LedgerColumn({ rows, total }: { rows: LedgerRow[]; total: Rupiah }) {
+export function LedgerColumn({
+  rows,
+  total,
+  totalLabel = 'Total',
+}: {
+  rows: LedgerRow[];
+  total: Rupiah;
+  totalLabel?: string;
+}) {
   return (
     <table className="w-full border-collapse text-base">
       <tbody>
@@ -35,7 +43,7 @@ export function LedgerColumn({ rows, total }: { rows: LedgerRow[]; total: Rupiah
         <tr className="border-t-4 border-double border-text">
           <td />
           <th scope="row" className="pt-2 text-left font-semibold text-text">
-            Total
+            {totalLabel}
           </th>
           <td className="pt-2 text-right">
             <MoneyText value={total} className="font-semibold" />
