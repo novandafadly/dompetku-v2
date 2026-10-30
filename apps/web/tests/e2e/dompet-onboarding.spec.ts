@@ -208,6 +208,14 @@ test.describe('Layar auth tiruan', () => {
     await expect(page.getByRole('navigation', { name: 'Tab utama' })).toHaveCount(0);
   }
 
+  /** Field kata sandi tiruan: tidak diisi otomatis, dan memperingatkan agar tidak memakai sandi asli. */
+  async function expectMockPassword(page: Page) {
+    const password = page.getByLabel('Kata sandi');
+    await expect(password).toHaveAttribute('autocomplete', 'off');
+    await expect(page.getByText('Prototipe: jangan isi kata sandi asli.')).toBeVisible();
+    await expect(password).toHaveAccessibleDescription('Prototipe: jangan isi kata sandi asli.');
+  }
+
   async function check(page: Page) {
     await expectNoSeriousViolations(page);
     await noHorizontalScroll(page);
@@ -219,7 +227,7 @@ test.describe('Layar auth tiruan', () => {
     await open(page, '/masuk', 'Masuk ke dompetmu');
     await expect(page.getByRole('link', { name: 'Masuk dengan passkey' })).toBeVisible();
     await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'email');
-    await expect(page.getByLabel('Kata sandi')).toHaveAttribute('autocomplete', 'current-password');
+    await expectMockPassword(page);
     await check(page);
     await page.getByRole('button', { name: 'Masuk', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/amankan\\?${q}$`));
@@ -264,7 +272,7 @@ test.describe('Layar auth tiruan', () => {
   test('terima-undangan', async ({ page }) => {
     await open(page, '/terima-undangan', 'Novanda mengundang kamu ke ruang Bersama');
     await expect(page.getByLabel('Email')).toHaveValue('farida@example.com');
-    await expect(page.getByLabel('Kata sandi')).toHaveAttribute('autocomplete', 'new-password');
+    await expectMockPassword(page);
     await check(page);
   });
 });

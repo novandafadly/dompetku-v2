@@ -33,7 +33,7 @@ export default function MasukPage() {
           value={email}
           onChange={setEmail}
         />
-        <PasswordField value={password} onChange={setPassword} autoComplete="current-password" />
+        <PasswordField value={password} onChange={setPassword} />
         <Button type="submit">Masuk</Button>
         <p className="text-sm text-text-muted">
           Masuk dengan kata sandi diikuti kode autentikator di langkah berikutnya.

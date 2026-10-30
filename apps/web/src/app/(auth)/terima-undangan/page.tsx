@@ -33,7 +33,7 @@ export default function TerimaUndanganPage() {
           readOnly
           hint="Sudah terisi dari undangan."
         />
-        <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
+        <PasswordField value={password} onChange={setPassword} />
         <Button type="submit">Buat akun</Button>
       </form>
     </>

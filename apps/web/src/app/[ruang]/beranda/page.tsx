@@ -1,20 +1,28 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
+import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { ActivityFeed } from '@/features/beranda/activity-feed';
 import { BillsSoon } from '@/features/beranda/bills-soon';
 import { BudgetsNearLimit } from '@/features/beranda/budgets-near-limit';
 import { OnboardingChecklist } from '@/features/beranda/onboarding-checklist';
 import { RecentEntries } from '@/features/beranda/recent-entries';
 import { SafeToSpend } from '@/features/beranda/safe-to-spend';
-import { AddAccountSheet } from '@/features/dompet/add-account-sheet';
-import { useOpenCatat } from '@/features/shell/catat';
+import { useOpenCatat, usePreloadCatat } from '@/features/shell/catat';
 import { useDemo } from '@/features/shell/demo-provider';
+
+const AddAccountSheet = dynamic(
+  () => import('@/features/dompet/add-account-sheet').then((m) => m.AddAccountSheet),
+  { ssr: false },
+);
 
 export default function BerandaPage() {
   const demo = useDemo();
   const openCatat = useOpenCatat();
+  const preloadCatat = usePreloadCatat();
   const [adding, setAdding] = useState(false);
+  const addMounted = useOpenedOnce(adding);
   const { state, store, ruang, today, authHref } = demo;
   const hasOperasional = state.accounts.some(
     (a) => a.ruang === ruang && a.pocket === 'operasional',
@@ -30,12 +38,13 @@ export default function BerandaPage() {
       onAddWallet={() => {
         setAdding(true);
       }}
+      onCatatIntent={preloadCatat}
       onCatat={() => {
         openCatat();
       }}
     />
   );
-  const sheet = (
+  const sheet = addMounted ? (
     <AddAccountSheet
       open={adding}
       onOpenChange={setAdding}
@@ -44,7 +53,7 @@ export default function BerandaPage() {
       ruang={ruang}
       today={today}
     />
-  );
+  ) : null;
   if (!hasOperasional) {
     return (
       <>

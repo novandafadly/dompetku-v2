@@ -37,6 +37,7 @@ export function Sheet({
   headerAction,
   footer,
   initialFocus,
+  returnFocus,
   fill = false,
   children,
 }: {
@@ -50,6 +51,8 @@ export function Sheet({
   footer?: ReactNode;
   /** Elemen yang difokus saat sheet terbuka (bawaan: elemen fokusable pertama). */
   initialFocus?: RefObject<HTMLElement | null> | undefined;
+  /** Elemen yang difokus saat sheet ditutup (bawaan: elemen yang fokus saat sheet terbuka). */
+  returnFocus?: HTMLElement | null | undefined;
   /** Pakai seluruh tinggi area terlihat (mis. di atas keyboard), bukan 90%. */
   fill?: boolean;
   children: ReactNode;
@@ -66,11 +69,17 @@ export function Sheet({
           data-ruang={tint}
           onOpenAutoFocus={(e) => {
             returnFocusTo.current =
-              document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              returnFocus ??
+              (document.activeElement instanceof HTMLElement ? document.activeElement : null);
             const target = initialFocus?.current;
             if (target) {
               e.preventDefault();
               target.focus();
+              // Isi yang sudah ada (mis. nominal dari placeholder) dilanjutkan dari ujungnya.
+              if (target instanceof HTMLInputElement && target.selectionStart !== null) {
+                const end = target.value.length;
+                target.setSelectionRange(end, end);
+              }
             }
           }}
           onEscapeKeyDown={(e) => {

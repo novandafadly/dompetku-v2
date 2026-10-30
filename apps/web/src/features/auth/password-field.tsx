@@ -4,15 +4,16 @@ import { useState } from 'react';
 import { TextField } from '@/components/ui/text-field';
 import { focusRing } from '@/components/ui/styles';
 
-/** Field kata sandi yang boleh ditempel dan diisi otomatis (WCAG 3.3.8). */
+/**
+ * Field kata sandi layar auth tiruan. Tempel tetap boleh (WCAG 3.3.8), tetapi pengelola sandi
+ * tidak diajak mengisi atau menyimpan: prototipe tidak boleh menerima kata sandi asli.
+ */
 export function PasswordField({
   value,
   onChange,
-  autoComplete,
 }: {
   value: string;
   onChange: (value: string) => void;
-  autoComplete: 'current-password' | 'new-password';
 }) {
   const [shown, setShown] = useState(false);
   return (
@@ -21,7 +22,8 @@ export function PasswordField({
       type={shown ? 'text' : 'password'}
       value={value}
       onChange={onChange}
-      autoComplete={autoComplete}
+      autoComplete="off"
+      hint="Prototipe: jangan isi kata sandi asli."
       trailing={
         <button
           type="button"
@@ -29,7 +31,7 @@ export function PasswordField({
           onClick={() => {
             setShown((s) => !s);
           }}
-          className={`min-h-11 min-w-11 rounded-field px-3 text-base text-accent underline ${focusRing}`}
+          className={`min-h-11 min-w-11 shrink-0 rounded-field px-3 text-base text-accent underline ${focusRing}`}
         >
           {shown ? 'Sembunyikan' : 'Tampilkan'}
         </button>

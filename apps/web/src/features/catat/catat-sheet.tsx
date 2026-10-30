@@ -1,7 +1,7 @@
 'use client';
 
 import type { DemoState, DemoStore, Entry, Ruang } from '@dompetku/demo-data';
-import { addDays, dayLabel, formatRupiah, type IsoDate } from '@dompetku/domain';
+import { addDays, dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { useId, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { MoneyInput } from '@/components/ui/money-input';
@@ -24,6 +24,10 @@ export interface CatatSheetProps {
   today: IsoDate;
   keypad: 'os' | 'app';
   ruangLabel: Record<Ruang, string>;
+  /** Ke mana fokus kembali saat sheet ditutup. */
+  returnFocus?: HTMLElement | null;
+  /** Nominal yang diketik di placeholder sebelum kode sheet termuat. */
+  initialAmount?: Rupiah | null;
 }
 
 const TYPE_TITLE: Record<CatatType, string> = {
@@ -78,8 +82,10 @@ function CatatSession({
   today,
   keypad,
   ruangLabel,
+  returnFocus,
+  initialAmount,
 }: CatatSheetProps) {
-  const c = useCatat({ state, store, today, ruang });
+  const c = useCatat({ state, store, today, ruang, initialAmount });
   const { draft } = c;
   const amountRef = useRef<HTMLInputElement>(null);
   const formId = useId();
@@ -154,6 +160,7 @@ function CatatSession({
       headerAction={switchButton}
       footer={footer}
       initialFocus={hasAccounts ? amountRef : undefined}
+      returnFocus={returnFocus}
       fill
     >
       {hasAccounts ? (

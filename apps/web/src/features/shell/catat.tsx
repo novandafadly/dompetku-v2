@@ -15,11 +15,46 @@ export interface CatatSheetSlotProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ruang: Ruang;
+  /** Ke mana fokus kembali saat sheet ditutup: pemicu, atau tombol Catat yang terlihat. */
+  returnFocus: HTMLElement | null;
+}
+
+function focusTarget(): HTMLElement | null {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body) return active;
+  return (
+    // Tombol Catat di tab bar/sidebar bertanda data-catat-trigger; pilih yang sedang tampil.
+    [...document.querySelectorAll<HTMLElement>('[data-catat-trigger]')].find(
+      (el) => el.getClientRects().length > 0,
+    ) ?? null
+  );
 }
 
 type OpenCatat = (opts?: OpenCatatOptions) => void;
 
 const CatatContext = createContext<OpenCatat | null>(null);
+const PreloadContext = createContext<() => void>(() => undefined);
+
+/** Mulai memuat kode sheet Catat (mis. saat pointer/fokus di tombol Catat). */
+export function usePreloadCatat(): () => void {
+  return useContext(PreloadContext);
+}
+
+/** Muat kode sheet Catat saat browser senggang setelah hidrasi. */
+function useIdlePreload(preload: () => void) {
+  useEffect(() => {
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(preload, { timeout: 2000 });
+      return () => {
+        window.cancelIdleCallback(id);
+      };
+    }
+    const id = setTimeout(preload, 1);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [preload]);
+}
 
 export function useOpenCatat(): OpenCatat {
   const ctx = useContext(CatatContext);
@@ -43,19 +78,27 @@ function useCatatShortcut(open: () => void) {
 
 export function CatatProvider({
   renderSheet,
+  preload,
   children,
 }: {
   renderSheet: (props: CatatSheetSlotProps) => ReactNode;
+  /** Memuat kode sheet lebih awal; harus stabil (identitas tetap). */
+  preload: () => void;
   children: ReactNode;
 }) {
   const { ruang } = useDemo();
-  const [sheet, setSheet] = useState<{ open: boolean; ruang: Ruang }>({ open: false, ruang });
+  const [sheet, setSheet] = useState<{
+    open: boolean;
+    ruang: Ruang;
+    returnFocus: HTMLElement | null;
+  }>({ open: false, ruang, returnFocus: null });
   const openCatat = useCallback<OpenCatat>(
     (opts) => {
-      setSheet({ open: true, ruang: opts?.ruang ?? ruang });
+      setSheet({ open: true, ruang: opts?.ruang ?? ruang, returnFocus: focusTarget() });
     },
     [ruang],
   );
+  useIdlePreload(preload);
   const shortcut = useCallback(() => {
     openCatat();
   }, [openCatat]);
@@ -65,8 +108,15 @@ export function CatatProvider({
   }, []);
   return (
     <CatatContext.Provider value={openCatat}>
-      {children}
-      {renderSheet({ open: sheet.open, onOpenChange, ruang: sheet.ruang })}
+      <PreloadContext.Provider value={preload}>
+        {children}
+        {renderSheet({
+          open: sheet.open,
+          onOpenChange,
+          ruang: sheet.ruang,
+          returnFocus: sheet.returnFocus,
+        })}
+      </PreloadContext.Provider>
     </CatatContext.Provider>
   );
 }

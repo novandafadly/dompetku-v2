@@ -1,13 +1,20 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
+import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { AccountList } from '@/features/dompet/account-list';
-import { AddAccountSheet } from '@/features/dompet/add-account-sheet';
 import { useDemo } from '@/features/shell/demo-provider';
+
+const AddAccountSheet = dynamic(
+  () => import('@/features/dompet/add-account-sheet').then((m) => m.AddAccountSheet),
+  { ssr: false },
+);
 
 export default function DompetPage() {
   const { state, store, ruang, today, accountHref } = useDemo();
   const [adding, setAdding] = useState(false);
+  const addMounted = useOpenedOnce(adding);
   return (
     <>
       <AccountList
@@ -18,14 +25,16 @@ export default function DompetPage() {
           setAdding(true);
         }}
       />
-      <AddAccountSheet
-        open={adding}
-        onOpenChange={setAdding}
-        state={state}
-        store={store}
-        ruang={ruang}
-        today={today}
-      />
+      {addMounted ? (
+        <AddAccountSheet
+          open={adding}
+          onOpenChange={setAdding}
+          state={state}
+          store={store}
+          ruang={ruang}
+          today={today}
+        />
+      ) : null}
     </>
   );
 }

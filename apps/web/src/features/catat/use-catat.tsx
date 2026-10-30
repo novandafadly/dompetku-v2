@@ -28,6 +28,8 @@ export interface UseCatatArgs {
   ruang: Ruang;
   /** Jam WIB untuk saran kategori; bawaan jam sekarang. */
   hourWIB?: number;
+  /** Nominal yang sudah diketik sebelum sheet selesai dimuat. */
+  initialAmount?: Rupiah | null | undefined;
 }
 
 const SAVE_ERROR =
@@ -72,11 +74,11 @@ function chipsFor(state: DemoState, ruang: Ruang, type: CatatType, hourWIB: numb
   return suggestCategories(state, ruang, { hourWIB, type });
 }
 
-export function useCatat({ state, store, today, ruang, hourWIB }: UseCatatArgs) {
+export function useCatat({ state, store, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
   const [hour] = useState(() => hourWIB ?? Number(nowTimeWIB().slice(0, 2)));
   const [draft, setDraft] = useState<CatatDraft>(() => ({
     type: 'expense',
-    amount: null,
+    amount: initialAmount ?? null,
     accountId: defaultAccountId(state, ruang),
     date: today,
     ruang,

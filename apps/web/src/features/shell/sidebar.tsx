@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { focusRing } from '@/components/ui/styles';
-import { useOpenCatat } from './catat';
+import { useOpenCatat, usePreloadCatat } from './catat';
 import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
@@ -18,6 +18,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
   const openCatat = useOpenCatat();
+  const preloadCatat = usePreloadCatat();
   return (
     <aside
       aria-label="Sidebar"
@@ -26,6 +27,9 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
       <p className="font-hero text-xl font-semibold text-text">DompetKu</p>
       <SpaceSwitcher />
       <Button
+        data-catat-trigger=""
+        onPointerEnter={preloadCatat}
+        onFocus={preloadCatat}
         onClick={() => {
           openCatat();
         }}

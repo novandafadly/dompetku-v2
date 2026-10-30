@@ -3,9 +3,12 @@ import { defineConfig, devices } from '@playwright/test';
 const port = 3100;
 // Sandbox lokal: Chromium sudah terpasang di luar paket. CI memakai browser bawaan image.
 const executablePath = process.env.PW_CHROMIUM_PATH;
+// SCREENS=1 (`pnpm e2e:screens`) hanya menjalankan screenshot @screens; selain itu dilewati.
+const screens = process.env.SCREENS === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  ...(screens ? { grep: /@screens/ } : { grepInvert: /@screens/ }),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

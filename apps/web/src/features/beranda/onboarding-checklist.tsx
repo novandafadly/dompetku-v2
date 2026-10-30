@@ -19,10 +19,13 @@ export function OnboardingChecklist({
   undangHref,
   onAddWallet,
   onCatat,
+  onCatatIntent,
 }: Pick<BerandaContext, 'state' | 'ruang'> & {
   undangHref: Route;
   onAddWallet: () => void;
   onCatat: () => void;
+  /** Pointer/fokus di tombol Catat: mulai memuat kode sheet. */
+  onCatatIntent?: () => void;
 }) {
   const walletDone = state.accounts.some((a) => a.ruang === ruang && a.pocket === 'operasional');
   const entryDone = state.entries.some(
@@ -55,6 +58,8 @@ export function OnboardingChecklist({
         <Button
           variant="ghost"
           className="-ml-4 text-accent underline"
+          onPointerEnter={onCatatIntent}
+          onFocus={onCatatIntent}
           onClick={() => {
             onCatat();
           }}

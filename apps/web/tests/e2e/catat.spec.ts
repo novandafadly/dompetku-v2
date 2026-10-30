@@ -1,5 +1,6 @@
 import { parseRupiah } from '@dompetku/domain';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { routeScripts } from './route-scripts';
 
 const q = 'today=2026-10-17';
 
@@ -41,6 +42,86 @@ async function saveFirstChip(page: Page) {
 
 test.describe('Catat 390', () => {
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test('pintasan c sebelum kode sheet termuat: angka tidak hilang; Escape kembali ke Catat', async ({
+    page,
+  }) => {
+    // Tahan semua JS di luar HTML rute (sheet Catat, prefetch) sampai dilepas.
+    let own = new Set<string>();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let held!: () => void;
+    const firstHeld = new Promise<void>((r) => {
+      held = r;
+    });
+    await page.route('**/*', async (route) => {
+      const request = route.request();
+      if (request.resourceType() === 'document') {
+        const response = await route.fetch();
+        const body = await response.text();
+        own = routeScripts(body);
+        await route.fulfill({ response, body });
+        return;
+      }
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith('.js') && !own.has(path)) {
+        held();
+        await gate;
+      }
+      await route.continue().catch(() => undefined);
+    });
+
+    await page.goto(`/pribadi/beranda?${q}`);
+    // Permintaan tertahan pertama (preload senggang/prefetch) baru terjadi setelah hidrasi.
+    await firstHeld;
+    await page.keyboard.press('c');
+    await page.keyboard.type('35000');
+
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    const amount = sheet.getByLabel('Nominal', { exact: true });
+    await expect(amount).toHaveValue('35.000');
+    // Masih placeholder: kode sheet sebenarnya belum dimuat.
+    await expect(sheet.getByRole('radiogroup', { name: 'Kategori' })).toHaveCount(0);
+
+    release();
+    await expect(sheet.getByRole('radiogroup', { name: 'Kategori' })).toBeVisible();
+    await expect(amount).toHaveValue('35.000');
+    await expect(amount).toBeFocused();
+    await page.keyboard.type('0');
+    await expect(amount).toHaveValue('350.000');
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(openCatat(page)).toBeFocused();
+  });
+
+  test('Escape di placeholder menutup dan mengembalikan fokus ke Catat', async ({ page }) => {
+    let own = new Set<string>();
+    await page.route('**/*', async (route) => {
+      const request = route.request();
+      if (request.resourceType() === 'document') {
+        const response = await route.fetch();
+        const body = await response.text();
+        own = routeScripts(body);
+        await route.fulfill({ response, body });
+        return;
+      }
+      const path = new URL(request.url()).pathname;
+      // Kode sheet tidak pernah datang dalam tes ini.
+      if (path.endsWith('.js') && !own.has(path)) return;
+      await route.continue();
+    });
+    await page.goto(`/pribadi/beranda?${q}`);
+    await expect(page.locator('html')).toHaveAttribute('data-hero', 'serif');
+    await openCatat(page).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await expect(sheet.getByLabel('Nominal', { exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(openCatat(page)).toBeFocused();
+  });
 
   test('three taps from beranda', async ({ page }) => {
     const taps = await countTaps(page);

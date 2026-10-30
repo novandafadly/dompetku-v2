@@ -4,7 +4,7 @@ import { PlusIcon } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { focusRing } from '@/components/ui/styles';
-import { useOpenCatat } from './catat';
+import { useOpenCatat, usePreloadCatat } from './catat';
 import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
@@ -16,10 +16,14 @@ export function TabBar() {
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
   const openCatat = useOpenCatat();
+  const preloadCatat = usePreloadCatat();
   const catat = (
     <button
       key="catat"
       type="button"
+      data-catat-trigger=""
+      onPointerEnter={preloadCatat}
+      onFocus={preloadCatat}
       onClick={() => {
         openCatat();
       }}
