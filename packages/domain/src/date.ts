@@ -42,29 +42,36 @@ function fromMs(ms: number): IsoDate {
 
 const MS_DAY = 86_400_000;
 
-const dateFmt = new Intl.DateTimeFormat('en-CA', {
+const jakartaFmt = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Jakarta',
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
-});
-
-const timeFmt = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Jakarta',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
 });
 
+function jakartaParts(now: Date): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of jakartaFmt.formatToParts(now)) out[p.type] = p.value;
+  return out;
+}
+
+function part(parts: Record<string, string>, type: string): string {
+  const v = parts[type];
+  if (v === undefined) throw new Error(`Missing date part: ${type}`);
+  return v;
+}
+
 export function todayWIB(now: Date = new Date()): IsoDate {
-  return dateFmt.format(now);
+  const p = jakartaParts(now);
+  return part(p, 'year') + '-' + part(p, 'month') + '-' + part(p, 'day');
 }
 
 export function nowTimeWIB(now: Date = new Date()): string {
-  const parts = timeFmt.formatToParts(now);
-  const hh = parts.find((p) => p.type === 'hour')?.value ?? '00';
-  const mm = parts.find((p) => p.type === 'minute')?.value ?? '00';
-  return `${hh}.${mm}`;
+  const p = jakartaParts(now);
+  return part(p, 'hour') + '.' + part(p, 'minute');
 }
 
 export function addDays(d: IsoDate, n: number): IsoDate {
