@@ -77,7 +77,7 @@ export function FilterBar({
         onChange={(e) => {
           onQuery(e.target.value);
         }}
-        className={`min-h-11 w-full rounded-field border border-border bg-surface px-3 text-base text-text placeholder:text-text-muted ${focusRing}`}
+        className={`min-h-11 w-full rounded-field border border-border bg-surface px-3 text-lg text-text placeholder:text-text-muted ${focusRing}`}
       />
       <ChipGroup label="Filter">
         {filtersFor(ruang).map((f) => (

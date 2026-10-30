@@ -1,3 +1,7 @@
 export default function RencanaPage() {
-  return <h1 className="text-xl font-semibold">Rencana</h1>;
+  return (
+    <div className="mx-auto max-w-2xl">
+      <h1 className="text-xl font-bold">Rencana</h1>
+    </div>
+  );
 }

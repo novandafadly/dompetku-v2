@@ -56,21 +56,34 @@ export default function BerandaPage() {
   ) : null;
   if (!hasOperasional) {
     return (
-      <>
+      <div className="mx-auto max-w-2xl">
         {checklist}
         {sheet}
-      </>
+      </div>
     );
   }
+
+  // Tiga keadaan: satu kolom (< 768), daftar berpasangan di bawah kartu (768-1023),
+  // dua kolom kartu | daftar (>= 1024, spec R12).
   return (
-    <>
-      <SafeToSpend {...demo} />
-      {hasExpense ? null : <div className="mt-8">{checklist}</div>}
-      <BillsSoon {...demo} />
-      <BudgetsNearLimit {...demo} />
-      <RecentEntries {...demo} />
-      {ruang === 'bersama' ? <ActivityFeed {...demo} /> : null}
+    <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+      <div className="flex flex-col gap-8">
+        <SafeToSpend {...demo} />
+        {hasExpense ? null : checklist}
+      </div>
+      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-1">
+        <BillsSoon {...demo} />
+        <BudgetsNearLimit {...demo} />
+        <div className="md:col-span-2 lg:col-span-1">
+          <RecentEntries {...demo} />
+        </div>
+        {ruang === 'bersama' ? (
+          <div className="md:col-span-2 lg:col-span-1">
+            <ActivityFeed {...demo} />
+          </div>
+        ) : null}
+      </div>
       {sheet}
-    </>
+    </div>
   );
 }

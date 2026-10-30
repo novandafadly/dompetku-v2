@@ -3,6 +3,8 @@
 import type { Rupiah } from '@dompetku/domain';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { MoneyInput } from '@/components/ui/money-input';
+// Dari styles, bukan sheet: placeholder harus tetap bebas Radix di muat awal.
+import { SHEET_HEADER, SHEET_PANEL, tints } from '@/components/ui/styles';
 
 /**
  * Sheet Catat ringan yang tampil seketika selama kode sheet sebenarnya masih dimuat.
@@ -39,20 +41,17 @@ export function CatatPlaceholder({
   }, [onClose]);
   return (
     <>
-      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-text/40" />
+      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-scrim" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         aria-busy="true"
         data-ruang={tint}
-        className="fixed inset-x-0 bottom-0 z-20 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet bg-surface text-text animate-sheet-in dialog:inset-x-auto dialog:top-1/2 dialog:bottom-auto dialog:left-1/2 dialog:w-full dialog:max-w-lg dialog:-translate-x-1/2 dialog:-translate-y-1/2 dialog:rounded-sheet"
+        data-state="open"
+        className={SHEET_PANEL}
       >
-        <header
-          className={`flex min-h-13 items-center border-b border-hairline px-4 ${
-            tint === 'pribadi' ? 'bg-pribadi-tint' : 'bg-bersama-tint'
-          }`}
-        >
+        <header className={`${SHEET_HEADER} pr-4 ${tints[tint]}`}>
           <h2 className="text-lg/tight font-semibold">{title}</h2>
         </header>
         <div className="px-4 py-3">

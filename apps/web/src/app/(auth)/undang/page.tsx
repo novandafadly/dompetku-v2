@@ -51,7 +51,7 @@ export default function UndangPage() {
         <section
           aria-label="Tautan undangan"
           role="status"
-          className="flex flex-col gap-3 rounded-sheet border border-hairline bg-surface p-4"
+          className="flex flex-col gap-3 rounded-card bg-surface p-4"
         >
           <p className="text-base text-text">
             Tautan untuk {sentTo} siap dikirim. Berlaku 72 jam dan hanya bisa dipakai sekali.

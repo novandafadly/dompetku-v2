@@ -34,10 +34,7 @@ export default function AmankanPage() {
         </p>
         <ul aria-label="Kode pemulihan" className="grid grid-cols-2 gap-2">
           {RECOVERY_CODES.map((c) => (
-            <li
-              key={c}
-              className="num rounded-field border border-border bg-surface px-3 py-2 text-base text-text"
-            >
+            <li key={c} className="num rounded-field bg-surface px-3 py-2 text-base text-text">
               {c}
             </li>
           ))}

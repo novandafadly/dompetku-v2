@@ -1,6 +1,7 @@
 'use client';
 
 import type { DemoState, DemoStore, Entry, Ruang } from '@dompetku/demo-data';
+import { WarningIcon } from '@phosphor-icons/react';
 import { addDays, dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { useId, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
@@ -117,7 +118,7 @@ function CatatSession({
       onClick={() => {
         c.switchRuang(target);
       }}
-      className={`min-h-11 shrink-0 rounded-field px-2 text-sm font-semibold text-text underline ${focusRing}`}
+      className={`min-h-11 shrink-0 rounded-field px-2 text-sm font-semibold text-text underline hover:no-underline ${focusRing}`}
     >
       Pindah ke {ruangLabel[target]}
     </button>
@@ -127,7 +128,8 @@ function CatatSession({
   const footer = hasAccounts ? (
     <>
       {c.error === null ? null : (
-        <p id={errorId} role="alert" className="mb-2 text-base text-danger">
+        <p id={errorId} role="alert" className="mb-2 flex items-start gap-1 text-base text-danger">
+          <WarningIcon size={20} aria-hidden="true" className="mt-0.5 shrink-0" />
           {c.error}
         </p>
       )}

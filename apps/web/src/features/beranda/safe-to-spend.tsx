@@ -3,6 +3,7 @@
 import { CheckCircleIcon, WarningIcon } from '@phosphor-icons/react';
 import { safeToSpend } from '@dompetku/demo-data';
 import { formatRupiah, shortDateLabel } from '@dompetku/domain';
+import { BalanceCard } from '@/components/ui/balance-card';
 import { Button } from '@/components/ui/button';
 import { LedgerColumn } from '@/components/ui/ledger-column';
 import { MoneyText } from '@/components/ui/money-text';
@@ -23,51 +24,52 @@ export function SafeToSpend({ state, store, ruang, today }: BerandaContext) {
   const marked = state.noSpendDays.some((d) => d.ruang === ruang && d.date === today);
 
   return (
-    <section aria-labelledby="aman-dipakai">
-      <h1 id="aman-dipakai" className="text-lg font-semibold text-accent">
-        {title}
-      </h1>
-      <p data-testid="hero-amount" className="mt-1">
-        <MoneyText value={r.total} size="hero" />
-      </p>
-      {r.total < 0 ? (
-        <p className="mt-2 flex items-start gap-2 text-base text-danger">
-          <WarningIcon size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
-          <span>Pengeluaran wajib bulan ini melebihi saldo operasional.</span>
+    <div className="flex flex-col gap-4">
+      <BalanceCard aria-labelledby="aman-dipakai" data-testid="balance-card">
+        <h1 id="aman-dipakai" className="text-base font-semibold text-text">
+          {title}
+        </h1>
+        <p data-testid="hero-amount" className="mt-2">
+          <MoneyText value={r.total} size="hero" />
         </p>
-      ) : (
-        <p className="mt-2 text-base text-text-muted">
-          {`≈ ${formatRupiah(r.perDay)} per hari untuk ${String(r.daysLeft)} hari`}
-        </p>
-      )}
-      <div className="mt-6">
-        <LedgerColumn
-          rows={[
-            { label: 'Saldo operasional', value: r.operasional },
-            { label: `Tagihan s.d. ${until}`, value: r.billsUntilEom, op: 'minus' },
-            { label: 'Sisa anggaran wajib', value: r.budgetWajibRemaining, op: 'minus' },
-          ]}
-          total={r.total}
-          totalLabel="Aman dipakai"
-        />
-      </div>
-      <div className="mt-6">
-        {marked ? (
-          <p className="flex min-h-11 items-center gap-2 text-base text-text-muted">
-            <CheckCircleIcon size={20} aria-hidden="true" className="shrink-0" />
-            <span>Hari ini tercatat tanpa pengeluaran</span>
+        {r.total < 0 ? (
+          <p className="mt-2 flex items-start gap-2 text-base text-danger">
+            <WarningIcon size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>Pengeluaran wajib bulan ini melebihi saldo operasional.</span>
           </p>
-        ) : !spentToday ? (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              store.markNoSpendDay(ruang, today);
-            }}
-          >
-            Tidak ada pengeluaran hari ini
-          </Button>
-        ) : null}
-      </div>
-    </section>
+        ) : (
+          <p className="mt-2 text-base text-text-muted">
+            {`≈ ${formatRupiah(r.perDay)} per hari untuk ${String(r.daysLeft)} hari`}
+          </p>
+        )}
+        <div className="mt-5 border-t border-hairline pt-3">
+          <LedgerColumn
+            rows={[
+              { label: 'Saldo operasional', value: r.operasional },
+              { label: `Tagihan s.d. ${until}`, value: r.billsUntilEom, op: 'minus' },
+              { label: 'Sisa anggaran wajib', value: r.budgetWajibRemaining, op: 'minus' },
+            ]}
+            total={r.total}
+            totalLabel="Aman dipakai"
+          />
+        </div>
+      </BalanceCard>
+      {marked ? (
+        <p className="flex min-h-11 items-center gap-2 text-base text-text-muted">
+          <CheckCircleIcon size={20} aria-hidden="true" className="shrink-0" />
+          <span>Hari ini tercatat tanpa pengeluaran</span>
+        </p>
+      ) : !spentToday ? (
+        <Button
+          variant="secondary"
+          className="self-start"
+          onClick={() => {
+            store.markNoSpendDay(ruang, today);
+          }}
+        >
+          Tidak ada pengeluaran hari ini
+        </Button>
+      ) : null}
+    </div>
   );
 }

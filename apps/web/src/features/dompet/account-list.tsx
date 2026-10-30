@@ -6,9 +6,10 @@ import type { Account, Pocket } from '@dompetku/demo-data';
 import type { Route } from 'next';
 import Link from 'next/link';
 import { useId } from 'react';
+import { BalanceCard } from '@/components/ui/balance-card';
 import { Button } from '@/components/ui/button';
 import { MoneyText } from '@/components/ui/money-text';
-import { focusRing } from '@/components/ui/styles';
+import { focusRing, listBlock, listRow, rowLink } from '@/components/ui/styles';
 import { EmptyState } from '@/components/ui/state';
 import { POCKET_LABEL, RUANG_NAME, WALLET_TYPE_LABEL, type DompetContext } from './context';
 
@@ -28,20 +29,17 @@ function Group({
   const labelId = useId();
   const subtotal = accounts.reduce((sum, a) => sum + balanceOf(a.id), 0);
   return (
-    <section aria-labelledby={labelId} className="mt-6">
-      <div className="flex items-baseline justify-between gap-3 border-b border-text pb-1">
-        <h2 id={labelId} className="text-base font-semibold text-text">
+    <section aria-labelledby={labelId}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 id={labelId} className="text-lg font-semibold text-text">
           {POCKET_LABEL[pocket]}
         </h2>
         <MoneyText value={subtotal} />
       </div>
-      <ul>
+      <ul className={listBlock}>
         {accounts.map((a) => (
-          <li key={a.id} className="border-b border-hairline last:border-b-0">
-            <Link
-              href={accountHref(a.id)}
-              className={`flex min-h-15 items-center justify-between gap-3 py-2 ${focusRing}`}
-            >
+          <li key={a.id} className={listRow}>
+            <Link href={accountHref(a.id)} className={`${rowLink} ${focusRing}`}>
               <span className="min-w-0">
                 <span className="block text-base break-words text-text">{a.name}</span>
                 <span className="block text-sm text-text-muted">
@@ -76,42 +74,46 @@ export function AccountList({
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-text">Dompet {RUANG_NAME[ruang]}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-text">Dompet {RUANG_NAME[ruang]}</h1>
         <Button variant="secondary" onClick={onAdd}>
           <PlusIcon size={20} aria-hidden="true" />
           Tambah dompet
         </Button>
       </div>
       {mine.length === 0 ? (
-        <div className="mt-6">
+        <div className="mx-auto mt-6 max-w-2xl">
           <EmptyState
             title={`Belum ada dompet di ${RUANG_NAME[ruang]}.`}
             description="Tambah dompet yang kamu pakai sehari-hari untuk mulai mencatat."
           />
         </div>
       ) : (
-        <>
-          <section aria-label="Kekayaan bersih" className="mt-4">
-            <p className="text-sm text-text-muted">Kekayaan bersih</p>
-            <p data-testid="net-worth" className="mt-1">
+        // Tiga keadaan: satu kolom (< 768), grup berpasangan (768-1023),
+        // kartu | grup (>= 1024, spec R12).
+        <div className="mt-6 grid gap-8 lg:grid-cols-2 lg:items-start">
+          <BalanceCard aria-label="Kekayaan bersih">
+            <p className="text-base font-semibold text-text">Kekayaan bersih</p>
+            <p data-testid="net-worth" className="mt-2">
               <MoneyText value={netWorth} size="hero" />
             </p>
-            <p className="mt-1 text-sm text-text-muted">Operasional dan tabungan.</p>
-          </section>
-          {POCKETS.map((pocket) => {
-            const accounts = mine.filter((a) => a.pocket === pocket);
-            return accounts.length === 0 ? null : (
-              <Group
-                key={pocket}
-                pocket={pocket}
-                accounts={accounts}
-                balanceOf={balanceOf}
-                accountHref={accountHref}
-              />
-            );
-          })}
-        </>
+            <p className="mt-2 text-sm text-text-muted">Operasional dan tabungan.</p>
+          </BalanceCard>
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-1">
+            {POCKETS.map((pocket) => {
+              const accounts = mine.filter((a) => a.pocket === pocket);
+              return accounts.length === 0 ? null : (
+                <Group
+                  key={pocket}
+                  pocket={pocket}
+                  accounts={accounts}
+                  balanceOf={balanceOf}
+                  accountHref={accountHref}
+                />
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,8 +3,9 @@
 import { activityFeed } from '@dompetku/demo-data';
 import { dayLabel, timeLabelWIB } from '@dompetku/domain';
 import { MoneyText } from '@/components/ui/money-text';
+import { listRow } from '@/components/ui/styles';
 import type { BerandaContext } from './context';
-import { BerandaSection } from './section';
+import { BerandaSection, EmptyLine } from './section';
 
 export function ActivityFeed({ state, today }: BerandaContext) {
   const feed = activityFeed(state, 5);
@@ -12,18 +13,18 @@ export function ActivityFeed({ state, today }: BerandaContext) {
   return (
     <BerandaSection title="Aktivitas">
       {feed.length === 0 ? (
-        <p className="text-base text-text-muted">
+        <EmptyLine>
           Belum ada aktivitas. Yang kamu dan Farida catat di Bersama akan muncul di sini, terbaru di
           atas.
-        </p>
+        </EmptyLine>
       ) : (
         <ul>
           {feed.map((a) => (
-            <li key={a.id} className="flex min-h-11 items-center gap-3 py-1.5">
+            <li key={a.id} className={`flex min-h-12 items-center gap-3 py-2 ${listRow}`}>
               <span
                 data-initial=""
                 aria-hidden="true"
-                className="flex size-9 shrink-0 items-center justify-center rounded-pill bg-accent-tint text-sm font-semibold text-accent"
+                className="flex size-9 shrink-0 items-center justify-center rounded-pill bg-surface-2 text-sm font-semibold text-text"
               >
                 {a.actor.initial}
               </span>

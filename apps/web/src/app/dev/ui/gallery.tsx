@@ -3,6 +3,7 @@
 import { PlusIcon, TrashIcon } from '@phosphor-icons/react';
 import { useState, type ReactNode } from 'react';
 import type { Rupiah } from '@dompetku/domain';
+import { BalanceCard } from '@/components/ui/balance-card';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { DemoBanner } from '@/components/ui/demo-banner';
@@ -176,7 +177,16 @@ export function Gallery() {
           </Sheet>
         </Section>
 
-        <Section title="Kolom buku kas">
+        <Section title="Kartu saldo">
+          <BalanceCard aria-label="Contoh kartu saldo">
+            <p className="text-base font-semibold text-text">Aman dipakai sampai 31 Okt</p>
+            <p className="mt-2">
+              <MoneyText value={4250000} size="hero" />
+            </p>
+          </BalanceCard>
+        </Section>
+
+        <Section title="Rincian rumus">
           <LedgerColumn
             rows={[
               { label: 'Pemasukan', value: 8500000 },

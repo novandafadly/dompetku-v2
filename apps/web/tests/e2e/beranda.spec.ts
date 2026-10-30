@@ -62,7 +62,7 @@ test.describe('Beranda Pribadi terisi', () => {
     const borderStyle = await table
       .locator('tfoot tr')
       .evaluate((el) => getComputedStyle(el).borderTopStyle);
-    expect(borderStyle).toBe('double');
+    expect(borderStyle).toBe('solid');
     await expect(
       main.getByText(`≈ ${formatRupiah(r.perDay)} per hari untuk 15 hari`),
     ).toBeVisible();
@@ -116,13 +116,16 @@ test.describe('Beranda Bersama', () => {
     expect(await page.locator('body').innerText()).not.toContain(secret ?? '');
   });
 
-  test('aksen bata, judul bersama, feed Aktivitas dengan inisial', async ({ page }) => {
+  test('kartu saldo bertint emas, judul bersama, feed Aktivitas dengan inisial', async ({
+    page,
+  }) => {
     const r = safeToSpend(full, 'bersama', TODAY);
     await page.goto(`/bersama/beranda?${q}`);
     const main = page.getByRole('main');
     const h1 = main.getByRole('heading', { level: 1 });
     await expect(h1).toHaveText('Aman dipakai bersama sampai 31 Okt');
-    await expect(h1).toHaveCSS('color', 'rgb(163, 70, 30)');
+    // Kartu saldo (motif DESIGN.md) memakai tint Bersama #2A2113 di tema gelap bawaan.
+    await expect(page.getByTestId('balance-card')).toHaveCSS('background-color', 'rgb(42, 33, 19)');
     await expect(page.getByTestId('hero-amount')).toContainText(formatRupiah(r.total));
     const feed = main.getByRole('region', { name: 'Aktivitas' });
     const rows = feed.getByRole('listitem');

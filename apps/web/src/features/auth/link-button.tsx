@@ -3,9 +3,10 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { focusRing } from '@/components/ui/styles';
 
+// Sama dengan Button agar tautan dan tombol tidak bisa dibedakan dari tampilan.
 const variants = {
-  primary: 'bg-accent text-on-accent hover:brightness-95',
-  secondary: 'border border-border bg-surface text-text hover:bg-surface-2',
+  primary: 'bg-accent text-on-accent hover:brightness-110 active:brightness-90',
+  secondary: 'border border-border bg-surface-2 text-text hover:bg-surface active:bg-bg',
 } as const;
 
 /** Tautan bergaya tombol: layar tiruan hanya berpindah langkah. */

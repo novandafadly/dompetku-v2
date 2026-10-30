@@ -3,7 +3,7 @@
 import { WarningIcon } from '@phosphor-icons/react';
 import { budgetProgress } from '@dompetku/demo-data';
 import type { BerandaContext } from './context';
-import { BerandaSection, Row } from './section';
+import { BerandaSection, EmptyLine, Row } from './section';
 
 export function BudgetsNearLimit({ state, ruang, today }: BerandaContext) {
   const near = budgetProgress(state, ruang, today).filter((p) => p.pct >= 80);
@@ -11,7 +11,7 @@ export function BudgetsNearLimit({ state, ruang, today }: BerandaContext) {
   return (
     <BerandaSection title="Anggaran hampir habis">
       {near.length === 0 ? (
-        <p className="text-base text-text-muted">Belum ada anggaran yang mendekati batas.</p>
+        <EmptyLine>Belum ada anggaran yang mendekati batas.</EmptyLine>
       ) : (
         <ul>
           {near.map((p) => (

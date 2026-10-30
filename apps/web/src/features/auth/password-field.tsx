@@ -31,7 +31,7 @@ export function PasswordField({
           onClick={() => {
             setShown((s) => !s);
           }}
-          className={`min-h-11 min-w-11 shrink-0 rounded-field px-3 text-base text-accent underline ${focusRing}`}
+          className={`min-h-11 min-w-11 shrink-0 rounded-field px-3 text-base font-semibold text-text underline hover:no-underline ${focusRing}`}
         >
           {shown ? 'Sembunyikan' : 'Tampilkan'}
         </button>

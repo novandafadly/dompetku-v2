@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MoneyText } from '@/components/ui/money-text';
-import { focusRing } from '@/components/ui/styles';
+import { focusRing, listBlock, listRow } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import { RUANG_NAME, type TransaksiContext } from './context';
 import { entryKindLabel } from './entry-row';
@@ -29,6 +29,8 @@ function voidedMessage(state: TransaksiContext['state'], e: Entry): string {
       return `${head} dari ${name(e.accountId)}`;
   }
 }
+
+const detailRow = `flex min-h-12 items-center justify-between gap-3 py-2 ${listRow}`;
 
 export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry }) {
   const { state, store, today, listHref } = ctx;
@@ -62,18 +64,16 @@ export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry
   }
 
   return (
-    <article>
+    <article className="mx-auto max-w-2xl">
       <Link
         href={listHref}
-        className={`inline-flex min-h-11 items-center gap-2 rounded-field text-base text-text ${focusRing}`}
+        className={`-ml-2 inline-flex min-h-11 items-center gap-2 rounded-field px-2 text-base text-text-muted hover:text-text ${focusRing}`}
       >
         <ArrowLeftIcon size={20} aria-hidden="true" />
         Kembali ke daftar
       </Link>
-      <h1 className="mt-2 text-xl font-semibold break-words text-text">
-        {entryTitle(state, entry)}
-      </h1>
-      <p className="mt-1">
+      <h1 className="mt-2 text-xl font-bold break-words text-text">{entryTitle(state, entry)}</h1>
+      <p className="mt-2">
         <MoneyText value={value} kind={kind} size="hero" />
       </p>
       <p className="mt-1 text-base text-text-muted">
@@ -85,26 +85,26 @@ export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry
           <span>Transaksi ini sudah dibatalkan.</span>
         </p>
       ) : null}
-      <dl className="mt-6 border-t border-hairline text-base">
-        <div className="flex justify-between gap-3 border-b border-hairline py-2">
+      <dl className={`mt-6 text-base ${listBlock}`}>
+        <div className={detailRow}>
           <dt className="text-text-muted">Kategori</dt>
           <dd className="min-w-0 text-right break-words text-text">
             {entryKindLabel(state, entry)}
           </dd>
         </div>
-        <div className="flex justify-between gap-3 border-b border-hairline py-2">
+        <div className={detailRow}>
           <dt className="text-text-muted">Dompet</dt>
           <dd className="min-w-0 text-right break-words text-text">{wallet}</dd>
         </div>
         {entry.sharedNote === undefined ? null : (
-          <div className="flex justify-between gap-3 border-b border-hairline py-2">
+          <div className={detailRow}>
             <dt className="text-text-muted">Catatan</dt>
             <dd className="min-w-0 text-right break-words text-text">{entry.sharedNote}</dd>
           </div>
         )}
       </dl>
       {voided ? null : (
-        <div className="mt-6 flex flex-col gap-2">
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button variant="secondary" onClick={soon}>
             Ubah
           </Button>

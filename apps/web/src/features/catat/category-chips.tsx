@@ -78,7 +78,7 @@ export function CategoryChips({
           onClick={() => {
             setSearching(true);
           }}
-          className={`inline-flex min-h-11 items-center self-start rounded-pill border border-dashed border-border px-4 text-base text-text hover:bg-surface-2 ${focusRing}`}
+          className={`inline-flex min-h-11 items-center self-start rounded-pill border border-dashed border-border px-4 text-base text-text hover:bg-surface active:bg-bg ${focusRing}`}
         >
           Kategori lain…
         </button>

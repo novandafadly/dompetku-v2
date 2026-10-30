@@ -4,7 +4,7 @@ import { entryTitle, groupByDay, signedAmount } from '@dompetku/demo-data';
 import { dayLabel } from '@dompetku/domain';
 import { MoneyText } from '@/components/ui/money-text';
 import type { BerandaContext } from './context';
-import { BerandaSection, Row } from './section';
+import { BerandaSection, EmptyLine, Row } from './section';
 
 export function RecentEntries({ state, ruang, today }: BerandaContext) {
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
@@ -18,7 +18,7 @@ export function RecentEntries({ state, ruang, today }: BerandaContext) {
   return (
     <BerandaSection title="Terakhir">
       {recent.length === 0 ? (
-        <p className="text-base text-text-muted">Belum ada transaksi.</p>
+        <EmptyLine>Belum ada transaksi.</EmptyLine>
       ) : (
         <ul>
           {recent.map((e) => {

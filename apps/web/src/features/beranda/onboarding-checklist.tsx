@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { focusRing, listBlock, listRow } from '@/components/ui/styles';
 import type { BerandaContext } from './context';
 
 interface Step {
@@ -32,7 +33,7 @@ export function OnboardingChecklist({
     (e) => e.ruang === ruang && e.kind === 'expense' && e.voidedAt === undefined,
   );
   const Heading = walletDone ? 'h2' : 'h1';
-  const linkClass = 'inline-flex min-h-11 items-center text-base font-semibold text-text underline';
+  const linkClass = `inline-flex min-h-11 items-center rounded-field text-base font-semibold text-text underline hover:no-underline ${focusRing}`;
 
   const steps: Step[] = [
     { key: 'aman', done: true, label: 'Akun aman' },
@@ -42,7 +43,7 @@ export function OnboardingChecklist({
       label: (
         <Button
           variant="ghost"
-          className="-ml-4 text-accent underline"
+          className="-ml-4 underline hover:no-underline"
           onClick={() => {
             onAddWallet();
           }}
@@ -57,7 +58,7 @@ export function OnboardingChecklist({
       label: (
         <Button
           variant="ghost"
-          className="-ml-4 text-accent underline"
+          className="-ml-4 underline hover:no-underline"
           onPointerEnter={onCatatIntent}
           onFocus={onCatatIntent}
           onClick={() => {
@@ -83,7 +84,7 @@ export function OnboardingChecklist({
 
   return (
     <section aria-labelledby="mulai">
-      <Heading id="mulai" className="text-xl font-semibold text-accent">
+      <Heading id="mulai" className="text-xl font-bold text-text">
         Mulai dari sini
       </Heading>
       {ruang === 'bersama' ? (
@@ -92,9 +93,12 @@ export function OnboardingChecklist({
           mengubah di sini.
         </p>
       ) : null}
-      <ul aria-label="Mulai dari sini" className="mt-4">
+      <ul aria-label="Mulai dari sini" className={`mt-4 ${listBlock}`}>
         {steps.map((s) => (
-          <li key={s.key} className="flex min-h-11 items-center gap-3 text-base text-text">
+          <li
+            key={s.key}
+            className={`flex min-h-13 items-center gap-3 py-1 text-base text-text ${listRow}`}
+          >
             {s.done ? (
               <CheckCircleIcon
                 size={24}

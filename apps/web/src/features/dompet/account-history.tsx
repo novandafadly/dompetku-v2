@@ -7,7 +7,7 @@ import type { Route } from 'next';
 import Link from 'next/link';
 import { useId } from 'react';
 import { MoneyText } from '@/components/ui/money-text';
-import { focusRing } from '@/components/ui/styles';
+import { focusRing, listBlock, listRow, rowLink } from '@/components/ui/styles';
 import { EmptyState } from '@/components/ui/state';
 import { POCKET_LABEL, WALLET_TYPE_LABEL, type DompetContext } from './context';
 
@@ -43,21 +43,21 @@ export function AccountHistory({
   );
   const groups = groupByDay(entries, today);
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <Link
         href={dompetHref}
-        className={`-ml-2 inline-flex min-h-11 items-center gap-1 px-2 text-base text-accent underline ${focusRing}`}
+        className={`-ml-2 inline-flex min-h-11 items-center gap-1 rounded-field px-2 text-base text-text-muted hover:text-text ${focusRing}`}
       >
         <CaretLeftIcon size={20} aria-hidden="true" />
         Dompet
       </Link>
-      <h1 className="mt-2 text-xl font-semibold text-text">{account.name}</h1>
+      <h1 className="mt-2 text-xl font-bold text-text">{account.name}</h1>
       <p className="text-sm text-text-muted">
         {POCKET_LABEL[account.pocket]} · {WALLET_TYPE_LABEL[account.walletType]}
         {account.pocket === 'kantor' ? ' · Tidak masuk hitungan pribadi' : ''}
       </p>
-      <p className="mt-3 text-sm text-text-muted">Saldo</p>
-      <p data-testid="wallet-balance">
+      <p className="mt-4 text-sm text-text-muted">Saldo</p>
+      <p data-testid="wallet-balance" className="mt-1">
         <MoneyText value={balance} size="hero" />
       </p>
       {groups.length === 0 ? (
@@ -67,22 +67,16 @@ export function AccountHistory({
       ) : (
         groups.map((g) => (
           <section key={g.date} aria-labelledby={`${baseId}-${g.date}`} className="mt-6">
-            <h2
-              id={`${baseId}-${g.date}`}
-              className="border-b border-text pb-1 text-base font-semibold text-text"
-            >
+            <h2 id={`${baseId}-${g.date}`} className="mb-2 text-sm font-semibold text-text-muted">
               {g.label}
             </h2>
-            <ul aria-label={`Riwayat ${g.label}`}>
+            <ul aria-label={`Riwayat ${g.label}`} className={listBlock}>
               {g.items.map((e) => {
                 const { value, kind } = effect(e, account.id);
                 const category = categoryName(state, e);
                 return (
-                  <li key={e.id} className="border-b border-hairline last:border-b-0">
-                    <Link
-                      href={entryHref(e.id)}
-                      className={`flex min-h-15 items-center justify-between gap-3 py-2 ${focusRing}`}
-                    >
+                  <li key={e.id} className={listRow}>
+                    <Link href={entryHref(e.id)} className={`${rowLink} ${focusRing}`}>
                       <span className="min-w-0">
                         <span className="block text-base break-words text-text">
                           {entryTitle(state, e)}

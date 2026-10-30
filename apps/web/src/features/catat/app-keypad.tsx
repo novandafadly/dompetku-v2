@@ -24,7 +24,8 @@ const keepFocus = (e: MouseEvent) => {
   e.preventDefault();
 };
 
-const key = `min-h-11 rounded-field bg-surface-2 text-xl text-text num active:brightness-95 ${focusRing}`;
+// Tombol keypad di lapisan surface (lebih gelap dari sheet) agar terbaca sebagai tuts.
+const key = `min-h-12 rounded-field bg-surface text-xl font-semibold text-text num hover:bg-bg active:bg-hairline ${focusRing}`;
 
 /** Varian B: keypad dalam aplikasi. Keyboard fisik tetap jalan lewat field nominal. */
 export function AppKeypad({

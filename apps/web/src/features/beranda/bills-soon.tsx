@@ -4,7 +4,7 @@ import { WarningIcon } from '@phosphor-icons/react';
 import { addDays, dayLabel, daysInclusive } from '@dompetku/domain';
 import { MoneyText } from '@/components/ui/money-text';
 import type { BerandaContext } from './context';
-import { BerandaSection, Row } from './section';
+import { BerandaSection, EmptyLine, Row } from './section';
 
 export function BillsSoon({ state, ruang, today }: BerandaContext) {
   const limit = addDays(today, 7);
@@ -15,7 +15,7 @@ export function BillsSoon({ state, ruang, today }: BerandaContext) {
   return (
     <BerandaSection title="Tagihan 7 hari">
       {bills.length === 0 ? (
-        <p className="text-base text-text-muted">Tidak ada tagihan dalam 7 hari ke depan.</p>
+        <EmptyLine>Tidak ada tagihan dalam 7 hari ke depan.</EmptyLine>
       ) : (
         <ul>
           {bills.map((b) => {

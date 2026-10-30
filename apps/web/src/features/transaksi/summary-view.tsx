@@ -12,7 +12,7 @@ export function SummaryView({
 }: Pick<TransaksiContext, 'state' | 'ruang'> & { month: string }) {
   const s = monthSummary(state, ruang, month);
   return (
-    <section aria-label="Ringkasan bulan" className="mt-6">
+    <section aria-label="Ringkasan bulan" className="mt-6 rounded-card bg-surface p-4">
       <LedgerColumn
         rows={[
           { label: 'Pemasukan', value: s.pemasukan },

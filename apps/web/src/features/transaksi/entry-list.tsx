@@ -11,6 +11,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { MoneyText } from '@/components/ui/money-text';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { EmptyState } from '@/components/ui/state';
+import { listBlock } from '@/components/ui/styles';
 import { RUANG_NAME, type TransaksiContext } from './context';
 import { EntryRow } from './entry-row';
 import {
@@ -92,12 +93,12 @@ function DayGroups({
         <section key={g.date} aria-labelledby={`${baseId}-${g.date}`} className="mt-6">
           <h3
             id={`${baseId}-${g.date}`}
-            className="flex items-baseline justify-between gap-3 border-b border-text pb-1 text-base font-semibold text-text"
+            className="mb-2 flex items-baseline justify-between gap-3 px-1 text-sm font-semibold text-text-muted"
           >
             <span>{g.label}</span>
             <MoneyText value={g.net} />
           </h3>
-          <ul aria-label={`Transaksi ${g.label}`}>
+          <ul aria-label={`Transaksi ${g.label}`} className={listBlock}>
             {g.shown.map((e) => (
               <EntryRow key={e.id} state={ctx.state} entry={e} href={ctx.entryHref(e.id)} />
             ))}
@@ -156,7 +157,7 @@ export function EntryList(ctx: TransaksiContext) {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <h1 className="sr-only">Transaksi</h1>
       <SegmentedControl
         label="Tampilan"
