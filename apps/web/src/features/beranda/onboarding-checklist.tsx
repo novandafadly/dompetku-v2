@@ -16,11 +16,19 @@ interface Step {
 export function OnboardingChecklist({
   state,
   ruang,
-  dompetHref,
+  undangHref,
+  onAddWallet,
   onCatat,
-}: Pick<BerandaContext, 'state' | 'ruang'> & { dompetHref: Route; onCatat: () => void }) {
-  const walletDone = state.accounts.some((a) => a.ruang === ruang);
-  const entryDone = state.entries.some((e) => e.ruang === ruang && e.kind === 'expense');
+}: Pick<BerandaContext, 'state' | 'ruang'> & {
+  undangHref: Route;
+  onAddWallet: () => void;
+  onCatat: () => void;
+}) {
+  const walletDone = state.accounts.some((a) => a.ruang === ruang && a.pocket === 'operasional');
+  const entryDone = state.entries.some(
+    (e) => e.ruang === ruang && e.kind === 'expense' && e.voidedAt === undefined,
+  );
+  const Heading = walletDone ? 'h2' : 'h1';
   const linkClass = 'inline-flex min-h-11 items-center text-base font-medium text-accent underline';
 
   const steps: Step[] = [
@@ -29,9 +37,15 @@ export function OnboardingChecklist({
       key: 'dompet',
       done: walletDone,
       label: (
-        <Link href={dompetHref} className={linkClass}>
+        <Button
+          variant="ghost"
+          className="-ml-4 text-accent underline"
+          onClick={() => {
+            onAddWallet();
+          }}
+        >
           {ruang === 'bersama' ? 'Buat dompet bersama' : 'Tambah dompet sehari-hari'}
-        </Link>
+        </Button>
       ),
     },
     {
@@ -50,13 +64,23 @@ export function OnboardingChecklist({
       ),
     },
   ];
-  if (ruang === 'pribadi') steps.push({ key: 'undang', done: false, label: 'Undang Farida' });
+  if (ruang === 'pribadi') {
+    steps.push({
+      key: 'undang',
+      done: false,
+      label: (
+        <Link href={undangHref} className={linkClass}>
+          Undang Farida
+        </Link>
+      ),
+    });
+  }
 
   return (
     <section aria-labelledby="mulai">
-      <h1 id="mulai" className="text-xl font-semibold text-accent">
+      <Heading id="mulai" className="text-xl font-semibold text-accent">
         Mulai dari sini
-      </h1>
+      </Heading>
       {ruang === 'bersama' ? (
         <p className="mt-2 text-base text-text-muted">
           Pengeluaran rumah tangga yang kalian bagi. Farida dan kamu sama-sama bisa mencatat dan
@@ -81,9 +105,11 @@ export function OnboardingChecklist({
           </li>
         ))}
       </ul>
-      <p className="mt-6 text-base text-text-muted">
-        Tambahkan dompet operasional untuk melihat berapa yang aman dipakai bulan ini.
-      </p>
+      {walletDone ? null : (
+        <p className="mt-6 text-base text-text-muted">
+          Tambahkan dompet operasional untuk melihat berapa yang aman dipakai bulan ini.
+        </p>
+      )}
     </section>
   );
 }

@@ -16,12 +16,15 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  buildAccountHref,
+  buildAuthHref,
   buildEntryHref,
   buildHref,
   isRuang,
   keptQuery,
   tabFromPathname,
   validMonth,
+  type AuthPage,
   type Tab,
 } from './hrefs';
 
@@ -100,6 +103,10 @@ export function useDemo(): {
   href: (ruang: Ruang, tab: Tab) => Route;
   /** Alamat detail transaksi dengan query demo yang dipertahankan. */
   entryHref: (ruang: Ruang, id: string) => Route;
+  /** Alamat riwayat dompet dengan query demo yang dipertahankan. */
+  accountHref: (ruang: Ruang, id: string) => Route;
+  /** Alamat layar auth tiruan dengan query demo yang dipertahankan. */
+  authHref: (page: AuthPage) => Route;
   /** Bulan terpilih di Transaksi ('YYYY-MM'), dari `?bulan=`. */
   month: string;
   /** Alamat daftar Transaksi untuk bulan tertentu. */
@@ -126,6 +133,8 @@ export function useDemo(): {
     keypad: ctx.keypad,
     href: (ruang, tab) => buildHref(ruang, tab, query, keep),
     entryHref: (ruang, id) => buildEntryHref(ruang, id, query, keep),
+    accountHref: (ruang, id) => buildAccountHref(ruang, id, query),
+    authHref: (page) => buildAuthHref(page, query),
     month,
     monthHref: (ruang, m) => buildHref(ruang, 'transaksi', query, { value: m, today: ctx.today }),
   };

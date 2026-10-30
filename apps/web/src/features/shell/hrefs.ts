@@ -63,6 +63,17 @@ export function buildEntryHref(
   return `/${ruang}/transaksi/${encodeURIComponent(id)}${q}` as Route;
 }
 
+export function buildAccountHref(ruang: Ruang, id: string, query: string): Route {
+  return `/${ruang}/dompet/${encodeURIComponent(id)}${query}` as Route;
+}
+
+export const AUTH_PAGES = ['masuk', 'amankan', 'undang', 'terima-undangan'] as const;
+export type AuthPage = (typeof AUTH_PAGES)[number];
+
+export function buildAuthHref(page: AuthPage, query: string): Route {
+  return `/${page}${query}` as Route;
+}
+
 export function tabFromPathname(pathname: string): Tab {
   const seg = pathname.split('/')[2];
   return TABS.find((t) => t === seg) ?? 'beranda';
