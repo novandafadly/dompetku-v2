@@ -6,6 +6,7 @@ import {
   balances,
   budgetProgress,
   groupByDay,
+  monthSummary,
   safeToSpend,
   suggestCategories,
 } from './selectors';
@@ -599,5 +600,81 @@ describe('activityFeed privacy', () => {
       }
     }
     expect(feed).not.toContain(out.name);
+  });
+});
+
+describe('monthSummary', () => {
+  const base = {
+    ruang: 'pribadi',
+    createdAt: '2026-10-10T10:00:00+07:00',
+    createdBy: 'm',
+  } as const;
+  const mk = (
+    id: string,
+    e: Partial<Entry> & Pick<Entry, 'kind' | 'amount' | 'accountId'>,
+  ): Entry => ({
+    ...base,
+    id,
+    occurredOn: '2026-10-10',
+    ...e,
+  });
+
+  function stateWith(entries: Entry[]): DemoState {
+    const s = full();
+    return { ...s, entries };
+  }
+
+  it('splits operasional/tabungan, kantor and transfer totals', () => {
+    const s = stateWith([
+      mk('1', { kind: 'income', amount: 1000, accountId: 'acc-bca' }),
+      mk('2', { kind: 'income', amount: 300, accountId: 'acc-darurat' }),
+      mk('3', { kind: 'expense', amount: 400, accountId: 'acc-tunai' }),
+      mk('4', { kind: 'expense', amount: 70, accountId: 'acc-kantor' }),
+      mk('5', { kind: 'income', amount: 30, accountId: 'acc-kantor' }),
+      mk('6', {
+        kind: 'transfer',
+        amount: 200,
+        accountId: 'acc-bca',
+        counterAccountId: 'acc-tunai',
+      }),
+      mk('7', { kind: 'space_transfer', direction: 'out', amount: 500, accountId: 'acc-bca' }),
+      mk('8', {
+        kind: 'space_transfer',
+        direction: 'in',
+        amount: 500,
+        accountId: 'acc-rumah',
+        ruang: 'bersama',
+      }),
+      mk('9', { kind: 'opening_balance', amount: 9999, accountId: 'acc-bca' }),
+      mk('10', { kind: 'expense', amount: 111, accountId: 'acc-bca', occurredOn: '2026-09-30' }),
+      mk('11', {
+        kind: 'expense',
+        amount: 222,
+        accountId: 'acc-bca',
+        voidedAt: '2026-10-11T10:00:00+07:00',
+      }),
+    ]);
+    expect(monthSummary(s, 'pribadi', '2026-10')).toEqual({
+      pemasukan: 1300,
+      pengeluaran: 400,
+      selisih: 900,
+      kantor: 100,
+      transfer: 700,
+    });
+    expect(monthSummary(s, 'bersama', '2026-10')).toEqual({
+      pemasukan: 0,
+      pengeluaran: 0,
+      selisih: 0,
+      kantor: 0,
+      transfer: 0,
+    });
+  });
+
+  it('selisih is pemasukan minus pengeluaran on the seed', () => {
+    const s = full();
+    const r = monthSummary(s, 'pribadi', '2026-10');
+    expect(r.selisih).toBe(r.pemasukan - r.pengeluaran);
+    expect(r.kantor).toBeGreaterThan(0);
+    expect(r.transfer).toBeGreaterThan(0);
   });
 });

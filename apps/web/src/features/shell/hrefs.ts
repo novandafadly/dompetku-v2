@@ -27,6 +27,10 @@ export function buildHref(ruang: Ruang, tab: Tab, query: string): Route {
   return `/${ruang}/${tab}${query}` as Route;
 }
 
+export function buildEntryHref(ruang: Ruang, id: string, query: string): Route {
+  return `/${ruang}/transaksi/${encodeURIComponent(id)}${query}` as Route;
+}
+
 export function tabFromPathname(pathname: string): Tab {
   const seg = pathname.split('/')[2];
   return TABS.find((t) => t === seg) ?? 'beranda';

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  addMonths,
   dayLabel,
   daysInclusive,
   endOfMonth,
+  monthName,
   nowIsoWIB,
   nowTimeWIB,
   shortDateLabel,
@@ -82,5 +84,22 @@ describe('nowIsoWIB', () => {
     expect(nowIsoWIB(new Date('2026-10-30T17:05:00Z'))).toBe('2026-10-31T00:05:00+07:00');
     expect(nowIsoWIB(new Date('2026-12-31T16:59:59Z'))).toBe('2026-12-31T23:59:59+07:00');
     expect(nowIsoWIB(new Date('2026-12-31T17:00:00Z'))).toBe('2027-01-01T00:00:00+07:00');
+  });
+});
+
+describe('addMonths / monthName', () => {
+  it('shifts across year boundaries', () => {
+    expect(addMonths('2026-10', -1)).toBe('2026-09');
+    expect(addMonths('2026-01', -1)).toBe('2025-12');
+    expect(addMonths('2026-12', 1)).toBe('2027-01');
+    expect(addMonths('2026-10', -5)).toBe('2026-05');
+  });
+  it('names months in Indonesian', () => {
+    expect(monthName('2026-10')).toBe('Oktober');
+    expect(monthName('2026-08')).toBe('Agustus');
+  });
+  it('rejects invalid months', () => {
+    expect(() => monthName('2026-13')).toThrow(RangeError);
+    expect(() => addMonths('2026-1', 1)).toThrow(RangeError);
   });
 });

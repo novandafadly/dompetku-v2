@@ -15,7 +15,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { buildHref, isRuang, keptQuery, type Tab } from './hrefs';
+import { buildEntryHref, buildHref, isRuang, keptQuery, type Tab } from './hrefs';
 
 interface DemoValue {
   store: DemoStore;
@@ -84,6 +84,8 @@ export function useDemo(): {
   keypad: 'os' | 'app';
   /** Alamat tab di ruang tertentu dengan query demo yang dipertahankan. */
   href: (ruang: Ruang, tab: Tab) => Route;
+  /** Alamat detail transaksi dengan query demo yang dipertahankan. */
+  entryHref: (ruang: Ruang, id: string) => Route;
 } {
   const ctx = useContext(DemoContext);
   if (ctx === null) throw new Error('useDemo harus dipakai di dalam <DemoProvider>');
@@ -100,5 +102,6 @@ export function useDemo(): {
     today: ctx.today,
     keypad: ctx.keypad,
     href: (ruang, tab) => buildHref(ruang, tab, query),
+    entryHref: (ruang, id) => buildEntryHref(ruang, id, query),
   };
 }

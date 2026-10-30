@@ -217,3 +217,38 @@ export function activityFeed(state: DemoState, limit: number): Activity[] {
     .sort((a, b) => (a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id < b.id ? 1 : -1))
     .slice(0, limit);
 }
+
+export interface MonthSummary {
+  pemasukan: Rupiah;
+  pengeluaran: Rupiah;
+  /** pemasukan − pengeluaran; bisa negatif. */
+  selisih: Rupiah;
+  /** Σ pemasukan + pengeluaran di dompet pocket kantor (tidak masuk tiga angka di atas). */
+  kantor: Rupiah;
+  /** Σ transfer + Σ kaki keluar space_transfer ruang ini. */
+  transfer: Rupiah;
+}
+
+/** Ringkasan bulan 'YYYY-MM'. Saldo awal dan entri batal tidak dihitung. */
+export function monthSummary(state: DemoState, ruang: Ruang, month: string): MonthSummary {
+  const kantorIds = new Set(
+    state.accounts.filter((a) => a.ruang === ruang && a.pocket === 'kantor').map((a) => a.id),
+  );
+  let pemasukan = 0;
+  let pengeluaran = 0;
+  let kantor = 0;
+  let transfer = 0;
+  for (const e of state.entries) {
+    if (!isLive(e) || e.ruang !== ruang || !e.occurredOn.startsWith(month)) continue;
+    if (e.kind === 'income' || e.kind === 'expense') {
+      if (kantorIds.has(e.accountId)) kantor += e.amount;
+      else if (e.kind === 'income') pemasukan += e.amount;
+      else pengeluaran += e.amount;
+    } else if (e.kind === 'transfer') {
+      transfer += e.amount;
+    } else if (e.kind === 'space_transfer' && e.direction === 'out') {
+      transfer += e.amount;
+    }
+  }
+  return { pemasukan, pengeluaran, selisih: pemasukan - pengeluaran, kantor, transfer };
+}

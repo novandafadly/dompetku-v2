@@ -110,3 +110,41 @@ export function shortDateLabel(d: IsoDate): string {
   const { m, day } = parse(d);
   return String(day) + ' ' + (MONTHS[m - 1] ?? '');
 }
+
+const MONTH_NAMES = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+] as const;
+
+const MONTH_RE = /^(\d{4})-(\d{2})$/;
+
+function parseMonth(ym: string): { y: number; m: number } {
+  const match = MONTH_RE.exec(ym);
+  const m = Number(match?.[2]);
+  if (!match || m < 1 || m > 12) throw new RangeError(`Invalid month: ${ym}`);
+  return { y: Number(match[1]), m };
+}
+
+/** Bulan 'YYYY-MM' bergeser n bulan. */
+export function addMonths(ym: string, n: number): string {
+  const { y, m } = parseMonth(ym);
+  const idx = y * 12 + (m - 1) + n;
+  return (
+    String(Math.floor(idx / 12)).padStart(4, '0') + '-' + String((idx % 12) + 1).padStart(2, '0')
+  );
+}
+
+/** "Oktober": nama bulan lengkap tanpa tahun. */
+export function monthName(ym: string): string {
+  return MONTH_NAMES[parseMonth(ym).m - 1] ?? '';
+}
