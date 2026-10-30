@@ -10,7 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="id"
       data-ruang="pribadi"
-      data-theme="light"
+
       className={`${sans.variable} ${hero.variable}`}
     >
       <body>{children}</body>
