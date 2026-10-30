@@ -9,6 +9,14 @@ function groupThousands(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+$)/g, '.');
 }
 
+/** "35000" -> "35.000": hanya pengelompokan ribuan, tanpa "Rp". Hanya bilangan bulat aman non-negatif. */
+export function formatRibuan(n: Rupiah): string {
+  if (!Number.isSafeInteger(n) || n < 0) {
+    throw new RangeError(`formatRibuan butuh bilangan bulat aman non-negatif, dapat ${String(n)}`);
+  }
+  return groupThousands(String(n));
+}
+
 export function formatRupiah(n: Rupiah, opts: { sign?: 'auto' | 'always' } = {}): string {
   const body = `Rp${NBSP}${groupThousands(String(Math.abs(n)))}`;
   if (n < 0) return `${MINUS}${body}`;

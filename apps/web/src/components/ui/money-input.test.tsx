@@ -73,4 +73,32 @@ describe('MoneyInput', () => {
     await user.clear(screen.getByLabelText('Nominal'));
     expect(onValue).toHaveBeenLastCalledWith(null);
   });
+
+  it('mengetik di tengah: caret tetap tepat setelah angka baru', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText<HTMLInputElement>('Nominal');
+    await user.type(input, '1250000');
+    expect(input).toHaveValue('1.250.000');
+    input.setSelectionRange(3, 3); // setelah "1.2"
+    await user.keyboard('9');
+    expect(onValue).toHaveBeenLastCalledWith(12950000);
+    expect(input).toHaveValue('12.950.000');
+    expect(input.selectionStart).toBe(4); // "12.9|50.000"
+    expect(input.selectionEnd).toBe(4);
+  });
+
+  it('paste "000" menimpa seleksi dan caret berada setelah sisipan', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} initial={1250000} />);
+    const input = screen.getByLabelText<HTMLInputElement>('Nominal');
+    await user.click(input);
+    input.setSelectionRange(2, 5); // "250"
+    await user.paste('000');
+    expect(onValue).toHaveBeenLastCalledWith(1000000);
+    expect(input).toHaveValue('1.000.000');
+    expect(input.selectionStart).toBe(5); // "1.000|.000"
+  });
 });

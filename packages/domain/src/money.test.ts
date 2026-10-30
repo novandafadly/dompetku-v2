@@ -1,6 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { formatRupiah, formatRupiahCompact, parseRupiah, spokenRupiah } from './money';
+import {
+  formatRibuan,
+  formatRupiah,
+  formatRupiahCompact,
+  parseRupiah,
+  spokenRupiah,
+} from './money';
 
 const NBSP = ' ';
 const MINUS = '−';
@@ -79,5 +85,19 @@ describe('spokenRupiah', () => {
     expect(spokenRupiah(35000, 'expense')).toBe('pengeluaran Rp 35.000');
     expect(spokenRupiah(9500000, 'income')).toBe('pemasukan Rp 9.500.000');
     expect(spokenRupiah(1250000, 'neutral')).toBe('Rp 1.250.000');
+  });
+});
+
+describe('formatRibuan', () => {
+  it('mengelompokkan ribuan tanpa Rp', () => {
+    expect(formatRibuan(0)).toBe('0');
+    expect(formatRibuan(999)).toBe('999');
+    expect(formatRibuan(35000)).toBe('35.000');
+    expect(formatRibuan(12345678900)).toBe('12.345.678.900');
+    expect(formatRibuan(Number.MAX_SAFE_INTEGER)).toBe('9.007.199.254.740.991');
+  });
+
+  it.each([-1, 1.5, Number.NaN, Infinity, 2 ** 53])('melempar RangeError untuk %s', (n) => {
+    expect(() => formatRibuan(n)).toThrow(RangeError);
   });
 });

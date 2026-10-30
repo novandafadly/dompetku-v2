@@ -1,10 +1,23 @@
 'use client';
 
-import { useId, type ClipboardEvent, type ChangeEvent } from 'react';
-import { parseRupiah, type Rupiah } from '@dompetku/domain';
+import { useId, useLayoutEffect, useRef, type ChangeEvent, type ClipboardEvent } from 'react';
+import { formatRibuan, parseRupiah, type Rupiah } from '@dompetku/domain';
 
 function display(value: Rupiah | null): string {
-  return value === null ? '' : String(value).replace(/\B(?=(\d{3})+$)/g, '.');
+  return value === null ? '' : formatRibuan(value);
+}
+
+const digitsOf = (text: string) => text.replace(/\D/g, '');
+
+/** Indeks di `text` tepat setelah `count` angka (titik pemisah dilewati). */
+function caretAfterDigits(text: string, count: number): number {
+  if (count <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (/\d/.test(text.charAt(i))) seen++;
+    if (seen === count) return i + 1;
+  }
+  return text.length;
 }
 
 export function MoneyInput({
@@ -19,6 +32,25 @@ export function MoneyInput({
   disabled?: boolean;
 }) {
   const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Jumlah angka di kiri caret yang harus dipertahankan setelah format ulang.
+  const pendingDigits = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const count = pendingDigits.current;
+    pendingDigits.current = null;
+    if (!input || count === null || document.activeElement !== input) return;
+    const pos = caretAfterDigits(input.value, count);
+    input.setSelectionRange(pos, pos);
+  });
+
+  function commit(digits: string, caretDigits: number) {
+    const n = Number(digits);
+    if (!Number.isSafeInteger(n)) return;
+    pendingDigits.current = caretDigits;
+    onChange(n);
+  }
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
@@ -28,14 +60,21 @@ export function MoneyInput({
     }
     // Ketikan di luar angka dan titik ditolak diam: input terkontrol kembali ke nilai lama.
     if (!/^[\d.]+$/.test(raw)) return;
-    const n = Number(raw.replaceAll('.', ''));
-    if (Number.isSafeInteger(n)) onChange(n);
+    const caret = e.target.selectionStart ?? raw.length;
+    commit(digitsOf(raw), digitsOf(raw.slice(0, caret)).length);
   }
 
   function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
     e.preventDefault();
-    const parsed = parseRupiah(e.clipboardData.getData('text'));
-    if (parsed !== null) onChange(parsed);
+    const pasted = e.clipboardData.getData('text');
+    if (parseRupiah(pasted) === null) return;
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const left = digitsOf(input.value.slice(0, start));
+    const right = digitsOf(input.value.slice(end));
+    const inserted = digitsOf(pasted);
+    commit(left + inserted + right, left.length + inserted.length);
   }
 
   return (
@@ -49,6 +88,7 @@ export function MoneyInput({
         </span>
         <input
           id={id}
+          ref={inputRef}
           type="text"
           inputMode="numeric"
           autoComplete="off"
