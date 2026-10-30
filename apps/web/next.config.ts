@@ -11,7 +11,7 @@ const config: NextConfig = {
   reactStrictMode: true,
   typedRoutes: true,
   images: { unoptimized: true },
-  transpilePackages: ['@dompetku/domain'],
+  transpilePackages: ['@dompetku/domain', '@dompetku/demo-data'],
 };
 
 export default config;

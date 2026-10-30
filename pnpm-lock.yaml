@@ -47,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@dompetku/demo-data':
+        specifier: workspace:*
+        version: link:../../packages/demo-data
       '@dompetku/domain':
         specifier: workspace:*
         version: link:../../packages/domain
