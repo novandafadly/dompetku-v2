@@ -36,7 +36,7 @@ NEXT_PUBLIC_PROTOTYPE=1 pnpm --filter @dompetku/web start
 
 Buka `http://localhost:3000`. `NEXT_PUBLIC_PROTOTYPE` dibaca saat build, jadi setel di kedua perintah.
 
-Pratinjau daring lewat Vercel dijelaskan di `docs/adr/0003-preview.md`. Formulir penilaian ada di `docs/review/m0a-penilaian.md`.
+Pratinjau daring lewat Vercel dilindungi Vercel Authentication; Farida membukanya lewat Shareable Link dari Novanda (menunggu konfirmasi pemilik, lihat `docs/adr/0003-preview.md`). Formulir penilaian ada di `docs/review/m0a-penilaian.md`.
 
 ## Struktur
 

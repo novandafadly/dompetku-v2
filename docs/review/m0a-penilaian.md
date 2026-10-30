@@ -4,7 +4,7 @@ Ini formulir untuk mencoba prototipe sebelum kita membangun versi sungguhan. Tid
 
 Tautan pratinjau: <LINK PRATINJAU>
 
-Buka lewat akun Vercel yang sudah diundang. Coba di HP, lalu kalau sempat di laptop juga.
+Buka lewat tautan khusus dari Novanda (Shareable Link Vercel); tidak perlu akun Vercel. Tautan dicabut setelah M0a. Coba di HP, lalu kalau sempat di laptop juga.
 
 ## Sebelum mulai
 
