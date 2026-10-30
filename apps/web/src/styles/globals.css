@@ -90,3 +90,9 @@
     scroll-padding-bottom: 6rem;
   }
 }
+
+/* ?hero=sans: angka hero memakai sans 600 alih-alih serif. */
+html[data-hero='sans'] .font-hero {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 600;
+}

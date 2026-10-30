@@ -10,7 +10,7 @@ import {
   createContext,
   Suspense,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -54,7 +54,7 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
     } as const;
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.hero = boot.hero;
   }, [boot.hero]);
 

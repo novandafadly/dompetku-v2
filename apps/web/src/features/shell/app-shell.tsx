@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
 import type { Ruang } from '@dompetku/demo-data';
 import { DemoBanner } from '@/components/ui/demo-banner';
 import { AppHeader } from './app-header';
@@ -11,7 +11,7 @@ import { TabBar } from './tab-bar';
 
 export function AppShell({ ruang, children }: { ruang: Ruang; children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.ruang = ruang;
   }, [ruang]);
   return (

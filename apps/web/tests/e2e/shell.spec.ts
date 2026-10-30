@@ -29,11 +29,17 @@ test.describe('mobile 390', () => {
   test('pengalih ke Bersama mengubah URL, data-ruang, dan label header', async ({ page }) => {
     await page.goto('/pribadi/beranda');
     const header = page.getByRole('banner');
-    await expect(header.getByRole('radio', { name: 'Pribadi' })).toBeChecked();
-    await header.getByRole('radio', { name: 'Bersama' }).click();
+    await expect(header.getByRole('link', { name: 'Pribadi' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await header.getByRole('link', { name: 'Bersama' }).click();
     await expect(page).toHaveURL(/\/bersama\/beranda$/);
     await expect(page.locator('html')).toHaveAttribute('data-ruang', 'bersama');
-    await expect(header.getByRole('radio', { name: 'Bersama' })).toBeChecked();
+    await expect(header.getByRole('link', { name: 'Bersama' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     await expect(header.getByText('Bersama', { exact: true })).toBeVisible();
   });
 
@@ -44,7 +50,7 @@ test.describe('mobile 390', () => {
       .getByRole('link', { name: 'Dompet' })
       .click();
     await expect(page).toHaveURL(/\/pribadi\/dompet\?seed=full&today=2026-10-30&hero=sans$/);
-    await page.getByRole('banner').getByRole('radio', { name: 'Bersama' }).click();
+    await page.getByRole('banner').getByRole('link', { name: 'Bersama' }).click();
     await expect(page).toHaveURL(/\/bersama\/dompet\?seed=full&today=2026-10-30&hero=sans$/);
     await expect(page.locator('html')).toHaveAttribute('data-hero', 'sans');
   });
@@ -85,6 +91,28 @@ test.describe('mobile 390', () => {
   });
 });
 
+test.describe('mobile 320', () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+
+  test('tab bar tanpa scroll horizontal, label utuh, target >= 44 px', async ({ page }) => {
+    await page.goto('/pribadi/beranda');
+    const bar = page.getByRole('navigation', { name: 'Tab utama' });
+    await expect(bar).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      320,
+    );
+    const items = bar.locator('a, button');
+    expect(await items.count()).toBe(5);
+    for (const item of await items.all()) {
+      const box = await item.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      const clipped = await item.evaluate((el) => el.scrollWidth > el.clientWidth);
+      expect(clipped).toBe(false);
+    }
+  });
+});
+
 test.describe('desktop 1280', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -93,7 +121,10 @@ test.describe('desktop 1280', () => {
     const side = page.getByRole('complementary', { name: 'Sidebar' });
     await expect(side).toBeVisible();
     expect((await side.boundingBox())?.width).toBe(248);
-    await expect(side.getByRole('radio', { name: 'Pribadi' })).toBeChecked();
+    await expect(side.getByRole('link', { name: 'Pribadi' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     await expect(side.getByRole('button', { name: 'Catat' })).toBeVisible();
     const nav = side.getByRole('navigation', { name: 'Navigasi utama' });
     const labels = await nav.locator('a, button').allInnerTexts();
@@ -105,9 +136,36 @@ test.describe('desktop 1280', () => {
       'Menu',
     ]);
     await expect(page.getByRole('navigation', { name: 'Tab utama' })).toBeHidden();
-    await side.getByRole('radio', { name: 'Bersama' }).click();
+    await side.getByRole('link', { name: 'Bersama' }).click();
     await expect(page).toHaveURL(/\/bersama\/beranda$/);
   });
+});
+
+test('c di dalam field teks tidak membuka Catat', async ({ page }) => {
+  await page.goto('/pribadi/beranda');
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.id = 'probe';
+    document.body.append(input);
+  });
+  await page.locator('#probe').focus();
+  await page.keyboard.press('c');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#probe')).toHaveValue('c');
+});
+
+test('?hero mengganti font angka hero', async ({ page }) => {
+  const family = async (hero: string) => {
+    await page.goto(`/pribadi/beranda?hero=${hero}`);
+    await expect(page.locator('html')).toHaveAttribute('data-hero', hero);
+    return page
+      .locator('.font-hero:visible')
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+  };
+  const serif = await family('serif');
+  const sans = await family('sans');
+  expect(sans).not.toBe(serif);
 });
 
 test('ruang tidak dikenal menghasilkan 404', async ({ page }) => {

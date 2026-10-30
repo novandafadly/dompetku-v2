@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Sheet } from '@/components/ui/sheet';
+import { shouldOpenCatat } from './catat-shortcut';
 import { useDemo } from './demo-provider';
 
 interface CatatValue {
@@ -25,17 +26,10 @@ export function useCatat(): CatatValue {
   return ctx;
 }
 
-function isTextField(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-}
-
-/** Pintasan `c` (WCAG 2.1.4): mati bila fokus di field teks, ada modifier, atau dialog terbuka. */
 function useCatatShortcut(open: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-      if (isTextField(e.target) || document.querySelector('[role="dialog"]') !== null) return;
+      if (!shouldOpenCatat(e)) return;
       e.preventDefault();
       open();
     };
