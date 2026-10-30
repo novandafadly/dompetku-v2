@@ -1,7 +1,9 @@
+import { DemoBanner } from '@/components/ui/demo-banner';
+
 export default function BerandaPage() {
   return (
     <main>
-      <p>Data demo</p>
+      <DemoBanner />
     </main>
   );
 }
