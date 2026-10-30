@@ -490,3 +490,62 @@ describe('markNoSpendDay', () => {
     expect(store.getState().noSpendDays).toHaveLength(2);
   });
 });
+
+describe('budgetProgress Pribadi', () => {
+  it('has a Pribadi budget at 80% or more but under 100% at the demo date', () => {
+    const rows = budgetProgress(full(), 'pribadi', TODAY);
+    expect(rows.some((r) => r.pct >= 80 && r.pct < 100)).toBe(true);
+    const total = safeToSpend(full(), 'pribadi', TODAY).total;
+    expect(total).toBeGreaterThan(1_000_000);
+    expect(total).toBeLessThan(10_000_000);
+  });
+});
+
+describe('activityFeed privacy', () => {
+  it('never exposes Pribadi descriptions or Pribadi-only amounts, also after a space_transfer', () => {
+    const store = createDemoStore(full());
+    const s0 = store.getState();
+    const out = acc(s0, 'BCA');
+    const into = s0.accounts.find((a) => a.ruang === 'bersama' && a.pocket === 'operasional');
+    if (!into) throw new Error('no bersama account');
+    const novanda = s0.members[0];
+    if (!novanda) throw new Error('no member');
+    const secret = 'Rahasia pribadi 7777';
+    const base = {
+      kind: 'space_transfer' as const,
+      occurredOn: TODAY,
+      createdBy: novanda.id,
+      amount: 777_000,
+      linkId: 'link-priv',
+    };
+    store.addEntry({
+      ...base,
+      ruang: 'pribadi',
+      accountId: out.id,
+      direction: 'out',
+      description: secret,
+    });
+    store.addEntry({
+      ...base,
+      ruang: 'bersama',
+      accountId: into.id,
+      direction: 'in',
+    });
+    const state = store.getState();
+    const feed = JSON.stringify(activityFeed(state, 1000));
+    const pribadi = state.entries.filter((e) => e.ruang === 'pribadi');
+    const bersamaAmounts = new Set(
+      state.entries.filter((e) => e.ruang === 'bersama').map((e) => e.amount),
+    );
+    for (const e of pribadi) {
+      if (e.description !== undefined) expect(feed).not.toContain(e.description);
+    }
+    expect(feed).not.toContain(secret);
+    for (const e of pribadi) {
+      if (!bersamaAmounts.has(e.amount) && e.kind !== 'space_transfer') {
+        expect(activityFeed(state, 1000).some((a) => a.amount === e.amount)).toBe(false);
+      }
+    }
+    expect(feed).not.toContain(out.name);
+  });
+});

@@ -71,8 +71,10 @@ test.describe('Beranda Pribadi terisi', () => {
     await expect(bills.getByText('Cicilan ponsel')).toBeVisible();
     await expect(bills.getByText('Tagihan kartu kredit')).toBeVisible();
     const budgets = main.getByRole('region', { name: 'Anggaran hampir habis' });
-    await expect(budgets.getByText('Belum ada anggaran yang mendekati batas.')).toBeVisible();
-    await expect(budgets.getByText('Langganan')).toHaveCount(0);
+    await expect(budgets.getByText('Langganan')).toBeVisible();
+    await expect(budgets.getByText('85% terpakai')).toBeVisible();
+    await expect(budgets.locator('svg')).toHaveCount(1);
+    await expect(budgets.getByText('Makan Siang & Minum')).toHaveCount(0);
     const recent = main.getByRole('region', { name: 'Terakhir' });
     await expect(recent.getByRole('listitem')).toHaveCount(5);
     await expect(main.getByText(/kekayaan bersih/i)).toHaveCount(0);
@@ -99,6 +101,20 @@ test.describe('Beranda Pribadi terisi', () => {
 
 test.describe('Beranda Bersama', () => {
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test('tidak memuat deskripsi pengeluaran Pribadi', async ({ page }) => {
+    const own = full.entries.filter(
+      (e) => e.ruang === 'pribadi' && e.kind === 'expense' && e.description !== undefined,
+    );
+    const bersamaText = new Set(
+      full.entries.filter((e) => e.ruang === 'bersama').map((e) => e.description),
+    );
+    const secret = own.find((e) => !bersamaText.has(e.description))?.description;
+    expect(secret).toBeDefined();
+    await page.goto(`/bersama/beranda?${q}`);
+    await expect(page.getByTestId('hero-amount')).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toContain(secret ?? '');
+  });
 
   test('aksen bata, judul bersama, feed Aktivitas dengan inisial', async ({ page }) => {
     const r = safeToSpend(full, 'bersama', TODAY);
