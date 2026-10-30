@@ -1,5 +1,6 @@
 'use client';
 
+import { WarningIcon } from '@phosphor-icons/react';
 import type { Account, Pocket } from '@dompetku/demo-data';
 import type { Rupiah } from '@dompetku/domain';
 import { useRef, useState, type RefObject } from 'react';
@@ -92,7 +93,12 @@ function Form({
             </Chip>
           ))}
         </ChipGroup>
-        {errors.pocket ? <p className="text-sm text-danger">{errors.pocket}</p> : null}
+        {errors.pocket ? (
+          <p className="flex items-start gap-1 text-sm text-danger">
+            <WarningIcon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+            {errors.pocket}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-sm text-text-muted">Tipe</span>

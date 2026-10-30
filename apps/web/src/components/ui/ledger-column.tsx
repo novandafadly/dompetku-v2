@@ -30,7 +30,7 @@ export function LedgerColumn({
                 </>
               ) : null}
             </td>
-            <th scope="row" className="py-1.5 text-left font-normal text-text-muted">
+            <th scope="row" className="py-1.5 pr-3 text-left font-normal text-text-muted">
               {row.label}
             </th>
             <td className="py-1.5 text-right">
@@ -42,7 +42,7 @@ export function LedgerColumn({
       <tfoot>
         <tr className="border-t border-border">
           <td />
-          <th scope="row" className="pt-2 text-left font-bold text-text">
+          <th scope="row" className="pt-2 pr-3 text-left font-bold text-text">
             {totalLabel}
           </th>
           <td className="pt-2 text-right">

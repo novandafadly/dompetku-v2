@@ -77,7 +77,7 @@ export function AccountList({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-text">Dompet {RUANG_NAME[ruang]}</h1>
         <Button variant="secondary" onClick={onAdd}>
-          <PlusIcon size={20} aria-hidden="true" />
+          <PlusIcon size={20} aria-hidden="true" className="shrink-0" />
           Tambah dompet
         </Button>
       </div>
