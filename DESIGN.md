@@ -15,20 +15,20 @@ Sumber: jawaban pemilik 2026-10-30 ("semuanya jadul", pilih **gelap premium**, w
 
 ## Palet (gelap)
 
-| Token | Hex | Catatan |
-|---|---|---|
-| `bg` | `#0D0E11` | hampir hitam, sedikit dingin |
-| `surface` | `#15171C` | lapisan 1 (baris, kartu) |
-| `surface-2` | `#1D2027` | lapisan 2 (input, sheet) |
-| `text` | `#F2F3F5` | 17,4:1 di `bg` |
-| `text-muted` | `#A0A6B2` | 7,9:1 di `bg`, 6,7:1 di `surface-2` |
-| `border` | ≥ 3:1 di `bg` dan `surface` | batas input/kontrol (nilai final dihitung tes kontras) |
-| `pribadi` | `#6CB4FF` biru langit | 8,8:1 di `bg` |
-| `bersama` | `#F4B860` emas | 10,9:1 di `bg` |
-| `on-accent` | `#0D0E11` | teks di atas tombol aksen (8,8:1 / 10,9:1) |
-| `income` | `#5BD69A` | |
-| `danger` | `#FF7A72` | |
-| `warning` | `#FF9B5E` | selalu bersama ikon + teks |
+| Token        | Hex                         | Catatan                                                |
+| ------------ | --------------------------- | ------------------------------------------------------ |
+| `bg`         | `#0D0E11`                   | hampir hitam, sedikit dingin                           |
+| `surface`    | `#15171C`                   | lapisan 1 (baris, kartu)                               |
+| `surface-2`  | `#1D2027`                   | lapisan 2 (input, sheet)                               |
+| `text`       | `#F2F3F5`                   | 17,4:1 di `bg`                                         |
+| `text-muted` | `#A0A6B2`                   | 7,9:1 di `bg`, 6,7:1 di `surface-2`                    |
+| `border`     | ≥ 3:1 di `bg` dan `surface` | batas input/kontrol (nilai final dihitung tes kontras) |
+| `pribadi`    | `#6CB4FF` biru langit       | 8,8:1 di `bg`                                          |
+| `bersama`    | `#F4B860` emas              | 10,9:1 di `bg`                                         |
+| `on-accent`  | `#0D0E11`                   | teks di atas tombol aksen (8,8:1 / 10,9:1)             |
+| `income`     | `#5BD69A`                   |                                                        |
+| `danger`     | `#FF7A72`                   |                                                        |
+| `warning`    | `#FF9B5E`                   | selalu bersama ikon + teks                             |
 
 Biru vs emas dipilih karena tetap terbedakan bagi buta warna merah-hijau (beda hue dan terang). Tint ruang: permukaan gelap bernuansa ruang (contoh `#132235` Pribadi, `#2A2113` Bersama), teks di atasnya ≥ 6,5:1.
 

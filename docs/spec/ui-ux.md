@@ -196,6 +196,8 @@ Alasan: UX hanya mendefinisikan 390 px dan ≥ 1024 px. Tablet dan jendela brows
 
 ## Lampiran A · Arah visual
 
+> Digantikan oleh `DESIGN.md` (gelap premium) sejak 2026-10-30; lihat `docs/adr/0005-visual-dark-premium.md`. Teks di bawah disimpan sebagai riwayat.
+
 **Karakter**: buku kas di meja rumah. Kertas hangat, tinta gelap, angka rapi rata kanan. Tenang karena uang adalah urusan serius; khas karena warnanya punya tugas (menandai ruang) dan motifnya (kolom aritmetika dengan garis total ganda) berasal dari cara orang memang menghitung uang di kertas.
 
 ### A.1 Palet (semua rasio terukur)

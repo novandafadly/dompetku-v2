@@ -11,14 +11,14 @@ Buka lewat tautan khusus dari Novanda (Shareable Link Vercel); tidak perlu akun 
 - Semua data di sini fiktif. Data tersimpan di memori saja, jadi kembali ke awal setiap kali halaman dimuat ulang. Itu normal, bukan error.
 - Tambahkan parameter di akhir alamat untuk mencoba variasi:
 
-| Parameter           | Fungsi                                                 |
-| ------------------- | ------------------------------------------------------ |
-| `?keypad=app`       | Keypad varian B (bawaan adalah varian A)               |
-| `?hero=sans`        | Angka besar di beranda pakai huruf sans (bawaan serif) |
-| `?seed=empty`       | Mulai dari kosong, tanpa transaksi                     |
-| `?today=2026-10-17` | Anggap hari ini tanggal 17 Oktober 2026                |
+| Parameter           | Fungsi                                   |
+| ------------------- | ---------------------------------------- |
+| `?keypad=app`       | Keypad varian B (bawaan adalah varian A) |
+| `?theme=light`      | Tema terang (bawaan gelap)               |
+| `?seed=empty`       | Mulai dari kosong, tanpa transaksi       |
+| `?today=2026-10-17` | Anggap hari ini tanggal 17 Oktober 2026  |
 
-Contoh: `<LINK PRATINJAU>/pribadi/beranda?keypad=app&hero=sans`
+Contoh: `<LINK PRATINJAU>/pribadi/beranda?keypad=app&theme=light`
 
 Skala 1-5 berlaku untuk semua tugas: 1 = sangat sulit atau membingungkan, 5 = lancar tanpa mikir.
 
@@ -41,7 +41,8 @@ Skala 1-5 berlaku untuk semua tugas: 1 = sangat sulit atau membingungkan, 5 = la
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Angka besar di beranda:** serif (bawaan) / sans (`?hero=sans`)
+- [ ] **Warna ruang:** Pribadi biru / Bersama emas: pertahankan atau ganti? Usulan warna lain: ____
+- [ ] **Tema:** gelap (bawaan) / terang (`?theme=light`)
 
 ### Penilaian akhir
 
@@ -74,7 +75,8 @@ Apa yang mengganggu, apa yang menyenangkan, apa yang kurang?
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Angka besar di beranda:** serif (bawaan) / sans (`?hero=sans`)
+- [ ] **Warna ruang:** Pribadi biru / Bersama emas: pertahankan atau ganti? Usulan warna lain: ____
+- [ ] **Tema:** gelap (bawaan) / terang (`?theme=light`)
 
 ### Penilaian akhir
 
@@ -93,5 +95,5 @@ Apa yang mengganggu, apa yang menyenangkan, apa yang kurang?
 M0a dianggap selesai kalau:
 
 1. Kedua bagian di atas sudah terisi.
-2. Pilihan keypad dan font angka besar dicatat di `docs/adr/0004-hasil-penilaian-m0a.md`.
+2. Pilihan keypad, warna ruang, dan tema dicatat di `docs/adr/0004-hasil-penilaian-m0a.md`.
 3. Setiap temuan dijadikan issue di GitHub dengan label `m0a-feedback`.
