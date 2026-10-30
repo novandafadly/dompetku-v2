@@ -18,6 +18,8 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@fontsource/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/source-serif-4": "^5.3.1",
     "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.19.2",

@@ -1,3 +1,61 @@
 @import 'tailwindcss';
+@import './tokens.css';
 
-/* Token desain dibuat di task berikutnya (tokens.css). */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-hairline: var(--hairline);
+  --color-pribadi: var(--space-pribadi);
+  --color-pribadi-tint: var(--space-pribadi-tint);
+  --color-bersama: var(--space-bersama);
+  --color-bersama-tint: var(--space-bersama-tint);
+  --color-income: var(--income);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-accent: var(--accent);
+  --color-accent-tint: var(--accent-tint);
+  --color-on-accent: var(--on-accent);
+
+  --spacing: 4px;
+
+  --radius-*: initial;
+  --radius-field: 8px;
+  --radius-sheet: 16px;
+  --radius-pill: 9999px;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 15px;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0s !important;
+      transition-duration: 0s !important;
+    }
+  }
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@utility font-hero {
+  font-family: var(--font-hero), serif;
+}

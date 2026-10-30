@@ -1,0 +1,71 @@
+/* Sumber tunggal token warna (ui-ux.md Lampiran A.1). Dibaca juga oleh contrast.test.ts. */
+:root {
+  color-scheme: light;
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-2: #efece5;
+  --text: #1c1b18;
+  --text-muted: #5e5a52;
+  --border: #8c877c;
+  --hairline: #e3dfd6;
+  --space-pribadi: #2b3f8f;
+  --space-pribadi-tint: #e6e9f5;
+  --space-bersama: #a3461e;
+  --space-bersama-tint: #f5e6dc;
+  --income: #1f6b45;
+  --danger: #b3261e;
+  --warning: #8a5a00;
+  --on-accent: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #121210;
+    --surface: #1a1a17;
+    --surface-2: #23221f;
+    --text: #edeae3;
+    --text-muted: #a8a398;
+    --border: #6e6a61;
+    --hairline: #2c2b27;
+    --space-pribadi: #9daef0;
+    --space-pribadi-tint: #1e2233;
+    --space-bersama: #f0a07a;
+    --space-bersama-tint: #2e241e;
+    --income: #6fd39a;
+    --danger: #ff8a80;
+    --warning: #f2c14e;
+    --on-accent: #121210;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121210;
+  --surface: #1a1a17;
+  --surface-2: #23221f;
+  --text: #edeae3;
+  --text-muted: #a8a398;
+  --border: #6e6a61;
+  --hairline: #2c2b27;
+  --space-pribadi: #9daef0;
+  --space-pribadi-tint: #1e2233;
+  --space-bersama: #f0a07a;
+  --space-bersama-tint: #2e241e;
+  --income: #6fd39a;
+  --danger: #ff8a80;
+  --warning: #f2c14e;
+  --on-accent: #121210;
+}
+
+/* Aksen mengikuti ruang aktif. */
+:root,
+:root[data-ruang='pribadi'] {
+  --accent: var(--space-pribadi);
+  --accent-tint: var(--space-pribadi-tint);
+}
+
+:root[data-ruang='bersama'] {
+  --accent: var(--space-bersama);
+  --accent-tint: var(--space-bersama-tint);
+}

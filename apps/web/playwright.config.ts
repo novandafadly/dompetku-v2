@@ -29,7 +29,7 @@ export default defineConfig({
       'rm -rf .next/standalone/apps/web/.next/static',
       'cp -r .next/static .next/standalone/apps/web/.next/static',
       '(test ! -d public || cp -r public .next/standalone/apps/web/public)',
-      `PORT=${port} HOSTNAME=127.0.0.1 node .next/standalone/apps/web/server.js`,
+      `NEXT_PUBLIC_DEMO=1 PORT=${port} HOSTNAME=127.0.0.1 node .next/standalone/apps/web/server.js`,
     ].join(' && '),
     url: `http://127.0.0.1:${port}/pribadi/beranda`,
     reuseExistingServer: !process.env.CI,
