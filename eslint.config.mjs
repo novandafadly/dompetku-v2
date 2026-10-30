@@ -105,7 +105,20 @@ export default tseslint.config(
   },
   {
     files: ['apps/web/src/components/ui/**'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'date-fns', message: 'Pakai packages/domain/src/date.ts.' },
+            { name: 'moment', message: 'Pakai packages/domain/src/date.ts.' },
+          ],
+          patterns: [
+            { group: ['date-fns/*', 'moment/*'], message: 'Pakai packages/domain/src/date.ts.' },
+          ],
+        },
+      ],
+    },
   },
   {
     files: ['packages/domain/src/date.ts'],

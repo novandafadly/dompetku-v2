@@ -4,6 +4,10 @@
   "minimumReleaseAge": "3 days",
   "packageRules": [
     {
+      "groupName": "playwright",
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"]
+    },
+    {
       "matchUpdateTypes": ["patch"],
       "groupName": "patch updates",
       "automerge": false
