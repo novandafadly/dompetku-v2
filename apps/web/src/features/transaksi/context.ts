@@ -10,6 +10,9 @@ export interface TransaksiContext {
   today: IsoDate;
   listHref: Route;
   entryHref: (id: string) => Route;
+  /** Bulan terpilih ('YYYY-MM') dan alamat daftar untuk bulan lain. */
+  month: string;
+  monthHref: (month: string) => Route;
 }
 
 export const RUANG_NAME: Record<Ruang, string> = { pribadi: 'Pribadi', bersama: 'Bersama' };

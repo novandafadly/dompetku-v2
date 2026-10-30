@@ -5,7 +5,7 @@ import { useDemo } from '@/features/shell/demo-provider';
 import { EntryDetail } from '@/features/transaksi/entry-detail';
 
 export default function TransaksiDetailPage() {
-  const { state, store, ruang, today, href, entryHref } = useDemo();
+  const { state, store, ruang, today, href, entryHref, month, monthHref } = useDemo();
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(params.id);
   const entry = state.entries.find((e) => e.id === id && e.ruang === ruang);
@@ -18,6 +18,8 @@ export default function TransaksiDetailPage() {
       ruang={ruang}
       today={today}
       listHref={href(ruang, 'transaksi')}
+      month={month}
+      monthHref={(m) => monthHref(ruang, m)}
       entryHref={(eid) => entryHref(ruang, eid)}
     />
   );

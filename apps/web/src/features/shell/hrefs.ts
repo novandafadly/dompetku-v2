@@ -1,5 +1,6 @@
 import type { Route } from 'next';
 import type { Ruang } from '@dompetku/demo-data';
+import { monthName } from '@dompetku/domain';
 
 export const TABS = ['beranda', 'transaksi', 'dompet', 'rencana'] as const;
 export type Tab = (typeof TABS)[number];
@@ -23,12 +24,43 @@ export function keptQuery(params: URLSearchParams): string {
   return s === '' ? '' : '?' + s;
 }
 
-export function buildHref(ruang: Ruang, tab: Tab, query: string): Route {
-  return `/${ruang}/${tab}${query}` as Route;
+/** Bulan terpilih di Transaksi ('YYYY-MM'); tidak valid atau setelah bulan ini → bulan ini. */
+export function validMonth(raw: string | null, today: string): string {
+  const current = today.slice(0, 7);
+  if (raw === null) return current;
+  try {
+    monthName(raw);
+  } catch (e) {
+    if (e instanceof RangeError) return current;
+    throw e;
+  }
+  return raw > current ? current : raw;
 }
 
-export function buildEntryHref(ruang: Ruang, id: string, query: string): Route {
-  return `/${ruang}/transaksi/${encodeURIComponent(id)}${query}` as Route;
+/** `?bulan=` hanya ditulis bila bukan bulan ini. */
+function withMonth(query: string, month: string | undefined, today: string): string {
+  if (month === undefined || month === today.slice(0, 7)) return query;
+  return `${query}${query === '' ? '?' : '&'}bulan=${month}`;
+}
+
+export function buildHref(
+  ruang: Ruang,
+  tab: Tab,
+  query: string,
+  month?: { value: string; today: string },
+): Route {
+  const q = tab === 'transaksi' && month ? withMonth(query, month.value, month.today) : query;
+  return `/${ruang}/${tab}${q}` as Route;
+}
+
+export function buildEntryHref(
+  ruang: Ruang,
+  id: string,
+  query: string,
+  month?: { value: string; today: string },
+): Route {
+  const q = month ? withMonth(query, month.value, month.today) : query;
+  return `/${ruang}/transaksi/${encodeURIComponent(id)}${q}` as Route;
 }
 
 export function tabFromPathname(pathname: string): Tab {

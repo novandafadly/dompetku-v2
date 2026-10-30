@@ -15,7 +15,15 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { buildEntryHref, buildHref, isRuang, keptQuery, type Tab } from './hrefs';
+import {
+  buildEntryHref,
+  buildHref,
+  isRuang,
+  keptQuery,
+  tabFromPathname,
+  validMonth,
+  type Tab,
+} from './hrefs';
 
 interface DemoValue {
   store: DemoStore;
@@ -25,6 +33,8 @@ interface DemoValue {
   /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
   keypad: 'os' | 'app';
   query: string;
+  /** Nilai mentah `?bulan=` di alamat saat ini. */
+  bulan: string | null;
 }
 
 const DemoContext = createContext<DemoValue | null>(null);
@@ -65,7 +75,11 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
   const segment = pathname.split('/')[1];
   const ruang: Ruang = isRuang(segment) ? segment : 'pribadi';
 
-  return <DemoContext.Provider value={{ ...boot, ruang }}>{children}</DemoContext.Provider>;
+  return (
+    <DemoContext.Provider value={{ ...boot, ruang, bulan: params.get('bulan') }}>
+      {children}
+    </DemoContext.Provider>
+  );
 }
 
 export function DemoProvider({ children }: { children: ReactNode }) {
@@ -86,10 +100,19 @@ export function useDemo(): {
   href: (ruang: Ruang, tab: Tab) => Route;
   /** Alamat detail transaksi dengan query demo yang dipertahankan. */
   entryHref: (ruang: Ruang, id: string) => Route;
+  /** Bulan terpilih di Transaksi ('YYYY-MM'), dari `?bulan=`. */
+  month: string;
+  /** Alamat daftar Transaksi untuk bulan tertentu. */
+  monthHref: (ruang: Ruang, month: string) => Route;
 } {
   const ctx = useContext(DemoContext);
   if (ctx === null) throw new Error('useDemo harus dipakai di dalam <DemoProvider>');
   const { store, query } = ctx;
+  const pathname = usePathname();
+  const month = validMonth(ctx.bulan, ctx.today);
+  // Bulan hanya dibawa selama masih di dalam Transaksi; tab lain tidak mewarisinya.
+  const inTransaksi = tabFromPathname(pathname) === 'transaksi';
+  const keep = inTransaksi ? { value: month, today: ctx.today } : undefined;
   const state = useSyncExternalStore(
     (fn) => store.subscribe(fn),
     () => store.getState(),
@@ -101,7 +124,9 @@ export function useDemo(): {
     ruang: ctx.ruang,
     today: ctx.today,
     keypad: ctx.keypad,
-    href: (ruang, tab) => buildHref(ruang, tab, query),
-    entryHref: (ruang, id) => buildEntryHref(ruang, id, query),
+    href: (ruang, tab) => buildHref(ruang, tab, query, keep),
+    entryHref: (ruang, id) => buildEntryHref(ruang, id, query, keep),
+    month,
+    monthHref: (ruang, m) => buildHref(ruang, 'transaksi', query, { value: m, today: ctx.today }),
   };
 }

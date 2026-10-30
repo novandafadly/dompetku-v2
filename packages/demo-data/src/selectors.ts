@@ -225,7 +225,7 @@ export interface MonthSummary {
   selisih: Rupiah;
   /** Σ pemasukan + pengeluaran di dompet pocket kantor (tidak masuk tiga angka di atas). */
   kantor: Rupiah;
-  /** Σ transfer + Σ kaki keluar space_transfer ruang ini. */
+  /** Σ transfer + Σ kaki space_transfer ruang ini (keluar di asal, masuk di tujuan). */
   transfer: Rupiah;
 }
 
@@ -244,9 +244,7 @@ export function monthSummary(state: DemoState, ruang: Ruang, month: string): Mon
       if (kantorIds.has(e.accountId)) kantor += e.amount;
       else if (e.kind === 'income') pemasukan += e.amount;
       else pengeluaran += e.amount;
-    } else if (e.kind === 'transfer') {
-      transfer += e.amount;
-    } else if (e.kind === 'space_transfer' && e.direction === 'out') {
+    } else if (e.kind === 'transfer' || e.kind === 'space_transfer') {
       transfer += e.amount;
     }
   }

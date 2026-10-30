@@ -81,18 +81,38 @@ test.describe('Transaksi 390', () => {
     await main.getByRole('searchbox', { name: 'Cari transaksi' }).fill('PARKIR');
     await expect(rows(page)).toHaveCount(expected.length);
     for (const r of await rows(page).all()) await expect(r).toContainText(/parkir/i);
+  });
 
-    // Bersama tidak punya dompet kantor.
+  test('filter Kantor tanpa hasil di Pribadi, Hapus filter mengembalikan semua', async ({
+    page,
+  }) => {
+    // Dengan hari ini 2 Oktober, belum ada entri kantor di Oktober (perjalanan dinas mulai tanggal 9).
+    const early = '2026-10-02';
+    const seed = createSeed({ today: early, variant: 'full' });
+    const live = seed.entries.filter(
+      (e) =>
+        e.ruang === 'pribadi' && e.voidedAt === undefined && e.occurredOn.startsWith('2026-10'),
+    );
+    await page.goto(`/pribadi/transaksi?today=${early}`);
+    const main = page.getByRole('main');
+    await main.getByRole('radio', { name: 'Kantor' }).click();
+    await expect(main.getByText('Tidak ada transaksi Kantor di Oktober.')).toBeVisible();
+    await main.getByRole('searchbox', { name: 'Cari transaksi' }).fill('zzz');
+    await main.getByRole('button', { name: 'Hapus filter' }).click();
+    await expect(main.getByRole('radio', { name: 'Semua' })).toBeChecked();
+    await expect(main.getByRole('searchbox', { name: 'Cari transaksi' })).toHaveValue('');
+    await expect(rows(page)).toHaveCount(live.length);
+  });
+
+  test('Bersama hanya punya chip Semua dan Operasional', async ({ page }) => {
     await page.goto(`/bersama/transaksi?${q}`);
-    await page.getByRole('main').getByRole('radio', { name: 'Kantor' }).click();
-    await expect(page.getByText('Tidak ada transaksi Kantor di Oktober.')).toBeVisible();
-    await page.getByRole('main').getByRole('searchbox', { name: 'Cari transaksi' }).fill('zzz');
-    await page.getByRole('button', { name: 'Hapus filter' }).click();
-    await expect(page.getByRole('main').getByRole('radio', { name: 'Semua' })).toBeChecked();
-    await expect(
-      page.getByRole('main').getByRole('searchbox', { name: 'Cari transaksi' }),
-    ).toHaveValue('');
-    await expect(rows(page)).toHaveCount(liveInMonth('bersama', '2026-10').length);
+    const chips = page
+      .getByRole('main')
+      .getByRole('radiogroup', { name: 'Filter' })
+      .getByRole('radio');
+    await expect(chips).toHaveText(['Semua', 'Operasional']);
+    await expect(page.getByRole('radio', { name: 'Kantor' })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Menunggu reimburse' })).toHaveCount(0);
   });
 
   test('filter Operasional, Kantor dan Menunggu reimburse', async ({ page }) => {
@@ -132,6 +152,28 @@ test.describe('Transaksi 390', () => {
     await main.getByRole('button', { name: 'Bulan berikutnya' }).click();
     await expect(main.getByText('Oktober 2026')).toBeVisible();
     expect(monthName('2026-10')).toBe('Oktober');
+  });
+
+  test('bulan terpilih ada di URL dan bertahan daftar, detail, kembali', async ({ page }) => {
+    await page.goto(`/pribadi/transaksi?${q}`);
+    const main = page.getByRole('main');
+    await main.getByRole('button', { name: 'Bulan sebelumnya' }).click();
+    await expect(main.getByText('September 2026')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/pribadi/transaksi\\?${q}&bulan=2026-09$`));
+    await rows(page).first().getByRole('link').click();
+    await expect(page).toHaveURL(/\/pribadi\/transaksi\/[^/?]+\?.*bulan=2026-09/);
+    await page.getByRole('link', { name: 'Kembali ke daftar' }).click();
+    await expect(main.getByText('September 2026')).toBeVisible();
+    // Tab lain tidak mewarisi bulan.
+    const beranda = page
+      .getByRole('navigation', { name: 'Tab utama' })
+      .getByRole('link', { name: 'Beranda' });
+    expect(await beranda.getAttribute('href')).not.toContain('bulan');
+    // Nilai tidak valid atau di masa depan kembali ke bulan ini.
+    await page.goto(`/pribadi/transaksi?${q}&bulan=2027-03`);
+    await expect(page.getByRole('main').getByText('Oktober 2026')).toBeVisible();
+    await page.goto(`/pribadi/transaksi?${q}&bulan=abc`);
+    await expect(page.getByRole('main').getByText('Oktober 2026')).toBeVisible();
   });
 
   test('detail Pribadi: dicatat oleh kamu, Ubah dan Pindahkan', async ({ page }) => {
@@ -183,7 +225,7 @@ test.describe('Transaksi 390', () => {
     await expect(rows(page)).toHaveCount(total - 1);
     await expect(page.locator(`a[href*="/transaksi/${top.id}?"]`)).toHaveCount(0);
     const toast = toasts(page);
-    await expect(toast.getByText(/dibatalkan/)).toBeVisible();
+    await expect(toast.getByText(`Dibatalkan di Pribadi · ${amount} dari ${bank}`)).toBeVisible();
     await toast.getByRole('button', { name: 'Urungkan' }).click();
     await expect(rows(page)).toHaveCount(total);
     await expect(page.locator(`a[href*="/transaksi/${top.id}?"]`)).toHaveCount(1);

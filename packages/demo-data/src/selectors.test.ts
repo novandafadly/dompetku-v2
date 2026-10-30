@@ -666,7 +666,7 @@ describe('monthSummary', () => {
       pengeluaran: 0,
       selisih: 0,
       kantor: 0,
-      transfer: 0,
+      transfer: 500,
     });
   });
 

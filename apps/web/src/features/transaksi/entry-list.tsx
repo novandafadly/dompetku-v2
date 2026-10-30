@@ -4,6 +4,7 @@ import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { groupByDay } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { addMonths, monthName } from '@dompetku/domain';
+import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -12,7 +13,14 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { EmptyState } from '@/components/ui/state';
 import { RUANG_NAME, type TransaksiContext } from './context';
 import { EntryRow } from './entry-row';
-import { FilterBar, filterLabel, matchesFilter, matchesSearch, type FilterId } from './filters';
+import {
+  FilterBar,
+  filterLabel,
+  filtersFor,
+  matchesFilter,
+  matchesSearch,
+  type FilterId,
+} from './filters';
 import { SummaryView } from './summary-view';
 
 const PAGE = 50;
@@ -104,8 +112,11 @@ export function EntryList(ctx: TransaksiContext) {
   const { state, ruang, today } = ctx;
   const currentMonth = today.slice(0, 7);
   const [view, setView] = useState<'daftar' | 'ringkasan'>('daftar');
-  const [month, setMonth] = useState(currentMonth);
-  const [filter, setFilter] = useState<FilterId>('semua');
+  const router = useRouter();
+  const { month } = ctx;
+  const [chosen, setFilter] = useState<FilterId>('semua');
+  // Filter yang tidak ada di ruang ini (mis. Kantor setelah pindah ke Bersama) kembali ke Semua.
+  const filter = filtersFor(ruang).some((f) => f.id === chosen) ? chosen : 'semua';
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
 
@@ -118,8 +129,8 @@ export function EntryList(ctx: TransaksiContext) {
   const minMonth = earliestMonth(state, ruang, currentMonth);
 
   function shift(delta: number) {
-    setMonth((m) => addMonths(m, delta));
     setLimit(PAGE);
+    router.replace(ctx.monthHref(addMonths(month, delta)), { scroll: false });
   }
 
   function reset() {
@@ -169,6 +180,7 @@ export function EntryList(ctx: TransaksiContext) {
       ) : (
         <>
           <FilterBar
+            ruang={ruang}
             filter={filter}
             onFilter={(f) => {
               setFilter(f);

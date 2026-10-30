@@ -2,7 +2,7 @@
 
 import { ArrowLeftIcon, ProhibitIcon } from '@phosphor-icons/react';
 import type { Entry } from '@dompetku/demo-data';
-import { dayLabel } from '@dompetku/domain';
+import { dayLabel, formatRupiah } from '@dompetku/domain';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -10,10 +10,24 @@ import { Button } from '@/components/ui/button';
 import { MoneyText } from '@/components/ui/money-text';
 import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
-import type { TransaksiContext } from './context';
+import { RUANG_NAME, type TransaksiContext } from './context';
 import { entryKindLabel, entryTitle, signedAmount } from './entry-row';
 import { accountName } from './filters';
 import { VoidDialog } from './void-dialog';
+
+/** Pola toast Catat: "Dibatalkan di Pribadi · Rp 35.000 dari BCA". */
+function voidedMessage(state: TransaksiContext['state'], e: Entry): string {
+  const name = (id: string | undefined) => accountName(state, id ?? '');
+  const head = `Dibatalkan di ${RUANG_NAME[e.ruang]} · ${formatRupiah(e.amount)}`;
+  switch (e.kind) {
+    case 'income':
+      return `${head} ke ${name(e.accountId)}`;
+    case 'transfer':
+      return `${head} dari ${name(e.accountId)} ke ${name(e.counterAccountId)}`;
+    default:
+      return `${head} dari ${name(e.accountId)}`;
+  }
+}
 
 export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry }) {
   const { state, store, today, listHref } = ctx;
@@ -36,7 +50,7 @@ export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry
     store.voidEntry(entry.id);
     router.push(listHref);
     toast({
-      message: 'Transaksi dibatalkan',
+      message: voidedMessage(state, entry),
       action: {
         label: 'Urungkan',
         onAction: () => {

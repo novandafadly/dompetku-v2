@@ -1,6 +1,6 @@
 'use client';
 
-import type { DemoState, Entry } from '@dompetku/demo-data';
+import type { DemoState, Entry, Ruang } from '@dompetku/demo-data';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { focusRing } from '@/components/ui/styles';
 
@@ -12,6 +12,13 @@ export const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'kantor', label: 'Kantor' },
   { id: 'reimburse', label: 'Menunggu reimburse' },
 ];
+
+/** Bersama tidak punya dompet kantor atau reimburse (ui-ux.md): chip disembunyikan, bukan dinonaktifkan. */
+export function filtersFor(ruang: Ruang): typeof FILTERS {
+  return ruang === 'pribadi'
+    ? FILTERS
+    : FILTERS.filter((f) => f.id === 'semua' || f.id === 'operasional');
+}
 
 export function filterLabel(id: FilterId): string {
   return FILTERS.find((f) => f.id === id)?.label ?? '';
@@ -48,11 +55,13 @@ export function matchesSearch(state: DemoState, e: Entry, query: string): boolea
 }
 
 export function FilterBar({
+  ruang,
   filter,
   onFilter,
   query,
   onQuery,
 }: {
+  ruang: Ruang;
   filter: FilterId;
   onFilter: (id: FilterId) => void;
   query: string;
@@ -71,7 +80,7 @@ export function FilterBar({
         className={`min-h-11 w-full rounded-field border border-border bg-surface px-3 text-base text-text placeholder:text-text-muted ${focusRing}`}
       />
       <ChipGroup label="Filter">
-        {FILTERS.map((f) => (
+        {filtersFor(ruang).map((f) => (
           <Chip
             key={f.id}
             selected={filter === f.id}
