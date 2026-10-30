@@ -2,6 +2,7 @@
 
 import { WarningIcon } from '@phosphor-icons/react';
 import { useId, type HTMLInputTypeAttribute, type ReactNode, type RefObject } from 'react';
+import { fieldBox } from './styles';
 
 export function TextField({
   label,
@@ -43,8 +44,8 @@ export function TextField({
         {label}
       </label>
       <div
-        className={`flex min-h-11 items-center gap-2 rounded-field border bg-surface pl-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent ${
-          error ? 'border-danger' : 'border-border'
+        className={`flex min-h-11 items-center gap-2 pl-3 ${fieldBox} ${
+          error ? 'border-danger' : ''
         } ${trailing ? 'pr-1' : 'pr-3'}`}
       >
         <input

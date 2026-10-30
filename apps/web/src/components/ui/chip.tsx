@@ -41,10 +41,11 @@ export function Chip({
       tabIndex={selected || focusable ? 0 : -1}
       disabled={disabled}
       onClick={onSelect}
-      className={`inline-flex min-h-11 items-center rounded-pill border px-4 text-base disabled:cursor-not-allowed disabled:text-text-muted ${focusRing} ${
+      className={`inline-flex min-h-11 items-center rounded-pill border px-4 text-base disabled:border-hairline disabled:text-text-muted ${focusRing} ${
+        // Terpilih = warna terbalik + tebal: terbaca tanpa bergantung pada hue ruang.
         selected
-          ? 'border-accent bg-accent-tint font-semibold text-text'
-          : 'border-border bg-surface text-text hover:bg-surface-2'
+          ? 'border-text bg-text font-semibold text-bg'
+          : 'border-border text-text hover:bg-surface-2 active:bg-surface'
       }`}
     >
       {children}

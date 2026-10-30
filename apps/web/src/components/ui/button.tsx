@@ -3,11 +3,13 @@ import { focusRing } from './styles';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
+// Hover dan tekan dibedakan lewat terang/latar, tidak hanya warna aksen.
 const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-on-accent hover:brightness-95',
-  secondary: 'border border-border bg-surface text-text hover:bg-surface-2',
-  ghost: 'text-text hover:bg-surface-2',
-  danger: 'bg-danger text-on-accent hover:brightness-95',
+  primary: 'bg-accent text-on-accent hover:brightness-110 active:brightness-90',
+  secondary:
+    'border border-border bg-surface-2 text-text hover:bg-surface active:bg-bg disabled:border-hairline',
+  ghost: 'text-text hover:bg-surface-2 active:bg-surface',
+  danger: 'bg-danger text-on-accent hover:brightness-110 active:brightness-90',
 };
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

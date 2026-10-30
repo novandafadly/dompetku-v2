@@ -25,7 +25,7 @@ export function SegmentedControl({
       role="radiogroup"
       aria-label={label}
       onKeyDown={handleRadioArrowKeys}
-      className="inline-flex rounded-field bg-surface-2 p-1"
+      className="inline-flex max-w-full rounded-field border border-hairline bg-surface p-1"
     >
       {items.map((item) => {
         const selected = item.value === value;
@@ -39,8 +39,11 @@ export function SegmentedControl({
             onClick={() => {
               onChange(item.value);
             }}
-            className={`min-h-11 rounded-field px-4 text-base ${focusRing} ${
-              selected ? 'bg-surface font-semibold text-text' : 'text-text-muted hover:text-text'
+            className={`min-h-11 min-w-0 rounded-field border px-4 text-base ${focusRing} ${
+              // Terpilih: lapisan naik + batas + tebal, tidak hanya beda warna.
+              selected
+                ? 'border-border bg-surface-2 font-semibold text-text'
+                : 'border-transparent text-text-muted hover:text-text active:bg-bg'
             }`}
           >
             {item.label}

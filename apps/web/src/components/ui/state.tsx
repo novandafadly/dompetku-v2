@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+// Per ikon: indeks SSR Phosphor tidak ter-tree-shake di bundel klien.
+import { WarningCircleIcon } from '@phosphor-icons/react/dist/ssr/WarningCircle';
 import { Button } from './button';
 
 export function EmptyState({
@@ -11,7 +13,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-sheet border border-hairline bg-surface p-6 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-card bg-surface p-6 text-center">
       <p className="text-lg font-semibold text-text">{title}</p>
       {description ? <p className="text-base text-text-muted">{description}</p> : null}
       {action}
@@ -31,9 +33,12 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="flex flex-col items-center gap-2 rounded-sheet border border-danger bg-surface p-6 text-center"
+      className="flex flex-col items-center gap-2 rounded-card border border-danger bg-surface p-6 text-center"
     >
-      <p className="text-lg font-semibold text-danger">{title}</p>
+      <p className="flex items-center gap-2 text-lg font-semibold text-danger">
+        <WarningCircleIcon size={20} weight="fill" aria-hidden="true" className="shrink-0" />
+        {title}
+      </p>
       {description ? <p className="text-base text-text-muted">{description}</p> : null}
       {onRetry ? (
         <Button variant="secondary" onClick={onRetry}>

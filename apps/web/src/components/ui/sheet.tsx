@@ -4,11 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { XIcon } from '@phosphor-icons/react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { IconButton } from './icon-button';
-
-const tints = {
-  pribadi: 'bg-pribadi-tint',
-  bersama: 'bg-bersama-tint',
-} as const;
+import { SHEET_HEADER, SHEET_PANEL, tints } from './styles';
 
 /** Tinggi area terlihat (mengecil saat keyboard layar muncul). */
 function useVisualViewportHeight(active: boolean): number | null {
@@ -63,7 +59,7 @@ export function Sheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-20 bg-text/40 data-[state=open]:animate-fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-20 bg-scrim data-[state=open]:animate-fade-in" />
         <Dialog.Content
           aria-describedby={undefined}
           data-ruang={tint}
@@ -94,22 +90,32 @@ export function Sheet({
             returnFocusTo.current?.focus();
           }}
           style={vvHeight === null ? undefined : { maxHeight: fill ? vvHeight : vvHeight * 0.9 }}
-          className="fixed inset-x-0 bottom-0 z-20 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet bg-surface text-text data-[state=open]:animate-sheet-in dialog:inset-x-auto dialog:top-1/2 dialog:bottom-auto dialog:left-1/2 dialog:w-full dialog:max-w-lg dialog:-translate-x-1/2 dialog:-translate-y-1/2 dialog:rounded-sheet"
+          className={SHEET_PANEL}
         >
-          <header
-            className={`flex items-center gap-2 border-b border-hairline py-1 pr-1 pl-4 ${
-              tint ? tints[tint] : 'bg-surface'
-            }`}
-          >
+          <header className={`${SHEET_HEADER} py-1 pr-1 ${tint ? tints[tint] : ''}`}>
             <Dialog.Title className="mr-auto text-lg/tight font-semibold">{title}</Dialog.Title>
             {headerAction}
             <Dialog.Close asChild>
               <IconButton label="Tutup" icon={<XIcon size={24} />} />
             </Dialog.Close>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{children}</div>
+          <div
+            style={
+              footer === undefined
+                ? { paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }
+                : undefined
+            }
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+          >
+            {children}
+          </div>
           {footer === undefined ? null : (
-            <div className="border-t border-hairline px-4 py-2">{footer}</div>
+            <div
+              style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+              className="border-t border-hairline px-4 pt-2"
+            >
+              {footer}
+            </div>
           )}
         </Dialog.Content>
       </Dialog.Portal>

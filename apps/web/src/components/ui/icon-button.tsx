@@ -21,7 +21,7 @@ export function IconButton({
     <button
       type={type}
       aria-label={label}
-      className={`inline-flex size-11 items-center justify-center rounded-field text-text hover:bg-surface-2 disabled:cursor-not-allowed disabled:text-text-muted ${focusRing} ${className}`}
+      className={`inline-flex size-11 items-center justify-center rounded-field text-text hover:bg-surface-2 active:bg-surface disabled:text-text-muted disabled:hover:bg-transparent ${focusRing} ${className}`}
       {...rest}
     >
       <span aria-hidden="true" className="inline-flex">

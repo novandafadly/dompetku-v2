@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import { formatRibuan, parseRupiah, type Rupiah } from '@dompetku/domain';
+import { fieldBox } from './styles';
 
 function display(value: Rupiah | null): string {
   return value === null ? '' : formatRibuan(value);
@@ -100,8 +101,13 @@ export function MoneyInput({
       <label htmlFor={id} className={labelHidden ? 'sr-only' : 'text-sm text-text-muted'}>
         {label}
       </label>
-      <div className="flex min-h-11 items-center gap-2 rounded-field border border-border bg-surface px-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
-        <span aria-hidden="true" className="text-lg text-text-muted">
+      <div className={`flex min-h-11 items-center gap-2 px-3 ${fieldBox}`}>
+        <span
+          aria-hidden="true"
+          className={
+            size === 'hero' ? 'text-2xl font-semibold text-text-muted' : 'text-lg text-text-muted'
+          }
+        >
           Rp
         </span>
         <input

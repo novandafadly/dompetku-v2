@@ -24,13 +24,13 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="fixed inset-0 z-20 bg-text/40 data-[state=open]:animate-fade-in" />
-        <AlertDialog.Content className="fixed inset-x-4 top-1/2 z-20 mx-auto max-w-md -translate-y-1/2 rounded-sheet bg-surface p-5 text-text">
+        <AlertDialog.Overlay className="fixed inset-0 z-20 bg-scrim data-[state=open]:animate-fade-in" />
+        <AlertDialog.Content className="fixed inset-x-4 top-1/2 z-20 mx-auto max-w-md -translate-y-1/2 rounded-sheet border border-hairline bg-surface-2 p-6 text-text shadow-dialog">
           <AlertDialog.Title className="text-lg font-semibold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="mt-2 text-base">
+          <AlertDialog.Description className="mt-2 text-base text-text-muted">
             {description}
           </AlertDialog.Description>
-          <div className="mt-5 flex flex-col-reverse gap-2 dialog:flex-row dialog:justify-end">
+          <div className="mt-6 flex flex-col-reverse gap-2 dialog:flex-row dialog:justify-end">
             <AlertDialog.Cancel asChild>
               <Button variant="secondary">{cancelLabel}</Button>
             </AlertDialog.Cancel>

@@ -7,7 +7,7 @@ export interface LedgerRow {
   op?: 'minus';
 }
 
-/** Kolom buku kas: baris angka rata kanan, garis ganda di atas total. */
+/** Rincian rumus: baris angka rata kanan, pengurang diawali −, total tebal di bawah garis. */
 export function LedgerColumn({
   rows,
   total,
@@ -22,7 +22,7 @@ export function LedgerColumn({
       <tbody>
         {rows.map((row) => (
           <tr key={row.label}>
-            <td className="w-6 py-1 text-text-muted">
+            <td className="w-6 py-1.5 text-text-muted">
               {row.op === 'minus' ? (
                 <>
                   <span aria-hidden="true">{'−'}</span>
@@ -30,23 +30,23 @@ export function LedgerColumn({
                 </>
               ) : null}
             </td>
-            <th scope="row" className="py-1 text-left font-normal text-text">
+            <th scope="row" className="py-1.5 text-left font-normal text-text-muted">
               {row.label}
             </th>
-            <td className="py-1 text-right">
+            <td className="py-1.5 text-right">
               <MoneyText value={row.value} />
             </td>
           </tr>
         ))}
       </tbody>
       <tfoot>
-        <tr className="border-t-4 border-double border-text">
+        <tr className="border-t border-border">
           <td />
-          <th scope="row" className="pt-2 text-left font-semibold text-text">
+          <th scope="row" className="pt-2 text-left font-bold text-text">
             {totalLabel}
           </th>
           <td className="pt-2 text-right">
-            <MoneyText value={total} className="font-semibold" />
+            <MoneyText value={total} className="font-bold" />
           </td>
         </tr>
       </tfoot>
