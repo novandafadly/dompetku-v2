@@ -1,41 +1,44 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { TextField } from '@/components/ui/text-field';
-import { PasswordField } from '@/features/auth/password-field';
+import { ArrowRightIcon } from '@/components/ui/icons/arrow-right';
+import { EyeIcon } from '@/components/ui/icons/eye';
+import { EyeSlashIcon } from '@/components/ui/icons/eye-slash';
+import { UsersThreeFillIcon } from '@/components/ui/icons/users-three-fill';
+import { AuthTitle } from '@/features/auth/auth-frame';
+import { LinkButton } from '@/features/auth/link-button';
 import { useDemo } from '@/features/shell/demo-provider';
 
 export default function TerimaUndanganPage() {
   const { authHref } = useDemo();
-  const router = useRouter();
-  const [password, setPassword] = useState('');
   return (
     <>
-      <h1 className="text-xl font-semibold text-text">Novanda mengundang kamu ke ruang Bersama</h1>
-      <p className="text-base text-text-muted">
-        Buat akunmu. Setelah itu kamu mengamankannya dengan passkey dan kode autentikator.
-      </p>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push(authHref('amankan'));
-        }}
-      >
-        <TextField
-          label="Email"
-          type="email"
-          autoComplete="email"
-          value="farida@example.com"
-          onChange={() => undefined}
-          readOnly
-          hint="Sudah terisi dari undangan."
-        />
-        <PasswordField value={password} onChange={setPassword} />
-        <Button type="submit">Buat akun</Button>
-      </form>
+      <div aria-hidden="true" className="flex items-center gap-3">
+        <span className="flex size-14 items-center justify-center rounded-full border border-border bg-surface-3 text-headline font-extrabold text-text">
+          N
+        </span>
+        <ArrowRightIcon size={20} className="text-text-muted" />
+        <span className="flex size-14 items-center justify-center rounded-full border border-border bg-bersama-tint text-bersama">
+          <UsersThreeFillIcon size={26} weight="fill" />
+        </span>
+      </div>
+      <AuthTitle>Novanda mengundang kamu ke ruang Bersama</AuthTitle>
+      <ul className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface p-4 text-body font-medium text-text-soft">
+        <li className="flex items-start gap-2.5">
+          <EyeIcon size={20} className="mt-0.5 shrink-0 text-bersama" />
+          <span>Terlihat berdua: dompet, transaksi, dan rencana Bersama.</span>
+        </li>
+        <li className="flex items-start gap-2.5">
+          <EyeSlashIcon size={20} className="mt-0.5 shrink-0 text-accent-text" />
+          <span>Tidak pernah terlihat: isi ruang Pribadi masing-masing.</span>
+        </li>
+      </ul>
+      {/* Menerima undangan berlanjut ke pembuatan akun dan pengamanan (passkey + kode). */}
+      <LinkButton href={authHref('amankan')} size="lg">
+        Terima undangan
+      </LinkButton>
+      <LinkButton href={authHref('masuk')} variant="text">
+        Tolak
+      </LinkButton>
     </>
   );
 }

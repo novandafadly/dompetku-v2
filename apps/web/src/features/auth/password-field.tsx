@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { TextField } from '@/components/ui/text-field';
+import { EyeIcon } from '@/components/ui/icons/eye';
+import { EyeSlashIcon } from '@/components/ui/icons/eye-slash';
 import { focusRing } from '@/components/ui/styles';
+import { TextField } from '@/components/ui/text-field';
 
 /**
  * Field kata sandi layar auth tiruan. Tempel tetap boleh (WCAG 3.3.8), tetapi pengelola sandi
@@ -22,18 +24,21 @@ export function PasswordField({
       type={shown ? 'text' : 'password'}
       value={value}
       onChange={onChange}
+      placeholder="Kata sandi"
       autoComplete="off"
       hint="Prototipe: jangan isi kata sandi asli."
+      hintTone="warning"
       trailing={
         <button
           type="button"
           aria-pressed={shown}
+          aria-label="Tampilkan kata sandi"
           onClick={() => {
             setShown((s) => !s);
           }}
-          className={`min-h-11 min-w-11 shrink-0 rounded-field px-3 text-base font-semibold text-text underline hover:no-underline ${focusRing}`}
+          className={`flex size-11 shrink-0 items-center justify-center rounded-md text-text-soft hover-pointer:bg-hover ${focusRing}`}
         >
-          {shown ? 'Sembunyikan' : 'Tampilkan'}
+          {shown ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
         </button>
       }
     />

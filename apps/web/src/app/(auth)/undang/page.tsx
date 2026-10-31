@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { BackLink } from '@/components/ui/back-link';
 import { Button } from '@/components/ui/button';
+import { CheckCircleIcon } from '@/components/ui/icons/check-circle';
+import { PaperPlaneTiltIcon } from '@/components/ui/icons/paper-plane-tilt';
 import { TextField } from '@/components/ui/text-field';
+import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
 import { useDemo } from '@/features/shell/demo-provider';
 
@@ -13,10 +17,12 @@ export default function UndangPage() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   return (
     <>
-      <h1 className="text-xl font-semibold text-text">Undang Farida</h1>
-      <p className="text-base text-text-muted">
-        DompetKu dipakai berdua. Undangan ini membuka akun kedua, dan tidak ada akun ketiga.
-      </p>
+      <BackLink href={href('pribadi', 'beranda')}>Beranda</BackLink>
+      <AuthTitle>Undang Farida ke ruang Bersama</AuthTitle>
+      <AuthText>
+        Farida hanya akan melihat dompet, transaksi, dan rencana Bersama. Ruang Pribadi kalian tetap
+        terpisah.
+      </AuthText>
       <form
         noValidate
         className="flex flex-col gap-4"
@@ -36,34 +42,38 @@ export default function UndangPage() {
         }}
       >
         <TextField
-          label="Email Farida"
+          label="Email pasangan"
           type="email"
           inputMode="email"
           autoComplete="off"
+          placeholder="nama@email.com"
           value={email}
           onChange={setEmail}
           error={error}
           hint="Tautan berlaku 72 jam, sekali pakai."
         />
-        <Button type="submit">Buat tautan undangan</Button>
+        <Button type="submit">
+          <PaperPlaneTiltIcon size={18} weight="bold" />
+          Kirim undangan
+        </Button>
       </form>
       {sentTo === null ? null : (
         <section
           aria-label="Tautan undangan"
           role="status"
-          className="flex flex-col gap-3 rounded-card bg-surface p-4"
+          className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface-2 p-4"
         >
-          <p className="text-base text-text">
-            Tautan untuk {sentTo} siap dikirim. Berlaku 72 jam dan hanya bisa dipakai sekali.
+          <p className="flex items-start gap-2 text-body font-medium text-text">
+            <CheckCircleIcon size={20} weight="fill" className="mt-0.5 shrink-0 text-accent-text" />
+            <span>
+              Tautan untuk {sentTo} siap dikirim. Berlaku 72 jam dan hanya bisa dipakai sekali.
+            </span>
           </p>
           <LinkButton href={authHref('terima-undangan')} variant="secondary">
             Buka sebagai Farida
           </LinkButton>
         </section>
       )}
-      <LinkButton href={href('pribadi', 'beranda')} variant="secondary">
-        Kembali ke Beranda
-      </LinkButton>
     </>
   );
 }
