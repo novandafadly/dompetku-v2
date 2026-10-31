@@ -633,7 +633,7 @@ create table audit.events (
              check (jsonb_typeof(meta) = 'object'
                     and meta - array['count', 'reason', 'method', 'op', 'job', 'status', 'via',
                                      'target', 'amr'] = '{}'::jsonb
-                    and not jsonb_path_exists(meta, '$.* ? (@.type() == "object" || @.type() == "array")')
+                    and not jsonb_path_exists(meta, 'strict $.* ? (@.type() == "object" || @.type() == "array")')
                     and length(meta::text) <= 1024)
 );
 create index on audit.events (user_id, at desc);
@@ -2717,3 +2717,5 @@ Temuan review backend dan security (`docs/product/review/`) diterapkan, kecuali:
 - Backend Minor (akun aset tidak boleh negatif): tidak mengubah perilaku. `tabungan` boleh negatif dengan konfirmasi seperti dompet lain; aturan spec §9.1 dibaca untuk tabel aset M4 (§9.1).
 - Backend Penting (konsumsi undangan lewat trigger `BEFORE INSERT` di `auth."user"`): arah diambil sebagian. Trigger menegakkan pendaftaran tertutup dan batas user, tetapi undangan baru terpakai di `api.accept_invitation` setelah akun diamankan (keputusan pemilik #3). User setengah jadi tidak memakan kuota dan dihapus setelah 72 jam, sehingga kasus salah ketik email tidak lagi mengunci rumah tangga.
 - Batas user paralel: dijaga advisory lock `dompetku.user_cap` di READ COMMITTED (trigger dan provisioning). Uji dua koneksi untuk pendaftaran paralel tidak dijalankan di `bsd-check` karena hanya ada satu undangan terbuka per rumah tangga; masuk tes Vitest dua koneksi M0b.
+
+**Catatan review S4 (2026-11-01):** CHECK `audit.events.meta` (§6) memakai jsonpath `strict`; mode lax membuka array sehingga `{"reason": [1]}` lolos (temuan pgTAP S4, diputuskan atas nama pemilik).

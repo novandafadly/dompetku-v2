@@ -122,7 +122,7 @@ create table audit.events (
              check (jsonb_typeof(meta) = 'object'
                     and meta - array['count', 'reason', 'method', 'op', 'job', 'status', 'via',
                                      'target', 'amr'] = '{}'::jsonb
-                    and not jsonb_path_exists(meta, '$.* ? (@.type() == "object" || @.type() == "array")')
+                    and not jsonb_path_exists(meta, 'strict $.* ? (@.type() == "object" || @.type() == "array")')
                     and length(meta::text) <= 1024)
 );
 create index on audit.events (user_id, at desc);

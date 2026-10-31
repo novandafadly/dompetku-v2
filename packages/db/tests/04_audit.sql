@@ -1,7 +1,7 @@
 -- audit.events dan product_events (BSD §6, §10, §13 #17, #32): user_id dari konteks, daftar
 -- tertutup event dan kunci meta, tanpa INSERT langsung, append-only, retensi lewat job.
 begin;
-select plan(30);
+select plan(32);
 select tests.fixture();
 
 -- user_id selalu dari konteks request.
@@ -38,12 +38,15 @@ from (values
   ('meta bukan objek', $q$select audit.log('login_success', null, null, null, '[1]')$q$),
   ('meta > 1 kB', $q$select audit.log('login_success', null, null, null, jsonb_build_object('reason', repeat('x', 1100)))$q$)
 ) v (t, q);
--- Celah BSD §6 (temuan S4): jsonpath mode lax membuka array, jadi array berisi skalar lolos
--- CHECK "nilai skalar saja". DDL tetap persis BSD sampai pemilik memutuskan ('strict $.* ? ...').
-select todo('BSD §6: CHECK meta mode lax meloloskan array skalar', 1);
-select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
-    $q$select audit.log('login_success', null, null, null, '{"reason": [1]}')$q$),
-  '23514', null, 'meta/event ditolak: nilai array skalar');
+-- Mode strict: array dan objek ditolak juga bila isinya skalar (BSD §6, diubah S4).
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), q), '23514', null, 'meta ditolak: ' || t)
+from (values
+  ('array skalar', $q$select audit.log('login_success', null, null, null, '{"reason": [1]}')$q$),
+  ('objek skalar', $q$select audit.log('login_success', null, null, null, '{"reason": {"x": 1}}')$q$)
+) v (t, q);
+select lives_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
+    $q$select audit.log('logout', null, null, null, '{"reason": null, "count": 2, "status": "ok", "via": true}')$q$),
+  'meta skalar dan null diterima');
 select lives_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
     $q$select audit.log('factor_added', null, null, null, '{"method": "passkey", "amr": "passkey", "count": 1}')$q$),
   'kunci meta yang diizinkan');
