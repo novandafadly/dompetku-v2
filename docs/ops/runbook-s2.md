@@ -56,3 +56,32 @@ Rollback umum: `docker compose down` + hapus volume `dompetku_pgdata` (belum ada
 - WAL-G biner prebuilt untuk glibc 20.04: diuji di image bookworm sebelum dipakai; bila tidak cocok, dibangun dari sumber di tahap build.
 - Retention memblokir penimpaan: diuji dengan `wal-push` ganda pada segmen yang sama di langkah 5.
 - Beban VM DB: base backup dan uji restore dijadwalkan di luar jam kerja; data DompetKu masih kecil.
+
+## Catatan eksekusi (2026-10-31/11-01)
+
+Langkah 1 sampai 8 dan 10 dijalankan dari sesi Claude Code di VM App. Penyimpangan dan temuan (semua sudah masuk berkas di repo):
+
+1. **Builder Docker VM DB tanpa BuildKit:** `COPY --chmod` tidak didukung; diganti `COPY` + `RUN chmod`.
+2. **Postgres butuh egress untuk WAL-G:** network `internal` sengaja tanpa akses keluar; postgres ditambah network `egress` yang hanya berisi dirinya. `pg_hba` tetap hanya menerima subnet `internal`.
+3. **Healthcheck sebagai root memenuhi log dengan `FATAL: Peer authentication`;** diganti `gosu postgres pg_isready -q`.
+4. **`PGOPTIONS=-c pgaudit.log=ddl` untuk migrate ditolak** (parameter superuser). Dibuang, BSD §12 diperbarui; owner tidak diberi hak `SET` agar tidak bisa mematikan auditnya.
+5. **dbmate mewajibkan penanda `-- migrate:down`;** migrasi 0001 diberi blok down kosong (maju-saja).
+6. **Kunci TLS Postgres** dimiliki uid 999 (user postgres di container; di host tercatat `dnsmasq`, hanya nama).
+
+Hasil verifikasi:
+
+| Hal            | Hasil                                                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Image          | `dompetku-postgres:17.11-1`: WAL-G v3.0.9 (sha256 cocok), pgaudit 17.1, pgTAP 1.3.4                                                                                                                                      |
+| Enkripsi WAL-G | Objek uji di bucket tidak memuat teks asli; terbaca hanya dengan `--decrypt`                                                                                                                                             |
+| Postgres       | Tanpa port host; `ssl=on` TLS 1.3; `data_checksums=on`; `scram-sha-256`; `archive_mode=on`, `archive_timeout=5min`; pgaudit dimuat; isolasi default `read committed`                                                     |
+| `pg_hba`       | Ditolak: tanpa SSL, superuser lewat TCP, role aplikasi ke DB `postgres`, password salah. Diterima: `dompetku_web` SSL `verify-full` ke `dompetku`. Timeout web 5s/3s/15s                                                 |
+| Role + migrasi | 8 role (`dompetku_*` + `dompetku_auditlog`), password acak di `db-roles.env` (600). dbmate `0001` lewat TLS `verify-full`; skema `app api private jobs audit auth` milik `dompetku_owner`; `app.today()` WIB; `env=prod` |
+| Archive WAL    | Segmen setelah `pg_switch_wal()` terarsip dalam 3 s; kirim ulang segmen sama dilewati ("already archived with equal content"), aman terhadap retention                                                                   |
+| Base backup    | Manual 2 s; timer harian 02:00 WIB aktif                                                                                                                                                                                 |
+| Dump bulanan   | `pg_dump -Fc` terenkripsi ke `pg17-monthly/` (zstd); timer tanggal 1, 03:00 WIB aktif                                                                                                                                    |
+| Uji restore    | Lulus 2x: titik pulih tercapai, DB terbuka, semua tabel terbaca; **RTO 16 s dan 11 s**. Timer Minggu 04:00 WIB aktif                                                                                                     |
+| Latihan RPO    | Detak tiap 5 s selama 6 menit, "bencana" tanpa switch WAL, pulih sampai WAL terakhir di bucket: **RPO 117 s** (≤ 300 s), RTO 6 s. DB latihan dihapus                                                                     |
+| Latihan alert  | `DRILL_FAIL=1 backup.sh` gagal upload dan mengirim `/fail` ke Healthchecks `dompetku-backup`; lalu backup normal mengirim sukses. Email alert: **menunggu konfirmasi pemilik**                                           |
+
+Sisa: konfirmasi email alert diterima, lifecycle rule (`infra/oci/lifecycle-backup.sh` di Cloud Shell), keputusan mengunci retention rule. Data DompetKu nyata belum ada (M1), jadi RTO akan diukur ulang saat data tumbuh.

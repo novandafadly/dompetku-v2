@@ -12,7 +12,7 @@ Disiapkan 2026-10-31. Tidak ada rahasia di dokumen ini.
 | Akses               | user `dompetku-backup` (domain Default) di group `dompetku-backup`, hanya Customer Secret Key |
 | Policy              | `dompetku-backup`: baca bucket, `OBJECT_CREATE`/`OBJECT_INSPECT`/`OBJECT_READ`, tanpa hapus   |
 | Retention rule      | `min-30-hari`, 30 hari, **belum dikunci**                                                     |
-| Lifecycle rule      | belum ada (ditetapkan di S2)                                                                  |
+| Lifecycle rule      | `infra/oci/lifecycle-backup.sh`: `pg17/` 35 hari, `pg17-monthly/` 400 hari, `_test/` 31 hari  |
 | Kredensial di VM DB | `/opt/dompetku/env/backup.env` (root 600), diisi pemilik; salinan di password manager pemilik |
 
 Penyiapan: `infra/oci/setup-backup-iam.sh` dijalankan pemilik di OCI Cloud Shell.
@@ -32,3 +32,7 @@ Kejadian saat penyiapan:
 - Retention memblokir **penimpaan** objek. WAL-G wajib `WALG_PREVENT_WAL_OVERWRITE=true` (WAL yang sama dikirim ulang setelah crash dibandingkan isinya, tidak ditimpa) dan tidak boleh memakai perintah yang menulis ulang metadata (`backup-mark`).
 - WAL-G tidak bisa menghapus (`delete retain`); pembersihan backup lama lewat lifecycle rule per prefix (`pg17/` harian sekitar 35 hari, prefix bulanan sekitar 400 hari), selalu lebih lama dari retention.
 - Retention dikunci setelah uji restore pertama lulus dan perilaku WAL-G di atas terbukti.
+
+## Dipakai sejak S2 (2026-10-31)
+
+WAL-G aktif (`WALG_S3_PREFIX=s3://dompetku-backup/pg17`, zstd, libsodium, `WALG_PREVENT_WAL_OVERWRITE=true`), dump bulanan di `pg17-monthly/`. Hasil uji di `docs/ops/runbook-s2.md`.
