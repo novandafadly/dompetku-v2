@@ -1,8 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "7 days",
   "packageRules": [
+    {
+      "description": "Tunggu 7 hari sebelum mengusulkan versi baru (selaras minimumReleaseAge pnpm).",
+      "matchPackageNames": ["*"],
+      "minimumReleaseAge": "7 days"
+    },
     {
       "groupName": "playwright",
       "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"]
