@@ -1,5 +1,5 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
-# S1: gw + postgres sementara (diganti image sendiri di S2).
+# S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools).
 name: dompetku
 
 services:
@@ -27,16 +27,25 @@ services:
     pids_limit: 100
 
   postgres:
-    # Sementara untuk membuktikan "tanpa port host". S2 menggantinya dengan Postgres 17 + WAL-G + pgaudit
-    # dan menginisialisasi ulang volume (belum ada data).
-    image: postgres:17.11-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    # Postgres 17 + pgaudit + pgTAP + WAL-G (infra/db-vm/postgres). Tanpa port host.
+    build: ./postgres
+    image: dompetku-postgres:17.11-1
     restart: unless-stopped
-    env_file: ./env/postgres.env
+    command: ['postgres', '-c', 'config_file=/etc/dompetku/postgresql.conf']
+    env_file:
+      - ./env/postgres.env
+      - ./env/backup.env
     environment:
-      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --auth-local=scram-sha-256'
+      POSTGRES_INITDB_ARGS: '--data-checksums --auth-local=peer --auth-host=scram-sha-256'
+      PGHOST: /var/run/postgresql
+      PGUSER: postgres
+      WALG_PREVENT_WAL_OVERWRITE: 'true'
+      WALG_COMPRESSION_METHOD: zstd
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks: [internal]
+      - ./pki/postgres:/etc/dompetku/tls:ro
+    # internal: klien aplikasi (pg_hba hanya subnet ini). egress: hanya untuk WAL-G ke bucket OCI.
+    networks: [internal, egress]
     shm_size: 128m
     mem_limit: 1g
     cpus: 1.0
@@ -46,12 +55,32 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    # Dijalankan manual/deployer: docker compose run --rm migrate up
+    image: ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb
+    profiles: [tools]
+    env_file: ./env/migrate.env
+    environment:
+      DBMATE_MIGRATIONS_DIR: /migrations
+      DBMATE_NO_DUMP_SCHEMA: 'true'
+      PGOPTIONS: '-c pgaudit.log=ddl'
+    volumes:
+      - ./migrations:/migrations:ro
+      - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro
+    networks: [internal]
+    depends_on: [postgres]
+
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).
   app: {}
-  # web/worker <-> postgres, tanpa akses keluar dan tanpa port host.
+  # web/worker/migrate <-> postgres, tanpa akses keluar dan tanpa port host. Subnet dipatok untuk pg_hba.
   internal:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+  # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
+  egress: {}
 
 volumes:
   pgdata: {}

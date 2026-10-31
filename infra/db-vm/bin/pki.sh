@@ -26,14 +26,24 @@ init)
 		-addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign -out "$D/ca/ca.crt"
 	;;
 renew) ;;
+postgres)
+	# S2: hanya sertifikat server Postgres (SAN = nama service compose). Kunci dibaca uid 999 (postgres).
+	leaf postgres serverAuth subjectAltName=DNS:postgres
+	chown 999 "$D/postgres/postgres.key"
+	chmod 755 "$D/postgres"
+	chmod 644 "$D/postgres/postgres.crt" "$D/postgres/ca.crt"
+	openssl x509 -in "$D/postgres/postgres.crt" -noout -enddate
+	exit 0
+	;;
 *)
-	echo "pakai: $0 init|renew" >&2
+	echo "pakai: $0 init|renew|postgres" >&2
 	exit 2
 	;;
 esac
 
 leaf gw serverAuth subjectAltName=DNS:dompetku-gw.internal
 leaf edge clientAuth subjectAltName=DNS:nginx-app-01
+[ -d "$D/postgres" ] && leaf postgres serverAuth subjectAltName=DNS:postgres && chown 999 "$D/postgres/postgres.key"
 
 chmod 700 "$D" "$D"/*
 chmod 644 "$D"/*/*.crt
