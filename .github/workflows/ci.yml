@@ -65,6 +65,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read # gitleaks-action membaca daftar commit PR pada event pull_request
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

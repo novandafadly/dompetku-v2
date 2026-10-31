@@ -1,0 +1,21 @@
+# Bawaan Semgrep (berkas ini menggantikannya, jadi disalin ulang).
+node_modules/
+build/
+dist/
+vendor/
+.env/
+.venv/
+.tox/
+*.min.js
+.npm/
+.yarn/
+test/
+tests/
+*_test.go
+.semgrep
+.semgrep_logs/
+
+# Runtime pratinjau handoff Claude Design (kode pihak ketiga, hanya dibuka lokal dari berkas
+# *.dc.html di folder yang sama; tidak dibundel ke apps/web dan tidak dideploy). Lihat
+# docs/ops/ci-keamanan.md.
+docs/design/panel-malam/designs/support.js
