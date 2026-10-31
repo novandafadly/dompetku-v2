@@ -47,6 +47,26 @@ test('GET /api/health: 200, no-store, tanpa rahasia', async ({ request }) => {
   expect(body.status).toBe('ok');
 });
 
+test('manifest PWA dapat dibaca dan ikonnya ada', async ({ request }) => {
+  const res = await request.get('/manifest.webmanifest');
+  expect(res.status()).toBe(200);
+  const m = (await res.json()) as {
+    name: string;
+    start_url: string;
+    display: string;
+    icons: { src: string; sizes: string; purpose?: string }[];
+  };
+  expect(m.name).toBe('DompetKu');
+  expect(m.display).toBe('standalone');
+  for (const size of ['192x192', '512x512']) {
+    expect(m.icons.some((i) => i.sizes === size)).toBe(true);
+  }
+  expect(m.icons.some((i) => i.purpose === 'maskable')).toBe(true);
+  for (const icon of m.icons) {
+    expect((await request.get(icon.src)).status(), icon.src).toBe(200);
+  }
+});
+
 test('tidak ada pelanggaran CSP di semua rute', async ({ page }) => {
   const violations = await watchCsp(page);
   for (const route of ROUTES) {
