@@ -31,7 +31,7 @@ Aplikasi keuangan pribadi + bersama untuk Novanda dan Farida. Repo private, juga
 ## Tertunda
 
 1. **Penilaian M0a** oleh pemilik dan Farida (`docs/review/m0a-penilaian.md`), lalu ADR 0004 + issue berlabel `m0a-feedback`.
-2. **Konfirmasi pemilik:** akses Farida via Shareable Link (ADR 0003). Favicon dibuat pemilik dari `docs/design/favicon-prompt.md`; pasang berkasnya saat dikirim. (Lime/violet, label kapital, teks handoff, dan arah visual Panel Malam sudah disetujui 2026-10-31.)
+2. **Konfirmasi pemilik:** Shareable Link untuk Farida disetujui; subdomain `dompet.novandafadly.com`; kedua VM `aarch64`, web + worker di VM DB (IPD §1). Rahasia diisi pemilik langsung di VM, tidak lewat chat. Favicon dibuat pemilik dari `docs/design/favicon-prompt.md`; pasang berkasnya saat dikirim. (Lime/violet, label kapital, teks handoff, dan arah visual Panel Malam sudah disetujui 2026-10-31.)
 3. **Enam dokumen produk** di `docs/product/` (PRD, TRD, AFD, DBD, BSD, IPD) selesai dan sudah lewat satu putaran review tim (`docs/product/review/`); 18 keputusan pemilik disetujui (`review/keputusan-pemilik.md`). DDL BSD lulus 130/130 asersi di PG 16 sekali pakai (`docs/product/bsd-check/`); uji ulang di PG 17 + pgTAP adalah gerbang sebelum S2. Pertanyaan terbuka sisa: BSD §15, TRD §7.
 4. **Peran designer:** tambah kursi "design reviewer" di setiap task UI, dan design critique pada pratinjau Panel Malam.
 5. Budget JS tetap 162 kB rute (target 150 kB di M2 dibatalkan pemilik); Panel Malam memakai 160,9 kB.
