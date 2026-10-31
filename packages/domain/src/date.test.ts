@@ -3,8 +3,12 @@ import {
   addDays,
   addMonths,
   dayLabel,
+  dayOfMonth,
   daysInclusive,
+  detailDateLabel,
+  dueLabel,
   endOfMonth,
+  fullDateLabel,
   isoAtWIB,
   monthName,
   monthYearLabel,
@@ -13,6 +17,8 @@ import {
   shortDateLabel,
   timeLabelWIB,
   todayWIB,
+  weekdayDateLabel,
+  weekdayShort,
 } from './date';
 
 describe('todayWIB', () => {
@@ -140,5 +146,25 @@ describe('monthYearLabel', () => {
   });
   it('rejects an invalid month', () => {
     expect(() => monthYearLabel('2026-13')).toThrow(RangeError);
+  });
+});
+
+describe('label tanggal Panel Malam', () => {
+  it('hari singkat dan tanggal untuk ubin tagihan', () => {
+    expect(weekdayShort('2026-10-21')).toBe('Rab');
+    expect(dayOfMonth('2026-10-21')).toBe(21);
+  });
+  it('tanggal lengkap dan tanggal detail', () => {
+    expect(weekdayDateLabel('2026-10-17')).toBe('Sab, 17 Okt');
+    expect(fullDateLabel('2026-10-17')).toBe('Sab, 17 Okt 2026');
+    expect(detailDateLabel('2026-10-17', '2026-10-17')).toBe('Hari ini · Sab, 17 Okt');
+    expect(detailDateLabel('2026-10-16', '2026-10-17')).toBe('Kemarin · Jum, 16 Okt');
+    expect(detailDateLabel('2026-10-15', '2026-10-17')).toBe('Kam, 15 Okt');
+  });
+  it('jatuh tempo relatif', () => {
+    expect(dueLabel('2026-10-17', '2026-10-17')).toBe('Hari ini');
+    expect(dueLabel('2026-10-18', '2026-10-17')).toBe('Besok');
+    expect(dueLabel('2026-10-21', '2026-10-17')).toBe('4 hari lagi');
+    expect(dueLabel('2026-10-14', '2026-10-17')).toBe('Lewat 3 hari');
   });
 });

@@ -123,6 +123,43 @@ export function dayLabel(d: IsoDate, today: IsoDate): string {
   return y === parse(today).y ? base : base + ' ' + String(y);
 }
 
+/** "Sab": nama hari singkat. */
+export function weekdayShort(d: IsoDate): string {
+  const { y, m, day } = parse(d);
+  return DAYS[new Date(Date.UTC(y, m - 1, day)).getUTCDay()] ?? '';
+}
+
+/** Tanggal dalam bulan (1–31), untuk ubin tanggal tagihan. */
+export function dayOfMonth(d: IsoDate): number {
+  return parse(d).day;
+}
+
+/** "Sab, 17 Okt": hari, tanggal, bulan tanpa tahun. */
+export function weekdayDateLabel(d: IsoDate): string {
+  const { m, day } = parse(d);
+  return weekdayShort(d) + ', ' + String(day) + ' ' + (MONTHS[m - 1] ?? '');
+}
+
+/** "Sab, 17 Okt 2026": tanggal lengkap untuk judul halaman laptop. */
+export function fullDateLabel(d: IsoDate): string {
+  return weekdayDateLabel(d) + ' ' + String(parse(d).y);
+}
+
+/** "Hari ini · Sab, 17 Okt" untuk hari ini dan kemarin; selain itu sama dengan dayLabel. */
+export function detailDateLabel(d: IsoDate, today: IsoDate): string {
+  const label = dayLabel(d, today);
+  return d === today || d === addDays(today, -1) ? label + ' · ' + weekdayDateLabel(d) : label;
+}
+
+/** Jatuh tempo relatif: "Hari ini", "Besok", "4 hari lagi", "Lewat 3 hari". */
+export function dueLabel(due: IsoDate, today: IsoDate): string {
+  const diff = daysInclusive(today, due) - 1;
+  if (diff === 0) return 'Hari ini';
+  if (diff === 1) return 'Besok';
+  if (diff > 1) return String(diff) + ' hari lagi';
+  return 'Lewat ' + String(-diff) + ' hari';
+}
+
 /** "31 Okt": hari dan bulan saja, untuk judul dan label yang sudah jelas tahunnya. */
 export function shortDateLabel(d: IsoDate): string {
   const { m, day } = parse(d);
