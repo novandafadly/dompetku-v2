@@ -2,6 +2,7 @@
 
 import type { Rupiah } from '@dompetku/domain';
 import type { MouseEvent } from 'react';
+import { BackspaceIcon } from '@/components/ui/icons/backspace';
 import { focusRing } from '@/components/ui/styles';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0'] as const;
@@ -24,8 +25,8 @@ const keepFocus = (e: MouseEvent) => {
   e.preventDefault();
 };
 
-// Tombol keypad di lapisan surface (lebih gelap dari sheet) agar terbaca sebagai tuts.
-const key = `min-h-12 rounded-field bg-surface text-xl font-semibold text-text num hover:bg-bg active:bg-hairline ${focusRing}`;
+// Tuts 52 px di surface-2, 22/700 (C2).
+const key = `num flex h-13 items-center justify-center rounded-lg bg-surface-2 text-keypad font-bold text-text hover-pointer:bg-hover active:bg-surface-3 ${focusRing}`;
 
 /** Varian B: keypad dalam aplikasi. Keyboard fisik tetap jalan lewat field nominal. */
 export function AppKeypad({
@@ -36,7 +37,7 @@ export function AppKeypad({
   onChange: (value: Rupiah | null) => void;
 }) {
   return (
-    <div role="group" aria-label="Keypad nominal" className="mt-3 grid grid-cols-3 gap-2">
+    <div role="group" aria-label="Keypad nominal" className="grid grid-cols-3 gap-2">
       {KEYS.map((k) => (
         <button
           key={k}
@@ -52,14 +53,14 @@ export function AppKeypad({
       ))}
       <button
         type="button"
-        aria-label="Hapus satu angka"
+        aria-label="Hapus"
         onMouseDown={keepFocus}
         onClick={() => {
           onChange(dropDigit(value));
         }}
         className={key}
       >
-        ⌫
+        <BackspaceIcon size={22} />
       </button>
     </div>
   );

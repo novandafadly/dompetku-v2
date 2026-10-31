@@ -2,9 +2,11 @@
 
 import type { Rupiah } from '@dompetku/domain';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { MoneyInput } from '@/components/ui/money-input';
+import { SpaceIcon } from '@/components/ui/space-tag';
 // Dari styles, bukan sheet: placeholder harus tetap bebas Radix di muat awal.
-import { SHEET_HEADER, SHEET_PANEL, tints } from '@/components/ui/styles';
+import { SHEET_HANDLE, SHEET_PANEL } from '@/components/ui/styles';
 
 /**
  * Sheet Catat ringan yang tampil seketika selama kode sheet sebenarnya masih dimuat.
@@ -41,7 +43,7 @@ export function CatatPlaceholder({
   }, [onClose]);
   return (
     <>
-      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-scrim" />
+      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-30 bg-scrim" />
       <div
         role="dialog"
         aria-modal="true"
@@ -51,10 +53,16 @@ export function CatatPlaceholder({
         data-state="open"
         className={SHEET_PANEL}
       >
-        <header className={`${SHEET_HEADER} pr-4 ${tints[tint]}`}>
-          <h2 className="text-lg/tight font-semibold">{title}</h2>
+        <span aria-hidden="true" className={SHEET_HANDLE} />
+        <header className="flex items-center gap-2 px-4 pt-2 tablet:px-6 tablet:pt-6">
+          {/* Bentuk sama dengan tombol judul sheet sebenarnya; belum bisa ditekan selama memuat. */}
+          <h2 className="flex h-11 items-center gap-2 rounded-lg border-1.5 border-ruang bg-ruang-tint px-3 text-body/none font-extrabold text-ruang">
+            <SpaceIcon space={tint} size={16} />
+            {title}
+            <CaretDownIcon size={14} weight="bold" />
+          </h2>
         </header>
-        <div className="px-4 py-3">
+        <div className="px-4 pt-3 pb-6 tablet:px-6">
           <MoneyInput
             label="Nominal"
             labelHidden
