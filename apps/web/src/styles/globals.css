@@ -91,10 +91,15 @@
   --text-display-xl: 3.5rem;
   --text-display-xl--line-height: 1;
   --text-display-xl--letter-spacing: -0.025em;
+  /* Nominal sangat panjang (≥ 13 karakter) di kartu utama HP. */
+  --text-display-long: clamp(1.75rem, 8.5vw, 2.75rem);
+  --text-display-long--line-height: 1;
+  --text-display-long--letter-spacing: -0.025em;
   --text-display-lg: 3.25rem;
   --text-display-lg--line-height: 1;
   --text-display-lg--letter-spacing: -0.025em;
-  --text-display: 2.75rem;
+  /* 44 px di 390, mengecil ke 36 px di 320 agar angka tujuh digit tetap muat. */
+  --text-display: clamp(2rem, 11.3vw, 2.75rem);
   --text-display--line-height: 1;
   --text-display--letter-spacing: -0.025em;
   --text-amount: 2.5rem;

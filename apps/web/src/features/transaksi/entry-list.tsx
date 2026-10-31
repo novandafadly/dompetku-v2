@@ -15,6 +15,7 @@ import { ListBulletsIcon } from '@/components/ui/icons/list-bullets';
 import { XIcon } from '@/components/ui/icons/x';
 import { MoneyText } from '@/components/ui/money-text';
 import { Tabs } from '@/components/ui/segmented-control';
+import { useMedia } from '@/components/ui/use-media';
 import { EmptyState, Skeleton } from '@/components/ui/state';
 import { card } from '@/components/ui/styles';
 import { RUANG_NAME, type TransaksiContext } from './context';
@@ -156,6 +157,8 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
   const [view, setView] = useState<'daftar' | 'ringkasan'>('daftar');
   const router = useRouter();
   const tabsId = useId();
+  // Laptop: daftar + kolom ringkasan berdampingan, tanpa segmen. Hanya satu yang dirender.
+  const laptop = useMedia('(min-width: 1024px)');
   const { month } = ctx;
   const [chosen, setFilter] = useState<FilterId>('semua');
   // Filter yang tidak ada di ruang ini (mis. Kantor setelah pindah ke Bersama) kembali ke Semua.
@@ -244,68 +247,76 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
   );
   const summary = <SummaryView state={state} ruang={ruang} month={month} />;
 
-  // HP/tablet: segmen Daftar | Ringkasan. Laptop: daftar dan kolom ringkasan 340 px berdampingan.
+  const listBlock = (
+    <div className="flex flex-col gap-3 tablet:gap-4">
+      <div className="flex flex-col gap-3 laptop:flex-row laptop:items-center laptop:gap-4">
+        {nav}
+        <div className="laptop:flex-1">
+          <SearchField
+            query={query}
+            onQuery={(q) => {
+              setQuery(q);
+              setLimit(PAGE);
+            }}
+          />
+        </div>
+      </div>
+      <FilterChips
+        ruang={ruang}
+        filter={filter}
+        onFilter={(f) => {
+          setFilter(f);
+          setLimit(PAGE);
+        }}
+      />
+      {list}
+    </div>
+  );
+
+  if (laptop) {
+    return (
+      <>
+        {header}
+        <div className="grid max-w-250 grid-cols-transaksi items-start gap-5">
+          <div className="min-w-0">{listBlock}</div>
+          <aside aria-label="Ringkasan bulan">{summary}</aside>
+        </div>
+      </>
+    );
+  }
+
+  // HP/tablet: segmen Daftar | Ringkasan.
   return (
     <>
       {header}
-      <div className="flex flex-col gap-3 tablet:gap-4 laptop:grid laptop:max-w-250 laptop:grid-cols-transaksi laptop:items-start laptop:gap-5">
-        <div className="flex min-w-0 flex-col gap-3 tablet:gap-4">
-          <div className="laptop:hidden">
-            <Tabs
-              label="Tampilan"
-              idBase={tabsId}
-              items={[
-                { value: 'daftar', label: 'Daftar' },
-                { value: 'ringkasan', label: 'Ringkasan' },
-              ]}
-              value={view}
-              onChange={(v) => {
-                setView(v === 'ringkasan' ? 'ringkasan' : 'daftar');
-              }}
-            />
-          </div>
-          <div
-            id={`${tabsId}-panel`}
-            role="tabpanel"
-            aria-labelledby={`${tabsId}-tab-${view}`}
-            className="flex flex-col gap-3 tablet:gap-4"
-          >
-            {view === 'ringkasan' ? (
-              <div className="flex flex-col gap-3 tablet:gap-4 laptop:hidden">
-                {nav}
-                {summary}
-              </div>
-            ) : null}
-            <div
-              className={`flex-col gap-3 tablet:gap-4 ${view === 'ringkasan' ? 'hidden laptop:flex' : 'flex'}`}
-            >
-              <div className="flex flex-col gap-3 laptop:flex-row laptop:items-center laptop:gap-4">
-                {nav}
-                <div className="laptop:flex-1">
-                  <SearchField
-                    query={query}
-                    onQuery={(q) => {
-                      setQuery(q);
-                      setLimit(PAGE);
-                    }}
-                  />
-                </div>
-              </div>
-              <FilterChips
-                ruang={ruang}
-                filter={filter}
-                onFilter={(f) => {
-                  setFilter(f);
-                  setLimit(PAGE);
-                }}
-              />
-              {list}
-            </div>
-          </div>
+      <div className="flex flex-col gap-3 tablet:gap-4">
+        <Tabs
+          label="Tampilan"
+          idBase={tabsId}
+          items={[
+            { value: 'daftar', label: 'Daftar' },
+            { value: 'ringkasan', label: 'Ringkasan' },
+          ]}
+          value={view}
+          onChange={(v) => {
+            setView(v === 'ringkasan' ? 'ringkasan' : 'daftar');
+          }}
+        />
+        <div
+          id={`${tabsId}-panel`}
+          role="tabpanel"
+          aria-labelledby={`${tabsId}-tab-${view}`}
+          className="flex flex-col gap-3 tablet:gap-4"
+        >
+          {view === 'ringkasan' ? (
+            <>
+              {nav}
+              {summary}
+            </>
+          ) : (
+            listBlock
+          )}
         </div>
-        <aside aria-label="Ringkasan bulan" className="hidden laptop:block">
-          {summary}
-        </aside>
       </div>
     </>
   );

@@ -25,6 +25,8 @@ export function ConfirmDialog({
   onConfirm: () => void;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // Dialog dibuka dari luar (tanpa Trigger), jadi fokus dikembalikan manual ke pemicunya.
+  const returnTo = useRef<HTMLElement | null>(null);
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
@@ -33,7 +35,13 @@ export function ConfirmDialog({
           onOpenAutoFocus={(e) => {
             // Tombol aman lebih dulu: Enter tidak membatalkan transaksi tanpa sengaja.
             e.preventDefault();
+            returnTo.current =
+              document.activeElement instanceof HTMLElement ? document.activeElement : null;
             cancelRef.current?.focus();
+          }}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            if (returnTo.current?.isConnected) returnTo.current.focus();
           }}
           className="fixed inset-x-4 top-1/2 z-30 mx-auto flex max-w-90 -translate-y-1/2 flex-col gap-3.5 rounded-2xl border border-hairline bg-surface p-5 text-text shadow-float"
         >

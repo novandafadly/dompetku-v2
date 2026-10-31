@@ -37,8 +37,13 @@ export function MoneyText({
   // Jenis (pemasukan/pengeluaran) sudah membawa arah; tanda minus hanya diucapkan untuk netral.
   const spoken = spokenRupiah(kind === 'neutral' ? value : Math.abs(value), kind);
 
+  // Angka sangat panjang memakai skala yang lebih kecil di HP agar tidak keluar dari kartu.
+  const sizeClass =
+    size === 'hero' && text.length > 13
+      ? 'text-display-long font-extrabold laptop:text-display-xl'
+      : sizes[size];
   return (
-    <span className={`num inline-block max-w-full ${sizes[size]} ${tones[kind]} ${className}`}>
+    <span className={`num inline-block max-w-full ${sizeClass} ${tones[kind]} ${className}`}>
       <span aria-hidden="true">{text}</span>
       <span className="sr-only">{spoken}</span>
     </span>
