@@ -43,12 +43,13 @@
 	request_header -X-Forwarded-Host
 	request_header -X-Real-IP
 
-	# S3: ganti dengan reverse_proxy web:3000 { header_up X-Forwarded-For {client_ip};
-	# header_up X-Forwarded-Proto https; header_up -X-Forwarded-Host } (diuji di S1).
+	# S3: web (Next.js standalone). {client_ip} = IP klien dari edge (trusted_proxies di atas).
 	handle {
-		header Content-Type "text/html; charset=utf-8"
-		header Cache-Control no-store
-		respond "<!doctype html><html lang=id><meta charset=utf-8><title>DompetKu</title><p>DompetKu sedang disiapkan.</p></html>" 200
+		reverse_proxy web:3000 {
+			header_up X-Forwarded-For {client_ip}
+			header_up X-Forwarded-Proto https
+			header_up -X-Forwarded-Host
+		}
 	}
 }
 
