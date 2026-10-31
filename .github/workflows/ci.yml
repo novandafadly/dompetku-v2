@@ -166,11 +166,12 @@ jobs:
             -e DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable' \
             -e DBMATE_MIGRATIONS_DIR=/db/migrations -e DBMATE_NO_DUMP_SCHEMA=true \
             "$DBMATE_IMAGE" --wait up
-          docker exec "$PG" pg_dump -U postgres -s -N tap -N tests dompetku \
-            | grep -v '^\\\(un\)\?restrict' >"$RUNNER_TEMP/schema-1.sql"
       - name: pg_prove
         run: |
           docker exec "$PG" psql -U postgres -v ON_ERROR_STOP=1 -q -d dompetku -f /db/tests/support/setup.sql
+          # Dump pembanding diambil sesudah setup.sql agar ekstensi pgtap ada di kedua dump.
+          docker exec "$PG" pg_dump -U postgres -s -N tap -N tests dompetku \
+            | grep -v '^\\\(un\)\?restrict' >"$RUNNER_TEMP/schema-1.sql"
           docker exec "$PG" sh -c 'pg_prove -U dompetku_test -d dompetku /db/tests/*.sql'
       - name: dbmate rollback semua lalu up lagi
         run: |
