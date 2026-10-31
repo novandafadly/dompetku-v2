@@ -243,6 +243,25 @@ export function entryTitle(state: DemoState, e: Entry): string {
   }
 }
 
+/** Label jenis/kategori entri untuk baris: kategori, atau Saldo awal / Pindah dompet / Antar ruang. */
+export function entryKindLabel(state: DemoState, e: Entry): string {
+  switch (e.kind) {
+    case 'opening_balance':
+      return 'Saldo awal';
+    case 'transfer':
+      return 'Pindah dompet';
+    case 'space_transfer':
+      return 'Antar ruang';
+    default:
+      return state.categories.find((c) => c.id === e.categoryId)?.name ?? 'Tanpa kategori';
+  }
+}
+
+/** Nama kategori entri (untuk ikon), bila ada. */
+export function entryCategoryName(state: DemoState, e: Entry): string | undefined {
+  return state.categories.find((c) => c.id === e.categoryId)?.name;
+}
+
 /** Nominal bertanda dari sudut pandang ruang entri: pengeluaran dan setoran keluar negatif. */
 export function signedAmount(e: Entry): { value: number; kind: AmountKind } {
   switch (e.kind) {
