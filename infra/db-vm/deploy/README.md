@@ -1,6 +1,6 @@
 # Deployer pull-based (S3)
 
-Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi attestation, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, dan rollback otomatis bila gagal.
+Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, dan rollback otomatis bila gagal.
 
 ## Berkas
 
@@ -10,6 +10,7 @@ Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di
 | `../compose.yml` (layanan `web`, profil `web`) | `/opt/dompetku/compose.yml`                                      | `644 root` |
 | `deploy.env.example`                           | `/opt/dompetku/env/deploy.env`                                   | `600 root` |
 | `web.env.example`                              | `/opt/dompetku/env/web.env`                                      | `600 root` |
+| (dari pemilik, bagian Tanda tangan image)      | `/opt/dompetku/keys/cosign.pub` (hanya kunci publik)             | `644 root` |
 | `systemd/dompetku-deploy.{service,timer}`      | `/etc/systemd/system/`                                           | `644 root` |
 | `README.md`                                    | `/opt/dompetku/deploy/README.md`                                 | `644 root` |
 | (dibuat deployer)                              | `/var/lib/dompetku/deploy/{current,history.tsv,failed}`          | `700 root` |
@@ -30,7 +31,7 @@ Image hanya ditarik dari GHCR (`docker pull`); VM tidak perlu BuildKit.
 | Kode | Arti                                                                                        |
 | ---- | ------------------------------------------------------------------------------------------- |
 | 0    | Selesai, tidak ada rilis baru, deploy lain sedang berjalan, atau digest pernah gagal        |
-| 2    | Ditolak: attestation tidak valid, commit lebih tua, digest pernah berjalan, preflight gagal |
+| 2    | Ditolak: tanda tangan/SBOM tidak valid, commit lebih tua, digest pernah berjalan, preflight |
 | 3    | Rilis gagal health, sudah kembali ke digest sebelumnya                                      |
 | 4    | Rilis gagal dan rollback juga gagal (tindakan manual)                                       |
 | 1    | Galat lain (GHCR tidak terbaca, migrasi gagal, konfigurasi)                                 |
@@ -44,8 +45,8 @@ Image hanya ditarik dari GHCR (`docker pull`); VM tidak perlu BuildKit.
 
 Satu langkah, verifikasi, lanjut. Isi `infra/db-vm/deploy/` disalin ke `/tmp/dompetku-s3/`, dan `infra/db-vm/compose.yml` ke `/tmp/dompetku-s3/compose.yml`, lebih dulu. Simpan salinan compose yang berjalan: `sudo cp /opt/dompetku/compose.yml /opt/dompetku/compose.yml.s2`.
 
-1. **Alat.** `gh` ≥ 2.60 dari repo apt resmi `cli.github.com` (paket `gh`, arsitektur arm64). Hanya bila `VERIFY=cosign`: biner `cosign-linux-arm64` dari rilis `sigstore/cosign`, cek `sha256` dengan berkas checksum rilis, pasang ke `/usr/local/bin/cosign`.
-   - Verifikasi: `gh --version`; `gh attestation verify --help | grep -c bundle-from-oci` = 1.
+1. **Alat.** cosign v3.0.6 (sama dengan workflow `release`): biner `cosign-linux-arm64` dari rilis `sigstore/cosign` v3.0.6, cek `sha256` dengan `cosign_checksums.txt` rilis yang sama, pasang ke `/usr/local/bin/cosign` (`755 root`). `gh` tidak diperlukan.
+   - Verifikasi: `cosign version` memuat `v3.0.6`.
 2. **Berkas.**
 
    ```bash
@@ -59,8 +60,8 @@ Satu langkah, verifikasi, lanjut. Isi `infra/db-vm/deploy/` disalin ke `/tmp/dom
 
    - Verifikasi: `cd /opt/dompetku && sudo docker compose --profile web config --services` memuat `web`; `sudo docker compose config --services` tanpa profil tetap `gw`, `postgres`; `diff /opt/dompetku/compose.yml.s2 /opt/dompetku/compose.yml` hanya menambah blok `web` dan komentar baris 2.
 
-3. **[PEMILIK] Rahasia.** Isi `GHCR_USER` dan `GHCR_TOKEN` (read-only, `read:packages`) di `/opt/dompetku/env/deploy.env` dengan editor di VM. Tidak lewat chat.
-   - Verifikasi tanpa mencetak isi: `sudo grep -c '^GHCR_TOKEN=.\{20,\}' /opt/dompetku/env/deploy.env` = 1.
+3. **[PEMILIK] Rahasia.** Isi `GHCR_USER` dan `GHCR_TOKEN` (read-only, `read:packages`) di `/opt/dompetku/env/deploy.env` dengan editor di VM. Tidak lewat chat. Pasang kunci publik cosign (bagian Tanda tangan image, langkah 3).
+   - Verifikasi tanpa mencetak isi: `sudo grep -c '^GHCR_TOKEN=.\{20,\}' /opt/dompetku/env/deploy.env` = 1; `sudo grep -c '^VERIFY=cosign-key$' /opt/dompetku/env/deploy.env` = 1; `head -n 1 /opt/dompetku/keys/cosign.pub` = `-----BEGIN PUBLIC KEY-----`.
 4. **Uji verifikasi sekali** (butuh satu rilis `main` sudah ada di GHCR):
 
    ```bash
@@ -68,7 +69,7 @@ Satu langkah, verifikasi, lanjut. Isi `infra/db-vm/deploy/` disalin ke `/tmp/dom
    sudo /opt/dompetku/bin/deploy; echo "kode $?"
    ```
 
-   Bila `gh attestation verify` menolak karena izin, lihat bagian Attestation di bawah.
+   Bila ditolak dengan `tanda tangan/attestation cosign tidak valid`, cek bahwa `cosign.pub` di VM pasangan dari secret `COSIGN_PRIVATE_KEY` dan bahwa run `Release` terakhir lulus langkah tanda tangan.
 
 5. **gw ke web.** Di `/opt/dompetku/gw/Caddyfile` ganti blok `handle { ... respond ... }` sementara dengan `reverse_proxy web:3000` sesuai komentar S3 di berkas itu (`header_up X-Forwarded-For {client_ip}`, `header_up X-Forwarded-Proto https`, `header_up -X-Forwarded-Host`), validasi (`caddy validate`), lalu `docker compose up -d gw`. Perubahan Caddyfile masuk repo lewat sesi pemilik berkas itu (`infra/db-vm/gw/`).
    - Verifikasi dari VM App: `curl -s https://dompet.novandafadly.com/api/health` = `{"status":"ok","sha":"<sha main>"}`; header `Content-Security-Policy-Report-Only` ada.
@@ -93,11 +94,38 @@ Rollback pemasangan: `sudo systemctl disable --now dompetku-deploy.timer`, hapus
 - Coba ulang digest yang tercatat gagal: `sudo /opt/dompetku/bin/deploy --digest sha256:...`.
 - CSP: setelah satu minggu report-only tanpa pelanggaran, hapus `CSP_REPORT_ONLY=1` dari `env/web.env`, lalu `docker compose --profile web up -d web`.
 
-## Attestation
+## Tanda tangan image
 
-Workflow `release` memakai `actions/attest-build-provenance` (provenance SLSA, disimpan juga di GHCR) dan deployer memverifikasi dengan `gh attestation verify --bundle-from-oci --signer-workflow .../release.yml --source-ref refs/heads/main`.
+Artifact attestation GitHub tidak tersedia untuk repo private milik akun pribadi (`Feature not available for user-owned private repositories`), dan cosign keyless menulis entri publik ke log transparansi Rekor. Karena itu workflow `release` menandatangani digest dengan **pasangan kunci cosign milik pemilik, tanpa log transparansi**:
 
-**Perlu dicek pemilik:** menurut dokumentasi GitHub yang diketahui agen, artifact attestation untuk repo **private** hanya tersedia di GitHub Enterprise Cloud; repo ini private milik akun pribadi. Bila langkah `Attest` di workflow `release` gagal karena itu, pilihannya:
+- `cosign sign --key env://COSIGN_PRIVATE_KEY` dan `cosign attest --type spdxjson` (SBOM) dengan signing config tanpa layanan (tanpa Fulcio, Rekor, TSA; padanan `--tlog-upload=false` di cosign v3). Tanda tangan dan attestation disimpan di GHCR di samping image.
+- Bila secret kosong, job gagal dengan pesan jelas sebelum tag `main` dipindah; deployer tidak melihat rilis tanpa tanda tangan.
+- Deployer (`VERIFY=cosign-key`) menjalankan `cosign verify` lalu `cosign verify-attestation --type spdxjson`, keduanya `--key /opt/dompetku/keys/cosign.pub --insecure-ignore-tlog=true`. Tanpa Rekor, satu-satunya jangkar kepercayaan adalah kunci itu.
 
-1. Set variabel repo `IMAGE_SIGNING=cosign` (Settings, Variables): workflow menandatangani digest dengan cosign keyless (Sigstore publik). Konsekuensi: entri publik di log transparansi Rekor memuat nama repo, path workflow, dan SHA commit (bukan kode). Di VM: `VERIFY=cosign` di `deploy.env` dan pasang `cosign` (langkah 1).
-2. Menjadikan repo publik (tidak disarankan; repo juga berisi dokumen produk).
+### [PEMILIK] Membuat dan memasang kunci
+
+Kunci pribadi tidak pernah ada di VM dan tidak pernah dikirim lewat chat.
+
+1. Di mesin tepercaya milik pemilik (bukan VM, bukan sandbox agen), dengan cosign v3:
+
+   ```bash
+   mkdir -p ~/dompetku-cosign && cd ~/dompetku-cosign
+   cosign generate-key-pair      # minta password; hasil cosign.key (terenkripsi) + cosign.pub
+   ```
+
+   Simpan `cosign.key` dan password-nya di password manager.
+
+2. GitHub repo `novandafadly/dompetku-v2`, Settings, Secrets and variables, Actions, **New repository secret**:
+   - `COSIGN_PRIVATE_KEY` = isi lengkap `cosign.key` (termasuk baris `BEGIN`/`END`).
+   - `COSIGN_PASSWORD` = password langkah 1 (wajib tidak kosong).
+   - Variabel lama `IMAGE_SIGNING` (bila pernah dibuat) boleh dihapus; tidak dipakai lagi.
+3. Salin **hanya** `cosign.pub` ke VM DB, lalu:
+
+   ```bash
+   sudo install -d -m 755 /opt/dompetku/keys
+   sudo install -m 644 cosign.pub /opt/dompetku/keys/cosign.pub
+   ```
+
+4. Picu rilis (push ke `main` atau re-run workflow `Release`), lalu di VM: `sudo /opt/dompetku/bin/deploy; echo "kode $?"`.
+
+Rotasi: ulangi langkah 1 sampai 3 dengan kunci baru, picu rilis baru, lalu deploy. Digest lama yang ditandatangani kunci lama tidak lolos verifikasi lagi (rollback manual ke digest lama perlu ditandatangani ulang atau kunci lama dipasang sementara).
