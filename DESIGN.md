@@ -25,8 +25,9 @@ Sumber: handoff "Panel Malam" yang dirancang pemilik di Claude Design (2026-10-3
 | Ruang Bersama          | violet `#B6A3FF`                  | `#5B45C9`                         |
 | Bahaya / peringatan    | `#FF8F7D` / `#F0B44C`             | `#B8322A` / `#9A5B00`             |
 | Fokus                  | `#C4EE6A`                         | `#3F5F0A`                         |
+| Pemasukan (`income`)   | `#5FD8A4`                         | `#1A7447`                         |
 
-Semua pasangan teks ≥ 4,5:1 dan batas kontrol/fokus ≥ 3:1 di kedua tema, diuji di `apps/web/src/styles/contrast.test.ts` terhadap rasio yang tertulis di handoff.
+Semua pasangan teks ≥ 4,5:1 dan batas kontrol/fokus ≥ 3:1 di kedua tema, diuji di `apps/web/src/styles/contrast.test.ts` terhadap rasio yang tertulis di handoff. Tiga nilai terang sengaja lebih gelap dari handoff (`income` `#1B7A4B`, `warning` `#9A5B00`, `chart-aman` `#7FAE2A`) agar lolos di `surface-3` dan sebagai grafik; lihat `IMPLEMENTATION-REPORT.md`.
 
 ## Tipografi
 
