@@ -1,25 +1,31 @@
 'use client';
 
-import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { groupByDay } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { addMonths, monthName, monthYearLabel } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
+import { ArrowDownIcon } from '@/components/ui/icons/arrow-down';
+import { CaretLeftIcon } from '@/components/ui/icons/caret-left';
+import { CaretRightIcon } from '@/components/ui/icons/caret-right';
+import { FunnelXIcon } from '@/components/ui/icons/funnel-x';
+import { ListBulletsIcon } from '@/components/ui/icons/list-bullets';
+import { XIcon } from '@/components/ui/icons/x';
 import { MoneyText } from '@/components/ui/money-text';
-import { SegmentedControl } from '@/components/ui/segmented-control';
-import { EmptyState } from '@/components/ui/state';
-import { listBlock } from '@/components/ui/styles';
+import { Tabs } from '@/components/ui/segmented-control';
+import { EmptyState, Skeleton } from '@/components/ui/state';
+import { card } from '@/components/ui/styles';
 import { RUANG_NAME, type TransaksiContext } from './context';
 import { EntryRow } from './entry-row';
 import {
-  FilterBar,
+  FilterChips,
   filterLabel,
   filtersFor,
   matchesFilter,
   matchesSearch,
+  SearchField,
   type FilterId,
 } from './filters';
 import { SummaryView } from './summary-view';
@@ -46,26 +52,57 @@ function MonthNav({
   onShift: (delta: number) => void;
 }) {
   return (
-    <div role="group" aria-label="Bulan" className="mt-4 flex items-center justify-between">
+    <div role="group" aria-label="Bulan" className="flex items-center justify-between gap-2">
       <IconButton
         label="Bulan sebelumnya"
-        icon={<CaretLeftIcon size={24} />}
+        icon={<CaretLeftIcon size={18} weight="bold" />}
         disabled={!canPrev}
         onClick={() => {
           onShift(-1);
         }}
       />
-      <p aria-live="polite" className="text-lg font-semibold text-text">
+      <p
+        aria-live="polite"
+        className="text-body font-extrabold text-text laptop:min-w-40 laptop:text-center"
+      >
         {monthYearLabel(month)}
       </p>
       <IconButton
         label="Bulan berikutnya"
-        icon={<CaretRightIcon size={24} />}
+        icon={<CaretRightIcon size={18} weight="bold" />}
         disabled={!canNext}
         onClick={() => {
           onShift(1);
         }}
       />
+    </div>
+  );
+}
+
+/** T4: teks memuat yang terlihat + kerangka baris. */
+function ListLoading({ month }: { month: string }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p role="status" className="px-1 text-label font-semibold text-text-muted">
+        {`Memuat transaksi ${monthName(month)}…`}
+      </p>
+      {[3, 2].map((rows, g) => (
+        <div key={g} aria-hidden="true" className="flex flex-col gap-2">
+          <Skeleton className="mx-1 h-3.5 w-24" />
+          <div className={`flex flex-col gap-4 px-4 py-3 ${card}`}>
+            {Array.from({ length: rows }, (_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="size-10 rounded-lg" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-3.5 w-1/2" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+                <Skeleton className="h-3.5 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -90,15 +127,19 @@ function DayGroups({
   return (
     <>
       {groups.map((g) => (
-        <section key={g.date} aria-labelledby={`${baseId}-${g.date}`} className="mt-6">
+        <section
+          key={g.date}
+          aria-labelledby={`${baseId}-${g.date}`}
+          className="flex flex-col gap-2"
+        >
           <h3
             id={`${baseId}-${g.date}`}
-            className="mb-2 flex items-baseline justify-between gap-3 px-1 text-sm font-semibold text-text-muted"
+            className="flex items-baseline justify-between gap-3 px-1 text-meta font-bold text-text-soft"
           >
             <span>{g.label}</span>
-            <MoneyText value={g.net} />
+            <MoneyText value={g.net} size="inherit" />
           </h3>
-          <ul aria-label={`Transaksi ${g.label}`} className={listBlock}>
+          <ul aria-label={`Transaksi ${g.label}`} className={`px-4 ${card}`}>
             {g.shown.map((e) => (
               <EntryRow key={e.id} state={ctx.state} entry={e} href={ctx.entryHref(e.id)} />
             ))}
@@ -109,11 +150,12 @@ function DayGroups({
   );
 }
 
-export function EntryList(ctx: TransaksiContext) {
+export function EntryList({ header, ...ctx }: TransaksiContext & { header: ReactNode }) {
   const { state, ruang, today } = ctx;
   const currentMonth = today.slice(0, 7);
   const [view, setView] = useState<'daftar' | 'ringkasan'>('daftar');
   const router = useRouter();
+  const tabsId = useId();
   const { month } = ctx;
   const [chosen, setFilter] = useState<FilterId>('semua');
   // Filter yang tidak ada di ruang ini (mis. Kantor setelah pindah ke Bersama) kembali ke Semua.
@@ -156,77 +198,115 @@ export function EntryList(ctx: TransaksiContext) {
         : { title: `Belum ada transaksi di ${monthName(month)}.` };
   }
 
+  const list =
+    ctx.dataState === 'loading' ? (
+      <ListLoading month={month} />
+    ) : empty ? (
+      <EmptyState
+        icon={filtered ? <FunnelXIcon size={26} /> : <ListBulletsIcon size={26} />}
+        title={empty.title}
+        {...(empty.description === undefined ? {} : { description: empty.description })}
+        action={
+          filtered ? (
+            <Button variant="secondary" onClick={reset}>
+              <XIcon size={18} weight="bold" />
+              Hapus filter
+            </Button>
+          ) : undefined
+        }
+      />
+    ) : (
+      <>
+        <h2 className="sr-only">Daftar transaksi</h2>
+        <DayGroups ctx={ctx} entries={matched} limit={limit} />
+        {matched.length > limit ? (
+          <Button
+            variant="secondary"
+            className="w-full laptop:w-auto laptop:self-start"
+            onClick={() => {
+              setLimit((l) => l + PAGE);
+            }}
+          >
+            <ArrowDownIcon size={18} weight="bold" />
+            Muat lagi
+          </Button>
+        ) : null}
+      </>
+    );
+
+  const nav = (
+    <MonthNav
+      month={month}
+      canPrev={month > minMonth}
+      canNext={month < currentMonth}
+      onShift={shift}
+    />
+  );
+  const summary = <SummaryView state={state} ruang={ruang} month={month} />;
+
+  // HP/tablet: segmen Daftar | Ringkasan. Laptop: daftar dan kolom ringkasan 340 px berdampingan.
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="sr-only">Transaksi</h1>
-      <SegmentedControl
-        label="Tampilan"
-        items={[
-          { value: 'daftar', label: 'Daftar' },
-          { value: 'ringkasan', label: 'Ringkasan' },
-        ]}
-        value={view}
-        onChange={(v) => {
-          setView(v === 'ringkasan' ? 'ringkasan' : 'daftar');
-        }}
-      />
-      <MonthNav
-        month={month}
-        canPrev={month > minMonth}
-        canNext={month < currentMonth}
-        onShift={shift}
-      />
-      {view === 'ringkasan' ? (
-        <SummaryView state={state} ruang={ruang} month={month} />
-      ) : (
-        <>
-          <FilterBar
-            ruang={ruang}
-            filter={filter}
-            onFilter={(f) => {
-              setFilter(f);
-              setLimit(PAGE);
-            }}
-            query={query}
-            onQuery={(q) => {
-              setQuery(q);
-              setLimit(PAGE);
-            }}
-          />
-          {empty ? (
-            <div className="mt-6">
-              <EmptyState
-                title={empty.title}
-                {...(empty.description === undefined ? {} : { description: empty.description })}
-                action={
-                  filtered ? (
-                    <Button variant="secondary" onClick={reset}>
-                      Hapus filter
-                    </Button>
-                  ) : undefined
-                }
-              />
-            </div>
-          ) : (
-            <>
-              <h2 className="sr-only">Daftar transaksi</h2>
-              <DayGroups ctx={ctx} entries={matched} limit={limit} />
-              {matched.length > limit ? (
-                <div className="mt-6 flex justify-center">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setLimit((l) => l + PAGE);
+    <>
+      {header}
+      <div className="flex flex-col gap-3 tablet:gap-4 laptop:grid laptop:max-w-250 laptop:grid-cols-transaksi laptop:items-start laptop:gap-5">
+        <div className="flex min-w-0 flex-col gap-3 tablet:gap-4">
+          <div className="laptop:hidden">
+            <Tabs
+              label="Tampilan"
+              idBase={tabsId}
+              items={[
+                { value: 'daftar', label: 'Daftar' },
+                { value: 'ringkasan', label: 'Ringkasan' },
+              ]}
+              value={view}
+              onChange={(v) => {
+                setView(v === 'ringkasan' ? 'ringkasan' : 'daftar');
+              }}
+            />
+          </div>
+          <div
+            id={`${tabsId}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${tabsId}-tab-${view}`}
+            className="flex flex-col gap-3 tablet:gap-4"
+          >
+            {view === 'ringkasan' ? (
+              <div className="flex flex-col gap-3 tablet:gap-4 laptop:hidden">
+                {nav}
+                {summary}
+              </div>
+            ) : null}
+            <div
+              className={`flex-col gap-3 tablet:gap-4 ${view === 'ringkasan' ? 'hidden laptop:flex' : 'flex'}`}
+            >
+              <div className="flex flex-col gap-3 laptop:flex-row laptop:items-center laptop:gap-4">
+                {nav}
+                <div className="laptop:flex-1">
+                  <SearchField
+                    query={query}
+                    onQuery={(q) => {
+                      setQuery(q);
+                      setLimit(PAGE);
                     }}
-                  >
-                    Muat lagi
-                  </Button>
+                  />
                 </div>
-              ) : null}
-            </>
-          )}
-        </>
-      )}
-    </div>
+              </div>
+              <FilterChips
+                ruang={ruang}
+                filter={filter}
+                onFilter={(f) => {
+                  setFilter(f);
+                  setLimit(PAGE);
+                }}
+              />
+              {list}
+            </div>
+          </div>
+        </div>
+        <aside aria-label="Ringkasan bulan" className="hidden laptop:block">
+          {summary}
+        </aside>
+      </div>
+    </>
   );
 }

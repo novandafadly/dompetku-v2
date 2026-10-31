@@ -1,50 +1,37 @@
 'use client';
 
-import { ClockIcon } from '@phosphor-icons/react';
-import { entryTitle, signedAmount } from '@dompetku/demo-data';
+import { entryCategoryName, entryKindLabel, entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import type { Route } from 'next';
-import Link from 'next/link';
-import { MoneyText } from '@/components/ui/money-text';
-import { focusRing, listRow, rowLink } from '@/components/ui/styles';
-import { accountName, entryCategoryName } from './filters';
+import { CategoryIcon } from '@/components/ui/category-icon';
+import { ClockIcon } from '@/components/ui/icons/clock';
+import { TxRow } from '@/components/ui/rows';
+import { accountName } from './filters';
 
-export function entryKindLabel(state: DemoState, e: Entry): string {
-  switch (e.kind) {
-    case 'opening_balance':
-      return 'Saldo awal';
-    case 'transfer':
-      return 'Pindah dompet';
-    case 'space_transfer':
-      return 'Antar ruang';
-    default:
-      return entryCategoryName(state, e) ?? 'Tanpa kategori';
-  }
+export function entryWallet(state: DemoState, entry: Entry): string {
+  return entry.kind === 'transfer' && entry.counterAccountId !== undefined
+    ? `${accountName(state, entry.accountId)} → ${accountName(state, entry.counterAccountId)}`
+    : accountName(state, entry.accountId);
 }
 
 export function EntryRow({ state, entry, href }: { state: DemoState; entry: Entry; href: Route }) {
   const { value, kind } = signedAmount(entry);
-  const wallet =
-    entry.kind === 'transfer' && entry.counterAccountId !== undefined
-      ? `${accountName(state, entry.accountId)} → ${accountName(state, entry.counterAccountId)}`
-      : accountName(state, entry.accountId);
   return (
-    <li className={listRow}>
-      <Link href={href} className={`${rowLink} ${focusRing}`}>
-        <span className="min-w-0">
-          <span className="block text-base break-words text-text">{entryTitle(state, entry)}</span>
-          <span className="block text-sm break-words text-text-muted">
-            {entryKindLabel(state, entry)} · {wallet}
+    <TxRow
+      href={href}
+      icon={<CategoryIcon name={entryCategoryName(state, entry)} kind={entry.kind} size={20} />}
+      label={entryTitle(state, entry)}
+      meta={`${entryKindLabel(state, entry)} · ${entryWallet(state, entry)}`}
+      status={
+        entry.kind === 'expense' && entry.reimbursable === true ? (
+          <span className="flex items-center gap-1 text-meta font-semibold text-warning">
+            <ClockIcon size={14} className="shrink-0" />
+            Menunggu reimburse
           </span>
-          {entry.kind === 'expense' && entry.reimbursable === true ? (
-            <span className="mt-0.5 flex items-center gap-1 text-sm text-warning">
-              <ClockIcon size={16} aria-hidden="true" className="shrink-0" />
-              Menunggu reimburse
-            </span>
-          ) : null}
-        </span>
-        <MoneyText value={value} kind={kind} />
-      </Link>
-    </li>
+        ) : undefined
+      }
+      value={value}
+      kind={kind}
+    />
   );
 }

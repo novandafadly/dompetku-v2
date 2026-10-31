@@ -3,6 +3,7 @@
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { formatRupiah } from '@dompetku/domain';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
 import { accountName } from './filters';
 
 /** Akibat ke saldo bila transaksi dibatalkan, dalam kalimat utuh. */
@@ -48,10 +49,11 @@ export function VoidDialog({
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Batalkan transaksi?"
+      icon={<ArrowCounterClockwiseIcon size={22} weight="bold" />}
+      title="Batalkan transaksi ini?"
       description={voidSentence(state, entry)}
       confirmLabel="Batalkan transaksi"
-      cancelLabel="Tidak jadi"
+      cancelLabel="Kembali"
       onConfirm={onConfirm}
     />
   );

@@ -13,6 +13,8 @@ export interface TransaksiContext {
   /** Bulan terpilih ('YYYY-MM') dan alamat daftar untuk bulan lain. */
   month: string;
   monthHref: (month: string) => Route;
+  /** Keadaan data demo (`?state=loading`): T4. */
+  dataState?: 'ready' | 'loading' | 'error';
 }
 
 export const RUANG_NAME: Record<Ruang, string> = { pribadi: 'Pribadi', bersama: 'Bersama' };

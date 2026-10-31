@@ -1,20 +1,33 @@
 'use client';
 
-import { ArrowLeftIcon, ProhibitIcon } from '@phosphor-icons/react';
-import { entryTitle, signedAmount } from '@dompetku/demo-data';
+import { entryCategoryName, entryKindLabel, entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { Entry } from '@dompetku/demo-data';
-import { dayLabel, formatRupiah } from '@dompetku/domain';
-import Link from 'next/link';
+import { detailDateLabel, formatRupiah } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { BackLink } from '@/components/ui/back-link';
 import { Button } from '@/components/ui/button';
+import { CategoryIcon } from '@/components/ui/category-icon';
+import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
+import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
+import { PencilSimpleIcon } from '@/components/ui/icons/pencil-simple';
+import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { MoneyText } from '@/components/ui/money-text';
-import { focusRing, listBlock, listRow } from '@/components/ui/styles';
+import { SpaceTag } from '@/components/ui/space-tag';
+import { card, heroCard, rowDivider, tile } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import { RUANG_NAME, type TransaksiContext } from './context';
-import { entryKindLabel } from './entry-row';
+import { entryWallet } from './entry-row';
 import { accountName } from './filters';
 import { VoidDialog } from './void-dialog';
+
+const KIND_NAME: Record<Entry['kind'], string> = {
+  expense: 'Pengeluaran',
+  income: 'Pemasukan',
+  transfer: 'Pindah dompet',
+  opening_balance: 'Saldo awal',
+  space_transfer: 'Antar ruang',
+};
 
 /** Pola toast Catat: "Dibatalkan di Pribadi · Rp 35.000 dari BCA". */
 function voidedMessage(state: TransaksiContext['state'], e: Entry): string {
@@ -30,7 +43,16 @@ function voidedMessage(state: TransaksiContext['state'], e: Entry): string {
   }
 }
 
-const detailRow = `flex min-h-12 items-center justify-between gap-3 py-2 ${listRow}`;
+function DetailRow({ term, children }: { term: string; children: ReactNode }) {
+  return (
+    <div className={`flex min-h-13 items-center justify-between gap-3 ${rowDivider}`}>
+      <dt className="text-body font-medium text-text-muted">{term}</dt>
+      <dd className="min-w-0 text-right text-body font-semibold break-words text-text">
+        {children}
+      </dd>
+    </div>
+  );
+}
 
 export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry }) {
   const { state, store, today, listHref } = ctx;
@@ -41,12 +63,8 @@ export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry
   const author = state.members.find((m) => m.id === entry.createdBy);
   const you = state.members[0];
   const by = author === undefined || author.id === you?.id ? 'kamu' : author.name;
-  const wallet =
-    entry.kind === 'transfer' && entry.counterAccountId !== undefined
-      ? `${accountName(state, entry.accountId)} → ${accountName(state, entry.counterAccountId)}`
-      : accountName(state, entry.accountId);
   const soon = () => {
-    toast({ message: 'Segera di M1' });
+    toast({ message: 'Segera di M1', tone: 'info' });
   };
 
   function confirmVoid() {
@@ -64,60 +82,60 @@ export function EntryDetail({ entry, ...ctx }: TransaksiContext & { entry: Entry
   }
 
   return (
-    <article className="mx-auto max-w-2xl">
-      <Link
-        href={listHref}
-        className={`-ml-2 inline-flex min-h-11 items-center gap-2 rounded-field px-2 text-base text-text-muted hover:text-text ${focusRing}`}
-      >
-        <ArrowLeftIcon size={20} aria-hidden="true" />
-        Kembali ke daftar
-      </Link>
-      <h1 className="mt-2 text-xl font-bold break-words text-text">{entryTitle(state, entry)}</h1>
-      <p className="mt-2">
-        <MoneyText value={value} kind={kind} size="hero" />
-      </p>
-      <p className="mt-1 text-base text-text-muted">
-        {dayLabel(entry.occurredOn, today)} · dicatat oleh {by}
-      </p>
-      {voided ? (
-        <p className="mt-4 flex items-start gap-2 text-base text-danger">
-          <ProhibitIcon size={20} weight="fill" aria-hidden="true" className="mt-0.5 shrink-0" />
-          <span>Transaksi ini sudah dibatalkan.</span>
-        </p>
-      ) : null}
-      <dl className={`mt-6 text-base ${listBlock}`}>
-        <div className={detailRow}>
-          <dt className="text-text-muted">Kategori</dt>
-          <dd className="min-w-0 text-right break-words text-text">
-            {entryKindLabel(state, entry)}
-          </dd>
-        </div>
-        <div className={detailRow}>
-          <dt className="text-text-muted">Dompet</dt>
-          <dd className="min-w-0 text-right break-words text-text">{wallet}</dd>
-        </div>
-        {entry.sharedNote === undefined ? null : (
-          <div className={detailRow}>
-            <dt className="text-text-muted">Catatan</dt>
-            <dd className="min-w-0 text-right break-words text-text">{entry.sharedNote}</dd>
+    <article className="flex flex-col gap-3 tablet:gap-4 laptop:max-w-180 laptop:pt-6">
+      <BackLink href={listHref}>Transaksi</BackLink>
+      <section className={`flex flex-col gap-3 p-4 ${heroCard}`}>
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className={`size-12 ${tile}`}>
+            <CategoryIcon name={entryCategoryName(state, entry)} kind={entry.kind} size={24} />
+          </span>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h1 className="text-subheading font-bold break-words text-text">
+              {entryTitle(state, entry)}
+            </h1>
+            <p className="text-label font-medium text-text-muted">{KIND_NAME[entry.kind]}</p>
           </div>
+        </div>
+        <p>
+          <MoneyText value={value} kind={kind} size="amount" />
+        </p>
+        {voided ? (
+          <p className="flex items-start gap-2 rounded-lg bg-danger-tint px-3 py-2.5 text-label font-bold text-danger">
+            <WarningCircleIcon size={18} weight="fill" className="mt-px shrink-0" />
+            <span>Transaksi ini sudah dibatalkan.</span>
+          </p>
+        ) : null}
+      </section>
+      <dl className={`px-4 ${card}`}>
+        <DetailRow term="Kategori">{entryKindLabel(state, entry)}</DetailRow>
+        <DetailRow term="Dompet">{entryWallet(state, entry)}</DetailRow>
+        <DetailRow term="Tanggal">{detailDateLabel(entry.occurredOn, today)}</DetailRow>
+        <DetailRow term="Ruang">
+          <SpaceTag space={entry.ruang} />
+        </DetailRow>
+        <DetailRow term="Dicatat oleh">{by}</DetailRow>
+        {entry.sharedNote === undefined ? null : (
+          <DetailRow term="Catatan">{entry.sharedNote}</DetailRow>
         )}
       </dl>
       {voided ? null : (
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="flex flex-col gap-2">
           <Button variant="secondary" onClick={soon}>
+            <PencilSimpleIcon size={18} weight="bold" />
             Ubah
           </Button>
           <Button variant="secondary" onClick={soon}>
+            <ArrowsLeftRightIcon size={18} weight="bold" />
             Pindahkan ke ruang lain
           </Button>
           <Button
-            variant="secondary"
+            variant="danger"
             onClick={() => {
               setConfirming(true);
             }}
           >
-            Batalkan
+            <ArrowCounterClockwiseIcon size={18} weight="bold" />
+            Batalkan transaksi
           </Button>
         </div>
       )}

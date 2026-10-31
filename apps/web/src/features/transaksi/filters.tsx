@@ -1,8 +1,11 @@
 'use client';
 
+import { entryCategoryName } from '@dompetku/demo-data';
 import type { DemoState, Entry, Ruang } from '@dompetku/demo-data';
+import { useId } from 'react';
 import { Chip, ChipGroup } from '@/components/ui/chip';
-import { focusRing } from '@/components/ui/styles';
+import { fieldShell } from '@/components/ui/field';
+import { MagnifyingGlassIcon } from '@/components/ui/icons/magnifying-glass';
 
 export type FilterId = 'semua' | 'operasional' | 'kantor' | 'reimburse';
 
@@ -22,10 +25,6 @@ export function filtersFor(ruang: Ruang): typeof FILTERS {
 
 export function filterLabel(id: FilterId): string {
   return FILTERS.find((f) => f.id === id)?.label ?? '';
-}
-
-export function entryCategoryName(state: DemoState, e: Entry): string | undefined {
-  return state.categories.find((c) => c.id === e.categoryId)?.name;
 }
 
 export function accountName(state: DemoState, id: string): string {
@@ -54,44 +53,54 @@ export function matchesSearch(state: DemoState, e: Entry, query: string): boolea
   ].some((text) => text.toLowerCase().includes(needle));
 }
 
-export function FilterBar({
-  ruang,
-  filter,
-  onFilter,
-  query,
-  onQuery,
-}: {
-  ruang: Ruang;
-  filter: FilterId;
-  onFilter: (id: FilterId) => void;
-  query: string;
-  onQuery: (q: string) => void;
-}) {
+export function SearchField({ query, onQuery }: { query: string; onQuery: (q: string) => void }) {
+  const searchId = useId();
   return (
-    <div className="mt-4 flex flex-col gap-3">
+    <div className={`${fieldShell(false, 'sm')} px-3.5`}>
+      <MagnifyingGlassIcon size={18} className="shrink-0 text-text-muted" />
+      <label htmlFor={searchId} className="sr-only">
+        Cari transaksi
+      </label>
       <input
+        id={searchId}
         type="search"
-        aria-label="Cari transaksi"
-        placeholder="Cari deskripsi, kategori, dompet"
+        placeholder="Cari keterangan"
         value={query}
         onChange={(e) => {
           onQuery(e.target.value);
         }}
-        className={`min-h-11 w-full rounded-field border border-border bg-surface px-3 text-lg text-text placeholder:text-text-muted ${focusRing}`}
+        className="min-w-0 flex-1 bg-transparent text-body font-medium text-text outline-none placeholder:text-text-muted"
       />
-      <ChipGroup label="Filter">
-        {filtersFor(ruang).map((f) => (
-          <Chip
-            key={f.id}
-            selected={filter === f.id}
-            onSelect={() => {
-              onFilter(f.id);
-            }}
-          >
-            {f.label}
-          </Chip>
-        ))}
-      </ChipGroup>
     </div>
+  );
+}
+
+/** Filter pil 44: HP digeser ke samping, laptop dibungkus. Aktif = warna dibalik + ✓. */
+export function FilterChips({
+  ruang,
+  filter,
+  onFilter,
+}: {
+  ruang: Ruang;
+  filter: FilterId;
+  onFilter: (id: FilterId) => void;
+}) {
+  return (
+    <ChipGroup
+      label="Filter"
+      className="scrollbar-none -mx-3 flex gap-2 overflow-x-auto px-3 py-0.5 tablet:mx-0 tablet:flex-wrap tablet:overflow-visible tablet:px-0"
+    >
+      {filtersFor(ruang).map((f) => (
+        <Chip
+          key={f.id}
+          selected={filter === f.id}
+          onSelect={() => {
+            onFilter(f.id);
+          }}
+        >
+          {f.label}
+        </Chip>
+      ))}
+    </ChipGroup>
   );
 }
