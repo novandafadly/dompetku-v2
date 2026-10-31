@@ -36,9 +36,11 @@ if [ -z "$USER_ID" ]; then
 	echo "User dibuat"
 else echo "User sudah ada"; fi
 
-MEMBER=$(first iam iam user-group-membership list --compartment-id "$T" --user-id "$USER_ID" \
-	--group-id "$GID" --query 'data[0].id' --raw-output)
+MEMBER=$(first iam iam group list-users --group-id "$GID" --query "data[?name=='$NAME']|[0].id" --raw-output)
 [ -n "$MEMBER" ] || { iam iam group add-user --group-id "$GID" --user-id "$USER_ID" >/dev/null; echo "User masuk group"; }
+# Tanpa keanggotaan, policy group tidak berlaku: login S3 diterima tapi semua akses 403.
+MEMBER=$(first iam iam group list-users --group-id "$GID" --query "data[?name=='$NAME']|[0].id" --raw-output)
+[ -n "$MEMBER" ] || { echo "User belum tercatat di group $NAME"; exit 1; }
 
 iam iam user update-user-capabilities --user-id "$USER_ID" --can-use-console-password false \
 	--can-use-api-keys false --can-use-auth-tokens false --can-use-smtp-credentials false \
