@@ -4,16 +4,16 @@ Disiapkan 2026-10-31. Tidak ada rahasia di dokumen ini.
 
 ## Keadaan
 
-| Hal                 | Nilai                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------------- |
-| Bucket              | `dompetku-backup`, region `ap-batam-1`, compartment root, Standard, versioning mati, private  |
-| Enkripsi bucket     | Oracle managed keys (data sudah dienkripsi WAL-G di VM dengan libsodium)                      |
-| Namespace, endpoint | `ax40rkaxashz`, `https://ax40rkaxashz.compat.objectstorage.ap-batam-1.oraclecloud.com`        |
-| Akses               | user `dompetku-backup` (domain Default) di group `dompetku-backup`, hanya Customer Secret Key |
-| Policy              | `dompetku-backup`: baca bucket, `OBJECT_CREATE`/`OBJECT_INSPECT`/`OBJECT_READ`, tanpa hapus   |
-| Retention rule      | `min-30-hari`, 30 hari, **belum dikunci**                                                     |
-| Lifecycle rule      | `infra/oci/lifecycle-backup.sh`: `pg17/` 35 hari, `pg17-monthly/` 400 hari, `_test/` 31 hari  |
-| Kredensial di VM DB | `/opt/dompetku/env/backup.env` (root 600), diisi pemilik; salinan di password manager pemilik |
+| Hal                 | Nilai                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Bucket              | `dompetku-backup`, region `ap-batam-1`, compartment root, Standard, versioning mati, private               |
+| Enkripsi bucket     | Oracle managed keys (data sudah dienkripsi WAL-G di VM dengan libsodium)                                   |
+| Namespace, endpoint | `ax40rkaxashz`, `https://ax40rkaxashz.compat.objectstorage.ap-batam-1.oraclecloud.com`                     |
+| Akses               | user `dompetku-backup` (domain Default) di group `dompetku-backup`, hanya Customer Secret Key              |
+| Policy              | `dompetku-backup`: baca bucket, `OBJECT_CREATE`/`OBJECT_INSPECT`/`OBJECT_READ`, tanpa hapus                |
+| Retention rule      | `min-30-hari`, 30 hari, **dikunci** 2026-11-01 (kunci berlaku sekitar 2026-11-14 setelah jeda 14 hari OCI) |
+| Lifecycle rule      | `infra/oci/lifecycle-backup.sh`: `pg17/` 35 hari, `pg17-monthly/` 400 hari, `_test/` 31 hari               |
+| Kredensial di VM DB | `/opt/dompetku/env/backup.env` (root 600), diisi pemilik; salinan di password manager pemilik              |
 
 Penyiapan: `infra/oci/setup-backup-iam.sh` dijalankan pemilik di OCI Cloud Shell.
 

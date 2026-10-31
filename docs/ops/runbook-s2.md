@@ -84,4 +84,4 @@ Hasil verifikasi:
 | Latihan RPO    | Detak tiap 5 s selama 6 menit, "bencana" tanpa switch WAL, pulih sampai WAL terakhir di bucket: **RPO 117 s** (≤ 300 s), RTO 6 s. DB latihan dihapus                                                                     |
 | Latihan alert  | `DRILL_FAIL=1 backup.sh` gagal upload dan mengirim `/fail` ke Healthchecks `dompetku-backup`; lalu backup normal mengirim sukses. Email alert **diterima pemilik** (dikonfirmasi 2026-11-01)                             |
 
-Lifecycle rule terpasang 2026-11-01 (4 aturan aktif: `pg17/` 35 hari, `pg17-monthly/` 400 hari, `_test/` 31 hari, multipart gagal 2 hari). Sisa: keputusan mengunci retention rule. Data DompetKu nyata belum ada (M1), jadi RTO akan diukur ulang saat data tumbuh.
+Lifecycle rule terpasang 2026-11-01 (4 aturan aktif: `pg17/` 35 hari, `pg17-monthly/` 400 hari, `_test/` 31 hari, multipart gagal 2 hari). Retention rule dikunci pemilik 2026-11-01 (berlaku setelah jeda 14 hari). **S2 selesai.** Data DompetKu nyata belum ada (M1), jadi RTO akan diukur ulang saat data tumbuh.
