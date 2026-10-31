@@ -32,14 +32,7 @@ Aplikasi keuangan pribadi + bersama untuk Novanda dan Farida. Repo private, juga
 
 1. **Penilaian M0a** oleh pemilik dan Farida (`docs/review/m0a-penilaian.md`), lalu ADR 0004 + issue berlabel `m0a-feedback`.
 2. **Konfirmasi pemilik:** akses Farida via Shareable Link (ADR 0003). Favicon dibuat pemilik dari `docs/design/favicon-prompt.md`; pasang berkasnya saat dikirim. (Lime/violet, label kapital, teks handoff, dan arah visual Panel Malam sudah disetujui 2026-10-31.)
-3. **Enam dokumen produk** di `docs/product/`, disusun dari bahan yang ada (bukan dari nol), dokumen lama ditandai "digantikan oleh":
-   - PRD (user story, kriteria terima per milestone, metrik)
-   - TRD (arsitektur, NFR: performa, backup/RPO, keamanan)
-   - AFD (diagram alur Mermaid: onboarding, Catat, transfer antar ruang, batalkan/urungkan, undang Farida)
-   - DBD (dari `DESIGN.md` + ADR 0006 + handoff Panel Malam)
-   - BSD (DDL lengkap: tabel, constraint, fungsi, RLS, roles; celah terbesar, wajib sebelum M1)
-   - IPD (M0b–M8 per sprint, dependensi, risiko)
-     Lalu satu putaran review tim (PM, backend, security, designer) sebelum disetujui pemilik. Pemilik mungkin menambah plugin (dev-workflow-plugin, designer-skills); cek skill yang tersedia di awal sesi.
+3. **Enam dokumen produk** di `docs/product/` (PRD, TRD, AFD, DBD, BSD, IPD) selesai dan sudah lewat satu putaran review tim (`docs/product/review/`); 18 keputusan pemilik disetujui (`review/keputusan-pemilik.md`). DDL BSD lulus 130/130 asersi di PG 16 sekali pakai (`docs/product/bsd-check/`); uji ulang di PG 17 + pgTAP adalah gerbang sebelum S2. Pertanyaan terbuka sisa: BSD §15, TRD §7.
 4. **Peran designer:** tambah kursi "design reviewer" di setiap task UI, dan design critique pada pratinjau Panel Malam.
 5. Budget JS tetap 162 kB rute (target 150 kB di M2 dibatalkan pemilik); Panel Malam memakai 160,9 kB.
-6. Berikutnya: M0b (infra OCI, auth, backup) lalu M1 (ledger inti).
+6. Berikutnya: M0b sesuai `docs/product/IPD.md` (prasyarat pemilik: akun/VM OCI, SSH, domain, bucket, Healthchecks.io, Resend), paralel dengan penilaian M0a; lalu M1 (ledger inti).
