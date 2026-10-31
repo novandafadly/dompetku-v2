@@ -1026,7 +1026,23 @@ Aturan 1 menang atas aturan 2: fee yang dibayar dari dompet kantor berkelas `x_k
 
 ### 8.2 Rumus "aman dipakai"
 
-`total = Σ saldo dompet operasional − Σ tagihan belum dibayar jatuh tempo ≤ akhir bulan (termasuk lewat) − Σ max(0, anggaran wajib − realisasi)`; `per_day = floor(total / sisa hari termasuk hari ini)`. Sama dengan `safeToSpend` demo (m0a-keputusan T6). Tagihan terarsip dan kemunculan yang dilewati tidak dihitung; kemunculan sebelum bulan tagihan dibuat tidak pernah ada (§2.2 butir 6). Dompet terarsip bersaldo 0 (§2.2 butir 4). Default sampai akhir bulan; tanggal gajian per orang (`profiles.payday_day`) disimpan, rumusnya **Belum diputuskan**.
+`total = Σ saldo dompet operasional − Σ tagihan belum dibayar jatuh tempo ≤ akhir bulan (termasuk lewat) − Σ max(0, anggaran wajib − realisasi)`; `per_day = floor(total / sisa hari termasuk hari ini)`. Sama dengan `safeToSpend` demo (m0a-keputusan T6). Tagihan terarsip dan kemunculan yang dilewati tidak dihitung; kemunculan sebelum bulan tagihan dibuat tidak pernah ada (§2.2 butir 6). Dompet terarsip bersaldo 0 (§2.2 butir 4). Default sampai akhir bulan; tanggal gajian per orang (`profiles.payday_day`) disimpan, rumusnya **Belum diputuskan** (usulan di §8.2a).
+
+### 8.2a Usulan: periode gajian untuk ruang Pribadi (menunggu konfirmasi pemilik)
+
+Masalah: gaji tanggal 25 membiayai bulan berikutnya. Dengan bulan kalender, setelah gajian "aman dipakai" hanya menghitung sampai akhir bulan, padahal uang itu harus cukup sampai gajian berikutnya; tagihan dan anggaran wajib awal bulan depan tidak ikut dipotong.
+
+Usulan (berlaku per orang, hanya ruang Pribadi; Bersama tetap bulan kalender):
+
+- **Hari gajian efektif** = `payday_day` (25); bila jatuh di Sabtu, Minggu, atau tanggal di tabel `app.holidays` (libur nasional dan cuti bersama), mundur ke hari kerja sebelumnya. Contoh: 25 Okt 2026 hari Minggu → Jumat 23 Okt; 25 Des 2026 libur Natal → Kamis 24 Des (atau 23 Des bila 24 Des ditetapkan cuti bersama).
+- **Periode anggaran Pribadi** = dari hari gajian efektif sampai sehari sebelum gajian efektif berikutnya, diberi nama bulan yang dibiayainya. Contoh: periode "November 2026" = 23 Okt sampai 24 Nov 2026. Anggaran Pribadi, realisasinya, dan review bulanan memakai periode ini.
+- **Aman dipakai Pribadi** = Σ saldo dompet operasional Pribadi − Σ tagihan Pribadi belum dibayar yang jatuh tempo sebelum gajian efektif berikutnya (termasuk lewat) − Σ max(0, anggaran wajib periode berjalan − realisasi periode berjalan); `per_day` dibagi sisa hari sampai sehari sebelum gajian berikutnya.
+- **Laporan dan ringkasan** tetap bisa dilihat per bulan kalender (pilihan tampilan); angka uangnya sama, hanya pemotongan tanggalnya yang berbeda.
+- **`app.holidays`** diisi dari SKB libur nasional dan cuti bersama, diperbarui sekali setahun (pengingat di job Desember). Bila tabel kosong untuk tahun itu, hanya akhir pekan yang dihitung dan Beranda memberi tanda.
+- Orang tanpa `payday_day` (misalnya Farida bila tidak diisi) memakai bulan kalender seperti sekarang.
+- Waktu: S9 (anggaran dan "aman dipakai" nyata). Skema: kolom `payday_rule` di `app.profiles`, tabel `app.holidays`, fungsi `app.pay_period(user, date)` sebagai satu sumber untuk anggaran, aman dipakai, dan review bulanan.
+
+Alternatif yang ditolak: bulan kalender + horizon sampai gajian (anggaran wajib bulan depan diprorata). Lebih sedikit perubahan, tapi kewajiban seperti SPP atau cicilan bukan biaya harian sehingga prorata menyesatkan.
 
 ```sql
 -- migrate:up
@@ -1281,7 +1297,7 @@ end $$;
 - Isolasi: setiap fungsi tulis berjalan di READ COMMITTED (§3); `private.require_user()` menolak tingkat lain.
 - `space_transfer`: edit dan void hanya oleh pencatat; selain pencatat mendapat `DK404`. Kedua kaki dikunci urut id dan naik versi bersama.
 - Urutan lock: entri, lalu akun urut id (`for no key update`).
-- Tanggal masa depan ditolak (`DK400 occurred_on`): **usulan**, belum diputuskan PM.
+- Tanggal masa depan ditolak (`DK400 occurred_on`): diputuskan pemilik 2026-10-31. Tagihan dibayar di muka memakai kemunculan tagihan berikutnya, bukan entri bertanggal depan (§15 butir 2).
 
 ### 9.2 Kode error
 
@@ -2679,16 +2695,18 @@ Utang/piutang dan modal trading (M3), tujuan tabungan, aset, saham, snapshot net
 
 Terjawab di putaran 2 (2026-10-31): `api.invitation_peek` masuk daftar tertutup DEFINER (rekomendasi security); pembuatan user dan konsumsi undangan tidak lagi butuh satu transaksi bersama Better Auth (trigger pendaftaran + `accept_invitation` setelah akun diamankan); faktor kuat = passkey ATAU kata sandi + TOTP (keputusan pemilik #1); `statement_timeout` worker 60 s.
 
-1. Anggaran hanya pada kategori induk (sesuai selector demo). v1 punya anggaran subkategori (v1 DESIGN §9). Perlu anggaran subkategori di M2?
-2. Tanggal masa depan ditolak di semua fungsi tulis. Perlu dibuka untuk tagihan yang dibayar di muka?
-3. Saldo awal harus ≥ 0. Dompet yang dibuka dengan saldo negatif (misalnya cerukan) dicatat lewat "Cocokkan saldo"?
-4. Selaraskan selector demo dengan §2.2 (talangan dan kantor tidak masuk pengeluaran/anggaran, fee masuk pengeluaran, kantor dipecah) sebelum penilaian M0a selesai, atau setelah M1?
-5. Retensi `entry_tombstones`: round2 backend mengusulkan 1 tahun; spec tidak menyebut.
-6. Retensi `idempotency_keys` 30 hari (round2 backend A6) dan `audit.events` 1 tahun (round1 security R12): sahkan?
-7. Timeout web: angka backend (5 s / 3 s / 15 s) dipakai; security mengusulkan 15 s / 30 s.
-8. `dompetku_monitor` untuk `postgres_exporter`: setuju sebagai role keenam?
-9. Rumus "aman dipakai" sampai tanggal gajian (`payday_day`) untuk ruang Pribadi: kapan dan bagaimana tagihan/anggaran wajib dipotong per periode gajian?
-10. Nama opsi Better Auth (cascade FK tabel plugin ke `user`, `emailVerified` dari hook undangan, field sesi `amr`) diverifikasi pada versi yang dipatok di M0b.
+Dijawab pemilik 2026-10-31 (butir 1 sampai 10 di bawah). Butir yang mengubah skema dikerjakan di sprint fiturnya dengan migrasi expand, bukan mengubah DDL M1.
+
+1. **Anggaran subkategori: perlu.** Waktu bebas; dijadwalkan di S9 bersama anggaran. Arah: `app.budgets` menerima kategori induk atau sub; realisasi induk = Σ semua subnya; anggaran sub tidak menambah total induk (tidak dobel di "aman dipakai"); aturan kewajiban XOR berlaku per kategori dan leluhurnya. Detail dan tes ditulis di S9.
+2. **Tagihan dibayar di muka: perlu, tanpa membuka tanggal masa depan.** Usulan: ledger tetap hanya mencatat yang sudah terjadi (`DK400 occurred_on` tetap). Bayar di muka = entri bertanggal hari bayar yang ditautkan ke kemunculan tagihan berikutnya (`api.post_bill_occurrence` dengan `due_on` di masa depan), sehingga saldo turun saat uang keluar dan tagihan bulan itu tampil lunas. Perlu tambahan: kemunculan berikutnya harus sudah ada (materialisasi sampai satu kemunculan ke depan, atau dibuat saat dibayar). Laporan memakai basis kas: pengeluaran masuk bulan uang keluar. Rencana masa depan lain dibaca dari jadwal tagihan (kalender arus kas S16), bukan entri bertanggal depan. Tes: bayar tagihan bulan depan hari ini, saldo turun hari ini, "aman dipakai" tidak memotong tagihan itu lagi.
+3. **Disetujui.** Saldo awal ≥ 0; dompet yang dibuka minus dicatat lewat "Cocokkan saldo".
+4. **Setelah penilaian M0a, paling lambat S6.** Angka demo tidak diubah selama N dan F menilai; di S6 selector demo diganti fungsi DB yang sudah mengikuti §2.2.
+5. **`entry_tombstones` 1 tahun** (usulan backend).
+6. **Disahkan:** `idempotency_keys` 30 hari, `audit.events` 1 tahun.
+7. **Angka backend:** web `statement_timeout=5s`, `lock_timeout=3s`, `idle_in_transaction_session_timeout=15s`. Rute berat (ekspor CSV/PDF) boleh menaikkan `statement_timeout` lewat `set_config(..., true)` lokal transaksi sampai 30 s, hanya di fungsi yang terdaftar. Ditinjau ulang dengan data nyata M1.
+8. **Disetujui:** `dompetku_monitor` sebagai role keenam.
+9. **Tanggal gajian: Novanda tanggal 25, maju ke hari kerja sebelumnya bila 25 jatuh di Sabtu, Minggu, atau libur nasional/cuti bersama.** Rumus menunggu konfirmasi pemilik (usulan di §8.2a).
+10. **Diverifikasi di S4** saat versi Better Auth dipatok: nama opsi dicek di kode sumber versi itu, dicatat di ADR, dan dikunci dengan tes (cascade hapus user, `emailVerified` dari undangan, `amr` di sesi).
 
 ## 16. Catatan review (putaran 2)
 
