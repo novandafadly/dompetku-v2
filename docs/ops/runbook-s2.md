@@ -82,6 +82,6 @@ Hasil verifikasi:
 | Dump bulanan   | `pg_dump -Fc` terenkripsi ke `pg17-monthly/` (zstd); timer tanggal 1, 03:00 WIB aktif                                                                                                                                    |
 | Uji restore    | Lulus 2x: titik pulih tercapai, DB terbuka, semua tabel terbaca; **RTO 16 s dan 11 s**. Timer Minggu 04:00 WIB aktif                                                                                                     |
 | Latihan RPO    | Detak tiap 5 s selama 6 menit, "bencana" tanpa switch WAL, pulih sampai WAL terakhir di bucket: **RPO 117 s** (≤ 300 s), RTO 6 s. DB latihan dihapus                                                                     |
-| Latihan alert  | `DRILL_FAIL=1 backup.sh` gagal upload dan mengirim `/fail` ke Healthchecks `dompetku-backup`; lalu backup normal mengirim sukses. Email alert: **menunggu konfirmasi pemilik**                                           |
+| Latihan alert  | `DRILL_FAIL=1 backup.sh` gagal upload dan mengirim `/fail` ke Healthchecks `dompetku-backup`; lalu backup normal mengirim sukses. Email alert **diterima pemilik** (dikonfirmasi 2026-11-01)                             |
 
-Sisa: konfirmasi email alert diterima, lifecycle rule (`infra/oci/lifecycle-backup.sh` di Cloud Shell), keputusan mengunci retention rule. Data DompetKu nyata belum ada (M1), jadi RTO akan diukur ulang saat data tumbuh.
+Sisa: lifecycle rule (`infra/oci/lifecycle-backup.sh` di Cloud Shell), keputusan mengunci retention rule. Data DompetKu nyata belum ada (M1), jadi RTO akan diukur ulang saat data tumbuh.
