@@ -63,3 +63,6 @@ $$;
 
 grant execute on function app.current_user_id(), app.now(), app.today()
   to dompetku_web, dompetku_worker, dompetku_api, dompetku_auditor;
+
+-- migrate:down
+-- Maju-saja di produksi (BSD §12); dbmate mewajibkan penanda ini.

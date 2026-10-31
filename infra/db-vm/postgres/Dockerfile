@@ -19,3 +19,6 @@ RUN set -eux; \
 	wal-g --version
 
 COPY postgresql.conf pg_hba.conf /etc/dompetku/
+# VM DB memakai builder lama (tanpa BuildKit): tanpa COPY --chmod.
+COPY dompetku-restore /usr/local/bin/dompetku-restore
+RUN chmod 755 /usr/local/bin/dompetku-restore

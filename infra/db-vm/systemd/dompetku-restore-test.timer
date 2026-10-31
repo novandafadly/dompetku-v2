@@ -1,0 +1,10 @@
+[Unit]
+Description=DompetKu: jadwal uji restore mingguan
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00 Asia/Jakarta
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

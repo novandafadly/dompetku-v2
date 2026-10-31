@@ -50,7 +50,8 @@ services:
     mem_limit: 1g
     cpus: 1.0
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      # Sebagai user OS postgres: pg_hba memakai peer, root akan memenuhi log dengan FATAL.
+      test: ['CMD', 'gosu', 'postgres', 'pg_isready', '-q']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -63,7 +64,7 @@ services:
     environment:
       DBMATE_MIGRATIONS_DIR: /migrations
       DBMATE_NO_DUMP_SCHEMA: 'true'
-      PGOPTIONS: '-c pgaudit.log=ddl'
+      # Tanpa PGOPTIONS pgaudit.log: parameter superuser; memberi owner hak itu = owner bisa mematikan auditnya.
     volumes:
       - ./migrations:/migrations:ro
       - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro

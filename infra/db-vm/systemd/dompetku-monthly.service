@@ -1,0 +1,11 @@
+[Unit]
+Description=DompetKu: dump bulanan terenkripsi
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dompetku/bin/monthly.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
