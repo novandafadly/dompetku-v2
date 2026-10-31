@@ -9,10 +9,10 @@ export type IconProps = Omit<SVGProps<SVGSVGElement>, 'children' | 'dangerouslyS
 
 export type Icon = ComponentType<IconProps>;
 
-/** Ikon SVG 256×256 dari markup Phosphor statis (icons.ts); dekoratif kecuali diberi nama. */
+/** Ikon SVG 256×256 dari data path Phosphor statis (icons/*.ts); dekoratif kecuali diberi nama. */
 export function makeIcon(paths: Partial<Record<IconWeight, string>>): Icon {
   function PhosphorIcon({ size = 20, weight = 'regular', ...rest }: IconProps) {
-    const inner = paths[weight] ?? paths.regular ?? paths.bold ?? paths.fill ?? '';
+    const d = paths[weight] ?? paths.regular ?? paths.bold ?? paths.fill ?? '';
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -23,9 +23,9 @@ export function makeIcon(paths: Partial<Record<IconWeight, string>>): Icon {
         aria-hidden="true"
         focusable="false"
         {...rest}
-        // Data path statis dari paket ikon (bukan masukan pengguna).
-        dangerouslySetInnerHTML={{ __html: inner }}
-      />
+      >
+        <path d={d} />
+      </svg>
     );
   }
   return PhosphorIcon;
