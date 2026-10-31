@@ -8,11 +8,15 @@ export type IconButtonProps = Omit<
   /** Nama aksesibel; wajib karena tombol tidak punya teks. */
   label: string;
   icon: ReactNode;
+  /** Tanpa garis: untuk ikon di dalam field atau baris yang sudah berbatas. */
+  bare?: boolean;
 };
 
+/** 44×44, radius 12, garis token border (Spesifikasi: IconButton). */
 export function IconButton({
   label,
   icon,
+  bare = false,
   className = '',
   type = 'button',
   ...rest
@@ -21,7 +25,9 @@ export function IconButton({
     <button
       type={type}
       aria-label={label}
-      className={`inline-flex size-11 items-center justify-center rounded-field text-text hover:bg-surface-2 active:bg-surface disabled:text-text-muted disabled:hover:bg-transparent ${focusRing} ${className}`}
+      className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-text hover-pointer:bg-hover active:bg-surface-2 disabled:border-hairline disabled:text-text-muted disabled:hover-pointer:bg-transparent ${
+        bare ? '' : 'border border-border bg-surface'
+      } ${focusRing} ${className}`}
       {...rest}
     >
       <span aria-hidden="true" className="inline-flex">

@@ -2,15 +2,19 @@ import { formatRupiah, formatRupiahCompact, spokenRupiah, type Rupiah } from '@d
 
 export type MoneyKind = 'income' | 'expense' | 'neutral';
 
+/** Ukuran nominal Panel Malam: baris 15/700, rincian 14/500, kartu utama 44 (laptop 56), detail 40. */
 const sizes = {
-  list: 'text-base font-semibold',
-  hero: 'text-hero font-bold',
+  list: 'text-body font-bold',
+  row: 'text-label font-medium',
+  hero: 'text-display font-extrabold laptop:text-display-xl',
+  amount: 'text-amount font-extrabold',
+  inherit: '',
 } as const;
 
 const tones: Record<MoneyKind, string> = {
   income: 'text-income',
-  expense: 'text-text',
-  neutral: 'text-text',
+  expense: '',
+  neutral: '',
 };
 
 export function MoneyText({
@@ -26,22 +30,16 @@ export function MoneyText({
   compact?: boolean;
   className?: string;
 }) {
-  const text = compact ? formatRupiahCompact(value) : formatRupiah(value);
-  const match = /^([+−]?)Rp(.*)$/s.exec(text);
-  const sign = match?.[1] ?? '';
-  const rest = match?.[2] ?? text;
+  // Pemasukan selalu bertanda "+" (handoff: aturan global format uang).
+  const text = compact
+    ? formatRupiahCompact(value)
+    : formatRupiah(value, kind === 'income' ? { sign: 'always' } : {});
   // Jenis (pemasukan/pengeluaran) sudah membawa arah; tanda minus hanya diucapkan untuk netral.
   const spoken = spokenRupiah(kind === 'neutral' ? value : Math.abs(value), kind);
 
   return (
-    <span
-      className={`num inline-block max-w-full whitespace-nowrap ${sizes[size]} ${tones[kind]} ${className}`}
-    >
-      <span aria-hidden="true">
-        {sign}
-        <span className="text-text-muted">Rp</span>
-        {rest}
-      </span>
+    <span className={`num inline-block max-w-full ${sizes[size]} ${tones[kind]} ${className}`}>
+      <span aria-hidden="true">{text}</span>
       <span className="sr-only">{spoken}</span>
     </span>
   );

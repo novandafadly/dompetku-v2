@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 
 export interface ToastInput {
   message: string;
+  /** Ikon di kiri: centang (bawaan) untuk hasil simpan, info untuk pemberitahuan. */
+  tone?: 'success' | 'info';
   action?: { label: string; onAction: () => void };
 }
 export interface ToastItem extends ToastInput {

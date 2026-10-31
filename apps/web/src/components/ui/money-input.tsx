@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import { formatRibuan, parseRupiah, type Rupiah } from '@dompetku/domain';
-import { fieldBox } from './styles';
+import { FieldLabel, fieldShell } from './field';
 
 function display(value: Rupiah | null): string {
   return value === null ? '' : formatRibuan(value);
@@ -37,6 +37,8 @@ export function MoneyInput({
   inputMode = 'numeric',
   size = 'base',
   inputRef: externalRef,
+  optional = false,
+  describedBy,
 }: {
   value: Rupiah | null;
   onChange: (value: Rupiah | null) => void;
@@ -46,8 +48,11 @@ export function MoneyInput({
   labelHidden?: boolean;
   /** 'none' untuk keypad dalam aplikasi: keyboard OS tidak muncul, keyboard fisik tetap jalan. */
   inputMode?: 'numeric' | 'none';
-  size?: 'base' | 'hero';
+  /** 'hero': nominal besar Catat dengan garis bawah warna ruang; 'compact': mode keyboard HP (36 px). */
+  size?: 'base' | 'hero' | 'compact';
   inputRef?: RefObject<HTMLInputElement | null>;
+  optional?: boolean;
+  describedBy?: string;
 }) {
   const id = useId();
   const ownRef = useRef<HTMLInputElement>(null);
@@ -96,35 +101,65 @@ export function MoneyInput({
     commit(left + inserted + right, left.length + inserted.length);
   }
 
+  const input = (
+    <input
+      id={id}
+      ref={inputRef}
+      type="text"
+      inputMode={inputMode}
+      autoComplete="off"
+      disabled={disabled}
+      value={display(value)}
+      placeholder={size === 'base' ? '0' : undefined}
+      onChange={handleChange}
+      onPaste={handlePaste}
+      aria-describedby={describedBy}
+      className={`num min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:text-text-muted ${
+        size === 'base'
+          ? 'min-h-11 text-body font-medium'
+          : size === 'hero'
+            ? 'min-h-11 text-amount font-extrabold'
+            : 'min-h-10 text-amount-sm font-extrabold'
+      }`}
+    />
+  );
+
+  if (size === 'base') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {labelHidden ? (
+          <label htmlFor={id} className="sr-only">
+            {label}
+          </label>
+        ) : (
+          <FieldLabel htmlFor={id} optional={optional}>
+            {label}
+          </FieldLabel>
+        )}
+        <div className={`${fieldShell(false)} px-3.5`}>
+          <span aria-hidden="true" className="text-body font-bold text-text-muted">
+            Rp
+          </span>
+          {input}
+        </div>
+      </div>
+    );
+  }
+
+  // Nominal Catat: garis bawah 2 px warna ruang, abu (border) selama masih kosong.
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className={labelHidden ? 'sr-only' : 'text-sm text-text-muted'}>
+    <div
+      className={`flex items-baseline gap-2 border-b-2 px-0.5 pb-1 ${
+        value !== null && value > 0 ? 'border-ruang' : 'border-border focus-within:border-focus'
+      }`}
+    >
+      <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <div className={`flex min-h-11 items-center gap-2 px-3 ${fieldBox}`}>
-        <span
-          aria-hidden="true"
-          className={
-            size === 'hero' ? 'text-2xl font-semibold text-text-muted' : 'text-lg text-text-muted'
-          }
-        >
-          Rp
-        </span>
-        <input
-          id={id}
-          ref={inputRef}
-          type="text"
-          inputMode={inputMode}
-          autoComplete="off"
-          disabled={disabled}
-          value={display(value)}
-          onChange={handleChange}
-          onPaste={handlePaste}
-          className={`num min-h-11 w-full min-w-0 bg-transparent text-text outline-none ${
-            size === 'hero' ? 'text-hero font-bold' : 'text-lg'
-          } disabled:cursor-not-allowed disabled:text-text-muted`}
-        />
-      </div>
+      <span aria-hidden="true" className="text-headline/none font-bold text-text-muted">
+        Rp
+      </span>
+      {input}
     </div>
   );
 }

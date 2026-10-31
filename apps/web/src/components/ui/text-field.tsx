@@ -1,8 +1,7 @@
 'use client';
 
-import { WarningIcon } from '@phosphor-icons/react';
 import { useId, type HTMLInputTypeAttribute, type ReactNode, type RefObject } from 'react';
-import { fieldBox } from './styles';
+import { FieldError, FieldHint, FieldLabel, fieldShell } from './field';
 
 export function TextField({
   label,
@@ -10,6 +9,9 @@ export function TextField({
   onChange,
   error,
   hint,
+  hintTone = 'muted',
+  placeholder,
+  optional,
   type = 'text',
   autoComplete,
   inputMode,
@@ -24,6 +26,9 @@ export function TextField({
   /** Pesan galat inline; field ditandai tidak valid. */
   error?: string | undefined;
   hint?: string;
+  hintTone?: 'muted' | 'warning';
+  placeholder?: string;
+  optional?: boolean;
   type?: HTMLInputTypeAttribute;
   autoComplete?: string;
   inputMode?: 'numeric' | 'email' | 'text';
@@ -39,20 +44,17 @@ export function TextField({
   const describedBy =
     [hint ? hintId : null, error ? errorId : null].filter((x) => x !== null).join(' ') || undefined;
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm text-text-muted">
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel htmlFor={id} optional={optional === true}>
         {label}
-      </label>
-      <div
-        className={`flex min-h-11 items-center gap-2 pl-3 ${fieldBox} ${
-          error ? 'border-danger' : ''
-        } ${trailing ? 'pr-1' : 'pr-3'}`}
-      >
+      </FieldLabel>
+      <div className={`${fieldShell(Boolean(error))} pl-3.5 ${trailing ? 'pr-0.5' : 'pr-3.5'}`}>
         <input
           id={id}
           ref={inputRef}
           type={type}
           value={value}
+          placeholder={placeholder}
           onChange={(e) => {
             onChange(e.target.value);
           }}
@@ -62,20 +64,15 @@ export function TextField({
           readOnly={readOnly}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className="min-h-11 w-full min-w-0 bg-transparent text-lg text-text outline-none read-only:text-text-muted"
+          className="min-h-11 w-full min-w-0 bg-transparent text-body font-medium text-text outline-none placeholder:text-text-muted read-only:text-text-muted"
         />
         {trailing}
       </div>
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
       {hint ? (
-        <p id={hintId} className="text-sm text-text-muted">
+        <FieldHint id={hintId} tone={hintTone}>
           {hint}
-        </p>
-      ) : null}
-      {error ? (
-        <p id={errorId} className="flex items-start gap-1 text-sm text-danger">
-          <WarningIcon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-          {error}
-        </p>
+        </FieldHint>
       ) : null}
     </div>
   );

@@ -12,10 +12,13 @@ describe('MoneyText', () => {
     expect(container.querySelector('.sr-only')?.textContent).toBe('pengeluaran Rp 35.000');
   });
 
-  it('"Rp" berwarna text-muted', () => {
-    const { container } = render(<MoneyText value={1250000} />);
-    const rp = container.querySelector('.text-text-muted');
-    expect(rp?.textContent).toBe('Rp');
+  it('"Rp" satu warna dengan angka; pemasukan bertanda + dan berwarna income', () => {
+    const { container } = render(<MoneyText value={1250000} kind="income" />);
+    expect(container.querySelector('.text-text-muted')).toBeNull();
+    expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe(
+      `+Rp${NBSP}1.250.000`,
+    );
+    expect(container.firstElementChild?.className).toContain('text-income');
   });
 
   it('compact memakai formatRupiahCompact', () => {

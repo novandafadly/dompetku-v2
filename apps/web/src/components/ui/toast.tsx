@@ -38,7 +38,7 @@ export function Toaster() {
         ref={regionRef}
         aria-label="Notifikasi (F8)"
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-tabbar z-50 mx-auto w-full max-w-md outline-none lg:bottom-4"
+        className="fixed inset-x-3 bottom-toast z-50 outline-none laptop:inset-x-auto laptop:right-6 laptop:bottom-6 laptop:w-100"
       >
         {mounted && announcer ? <ToastList announcer={announcer} /> : null}
       </section>

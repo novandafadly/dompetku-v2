@@ -1,13 +1,13 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import { XIcon } from '@phosphor-icons/react';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { IconButton } from './icon-button';
-import { SHEET_HEADER, SHEET_PANEL, tints } from './styles';
+import { XIcon } from './icons/x';
+import { SHEET_HANDLE, SHEET_PANEL } from './styles';
 
 /** Tinggi area terlihat (mengecil saat keyboard layar muncul). */
-function useVisualViewportHeight(active: boolean): number | null {
+export function useVisualViewportHeight(active: boolean): number | null {
   const [height, setHeight] = useState<number | null>(null);
   useEffect(() => {
     if (!active) return;
@@ -29,19 +29,31 @@ export function Sheet({
   open,
   onOpenChange,
   title,
+  titleContent,
+  titleHidden = false,
   tint,
+  headerStart,
   headerAction,
   footer,
   initialFocus,
   returnFocus,
   fill = false,
+  compact = false,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Nama dialog; juga isi judul bila `titleContent` tidak diberikan. */
   title: string;
-  /** Juga menyetel aksen ruang (`data-ruang`) untuk isi sheet. */
+  /** Isi judul yang tampil (mis. tombol pemilih jenis); teksnya harus sama dengan `title`. */
+  titleContent?: ReactNode;
+  /** Judul hanya untuk pembaca layar (halaman kedua sheet punya judul sendiri). */
+  titleHidden?: boolean;
+  /** Ruang tujuan: menyetel warna ruang (`data-ruang`) untuk isi sheet. */
   tint?: 'pribadi' | 'bersama' | undefined;
+  /** Di kiri judul, mis. tombol Kembali. */
+  headerStart?: ReactNode;
+  /** Di antara judul dan tombol Tutup. */
   headerAction?: ReactNode;
   /** Tetap terlihat di bawah; hanya isi yang menggulir. */
   footer?: ReactNode;
@@ -51,6 +63,8 @@ export function Sheet({
   returnFocus?: HTMLElement | null | undefined;
   /** Pakai seluruh tinggi area terlihat (mis. di atas keyboard), bukan 90%. */
   fill?: boolean;
+  /** Mode keyboard HP: tanpa pegangan, jarak 8, padding 6 16 10. */
+  compact?: boolean;
   children: ReactNode;
 }) {
   const vvHeight = useVisualViewportHeight(open);
@@ -59,10 +73,11 @@ export function Sheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-20 bg-scrim data-[state=open]:animate-fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-30 bg-scrim data-[state=open]:animate-fade-in" />
         <Dialog.Content
           aria-describedby={undefined}
           data-ruang={tint}
+          data-compact={compact ? '' : undefined}
           onOpenAutoFocus={(e) => {
             returnFocusTo.current =
               returnFocus ??
@@ -80,7 +95,7 @@ export function Sheet({
           }}
           onEscapeKeyDown={(e) => {
             // Radix mendengar Escape di fase capture; komponen yang menangani Escape sendiri
-            // (mis. Combobox) menandai dirinya agar sheet tidak ikut tertutup.
+            // (mis. menu jenis, halaman kategori) menandai dirinya agar sheet tidak ikut tertutup.
             if (e.target instanceof Element && e.target.closest('[data-own-escape]')) {
               e.preventDefault();
             }
@@ -92,27 +107,46 @@ export function Sheet({
           style={vvHeight === null ? undefined : { maxHeight: fill ? vvHeight : vvHeight * 0.9 }}
           className={SHEET_PANEL}
         >
-          <header className={`${SHEET_HEADER} py-1 pr-1 ${tint ? tints[tint] : ''}`}>
-            <Dialog.Title className="mr-auto text-lg/tight font-semibold">{title}</Dialog.Title>
+          {compact ? null : <span aria-hidden="true" className={SHEET_HANDLE} />}
+          <header
+            className={`relative flex items-center gap-2 px-4 ${compact ? 'pt-1.5' : 'pt-2 tablet:px-6 tablet:pt-6'}`}
+          >
+            {headerStart}
+            <Dialog.Title
+              className={
+                titleHidden
+                  ? 'sr-only'
+                  : 'mr-auto flex min-w-0 items-center gap-2 text-heading font-extrabold'
+              }
+            >
+              {titleContent ?? title}
+            </Dialog.Title>
+            {titleHidden ? <span className="mr-auto" /> : null}
             {headerAction}
             <Dialog.Close asChild>
-              <IconButton label="Tutup" icon={<XIcon size={24} />} />
+              <IconButton label="Tutup" icon={<XIcon size={18} weight="bold" />} />
             </Dialog.Close>
           </header>
           <div
             style={
               footer === undefined
-                ? { paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }
+                ? { paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }
                 : undefined
             }
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+            className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 ${
+              compact ? 'gap-2 pt-2' : 'gap-3 pt-3 tablet:px-6'
+            }`}
           >
             {children}
           </div>
           {footer === undefined ? null : (
             <div
-              style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
-              className="border-t border-hairline px-4 pt-2"
+              style={{
+                paddingBottom: compact
+                  ? 'max(0.625rem, env(safe-area-inset-bottom))'
+                  : 'max(1rem, env(safe-area-inset-bottom))',
+              }}
+              className={`flex flex-col gap-2 px-4 ${compact ? 'pt-2' : 'pt-3 tablet:px-6 tablet:pb-6'}`}
             >
               {footer}
             </div>

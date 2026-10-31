@@ -1,27 +1,30 @@
-/** Cincin fokus bersama: warna teks (bukan aksen ruang), >= 3:1 di semua permukaan kedua tema. */
+/** Cincin fokus 2 px token focus (base layer juga menyetelnya); dipakai eksplisit agar tidak tertimpa. */
 export const focusRing =
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
 
-/** Field: lapisan surface di halaman, tampak cekung di sheet (surface-2). */
+/** Field: 48 px, label di atas, fokus 2 px focus, latar bg agar tampak cekung di kartu dan sheet. */
 export const fieldBox =
-  'rounded-field border border-border bg-surface text-text focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-text';
+  'rounded-lg border border-border bg-bg text-text focus-within:border-2 focus-within:border-focus';
 
-/** Daftar datar di lapisan surface: baris dipisah hairline, tanpa bayangan. */
-export const listBlock = 'rounded-card bg-surface px-4';
-export const listRow = 'border-b border-hairline last:border-b-0';
+/** Kartu daftar (ListCard): surface, hairline, radius 16; tanpa bayangan. */
+export const card = 'rounded-xl border border-hairline bg-surface';
 
-/** Baris yang membuka layar lain: area ketuk selebar blok, umpan balik hover/tekan. */
-export const rowLink =
-  '-mx-4 flex min-h-15 items-center justify-between gap-3 rounded-card px-4 py-2 hover:bg-surface-2 active:bg-bg';
+/** Kartu utama (AmanCard, kekayaan bersih, dialog): radius 20. */
+export const heroCard = 'rounded-2xl border border-hairline bg-surface';
 
-/** Latar judul = ruang tujuan (wajib di ui-ux.md): mencegah salah catat ke ruang lain. */
-export const tints = {
-  pribadi: 'bg-pribadi-tint',
-  bersama: 'bg-bersama-tint',
-} as const;
+/** Pemisah antarbaris di dalam kartu. */
+export const rowDivider = 'border-t border-hairline first:border-t-0';
 
-/** Panel sheet: lapisan tertinggi (surface-2), satu-satunya tempat bayangan selain dialog. */
+/** Ubin ikon atau tanggal di kiri baris. */
+export const tile =
+  'flex shrink-0 items-center justify-center rounded-lg bg-surface-2 text-text-soft';
+
+/** Baris yang membuka layar lain: area ketuk selebar kartu, hover pointer saja. */
+export const rowLink = `-mx-4 flex min-h-15.5 items-center gap-3 px-4 hover-pointer:bg-hover active:bg-hover ${focusRing}`;
+
+/** Panel sheet: bottom sheet di HP, dialog tengah mulai 600 px. Satu-satunya lapisan berbayangan selain dialog dan toast. */
 export const SHEET_PANEL =
-  'fixed inset-x-0 bottom-0 z-20 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet border-t border-hairline bg-surface-2 text-text shadow-sheet data-[state=open]:animate-sheet-in dialog:inset-x-auto dialog:top-1/2 dialog:bottom-auto dialog:left-1/2 dialog:w-full dialog:max-w-lg dialog:-translate-x-1/2 dialog:-translate-y-1/2 dialog:rounded-sheet dialog:border dialog:shadow-dialog';
+  'fixed inset-x-0 bottom-0 z-30 flex max-h-dvh flex-col overflow-hidden rounded-t-sheet border-t border-hairline bg-surface text-text shadow-sheet data-[state=open]:animate-sheet-in tablet:inset-x-auto tablet:top-1/2 tablet:bottom-auto tablet:left-1/2 tablet:w-full tablet:max-w-130 tablet:-translate-x-1/2 tablet:-translate-y-1/2 tablet:rounded-2xl tablet:border tablet:shadow-float';
 
-export const SHEET_HEADER = 'flex min-h-13 items-center gap-2 border-b border-hairline pl-4';
+/** Pegangan sheet (dekoratif), hanya di HP. */
+export const SHEET_HANDLE = 'mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-border tablet:hidden';

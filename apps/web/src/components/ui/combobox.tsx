@@ -1,17 +1,19 @@
 'use client';
 
 import { Command } from 'cmdk';
-import { useEffect, useRef } from 'react';
-import { Button } from './button';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { fieldShell } from './field';
+import { MagnifyingGlassIcon } from './icons/magnifying-glass';
 
 export interface ComboboxItem {
   value: string;
   label: string;
+  icon?: ReactNode;
 }
 
 /**
  * Daftar yang bisa dicari (cmdk). Fokus langsung ke pencarian; panah memilih, Enter mengambil.
- * Escape dan "Batal" hanya menutup pencarian (`data-own-escape` mencegah Sheet ikut tertutup).
+ * Escape hanya menutup pencarian (`data-own-escape` mencegah Sheet ikut tertutup).
  */
 export function Combobox({
   label,
@@ -29,6 +31,7 @@ export function Combobox({
   onCancel: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const labelId = useId();
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -43,23 +46,25 @@ export function Combobox({
         e.stopPropagation();
         onCancel();
       }}
-      className="flex flex-col gap-1"
+      className="flex min-h-0 flex-1 flex-col gap-3"
     >
-      <span aria-hidden="true" className="text-sm text-text-muted">
-        {label}
-      </span>
-      <div className="flex gap-2">
-        <Command.Input
-          ref={inputRef}
-          placeholder={placeholder}
-          className="min-h-11 min-w-0 flex-1 rounded-field border border-border bg-surface px-3 text-lg text-text placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
-        />
-        <Button variant="secondary" onClick={onCancel}>
-          Batal
-        </Button>
+      <div className="flex flex-col gap-1.5">
+        <span id={labelId} aria-hidden="true" className="text-meta font-semibold text-text-soft">
+          {label}
+        </span>
+        <div className={`${fieldShell(false)} px-3.5`}>
+          <MagnifyingGlassIcon size={18} className="shrink-0 text-text-muted" />
+          <Command.Input
+            ref={inputRef}
+            placeholder={placeholder}
+            className="min-h-11 min-w-0 flex-1 bg-transparent text-body font-medium text-text outline-none placeholder:text-text-muted"
+          />
+        </div>
       </div>
-      <Command.List className="max-h-60 overflow-y-auto rounded-field border border-hairline bg-surface">
-        <Command.Empty className="px-3 py-3 text-base text-text-muted">{emptyText}</Command.Empty>
+      <Command.List className="min-h-0 flex-1 overflow-y-auto">
+        <Command.Empty className="py-3 text-label font-medium text-text-muted">
+          {emptyText}
+        </Command.Empty>
         {items.map((item) => (
           <Command.Item
             key={item.value}
@@ -67,8 +72,13 @@ export function Combobox({
             onSelect={() => {
               onSelect(item.value);
             }}
-            className="flex min-h-11 cursor-pointer items-center px-3 text-base text-text data-[selected=true]:bg-surface-2 data-[selected=true]:font-semibold"
+            className="flex min-h-13 cursor-pointer items-center gap-3 border-t border-hairline px-1 text-body font-semibold text-text first:border-t-0 data-[selected=true]:bg-hover"
           >
+            {item.icon ? (
+              <span aria-hidden="true" className="inline-flex text-text-soft">
+                {item.icon}
+              </span>
+            ) : null}
             {item.label}
           </Command.Item>
         ))}
