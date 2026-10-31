@@ -1,0 +1,331 @@
+{
+  "tanggal_demo": "2026-10-17",
+  "anggota": ["Novanda", "Farida"],
+  "pribadi": {
+    "aman_dipakai": {
+      "operasional": 4253500,
+      "billsUntilEom": 1259000,
+      "budgetWajibRemaining": 26000,
+      "total": 2968500,
+      "perDay": 197900,
+      "daysLeft": 15,
+      "until": "2026-10-31"
+    },
+    "dompet": [
+      {
+        "nama": "BCA",
+        "jenis": "operasional",
+        "tipe": "bank",
+        "saldo": 3105500
+      },
+      {
+        "nama": "Tunai",
+        "jenis": "operasional",
+        "tipe": "cash",
+        "saldo": 1148000
+      },
+      {
+        "nama": "Dana Darurat",
+        "jenis": "tabungan",
+        "tipe": "bank",
+        "saldo": 30000000
+      },
+      {
+        "nama": "Kas Kantor",
+        "jenis": "kantor",
+        "tipe": "cash",
+        "saldo": 3206000
+      }
+    ],
+    "tagihan_belum_dibayar": [
+      {
+        "nama": "Cicilan ponsel",
+        "nominal": 450000,
+        "jatuh_tempo": "2026-10-21"
+      },
+      {
+        "nama": "Tagihan kartu kredit",
+        "nominal": 809000,
+        "jatuh_tempo": "2026-10-24"
+      }
+    ],
+    "anggaran_bulan_ini": [
+      {
+        "kategori": "Makan Siang & Minum",
+        "anggaran": 2000000,
+        "terpakai": 608000,
+        "persen": 30,
+        "wajib": false
+      },
+      {
+        "kategori": "Transportasi",
+        "anggaran": 700000,
+        "terpakai": 309500,
+        "persen": 44,
+        "wajib": false
+      },
+      {
+        "kategori": "Langganan",
+        "anggaran": 180000,
+        "terpakai": 154000,
+        "persen": 85,
+        "wajib": true
+      }
+    ],
+    "ringkasan_oktober": {
+      "pemasukan": 0,
+      "pengeluaran": 2427000,
+      "selisih": -2427000,
+      "kantor": 334000,
+      "transfer": 1000000
+    },
+    "transaksi_terakhir": [
+      {
+        "hari": "Hari ini",
+        "bersih": -43500,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 22000,
+            "keterangan": "Kopi sore (QRIS)",
+            "kategori": "Kopi & Camilan",
+            "dompet": "BCA"
+          },
+          {
+            "jenis": "expense",
+            "nominal": 21500,
+            "keterangan": "Kopi susu",
+            "kategori": "Kopi & Camilan",
+            "dompet": "Tunai"
+          }
+        ]
+      },
+      {
+        "hari": "Kemarin",
+        "bersih": -73500,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 25000,
+            "keterangan": "Tol & parkir",
+            "kategori": "Transportasi",
+            "dompet": "BCA"
+          },
+          {
+            "jenis": "expense",
+            "nominal": 48500,
+            "keterangan": "Mie ayam",
+            "kategori": "Makan Siang & Minum",
+            "dompet": "BCA"
+          }
+        ]
+      },
+      {
+        "hari": "Kam, 15 Okt",
+        "bersih": -63500,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 35500,
+            "keterangan": "Kopi susu",
+            "kategori": "Kopi & Camilan",
+            "dompet": "Tunai"
+          },
+          {
+            "jenis": "expense",
+            "nominal": 28000,
+            "keterangan": "Nasi campur",
+            "kategori": "Makan Siang & Minum",
+            "dompet": "Tunai"
+          }
+        ]
+      }
+    ],
+    "kategori": [
+      "+ Gaji",
+      "- Makan Siang & Minum",
+      "- Kopi & Camilan",
+      "- Transportasi",
+      "- Belanja",
+      "- Hiburan",
+      "- Kesehatan",
+      "- Langganan",
+      "- Cicilan & Tagihan",
+      "- Perjalanan Dinas"
+    ]
+  },
+  "bersama": {
+    "aman_dipakai": {
+      "operasional": 7762000,
+      "billsUntilEom": 1154000,
+      "budgetWajibRemaining": 0,
+      "total": 6608000,
+      "perDay": 440533,
+      "daysLeft": 15,
+      "until": "2026-10-31"
+    },
+    "dompet": [
+      {
+        "nama": "Kas Rumah",
+        "jenis": "operasional",
+        "tipe": "bank",
+        "saldo": 7762000
+      },
+      {
+        "nama": "Tabungan Liburan",
+        "jenis": "tabungan",
+        "tipe": "bank",
+        "saldo": 10500000
+      }
+    ],
+    "tagihan_belum_dibayar": [
+      {
+        "nama": "Iuran kebersihan RT",
+        "nominal": 150000,
+        "jatuh_tempo": "2026-10-14"
+      },
+      {
+        "nama": "Listrik PLN",
+        "nominal": 485000,
+        "jatuh_tempo": "2026-10-20"
+      },
+      {
+        "nama": "Internet rumah",
+        "nominal": 380000,
+        "jatuh_tempo": "2026-10-22"
+      },
+      {
+        "nama": "Air PDAM",
+        "nominal": 139000,
+        "jatuh_tempo": "2026-10-28"
+      }
+    ],
+    "anggaran_bulan_ini": [
+      {
+        "kategori": "Sewa Rumah",
+        "anggaran": 4500000,
+        "terpakai": 4500000,
+        "persen": 100,
+        "wajib": true
+      },
+      {
+        "kategori": "Listrik & Air",
+        "anggaran": 800000,
+        "terpakai": 0,
+        "persen": 0,
+        "wajib": false
+      },
+      {
+        "kategori": "Belanja Dapur",
+        "anggaran": 3000000,
+        "terpakai": 1589500,
+        "persen": 52,
+        "wajib": false
+      },
+      {
+        "kategori": "Makan di Luar",
+        "anggaran": 1000000,
+        "terpakai": 852000,
+        "persen": 85,
+        "wajib": false
+      }
+    ],
+    "ringkasan_oktober": {
+      "pemasukan": 0,
+      "pengeluaran": 7175500,
+      "selisih": -7175500,
+      "kantor": 0,
+      "transfer": 0
+    },
+    "transaksi_terakhir": [
+      {
+        "hari": "Hari ini",
+        "bersih": -185000,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 185000,
+            "keterangan": "Minimarket",
+            "kategori": "Belanja Dapur",
+            "dompet": "Kas Rumah"
+          }
+        ]
+      },
+      {
+        "hari": "Kemarin",
+        "bersih": -92500,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 92500,
+            "keterangan": "Belanja kebutuhan dapur",
+            "kategori": "Belanja Dapur",
+            "dompet": "Kas Rumah"
+          }
+        ]
+      },
+      {
+        "hari": "Sen, 12 Okt",
+        "bersih": -96000,
+        "item": [
+          {
+            "jenis": "expense",
+            "nominal": 96000,
+            "keterangan": "Belanja kebutuhan dapur",
+            "kategori": "Belanja Dapur",
+            "dompet": "Kas Rumah"
+          }
+        ]
+      }
+    ],
+    "kategori": [
+      "+ Kontribusi Farida",
+      "- Sewa Rumah",
+      "- Listrik & Air",
+      "- Internet",
+      "- Iuran Lingkungan",
+      "- Belanja Dapur",
+      "- Sayur & Buah",
+      "- Makan di Luar",
+      "- Bensin & Parkir"
+    ]
+  },
+  "aktivitas_bersama": [
+    {
+      "oleh": "Novanda",
+      "teks": "Pengeluaran: Minimarket",
+      "nominal": 185000,
+      "waktu": "2026-10-17T10:55:15+07:00"
+    },
+    {
+      "oleh": "Farida",
+      "teks": "Pengeluaran: Belanja kebutuhan dapur",
+      "nominal": 92500,
+      "waktu": "2026-10-16T17:51:33+07:00"
+    },
+    {
+      "oleh": "Novanda",
+      "teks": "Pengeluaran: Belanja kebutuhan dapur",
+      "nominal": 96000,
+      "waktu": "2026-10-12T18:32:33+07:00"
+    },
+    {
+      "oleh": "Novanda",
+      "teks": "Pengeluaran: Restoran keluarga",
+      "nominal": 136000,
+      "waktu": "2026-10-11T16:32:23+07:00"
+    },
+    {
+      "oleh": "Farida",
+      "teks": "Pengeluaran: Belanja mingguan",
+      "nominal": 300000,
+      "waktu": "2026-10-11T09:43:06+07:00"
+    },
+    {
+      "oleh": "Novanda",
+      "teks": "Pengeluaran: Restoran keluarga",
+      "nominal": 196000,
+      "waktu": "2026-10-10T18:53:35+07:00"
+    }
+  ]
+}

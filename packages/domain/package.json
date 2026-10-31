@@ -1,0 +1,19 @@
+{
+  "name": "@dompetku/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests && pnpm test:tz",
+    "test:tz": "TZ=America/Los_Angeles vitest run src/date.test.ts && TZ=Asia/Tokyo vitest run src/date.test.ts"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

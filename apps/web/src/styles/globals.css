@@ -1,0 +1,303 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Hover hanya untuk pointer presisi (handoff: hover pointer saja); sentuh memakai active:. */
+@custom-variant hover-pointer {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text: var(--text);
+  --color-text-soft: var(--text-soft);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-hairline: var(--hairline);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-edge: var(--accent-edge);
+  --color-accent-text: var(--accent-text);
+  --color-accent-tint: var(--accent-tint);
+  --color-income: var(--income);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-on-danger: var(--on-danger);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-pribadi: var(--pribadi);
+  --color-pribadi-tint: var(--pribadi-tint);
+  --color-pribadi-fill: var(--pribadi-fill);
+  --color-on-pribadi: var(--on-pribadi);
+  --color-bersama: var(--bersama);
+  --color-bersama-tint: var(--bersama-tint);
+  --color-bersama-fill: var(--bersama-fill);
+  --color-on-bersama: var(--on-bersama);
+  --color-ruang: var(--ruang);
+  --color-ruang-tint: var(--ruang-tint);
+  --color-ruang-fill: var(--ruang-fill);
+  --color-on-ruang: var(--on-ruang);
+  --color-focus: var(--focus);
+  --color-toast-bg: var(--toast-bg);
+  --color-toast-text: var(--toast-text);
+  --color-toast-action: var(--toast-action);
+  --color-scrim: var(--scrim);
+  --color-tab: var(--tab);
+  --color-hover: var(--hover);
+  --color-chart-aman: var(--chart-aman);
+  --color-chart-tagihan: var(--chart-tagihan);
+  --color-chart-tagihan-2: var(--chart-tagihan-2);
+  --color-chart-wajib: var(--chart-wajib);
+  --color-transparent: transparent;
+
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+
+  /* Grid 4 px: p-1 = 4, p-3 = 12, p-4 = 16, h-11 = 44, h-13 = 52. */
+  --spacing: 4px;
+
+  --radius-*: initial;
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-sheet: 24px;
+  --radius-toast: 14px;
+
+  --shadow-*: initial;
+  --shadow-float: 0 24px 60px var(--shadow-color);
+  --shadow-sheet: 0 -12px 40px var(--shadow-edge);
+  --shadow-rail: inset 3px 0 0 var(--accent-text);
+
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* Skala tipografi handoff (px dalam rem agar ikut ukuran huruf peramban). */
+  --text-*: initial;
+  --text-display-xl: 3.5rem;
+  --text-display-xl--line-height: 1;
+  --text-display-xl--letter-spacing: -0.025em;
+  /* Nominal sangat panjang (≥ 13 karakter) di kartu utama HP. */
+  --text-display-long: clamp(1.75rem, 8.5vw, 2.75rem);
+  --text-display-long--line-height: 1;
+  --text-display-long--letter-spacing: -0.025em;
+  --text-display-lg: 3.25rem;
+  --text-display-lg--line-height: 1;
+  --text-display-lg--letter-spacing: -0.025em;
+  /* 44 px di 390, mengecil ke 36 px di 320 agar angka tujuh digit tetap muat. */
+  --text-display: clamp(2rem, 11.3vw, 2.75rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.025em;
+  --text-amount: 2.5rem;
+  --text-amount--line-height: 1.05;
+  --text-amount--letter-spacing: -0.02em;
+  --text-amount-sm: 2.25rem;
+  --text-amount-sm--line-height: 1.05;
+  --text-amount-sm--letter-spacing: -0.02em;
+  --text-title-lg: 1.75rem;
+  --text-title-lg--line-height: 1.1;
+  --text-title-lg--letter-spacing: -0.02em;
+  --text-title: 1.625rem;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.02em;
+  --text-headline: 1.25rem;
+  --text-headline--line-height: 1.25;
+  --text-header: 1.1875rem;
+  --text-header--line-height: 1.2;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.2;
+  --text-subheading: 1.0625rem;
+  --text-subheading--line-height: 1.2;
+  --text-keypad: 1.375rem;
+  --text-keypad--line-height: 1;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.45;
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.3;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.25;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.3;
+  --text-nav: 0.71875rem;
+  --text-nav--line-height: 1.1;
+  --text-tag: 0.6875rem;
+  --text-tag--line-height: 1;
+  --text-tiny: 0.625rem;
+  --text-tiny--line-height: 1;
+
+  /* Label kapital ruang ("Ruang Pribadi", hari di ubin tagihan). */
+  --tracking-eyebrow: 0.06em;
+
+  /* Di bawah 360 px: judul ruang header sr-only, tombol Catat jadi ikon berlabel. */
+  --breakpoint-narrow: 360px;
+  --breakpoint-tablet: 600px;
+  --breakpoint-laptop: 1024px;
+
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-sheet-in: sheet-in 200ms ease-out;
+  --animate-toast-in: toast-in 160ms ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    /* Semua nominal memakai digit tabular (handoff: aturan global). */
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role='button'],
+  a[href],
+  summary,
+  select,
+  label[for] {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0s !important;
+      transition-duration: 0s !important;
+    }
+  }
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+/* Ruang untuk tab bar mobile (52 px + 6 px + inset aman) di bawah isi. */
+@utility pb-tabbar {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@utility pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 6px);
+}
+
+/* Toast HP: 92 px dari bawah, di atas tab bar. */
+@utility bottom-toast {
+  bottom: calc(92px + env(safe-area-inset-bottom));
+}
+
+/* Bilah proporsi "Tagihan": garis miring 4 + 3 px. */
+@utility bg-hatch-tagihan {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--chart-tagihan) 0 4px,
+    var(--chart-tagihan-2) 4px 7px
+  );
+}
+
+@utility bg-hatch-tagihan-sm {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--chart-tagihan) 0 2px,
+    var(--chart-tagihan-2) 2px 5px
+  );
+}
+
+@utility bg-hatch-danger {
+  background: repeating-linear-gradient(135deg, var(--danger) 0 4px, transparent 4px 8px);
+}
+
+/* Beranda laptop: keputusan di kiri, riwayat di kanan. */
+@utility grid-cols-beranda {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+
+@utility grid-cols-autofit-260 {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* Transaksi laptop: daftar + kolom ringkasan 340 px. */
+@utility grid-cols-transaksi {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+/* Chip kategori Catat: dua baris, bergulir ke samping. */
+@utility chip-rows {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, 44px);
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Garis 1,5 px: chip terpilih dan tombol judul Catat (warna ruang). */
+@utility border-1.5 {
+  border-width: 1.5px;
+}
+
+/* Slot Catat di tab bar sedikit lebih lebar dari tab lain. */
+@utility flex-catat {
+  flex: 1.3 1 0%;
+}
+
+/* Baris chip yang digeser ke samping: tanpa batang gulir (isi tetap terjangkau dengan geser/Tab). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+}

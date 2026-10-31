@@ -1,0 +1,163 @@
+/* Sumber tunggal token warna Panel Malam (docs/design/panel-malam/dompetku-tokens.css, ADR 0006). */
+/* Dibaca juga oleh contrast.test.ts: tiap blok tema harus memuat nilai yang sama persis. */
+/* Gelap bawaan; html[data-theme] ditulis skrip kepala (lihat app/theme-script.ts) sebelum cat pertama. */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1211;
+  --surface: #1a1f1d;
+  --surface-2: #232927;
+  --surface-3: #2c3330;
+  --text: #edf1ee;
+  --text-soft: #c9d1cd;
+  --text-muted: #9ba5a0;
+  --border: #737e79;
+  --hairline: #262c2a;
+  --accent: #c4ee6a;
+  --on-accent: #11160a;
+  --accent-hover: #d3f58c;
+  --accent-press: #b0db52;
+  --accent-edge: transparent;
+  --accent-text: #c4ee6a;
+  --accent-tint: #26301a;
+  --income: #5fd8a4;
+  --danger: #ff8f7d;
+  --danger-tint: #3a201c;
+  --on-danger: #1a0905;
+  --warning: #f0b44c;
+  --warning-tint: #33290f;
+  --pribadi: #c4ee6a;
+  --pribadi-tint: #26301a;
+  --pribadi-fill: #c4ee6a;
+  --on-pribadi: #11160a;
+  --bersama: #b6a3ff;
+  --bersama-tint: #2a2540;
+  --bersama-fill: #b6a3ff;
+  --on-bersama: #160f33;
+  --focus: #c4ee6a;
+  --toast-bg: #edf1ee;
+  --toast-text: #0f1211;
+  --toast-action: #3d5a0a;
+  --scrim: rgb(4 6 5 / 0.66);
+  --tab: #141816;
+  --hover: #212725;
+  --chart-aman: #c4ee6a;
+  --chart-tagihan: #f0b44c;
+  --chart-tagihan-2: #b8862f;
+  --chart-wajib: #ff8f7d;
+  --shadow-color: rgb(0 0 0 / 0.45);
+  --shadow-edge: rgb(0 0 0 / 0.25);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --surface-2: #ebefea;
+  --surface-3: #e1e6e0;
+  --text: #141917;
+  --text-soft: #38423d;
+  --text-muted: #56605b;
+  --border: #7d8782;
+  --hairline: #dde2de;
+  --accent: #c4ee6a;
+  --on-accent: #11160a;
+  --accent-hover: #b5e54f;
+  --accent-press: #a5d63e;
+  --accent-edge: #4a6a0f;
+  --accent-text: #4a6a0f;
+  --accent-tint: #e8f6c8;
+  --income: #1b7a4b;
+  --danger: #b8322a;
+  --danger-tint: #fbe6e3;
+  --on-danger: #ffffff;
+  --warning: #9a5b00;
+  --warning-tint: #fbefd9;
+  --pribadi: #4a6a0f;
+  --pribadi-tint: #e8f6c8;
+  --pribadi-fill: #c4ee6a;
+  --on-pribadi: #11160a;
+  --bersama: #5b45c9;
+  --bersama-tint: #ece8ff;
+  --bersama-fill: #5b45c9;
+  --on-bersama: #ffffff;
+  --focus: #3f5f0a;
+  --toast-bg: #141917;
+  --toast-text: #f4f6f3;
+  --toast-action: #c4ee6a;
+  --scrim: rgb(20 25 23 / 0.42);
+  --tab: #ffffff;
+  --hover: #f0f3ef;
+  --chart-aman: #7fae2a;
+  --chart-tagihan: #d99a2b;
+  --chart-tagihan-2: #b07a1c;
+  --chart-wajib: #d9564b;
+  --shadow-color: rgb(20 25 23 / 0.16);
+  --shadow-edge: rgb(20 25 23 / 0.12);
+}
+
+/* "Ikuti sistem": salinan persis blok terang (diuji contrast.test.ts). */
+@media (prefers-color-scheme: light) {
+  [data-theme='system'] {
+    color-scheme: light;
+    --bg: #f4f6f3;
+    --surface: #ffffff;
+    --surface-2: #ebefea;
+    --surface-3: #e1e6e0;
+    --text: #141917;
+    --text-soft: #38423d;
+    --text-muted: #56605b;
+    --border: #7d8782;
+    --hairline: #dde2de;
+    --accent: #c4ee6a;
+    --on-accent: #11160a;
+    --accent-hover: #b5e54f;
+    --accent-press: #a5d63e;
+    --accent-edge: #4a6a0f;
+    --accent-text: #4a6a0f;
+    --accent-tint: #e8f6c8;
+    --income: #1b7a4b;
+    --danger: #b8322a;
+    --danger-tint: #fbe6e3;
+    --on-danger: #ffffff;
+    --warning: #9a5b00;
+    --warning-tint: #fbefd9;
+    --pribadi: #4a6a0f;
+    --pribadi-tint: #e8f6c8;
+    --pribadi-fill: #c4ee6a;
+    --on-pribadi: #11160a;
+    --bersama: #5b45c9;
+    --bersama-tint: #ece8ff;
+    --bersama-fill: #5b45c9;
+    --on-bersama: #ffffff;
+    --focus: #3f5f0a;
+    --toast-bg: #141917;
+    --toast-text: #f4f6f3;
+    --toast-action: #c4ee6a;
+    --scrim: rgb(20 25 23 / 0.42);
+    --tab: #ffffff;
+    --hover: #f0f3ef;
+    --chart-aman: #7fae2a;
+    --chart-tagihan: #d99a2b;
+    --chart-tagihan-2: #b07a1c;
+    --chart-wajib: #d9564b;
+    --shadow-color: rgb(20 25 23 / 0.16);
+    --shadow-edge: rgb(20 25 23 / 0.12);
+  }
+}
+
+/* Warna ruang untuk subtree (sheet Catat bisa menulis ke ruang lain dari halaman ruang ini). */
+:root,
+[data-ruang='pribadi'] {
+  --ruang: var(--pribadi);
+  --ruang-tint: var(--pribadi-tint);
+  --ruang-fill: var(--pribadi-fill);
+  --on-ruang: var(--on-pribadi);
+}
+
+[data-ruang='bersama'] {
+  --ruang: var(--bersama);
+  --ruang-tint: var(--bersama-tint);
+  --ruang-fill: var(--bersama-fill);
+  --on-ruang: var(--on-bersama);
+}
