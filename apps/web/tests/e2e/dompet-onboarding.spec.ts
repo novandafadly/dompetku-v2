@@ -297,6 +297,25 @@ test.describe('Layar auth tiruan', () => {
     await check(page);
     await expect(page.getByRole('link', { name: 'Tolak' })).toHaveAttribute('href', /\/masuk\?/);
     await page.getByRole('link', { name: 'Terima undangan' }).click();
+    await expect(page).toHaveURL(new RegExp(`/buat-akun\\?${q}$`));
+  });
+
+  test('buat-akun: email dari undangan, kata sandi minimal 12, lalu amankan', async ({ page }) => {
+    await open(page, '/buat-akun', 'Buat akun');
+    await expect(page.getByText('Email tidak bisa diganti.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Undangan' })).toHaveAttribute(
+      'href',
+      /\/terima-undangan\?/,
+    );
+    await check(page);
+    const password = page.getByLabel('Kata sandi baru');
+    await password.fill('pendek');
+    await page.getByRole('button', { name: 'Buat akun' }).click();
+    await expect(password).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByText('Kata sandi minimal 12 karakter.')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/buat-akun\\?${q}$`));
+    await password.fill('contoh-panjang-12');
+    await page.getByRole('button', { name: 'Buat akun' }).click();
     await expect(page).toHaveURL(new RegExp(`/amankan\\?${q}$`));
   });
 });

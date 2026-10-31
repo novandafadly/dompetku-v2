@@ -75,7 +75,7 @@ export function buildAccountHref(ruang: Ruang, id: string, query: string): Route
   return `/${ruang}/dompet/${encodeURIComponent(id)}${query}` as Route;
 }
 
-export const AUTH_PAGES = ['masuk', 'amankan', 'undang', 'terima-undangan'] as const;
+export const AUTH_PAGES = ['masuk', 'amankan', 'undang', 'terima-undangan', 'buat-akun'] as const;
 export type AuthPage = (typeof AUTH_PAGES)[number];
 
 export function buildAuthHref(page: AuthPage, query: string): Route {

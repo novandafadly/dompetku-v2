@@ -13,18 +13,23 @@ import { TextField } from '@/components/ui/text-field';
 export function PasswordField({
   value,
   onChange,
+  label = 'Kata sandi',
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
+  label?: string;
+  error?: string | undefined;
 }) {
   const [shown, setShown] = useState(false);
   return (
     <TextField
-      label="Kata sandi"
+      label={label}
+      error={error}
       type={shown ? 'text' : 'password'}
       value={value}
       onChange={onChange}
-      placeholder="Kata sandi"
+      placeholder={label}
       autoComplete="off"
       hint="Prototipe: jangan isi kata sandi asli."
       hintTone="warning"
