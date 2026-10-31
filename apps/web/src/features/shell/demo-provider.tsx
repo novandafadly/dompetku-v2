@@ -9,8 +9,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   createContext,
   Suspense,
+  useCallback,
   useContext,
-  useLayoutEffect,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -24,6 +24,7 @@ import {
   keptQuery,
   tabFromPathname,
   validMonth,
+  withoutParam,
   type AuthPage,
   type Tab,
 } from './hrefs';
@@ -32,14 +33,17 @@ interface DemoValue {
   store: DemoStore;
   ruang: Ruang;
   today: IsoDate;
-  /** Tema tampilan: gelap bawaan, terang lewat `?theme=light` (sampai Pengaturan ada). */
-  theme: 'dark' | 'light';
   /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
   keypad: 'os' | 'app';
   query: string;
   /** Nilai mentah `?bulan=` di alamat saat ini. */
   bulan: string | null;
+  /** Keadaan data demo (`?state=loading|error`) agar B4/B5/T4 bisa ditinjau dan diuji. */
+  dataState: DataState;
+  retry: () => void;
 }
+
+export type DataState = 'ready' | 'loading' | 'error';
 
 const DemoContext = createContext<DemoValue | null>(null);
 
@@ -76,23 +80,29 @@ function DemoProviderInner({ children }: { children: ReactNode }) {
   const [boot] = useState(() => {
     const today = validToday(params.get('today'));
     const variant = params.get('seed') === 'empty' ? 'empty' : 'full';
-    const theme = params.get('theme') === 'light' ? 'light' : 'dark';
     const keypad = params.get('keypad') === 'app' ? 'app' : 'os';
     const store: DemoStore = createDemoStore(createSeed({ today, variant }), {
       clock: demoClock(today, () => store),
     });
-    return { today, theme, keypad, query: keptQuery(params), store } as const;
+    return { today, keypad, store } as const;
   });
-
-  useLayoutEffect(() => {
-    document.documentElement.dataset.theme = boot.theme;
-  }, [boot.theme]);
+  const [query, setQuery] = useState(() => keptQuery(params));
+  const [dataState, setDataState] = useState<DataState>(() => {
+    const raw = params.get('state');
+    return raw === 'loading' || raw === 'error' ? raw : 'ready';
+  });
+  const retry = useCallback(() => {
+    setDataState('ready');
+    setQuery((q) => withoutParam(q, 'state'));
+  }, []);
 
   const segment = pathname.split('/')[1];
   const ruang: Ruang = isRuang(segment) ? segment : 'pribadi';
 
   return (
-    <DemoContext.Provider value={{ ...boot, ruang, bulan: params.get('bulan') }}>
+    <DemoContext.Provider
+      value={{ ...boot, query, ruang, bulan: params.get('bulan'), dataState, retry }}
+    >
       {children}
     </DemoContext.Provider>
   );
@@ -112,6 +122,9 @@ export function useDemo(): {
   ruang: Ruang;
   today: IsoDate;
   keypad: 'os' | 'app';
+  dataState: DataState;
+  /** Muat ulang setelah galat: keadaan kembali siap dan `?state` dibuang dari tautan. */
+  retry: () => void;
   /** Alamat tab di ruang tertentu dengan query demo yang dipertahankan. */
   href: (ruang: Ruang, tab: Tab) => Route;
   /** Alamat detail transaksi dengan query demo yang dipertahankan. */
@@ -144,6 +157,8 @@ export function useDemo(): {
     ruang: ctx.ruang,
     today: ctx.today,
     keypad: ctx.keypad,
+    dataState: ctx.dataState,
+    retry: ctx.retry,
     href: (ruang, tab) => buildHref(ruang, tab, query, keep),
     entryHref: (ruang, id) => buildEntryHref(ruang, id, query, keep),
     accountHref: (ruang, id) => buildAccountHref(ruang, id, query),

@@ -1,9 +1,33 @@
 'use client';
 
+import { useId, useState } from 'react';
+import type { Icon } from '@/components/ui/icon';
+import { AddressBookIcon } from '@/components/ui/icons/address-book';
+import { AirplaneTiltIcon } from '@/components/ui/icons/airplane-tilt';
+import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
+import { ExportIcon } from '@/components/ui/icons/export';
+import { GearSixIcon } from '@/components/ui/icons/gear-six';
+import { HourglassMediumIcon } from '@/components/ui/icons/hourglass-medium';
+import { TagIcon } from '@/components/ui/icons/tag';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
-import { focusRing } from '@/components/ui/styles';
+import { focusRing, rowDivider, tile } from '@/components/ui/styles';
+import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
-const MENU_ITEMS = ['Trip', 'Kategori', 'Kontak', 'Export', 'Analisis', 'Pengaturan'];
+const MENU_ITEMS: { name: string; Icon: Icon }[] = [
+  { name: 'Trip', Icon: AirplaneTiltIcon },
+  { name: 'Kategori', Icon: TagIcon },
+  { name: 'Kontak', Icon: AddressBookIcon },
+  { name: 'Export', Icon: ExportIcon },
+  { name: 'Analisis', Icon: ChartLineUpIcon },
+  { name: 'Pengaturan', Icon: GearSixIcon },
+];
+
+const THEMES: { value: ThemeChoice; label: string }[] = [
+  { value: 'dark', label: 'Gelap' },
+  { value: 'light', label: 'Terang' },
+  { value: 'system', label: 'Ikuti sistem' },
+];
 
 export function MenuSheet({
   open,
@@ -12,23 +36,46 @@ export function MenuSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [theme, setTheme] = useState<ThemeChoice>(currentTheme);
+  const themeLabel = useId();
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Menu">
       <ul className="flex flex-col">
-        {MENU_ITEMS.map((name) => (
-          <li key={name} className="border-b border-hairline last:border-b-0">
-            {/* Fokusable tapi tidak berfungsi: fitur ini di luar M0a. */}
+        {MENU_ITEMS.map(({ name, Icon }) => (
+          <li key={name} className={rowDivider}>
+            {/* TODO(M1+): fitur ini di luar M0a; tetap fokusable dan berlabel "Segera". */}
             <button
               type="button"
               aria-disabled="true"
-              className={`flex min-h-12 w-full items-center justify-between rounded-field px-2 text-left text-base text-text-muted ${focusRing}`}
+              className={`flex min-h-13 w-full items-center gap-3 rounded-lg text-left text-body font-semibold text-text ${focusRing}`}
             >
-              {name}
-              <span className="text-sm">Segera</span>
+              <span aria-hidden="true" className={`size-9 ${tile}`}>
+                <Icon size={18} />
+              </span>
+              <span className="flex-1">{name}</span>
+              <span className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-caption font-semibold text-text-soft">
+                <HourglassMediumIcon size={14} className="shrink-0" />
+                Segera
+              </span>
             </button>
           </li>
         ))}
       </ul>
+      <div className="flex flex-col gap-1.5 pt-1">
+        <span id={themeLabel} className="text-meta font-bold text-text">
+          Tampilan
+        </span>
+        <SegmentedControl
+          labelledBy={themeLabel}
+          items={THEMES}
+          value={theme}
+          onChange={(v) => {
+            if (!isThemeChoice(v)) return;
+            setTheme(v);
+            applyTheme(v);
+          }}
+        />
+      </div>
     </Sheet>
   );
 }

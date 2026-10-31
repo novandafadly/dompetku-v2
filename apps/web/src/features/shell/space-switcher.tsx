@@ -2,20 +2,26 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { CheckIcon } from '@/components/ui/icons/check';
 import { focusRing } from '@/components/ui/styles';
 import { useDemo } from './demo-provider';
 import { RUANG_LABEL, tabFromPathname } from './hrefs';
 
 const RUANGS = ['pribadi', 'bersama'] as const;
 
-/** Dua tautan bergaya segmented control; ruang aktif ditandai lapisan naik, batas, teks tebal, dan aria-current. */
-export function SpaceSwitcher() {
+const ACTIVE = {
+  pribadi: 'bg-pribadi-fill font-bold text-on-pribadi',
+  bersama: 'bg-bersama-fill font-bold text-on-bersama',
+} as const;
+
+/** Dua tautan dalam pil; ruang aktif = isi warna ruang + ✓ + aria-current, tidak hanya warna. */
+export function SpaceSwitcher({ wide = false }: { wide?: boolean }) {
   const { ruang, href } = useDemo();
   const tab = tabFromPathname(usePathname());
   return (
     <nav
       aria-label="Ruang"
-      className="inline-flex rounded-field border border-hairline bg-surface p-1"
+      className={`flex shrink-0 gap-0.5 rounded-full border border-border bg-surface p-0.5 ${wide ? 'w-full' : ''}`}
     >
       {RUANGS.map((r) => {
         const current = r === ruang;
@@ -24,12 +30,11 @@ export function SpaceSwitcher() {
             key={r}
             href={href(r, tab)}
             aria-current={current ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center rounded-field border px-4 text-base ${focusRing} ${
-              current
-                ? 'border-border bg-surface-2 font-semibold text-text'
-                : 'border-transparent text-text-muted hover:text-text active:bg-bg'
+            className={`flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-label ${wide ? 'flex-1' : ''} ${focusRing} ${
+              current ? ACTIVE[r] : 'font-semibold text-text-soft hover-pointer:bg-hover'
             }`}
           >
+            {current ? <CheckIcon size={14} weight="bold" className="shrink-0" /> : null}
             {RUANG_LABEL[r]}
           </Link>
         );

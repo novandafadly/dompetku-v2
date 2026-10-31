@@ -3,7 +3,6 @@
 import dynamic from 'next/dynamic';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import type { Ruang } from '@dompetku/demo-data';
-import { DemoBanner } from '@/components/ui/demo-banner';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { Toaster } from '@/components/ui/toast';
 import { AppHeader } from './app-header';
@@ -30,21 +29,16 @@ export function AppShell({
   useLayoutEffect(() => {
     document.documentElement.dataset.ruang = ruang;
   }, [ruang]);
+  const openMenu = () => {
+    setMenuOpen(true);
+  };
   return (
     <CatatProvider renderSheet={renderCatat} preload={preloadCatat}>
-      <div className="min-h-dvh lg:pl-62">
-        <DemoBanner />
-        <AppHeader
-          onMenu={() => {
-            setMenuOpen(true);
-          }}
-        />
-        <Sidebar
-          onMenu={() => {
-            setMenuOpen(true);
-          }}
-        />
-        <main className="mx-auto w-full max-w-5xl px-4 pt-4 pb-tabbar sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">
+      <div className="min-h-dvh laptop:pl-62">
+        <AppHeader onMenu={openMenu} />
+        <Sidebar onMenu={openMenu} />
+        {/* HP: padding 12, jarak 12. Tablet: isi maks 720, padding 24. Laptop: rata kiri, isi maks 1000. */}
+        <main className="pb-tabbar mx-auto flex w-full max-w-180 flex-col gap-3 px-3 pt-3 tablet:gap-4 tablet:px-6 tablet:pt-6 laptop:mx-0 laptop:max-w-none laptop:px-8 laptop:pt-0 laptop:pb-8">
           {children}
         </main>
         <TabBar />

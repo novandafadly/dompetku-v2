@@ -1,15 +1,15 @@
 'use client';
 
-import { PlusIcon } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { PlusIcon } from '@/components/ui/icons/plus';
 import { focusRing } from '@/components/ui/styles';
 import { useOpenCatat, usePreloadCatat } from './catat';
 import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
 
-const slot = `flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-field text-sm ${focusRing}`;
+const slot = `flex min-h-13 min-w-0 flex-1 flex-col items-center justify-center gap-0.75 rounded-lg text-nav ${focusRing}`;
 
 export function TabBar() {
   const { ruang, href } = useDemo();
@@ -18,20 +18,25 @@ export function TabBar() {
   const openCatat = useOpenCatat();
   const preloadCatat = usePreloadCatat();
   const catat = (
-    <button
-      key="catat"
-      type="button"
-      data-catat-trigger=""
-      onPointerEnter={preloadCatat}
-      onFocus={preloadCatat}
-      onClick={() => {
-        openCatat();
-      }}
-      className={`${slot} my-1 w-14 flex-none rounded-card bg-accent font-semibold text-on-accent active:brightness-90`}
-    >
-      <PlusIcon size={24} weight="bold" aria-hidden="true" />
-      Catat
-    </button>
+    <div key="catat" className="flex-catat flex min-w-0 items-center justify-center px-1">
+      <button
+        type="button"
+        data-catat-trigger=""
+        aria-keyshortcuts="c"
+        onPointerEnter={preloadCatat}
+        onFocus={preloadCatat}
+        onClick={() => {
+          openCatat();
+        }}
+        className={`flex min-w-11 items-center justify-center gap-1.5 rounded-toast text-label font-extrabold text-on-accent max-narrow:flex-col max-narrow:gap-0.75 max-narrow:text-nav max-narrow:text-text narrow:h-12 narrow:border narrow:border-accent-edge narrow:bg-accent narrow:px-3.5 narrow:hover-pointer:bg-accent-hover narrow:active:bg-accent-press ${focusRing}`}
+      >
+        {/* < 360 px: ubin ikon 48×48 dengan label di bawahnya. */}
+        <span className="flex items-center justify-center max-narrow:size-12 max-narrow:rounded-toast max-narrow:border max-narrow:border-accent-edge max-narrow:bg-accent max-narrow:text-on-accent">
+          <PlusIcon size={18} weight="bold" />
+        </span>
+        Catat
+      </button>
+    </div>
   );
   const links = items.map(({ tab, label, Icon }) => {
     const current = tab === active;
@@ -40,9 +45,13 @@ export function TabBar() {
         key={tab}
         href={href(ruang, tab)}
         aria-current={current ? 'page' : undefined}
-        className={`${slot} flex-1 ${current ? 'font-semibold text-accent' : 'text-text-muted hover:text-text active:bg-surface-2'}`}
+        className={`${slot} ${current ? 'font-extrabold text-text' : 'font-medium text-text-muted hover-pointer:text-text'}`}
       >
-        <Icon size={24} weight={current ? 'fill' : 'regular'} aria-hidden="true" />
+        <Icon
+          size={22}
+          weight={current ? 'fill' : 'regular'}
+          className={current ? 'text-accent-text' : ''}
+        />
         {label}
       </Link>
     );
@@ -52,8 +61,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="Tab utama"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed inset-x-0 bottom-0 z-10 flex items-stretch border-t border-hairline bg-surface px-1 lg:hidden"
+      className="pb-safe fixed inset-x-0 bottom-0 z-20 flex items-stretch border-t border-hairline bg-tab px-1.5 pt-1.5 laptop:hidden"
     >
       {[...links.slice(0, mid), catat, ...links.slice(mid)]}
     </nav>

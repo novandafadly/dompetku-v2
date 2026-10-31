@@ -12,7 +12,7 @@ export function isRuang(value: string | undefined): value is Ruang {
 }
 
 /** Query demo yang dipertahankan antar halaman agar tautan dan tes stabil. */
-export const KEPT_PARAMS = ['seed', 'today', 'theme', 'keypad'] as const;
+export const KEPT_PARAMS = ['seed', 'today', 'theme', 'keypad', 'state'] as const;
 
 export function keptQuery(params: URLSearchParams): string {
   const kept = new URLSearchParams();
@@ -21,6 +21,14 @@ export function keptQuery(params: URLSearchParams): string {
     if (v !== null) kept.set(key, v);
   }
   const s = kept.toString();
+  return s === '' ? '' : '?' + s;
+}
+
+/** Query tersimpan tanpa satu parameter (mis. `state` setelah Coba lagi). */
+export function withoutParam(query: string, key: string): string {
+  const params = new URLSearchParams(query);
+  params.delete(key);
+  const s = params.toString();
   return s === '' ? '' : '?' + s;
 }
 
