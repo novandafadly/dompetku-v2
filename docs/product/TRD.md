@@ -300,7 +300,7 @@ Terjawab pemilik 2026-10-31: faktor kuat (#1), target Web Vitals (#16), durasi s
 7. Jam base backup harian, dump bulanan, dan uji restore mingguan.
 8. Anggaran sumber daya container di VM DB (usulan ≤ 1,7 vCPU, ≤ 3,6 GiB).
 9. Approval manual per deploy di GitHub Environment `production`, atau otomatis setelah CI hijau?
-10. Hasil `uname -m` kedua VM (spec §9.5 butir 1) untuk build image satu arsitektur.
+10. Terjawab 2026-10-31: kedua VM `aarch64`; image dibangun `linux/arm64`. Web dan worker di VM DB, VM App hanya proxy (IPD §1).
 
 ## 8. Catatan review (putaran 2)
 
