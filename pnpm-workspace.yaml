@@ -5,5 +5,13 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
-# Tolak versi paket yang rilisnya kurang dari 3 hari (menit).
-minimumReleaseAge: 4320
+# Tolak versi paket yang rilisnya kurang dari 7 hari (menit).
+minimumReleaseAge: 10080
+# Tolak versi yang bukti publikasinya (trusted publisher/provenance) lebih lemah dari versi sebelumnya.
+trustPolicy: no-downgrade
+# Dependensi transitif hanya dari registry, bukan git/tarball URL.
+blockExoticSubdeps: true
+overrides:
+  # GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f, dkk. (osv-scanner). Hanya lewat
+  # eslint-plugin-boundaries -> @boundaries/elements (dev); 4.7.10 = patch, API sama.
+  handlebars: ^4.7.10

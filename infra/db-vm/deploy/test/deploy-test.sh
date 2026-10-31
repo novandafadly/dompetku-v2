@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uji perilaku deployer tanpa server: docker, curl, gh, df, logger diganti stub di PATH.
+# Uji perilaku deployer tanpa server: docker, curl, cosign, df, logger diganti stub di PATH.
 # Jalankan: bash infra/db-vm/deploy/test/deploy-test.sh
 set -euo pipefail
 
@@ -15,11 +15,14 @@ SHA1=$(printf 'a%.0s' {1..40})
 SHA2=$(printf 'b%.0s' {1..40})
 SHA3=$(printf 'c%.0s' {1..40})
 
-mkdir -p "$W/bin" "$W/root/env" "$W/root/bin" "$W/sim"
+mkdir -p "$W/bin" "$W/root/env" "$W/root/bin" "$W/root/keys" "$W/sim"
 touch "$W/root/compose.yml" "$W/root/compose.web.yml"
+echo 'kunci publik uji' >"$W/root/keys/cosign.pub"
 cat >"$W/root/env/deploy.env" <<CFG
 GHCR_USER=u
 GHCR_TOKEN=t
+VERIFY=cosign-key
+COSIGN_PUBLIC_KEY=$W/root/keys/cosign.pub
 HEALTH_RETRIES=2
 HEALTH_INTERVAL=0
 CFG
@@ -32,9 +35,18 @@ cat >/dev/null
 if [[ $* == *token* ]]; then echo '{"token":"x"}'; exit 0; fi
 printf 'HTTP/2 200\r\ndocker-content-digest: %s\r\n\r\n' "$(cat "$SIM/remote")"
 STUB
-cat >"$W/bin/gh" <<'STUB'
+# Stub cosign: wajib --key <pub> dan --insecure-ignore-tlog=true; badsig = tanda tangan salah,
+# noattest = tanda tangan sah tetapi attestation SBOM tidak ada.
+cat >"$W/bin/cosign" <<'STUB'
 #!/usr/bin/env bash
-[[ $* == *"$(cat "$SIM/badsig" 2>/dev/null || echo none)"* ]] && exit 1
+echo "cosign $*" >>"$SIM/cosign-calls"
+[[ $* == *"--key $DEPLOY_ROOT/keys/cosign.pub"* && $* == *--insecure-ignore-tlog=true* ]] || exit 9
+ref=${*: -1}
+[[ $ref == *"$(cat "$SIM/badsig" 2>/dev/null || echo none)"* ]] && exit 1
+if [[ $1 == verify-attestation ]]; then
+  [[ $* == *'--type spdxjson'* ]] || exit 9
+  [[ $ref == *"$(cat "$SIM/noattest" 2>/dev/null || echo none)"* ]] && exit 1
+fi
 exit 0
 STUB
 cat >"$W/bin/df" <<'STUB'
@@ -128,8 +140,17 @@ check 'rollback manual sengaja diizinkan' 0 "$D1" --digest "$D1" --allow-older
 echo "$D2" >"$SIM/remote"
 echo "$D2" >"$SIM/badsig"
 sed -i "/$D2/d" "$W/state/history.tsv" "$W/state/failed"
-check 'attestation tidak valid ditolak' 2 "$D1"
+check 'tanda tangan cosign tidak valid ditolak' 2 "$D1"
 rm "$SIM/badsig"
+echo "$D2" >"$SIM/noattest"
+check 'attestation SBOM tidak ada ditolak' 2 "$D1"
+rm "$SIM/noattest"
+grep -q "^cosign verify-attestation .*--type spdxjson .*@$D2\$" "$SIM/cosign-calls" ||
+  { echo 'GAGAL: verify-attestation tidak dipanggil untuk D2'; exit 1; }
+
+mv "$W/root/keys/cosign.pub" "$W/root/keys/cosign.pub.off"
+check 'kunci publik cosign hilang = galat konfigurasi' 1 "$D1"
+mv "$W/root/keys/cosign.pub.off" "$W/root/keys/cosign.pub"
 
 echo "$D3" >"$SIM/remote"
 touch "$SIM/migratefail"

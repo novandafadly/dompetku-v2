@@ -3,9 +3,9 @@
 # dijalankan dompetku-deploy.timer tiap 5 menit sebagai root.
 #
 # Alur: kunci -> baca digest tag `main` di GHCR -> lewati bila sama/pernah gagal -> verifikasi
-# attestation -> tarik -> tolak bila lebih tua -> preflight -> restore point + migrasi dbmate
-# (berkas migrasi diambil dari image rilis) -> ganti web ->
-# health -> selesai, atau rollback ke digest sebelumnya. Setiap hasil = satu baris audit JSON.
+# tanda tangan cosign + attestation SBOM (kunci publik pemilik) -> tarik -> tolak bila lebih tua ->
+# preflight -> restore point + migrasi dbmate (berkas migrasi diambil dari image rilis) -> ganti web
+# -> health -> selesai, atau rollback ke digest sebelumnya. Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -27,9 +27,8 @@ LOCK_FILE=${DEPLOY_LOCK_FILE:-/run/lock/dompetku-deploy.lock}
 # Nilai bawaan; deploy.env boleh menimpa (tanpa rahasia di sana kecuali GHCR_*).
 IMAGE=ghcr.io/novandafadly/dompetku-web
 TAG=main
-SOURCE_REPO=novandafadly/dompetku-v2
-SIGNER_WORKFLOW=.github/workflows/release.yml
-VERIFY=gh                       # gh (GitHub artifact attestation) | cosign (keyless Sigstore)
+VERIFY=cosign-key               # satu-satunya mode: kunci publik cosign milik pemilik, tanpa Rekor
+COSIGN_PUBLIC_KEY=$ROOT/keys/cosign.pub
 LOCAL_TAG=dompetku-web:current  # dirujuk layanan web di compose.yml (pull_policy: never)
 SERVICE=web
 HEALTH_RETRIES=30
@@ -78,7 +77,8 @@ done
 # shellcheck source=/dev/null
 [[ -r $CONFIG ]] && . "$CONFIG"
 [[ -n $GHCR_USER && -n $GHCR_TOKEN ]] || die "GHCR_USER/GHCR_TOKEN kosong di $CONFIG"
-[[ $VERIFY == gh || $VERIFY == cosign ]] || die "VERIFY harus gh atau cosign"
+[[ $VERIFY == cosign-key ]] || die "VERIFY harus cosign-key (mode gh/cosign keyless sudah dihapus)"
+[[ -r $COSIGN_PUBLIC_KEY ]] || die "kunci publik cosign tidak terbaca: $COSIGN_PUBLIC_KEY"
 
 mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
 touch "$STATE_DIR/history.tsv" "$STATE_DIR/failed"
@@ -90,7 +90,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-# Kredensial registry terpisah dari ~/.docker milik root (dipakai docker pull, gh, cosign).
+# Kredensial registry terpisah dari ~/.docker milik root (dipakai docker pull dan cosign).
 export DOCKER_CONFIG=$STATE_DIR/docker
 mkdir -p "$DOCKER_CONFIG"
 
@@ -148,23 +148,13 @@ registry_login() {
   printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
 }
 
+# Tanda tangan dan attestation SBOM dibuat workflow release dengan kunci pribadi pemilik tanpa log
+# transparansi (repo private); karena itu bukti Rekor diabaikan dan yang dipercaya hanya kunci ini.
 verify_attestation() {
   local ref="$IMAGE@$1"
-  case $VERIFY in
-    gh)
-      GH_TOKEN=$GHCR_TOKEN gh attestation verify "oci://$ref" \
-        --repo "$SOURCE_REPO" \
-        --signer-workflow "$SOURCE_REPO/$SIGNER_WORKFLOW" \
-        --source-ref refs/heads/main \
-        --bundle-from-oci >/dev/null
-      ;;
-    cosign)
-      cosign verify "$ref" \
-        --certificate-identity "https://github.com/$SOURCE_REPO/$SIGNER_WORKFLOW@refs/heads/main" \
-        --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-        --certificate-github-workflow-ref refs/heads/main >/dev/null
-      ;;
-  esac
+  cosign verify --key "$COSIGN_PUBLIC_KEY" --insecure-ignore-tlog=true "$ref" >/dev/null &&
+    cosign verify-attestation --key "$COSIGN_PUBLIC_KEY" --insecure-ignore-tlog=true \
+      --type spdxjson "$ref" >/dev/null
 }
 
 label() {
@@ -274,10 +264,10 @@ fi
 
 log "kandidat $TO_DIGEST (berjalan: ${FROM_DIGEST:-tidak ada})"
 
-# --- 2. Verifikasi attestation sebelum menarik --------------------------------------------------
+# --- 2. Verifikasi tanda tangan + attestation SBOM sebelum menarik -----------------------------
 registry_login || die 'docker login ghcr.io gagal'
 # Tidak dicatat sebagai `failed`: galat jaringan sementara tidak boleh mengunci rilis sah.
-verify_attestation "$TO_DIGEST" || fail 2 rejected "attestation $VERIFY tidak valid untuk $TO_DIGEST"
+verify_attestation "$TO_DIGEST" || fail 2 rejected "tanda tangan/attestation cosign tidak valid untuk $TO_DIGEST"
 
 docker pull -q "$IMAGE@$TO_DIGEST" >/dev/null || die "docker pull $TO_DIGEST gagal"
 TO_SHA=$(label "$IMAGE@$TO_DIGEST" org.opencontainers.image.revision)
