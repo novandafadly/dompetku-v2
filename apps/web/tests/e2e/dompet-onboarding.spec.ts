@@ -29,7 +29,7 @@ async function setTheme(page: Page, theme: 'light' | 'dark') {
   }, theme);
   await expect(page.locator('body')).toHaveCSS(
     'background-color',
-    theme === 'light' ? 'rgb(238, 240, 243)' : 'rgb(13, 14, 17)',
+    theme === 'light' ? 'rgb(244, 246, 243)' : 'rgb(15, 18, 17)',
   );
 }
 
@@ -121,7 +121,7 @@ test.describe('Tambah dompet', () => {
   }) => {
     await page.goto(`/pribadi/dompet?seed=empty&${q}`);
     await page.getByRole('main').getByRole('button', { name: 'Tambah dompet' }).click();
-    const sheet = page.getByRole('dialog', { name: /Dompet baru/ });
+    const sheet = page.getByRole('dialog', { name: /Tambah dompet/ });
     await sheet.getByLabel('Nama').fill('BCA');
     await sheet.getByRole('radio', { name: 'Operasional' }).click();
     await expect(sheet.getByRole('radio', { name: 'Bank' })).toBeChecked();
@@ -147,7 +147,9 @@ test.describe('Tambah dompet', () => {
       .getByRole('navigation', { name: 'Tab utama' })
       .getByRole('link', { name: 'Beranda' })
       .click();
-    await expect(main.getByRole('heading', { level: 1 })).toHaveText('Aman dipakai sampai 31 Okt');
+    await expect(
+      main.getByRole('heading', { level: 2, name: 'Aman dipakai sampai 31 Okt' }),
+    ).toBeVisible();
     await expect(page.getByTestId('hero-amount')).toContainText(formatRupiah(4_100_000));
     const steps = main.getByRole('list', { name: 'Mulai dari sini' }).getByRole('listitem');
     await expect(steps.nth(1)).toContainText('Tambah dompet sehari-hari');
@@ -175,7 +177,9 @@ test.describe('Tambah dompet', () => {
     const sheet = page.getByRole('dialog');
     await expect(sheet.getByRole('radio', { name: 'Kantor' })).toBeVisible();
     await sheet.getByRole('button', { name: 'Simpan dompet' }).click();
-    await expect(sheet.getByText('Isi nama dompet.')).toBeVisible();
+    await expect(sheet.getByText('Nama dompet wajib diisi.')).toBeVisible();
+    // Fokus pindah ke kolom yang salah.
+    await expect(sheet.getByLabel('Nama')).toBeFocused();
     await expect(sheet.getByText('Pilih jenis dompet.')).toBeVisible();
     await expect(sheet).toBeVisible();
     await sheet.getByLabel('Nama').fill('bca');
@@ -193,7 +197,7 @@ test.describe('Tambah dompet', () => {
     await page.goto(`/pribadi/beranda?seed=empty&${q}`);
     const main = page.getByRole('main');
     await main.getByRole('button', { name: 'Tambah dompet sehari-hari' }).click();
-    await expect(page.getByRole('dialog', { name: /Dompet baru/ })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /Tambah dompet/ })).toBeVisible();
     await page.keyboard.press('Escape');
     await main.getByRole('link', { name: 'Undang Farida' }).click();
     await expect(page).toHaveURL(new RegExp(`/undang\\?seed=empty&${q}$`));
@@ -221,7 +225,7 @@ test.describe('Layar auth tiruan', () => {
 
   /** Field kata sandi tiruan: tidak diisi otomatis, dan memperingatkan agar tidak memakai sandi asli. */
   async function expectMockPassword(page: Page) {
-    const password = page.getByLabel('Kata sandi');
+    const password = page.getByLabel('Kata sandi', { exact: true });
     await expect(password).toHaveAttribute('autocomplete', 'off');
     await expect(page.getByText('Prototipe: jangan isi kata sandi asli.')).toBeVisible();
     await expect(password).toHaveAccessibleDescription('Prototipe: jangan isi kata sandi asli.');
@@ -237,7 +241,7 @@ test.describe('Layar auth tiruan', () => {
   }
 
   test('masuk', async ({ page }) => {
-    await open(page, '/masuk', 'Masuk ke dompetmu');
+    await open(page, '/masuk', 'Masuk ke DompetKu');
     await expect(page.getByRole('link', { name: 'Masuk dengan passkey' })).toBeVisible();
     await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'email');
     await expectMockPassword(page);
@@ -248,18 +252,24 @@ test.describe('Layar auth tiruan', () => {
 
   test('amankan: passkey lalu kode TOTP lalu kode pemulihan', async ({ page }) => {
     await open(page, '/amankan', 'Amankan akunmu');
-    await expect(page.getByText('Langkah 1 dari 2')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Langkah 1 dari 3' })).toBeVisible();
     await check(page);
     await page.getByRole('button', { name: 'Buat passkey' }).click();
-    await expect(page.getByText('Langkah 2 dari 2')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Langkah 2 dari 3' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Masukkan kode 6 digit' }),
+    ).toBeVisible();
     const code = page.getByLabel('Kode 6 angka');
     await expect(code).toHaveAttribute('inputmode', 'numeric');
     await expect(code).toHaveAttribute('autocomplete', 'one-time-code');
     await check(page);
-    await page.getByRole('button', { name: 'Simpan dan lanjut' }).click();
-    await expect(page.getByText('Masukkan 6 angka.')).toBeVisible();
+    // Verifikasi nonaktif sampai enam angka terisi (handoff A2).
+    const verify = page.getByRole('button', { name: 'Verifikasi' });
+    await expect(verify).toBeDisabled();
+    await code.fill('12345');
+    await expect(verify).toBeDisabled();
     await code.fill('123456');
-    await page.getByRole('button', { name: 'Simpan dan lanjut' }).click();
+    await verify.click();
     await expect(
       page.getByRole('heading', { level: 1, name: 'Simpan kode pemulihan' }),
     ).toBeVisible();
@@ -268,21 +278,25 @@ test.describe('Layar auth tiruan', () => {
   });
 
   test('undang', async ({ page }) => {
-    await open(page, '/undang', 'Undang Farida');
+    await open(page, '/undang', 'Undang Farida ke ruang Bersama');
     await expect(page.getByText('Tautan berlaku 72 jam, sekali pakai.')).toBeVisible();
     await check(page);
-    await page.getByRole('button', { name: 'Buat tautan undangan' }).click();
+    await page.getByRole('button', { name: 'Kirim undangan' }).click();
     await expect(page.getByText('Isi email Farida.')).toBeVisible();
-    await page.getByLabel('Email Farida').fill('farida@example.com');
-    await page.getByRole('button', { name: 'Buat tautan undangan' }).click();
+    await page.getByLabel('Email pasangan').fill('farida@example.com');
+    await page.getByRole('button', { name: 'Kirim undangan' }).click();
     await page.getByRole('link', { name: 'Buka sebagai Farida' }).click();
     await expect(page).toHaveURL(new RegExp(`/terima-undangan\\?${q}$`));
   });
 
   test('terima-undangan', async ({ page }) => {
     await open(page, '/terima-undangan', 'Novanda mengundang kamu ke ruang Bersama');
-    await expect(page.getByLabel('Email')).toHaveValue('farida@example.com');
-    await expectMockPassword(page);
+    await expect(
+      page.getByText('Tidak pernah terlihat: isi ruang Pribadi masing-masing.'),
+    ).toBeVisible();
     await check(page);
+    await expect(page.getByRole('link', { name: 'Tolak' })).toHaveAttribute('href', /\/masuk\?/);
+    await page.getByRole('link', { name: 'Terima undangan' }).click();
+    await expect(page).toHaveURL(new RegExp(`/amankan\\?${q}$`));
   });
 });

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('/ redirects to /pribadi/beranda and shows demo banner', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/pribadi\/beranda$/);
-  await expect(page.getByText('Data demo')).toBeVisible();
+  await expect(page.getByText('Data demo').filter({ visible: true })).toBeVisible();
 });
 
 test('security headers are sent on /pribadi/beranda', async ({ request }) => {

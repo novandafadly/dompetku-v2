@@ -40,7 +40,8 @@ test.describe('mobile 390', () => {
       'aria-current',
       'page',
     );
-    await expect(header.getByText('Bersama', { exact: true })).toBeVisible();
+    // Judul header menulis ruang aktif (selain pil pengalih).
+    await expect(header.getByText('Bersama', { exact: true }).first()).toBeVisible();
   });
 
   test('query seed/today/theme ikut saat pindah tab dan ruang', async ({ page }) => {

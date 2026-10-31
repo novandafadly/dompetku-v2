@@ -2,10 +2,15 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectNoSeriousViolations, WCAG_TAGS } from './axe';
 import { ROUTES, TODAY } from './routes';
 
-/** Tunggu halaman siap diperiksa: banner demo tampil dan tidak ada muatan tertunda. */
+/** Tunggu halaman siap diperiksa: penanda prototipe tampil dan tidak ada muatan tertunda. */
 async function open(page: Page, path: string) {
   await page.goto(path);
-  await expect(page.getByText('Data demo').first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/^(Data demo|Prototipe: belum aktif)$/)
+      .filter({ visible: true })
+      .first(),
+  ).toBeVisible();
   await page.waitForLoadState('networkidle');
 }
 

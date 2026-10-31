@@ -31,23 +31,29 @@ export interface AppRoute {
 const SCREENSHOT_ROUTES = new Set([
   'pribadi-beranda',
   'pribadi-beranda-kosong',
+  'pribadi-beranda-memuat',
+  'pribadi-beranda-galat',
+  'pribadi-rencana',
   'bersama-beranda',
   'pribadi-transaksi',
   'bersama-transaksi',
   'pribadi-transaksi-detail',
   'pribadi-dompet',
   'pribadi-dompet-detail',
+  'bersama-dompet',
   'masuk',
+  'amankan',
+  'undang',
   'terima-undangan',
 ]);
 
 /** Daftar panjang: screenshot sebatas viewport. */
 const LONG_PAGE = /\/(transaksi|transaksi\/[^/]+|dompet\/[^/]+)$/;
 
-function route(name: string, path: string, seed: 'full' | 'empty' = 'full'): AppRoute {
+function route(name: string, path: string, seed: 'full' | 'empty' = 'full', extra = ''): AppRoute {
   return {
     name,
-    path: `${path}?seed=${seed}&today=${TODAY}`,
+    path: `${path}?seed=${seed}&today=${TODAY}${extra}`,
     screenshot: SCREENSHOT_ROUTES.has(name),
     fullPage: !LONG_PAGE.test(path),
   };
@@ -57,6 +63,8 @@ export const ROUTES: AppRoute[] = [
   ...(['pribadi', 'bersama'] as const).flatMap((r) => [
     route(`${r}-beranda`, `/${r}/beranda`),
     route(`${r}-beranda-kosong`, `/${r}/beranda`, 'empty'),
+    route(`${r}-beranda-memuat`, `/${r}/beranda`, 'full', '&state=loading'),
+    route(`${r}-beranda-galat`, `/${r}/beranda`, 'full', '&state=error'),
     route(`${r}-transaksi`, `/${r}/transaksi`),
     route(`${r}-transaksi-detail`, `/${r}/transaksi/${entryId(r)}`),
     route(`${r}-dompet`, `/${r}/dompet`),

@@ -20,7 +20,12 @@ for (const theme of ['dark', 'light'] as const) {
         const file = `${route.name}-${String(width)}-${theme}.png`;
         test(file, { tag: '@screens' }, async ({ page }) => {
           await page.goto(theme === 'light' ? `${route.path}&theme=light` : route.path);
-          await expect(page.getByText('Data demo').first()).toBeVisible();
+          await expect(
+            page
+              .getByText(/^(Data demo|Prototipe: belum aktif)$/)
+              .filter({ visible: true })
+              .first(),
+          ).toBeVisible();
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
           await page.waitForLoadState('networkidle');
           await page.evaluate(() => document.fonts.ready);

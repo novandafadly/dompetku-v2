@@ -47,7 +47,11 @@ test.describe('Beranda Pribadi terisi', () => {
     const r = safeToSpend(full, 'pribadi', TODAY);
     await page.goto(`/pribadi/beranda?${q}`);
     const main = page.getByRole('main');
-    await expect(main.getByRole('heading', { level: 1 })).toHaveText('Aman dipakai sampai 31 Okt');
+    await expect(main.getByRole('heading', { level: 1 })).toHaveText('Beranda');
+    await expect(
+      main.getByRole('heading', { level: 2, name: 'Aman dipakai sampai 31 Okt' }),
+    ).toBeVisible();
+    await expect(page.getByRole('img', { name: /^Saldo operasional Rp/ })).toBeVisible();
     await expect(page.getByTestId('hero-amount')).toContainText(formatRupiah(r.total));
     const table = main.getByRole('table');
     await expect(table.getByRole('row')).toHaveCount(4);
@@ -73,7 +77,7 @@ test.describe('Beranda Pribadi terisi', () => {
     const budgets = main.getByRole('region', { name: 'Anggaran hampir habis' });
     await expect(budgets.getByText('Langganan')).toBeVisible();
     await expect(budgets.getByText('85% terpakai')).toBeVisible();
-    await expect(budgets.locator('svg')).toHaveCount(1);
+    await expect(budgets.getByRole('listitem').locator('svg')).toHaveCount(1);
     await expect(budgets.getByText('Makan Siang & Minum')).toHaveCount(0);
     const recent = main.getByRole('region', { name: 'Terakhir' });
     await expect(recent.getByRole('listitem')).toHaveCount(5);
@@ -87,7 +91,7 @@ test.describe('Beranda Pribadi terisi', () => {
     await expect(budgets.getByText('Makan di Luar')).toBeVisible();
     await expect(budgets.getByText('85% terpakai')).toBeVisible();
     await expect(budgets.getByText('100% terpakai')).toBeVisible();
-    await expect(budgets.locator('svg')).toHaveCount(2);
+    await expect(budgets.getByRole('listitem').locator('svg')).toHaveCount(2);
     await expect(budgets.getByText('Belanja Dapur')).toHaveCount(0);
   });
 
@@ -116,16 +120,22 @@ test.describe('Beranda Bersama', () => {
     expect(await page.locator('body').innerText()).not.toContain(secret ?? '');
   });
 
-  test('kartu saldo bertint emas, judul bersama, feed Aktivitas dengan inisial', async ({
+  test('kartu utama bertag Bersama, judul bersama, feed Aktivitas dengan inisial', async ({
     page,
   }) => {
     const r = safeToSpend(full, 'bersama', TODAY);
     await page.goto(`/bersama/beranda?${q}`);
     const main = page.getByRole('main');
-    const h1 = main.getByRole('heading', { level: 1 });
-    await expect(h1).toHaveText('Aman dipakai bersama sampai 31 Okt');
-    // Kartu saldo (motif DESIGN.md) memakai tint Bersama #2A2113 di tema gelap bawaan.
-    await expect(page.getByTestId('balance-card')).toHaveCSS('background-color', 'rgb(42, 33, 19)');
+    await expect(
+      main.getByRole('heading', { level: 2, name: 'Aman dipakai bersama sampai 31 Okt' }),
+    ).toBeVisible();
+    // Kartu utama: surface #1A1F1D (gelap bawaan), ruang tertulis di SpaceTag berwarna Bersama.
+    const card = page.getByTestId('balance-card');
+    await expect(card).toHaveCSS('background-color', 'rgb(26, 31, 29)');
+    await expect(card.getByText('Bersama', { exact: true })).toHaveCSS(
+      'color',
+      'rgb(182, 163, 255)',
+    );
     await expect(page.getByTestId('hero-amount')).toContainText(formatRupiah(r.total));
     const feed = main.getByRole('region', { name: 'Aktivitas' });
     const rows = feed.getByRole('listitem');

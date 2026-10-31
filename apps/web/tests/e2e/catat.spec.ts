@@ -139,7 +139,7 @@ test.describe('Catat 390', () => {
     await expect(toast.getByRole('button', { name: 'Urungkan' })).toBeVisible();
     const first = recent.getByRole('listitem').first();
     await expect(first).toContainText(category);
-    await expect(first).toContainText('Hari ini · BCA');
+    await expect(first).toContainText('BCA · Hari ini');
     await expect(first).toContainText('35.000');
   });
 
@@ -202,7 +202,7 @@ test.describe('Catat 390', () => {
     await expect(more).toBeFocused();
 
     await more.click();
-    await sheet.getByRole('button', { name: 'Batal' }).click();
+    await sheet.getByRole('button', { name: 'Kembali ke Catat' }).click();
     await expect(sheet.getByRole('combobox', { name: 'Cari kategori' })).toHaveCount(0);
     await expect(more).toBeFocused();
     await page.keyboard.press('Escape');
@@ -254,7 +254,8 @@ test.describe('Catat 390', () => {
     await page.goto(`/pribadi/beranda?${q}`);
     await openCatat(page).click();
     let sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
-    await sheet.getByRole('radio', { name: 'Masuk' }).click();
+    await sheet.getByRole('button', { name: 'Pengeluaran · Pribadi' }).click();
+    await sheet.getByRole('menuitemradio', { name: 'Pemasukan' }).click();
     sheet = page.getByRole('dialog', { name: 'Pemasukan · Pribadi' });
     await sheet.getByLabel('Nominal', { exact: true }).fill('50000');
     await sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first().click();
@@ -262,10 +263,9 @@ test.describe('Catat 390', () => {
     await expect(toasts(page).getByText('Tersimpan di Pribadi · Rp 50.000 ke BCA')).toBeVisible();
 
     await openCatat(page).click();
-    await page
-      .getByRole('dialog', { name: 'Pengeluaran · Pribadi' })
-      .getByRole('radio', { name: 'Transfer' })
-      .click();
+    const fresh = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await fresh.getByRole('button', { name: 'Pengeluaran · Pribadi' }).click();
+    await fresh.getByRole('menuitemradio', { name: 'Transfer' }).click();
     sheet = page.getByRole('dialog', { name: 'Transfer · Pribadi' });
     await sheet.getByLabel('Nominal', { exact: true }).fill('20000');
     await expect(sheet.getByRole('button', { name: 'Simpan' })).toBeDisabled();
@@ -307,7 +307,8 @@ async function expectFullyVisible(locator: Locator, label: string) {
   expect(clipped, label).toBeNull();
 }
 
-const KEYBOARD = 300;
+/** Handoff C1: HP 360×640 dengan bilah status 24 px dan keyboard ±260 px; sheet ≤ 356 px. */
+const KEYBOARD = 24 + 260;
 
 for (const size of [
   { width: 360, height: 640 },
@@ -367,25 +368,18 @@ test.describe('varian B keypad aplikasi', () => {
     const amount = sheet.getByLabel('Nominal', { exact: true });
     await expect(amount).toHaveAttribute('inputmode', 'none');
     const keypad = sheet.getByRole('group', { name: 'Keypad nominal' });
-    await expect(keypad.getByRole('button')).toHaveText([
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '000',
-      '0',
-      '⌫',
-    ]);
+    const keys = await keypad
+      .getByRole('button')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? el.textContent));
+    expect(keys).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', 'Hapus']);
+    for (const key of await keypad.getByRole('button').all()) {
+      expect((await key.boundingBox())?.height).toBeGreaterThanOrEqual(52);
+    }
     await keypad.getByRole('button', { name: '3', exact: true }).click();
     await keypad.getByRole('button', { name: '5', exact: true }).click();
     await keypad.getByRole('button', { name: '000' }).click();
     await expect(amount).toHaveValue('35.000');
-    await keypad.getByRole('button', { name: 'Hapus satu angka' }).click();
+    await keypad.getByRole('button', { name: 'Hapus' }).click();
     await expect(amount).toHaveValue('3.500');
     await amount.focus();
     await page.keyboard.type('0');

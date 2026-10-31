@@ -31,10 +31,14 @@ test.describe('Transaksi 390', () => {
   test('segmen, filter, grup per hari dan baris 60 px', async ({ page }) => {
     await page.goto(`/pribadi/transaksi?${q}`);
     const main = page.getByRole('main');
-    await expect(main.getByRole('radiogroup', { name: 'Tampilan' }).getByRole('radio')).toHaveText([
+    await expect(main.getByRole('tablist', { name: 'Tampilan' }).getByRole('tab')).toHaveText([
       'Daftar',
       'Ringkasan',
     ]);
+    await expect(main.getByRole('tab', { name: 'Daftar' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await expect(main.getByRole('radiogroup', { name: 'Filter' }).getByRole('radio')).toHaveText([
       'Semua',
       'Operasional',
@@ -162,7 +166,7 @@ test.describe('Transaksi 390', () => {
     await expect(page).toHaveURL(new RegExp(`/pribadi/transaksi\\?${q}&bulan=2026-09$`));
     await rows(page).first().getByRole('link').click();
     await expect(page).toHaveURL(/\/pribadi\/transaksi\/[^/?]+\?.*bulan=2026-09/);
-    await page.getByRole('link', { name: 'Kembali ke daftar' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Transaksi', exact: true }).click();
     await expect(main.getByText('September 2026')).toBeVisible();
     // Tab lain tidak mewarisi bulan.
     const beranda = page
@@ -180,7 +184,8 @@ test.describe('Transaksi 390', () => {
     await page.goto(`/pribadi/transaksi?${q}`);
     await rows(page).first().getByRole('link').click();
     const main = page.getByRole('main');
-    await expect(main.getByText('dicatat oleh kamu')).toBeVisible();
+    await expect(main.getByRole('definition').filter({ hasText: /^kamu$/ })).toBeVisible();
+    await expect(main.getByText('Dicatat oleh')).toBeVisible();
     expect(page.url()).toContain(q);
     await main.getByRole('button', { name: 'Ubah' }).click();
     await expect(toasts(page).getByText('Segera di M1')).toBeVisible();
@@ -196,7 +201,12 @@ test.describe('Transaksi 390', () => {
     const mine = full.entries.find((e) => e.ruang === 'pribadi' && e.kind === 'expense');
     if (!byFarida || !mine) throw new Error('seed tanpa entri');
     await page.goto(`/bersama/transaksi/${byFarida.id}?${q}`);
-    await expect(page.getByRole('main').getByText('dicatat oleh Farida')).toBeVisible();
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('definition')
+        .filter({ hasText: /^Farida$/ }),
+    ).toBeVisible();
 
     await page.goto(`/bersama/transaksi/${mine.id}?${q}`);
     await expect(page.getByText('This page could not be found.')).toBeVisible();
@@ -251,9 +261,12 @@ test.describe('Transaksi 390', () => {
   test('Ringkasan bulan berjalan', async ({ page }) => {
     await page.goto(`/pribadi/transaksi?${q}`);
     const main = page.getByRole('main');
-    await main.getByRole('radio', { name: 'Ringkasan' }).click();
+    await main.getByRole('tab', { name: 'Ringkasan' }).click();
     const s = monthSummary(full, 'pribadi', '2026-10');
-    await expect(main.getByText('Oktober 2026')).toBeVisible();
+    await expect(
+      main.getByRole('group', { name: 'Bulan' }).getByText('Oktober 2026'),
+    ).toBeVisible();
+    await expect(main.getByRole('tabpanel')).toContainText('Anggaran bulan ini');
     // Angka tertulis langsung (dari halaman yang tampil), bukan hanya dari selector.
     await expect(main.getByRole('row', { name: /Pengeluaran/ })).toContainText('Rp 2.427.000');
     await expect(main.getByRole('row', { name: /Selisih/ })).toContainText('\u2212Rp 2.427.000');
@@ -285,7 +298,7 @@ test.describe('Transaksi 320', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         320,
       );
-      await page.getByRole('main').getByRole('radio', { name: 'Ringkasan' }).click();
+      await page.getByRole('main').getByRole('tab', { name: 'Ringkasan' }).click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         320,
       );
