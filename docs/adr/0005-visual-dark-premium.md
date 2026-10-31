@@ -1,6 +1,6 @@
 # ADR 0005: Arah visual gelap premium
 
-Status: diterima (2026-10-30)
+Status: digantikan oleh ADR 0006 (2026-10-31)
 
 ## Konteks
 

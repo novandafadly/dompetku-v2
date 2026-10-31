@@ -11,12 +11,14 @@ Buka lewat tautan khusus dari Novanda (Shareable Link Vercel); tidak perlu akun 
 - Semua data di sini fiktif. Data tersimpan di memori saja, jadi kembali ke awal setiap kali halaman dimuat ulang. Itu normal, bukan error.
 - Tambahkan parameter di akhir alamat untuk mencoba variasi:
 
-| Parameter           | Fungsi                                   |
-| ------------------- | ---------------------------------------- |
-| `?keypad=app`       | Keypad varian B (bawaan adalah varian A) |
-| `?theme=light`      | Tema terang (bawaan gelap)               |
-| `?seed=empty`       | Mulai dari kosong, tanpa transaksi       |
-| `?today=2026-10-17` | Anggap hari ini tanggal 17 Oktober 2026  |
+| Parameter           | Fungsi                                              |
+| ------------------- | --------------------------------------------------- |
+| `?keypad=app`       | Keypad varian B (bawaan adalah varian A)            |
+| `?theme=light`      | Tema terang (bawaan gelap; juga di Menu → Tampilan) |
+| `?seed=empty`       | Mulai dari kosong, tanpa transaksi                  |
+| `?today=2026-10-17` | Anggap hari ini tanggal 17 Oktober 2026             |
+| `?state=loading`    | Lihat keadaan memuat (Beranda, Transaksi)           |
+| `?state=error`      | Lihat keadaan galat Beranda                         |
 
 Contoh: `<LINK PRATINJAU>/pribadi/beranda?keypad=app&theme=light`
 
@@ -41,8 +43,8 @@ Skala 1-5 berlaku untuk semua tugas: 1 = sangat sulit atau membingungkan, 5 = la
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Warna ruang:** Pribadi biru / Bersama emas: pertahankan atau ganti? Usulan warna lain: ____
-- [ ] **Tema:** gelap (bawaan) / terang (`?theme=light`)
+- [ ] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: pertahankan atau ganti? Usulan warna lain: ____
+- [ ] **Tema:** gelap (bawaan) / terang / ikuti sistem (Menu → Tampilan): mana yang kamu pakai?
 
 ### Penilaian akhir
 
@@ -75,8 +77,8 @@ Apa yang mengganggu, apa yang menyenangkan, apa yang kurang?
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Warna ruang:** Pribadi biru / Bersama emas: pertahankan atau ganti? Usulan warna lain: ____
-- [ ] **Tema:** gelap (bawaan) / terang (`?theme=light`)
+- [ ] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: pertahankan atau ganti? Usulan warna lain: ____
+- [ ] **Tema:** gelap (bawaan) / terang / ikuti sistem (Menu → Tampilan): mana yang kamu pakai?
 
 ### Penilaian akhir
 
