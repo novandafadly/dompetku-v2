@@ -8,7 +8,7 @@ export function isThemeChoice(value: unknown): value is ThemeChoice {
 
 /**
  * Dijalankan inline di <head> sebelum cat pertama (tanpa kilasan gelap di ?theme=light).
- * Urutan: ?theme=light|dark, lalu pilihan tersimpan, lalu gelap. CSP situs hanya frame-ancestors.
+ * Urutan: ?theme=light|dark, lalu pilihan tersimpan, lalu gelap. Diberi nonce CSP oleh layout (src/proxy.ts).
  */
 export const themeBootScript = `(function(){var d=document.documentElement,t=null;try{var p=new URLSearchParams(location.search).get('theme');if(p==='light'||p==='dark')t=p;else{var s=localStorage.getItem('${THEME_KEY}');if(s==='light'||s==='dark'||s==='system')t=s;}}catch(e){}d.dataset.theme=t||'dark';})();`;
 
