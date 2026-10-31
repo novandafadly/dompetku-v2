@@ -10,12 +10,14 @@
     },
     {
       "groupName": "playwright",
-      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"]
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchUpdateTypes": ["patch"],
       "groupName": "patch updates",
-      "automerge": false
+      "automerge": false,
+      "minimumReleaseAge": "7 days"
     }
   ]
 }
