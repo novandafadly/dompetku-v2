@@ -1,13 +1,14 @@
 'use client';
 
-import { WarningIcon } from '@phosphor-icons/react';
 import type { Account, Pocket } from '@dompetku/demo-data';
 import type { Rupiah } from '@dompetku/domain';
-import { useRef, useState, type RefObject } from 'react';
+import { useId, useRef, useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
-import { Chip, ChipGroup } from '@/components/ui/chip';
+import { FieldError, FieldHint, FieldLabel } from '@/components/ui/field';
 import { MoneyInput } from '@/components/ui/money-input';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
+import { SpaceTag } from '@/components/ui/space-tag';
 import { TextField } from '@/components/ui/text-field';
 import { toast } from '@/components/ui/toast';
 import { POCKET_LABEL, RUANG_NAME, WALLET_TYPE_LABEL, type DompetContext } from './context';
@@ -34,13 +35,18 @@ function Form({
   const [walletType, setWalletType] = useState<WalletType>('bank');
   const [opening, setOpening] = useState<Rupiah | null>(null);
   const [errors, setErrors] = useState<Errors>({});
+  const pocketLabel = useId();
+  const pocketError = useId();
+  const typeLabel = useId();
+  const openingHint = useId();
+  const pocketRef = useRef<HTMLDivElement>(null);
   const pockets: Pocket[] =
     ruang === 'pribadi' ? ['operasional', 'tabungan', 'kantor'] : ['operasional', 'tabungan'];
 
   function submit() {
     const trimmed = name.trim();
     const next: Errors = {};
-    if (trimmed === '') next.name = 'Isi nama dompet.';
+    if (trimmed === '') next.name = 'Nama dompet wajib diisi.';
     else {
       const same = state.accounts.find(
         (a) => a.ruang === ruang && a.name.toLowerCase() === trimmed.toLowerCase(),
@@ -49,7 +55,15 @@ function Form({
     }
     if (pocket === null) next.pocket = 'Pilih jenis dompet.';
     setErrors(next);
-    if (next.name !== undefined || pocket === null) return;
+    // Fokus pindah ke kolom pertama yang salah.
+    if (next.name !== undefined) {
+      nameRef.current?.focus();
+      return;
+    }
+    if (pocket === null) {
+      pocketRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+      return;
+    }
     const ownerId = ruang === 'pribadi' ? (state.members[0]?.id ?? null) : null;
     store.addAccount(
       { ruang, ownerId, name: trimmed, pocket, walletType, openedOn: today },
@@ -67,60 +81,54 @@ function Form({
         e.preventDefault();
         submit();
       }}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
     >
       <TextField
         label="Nama"
         value={name}
         onChange={setName}
         error={errors.name}
+        placeholder="Contoh: BCA, Tunai"
         autoComplete="off"
         inputRef={nameRef}
       />
-      <div className="flex flex-col gap-1">
-        <span className="text-sm text-text-muted">Jenis</span>
-        <ChipGroup label="Jenis">
-          {pockets.map((p, i) => (
-            <Chip
-              key={p}
-              selected={pocket === p}
-              focusable={pocket === null && i === 0}
-              onSelect={() => {
-                setPocket(p);
-              }}
-            >
-              {POCKET_LABEL[p]}
-            </Chip>
-          ))}
-        </ChipGroup>
-        {errors.pocket ? (
-          <p className="flex items-start gap-1 text-sm text-danger">
-            <WarningIcon size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-            {errors.pocket}
-          </p>
-        ) : null}
+      <div ref={pocketRef} className="flex flex-col gap-1.5">
+        <FieldLabel id={pocketLabel}>Jenis</FieldLabel>
+        <SegmentedControl
+          labelledBy={pocketLabel}
+          items={pockets.map((p) => ({ value: p, label: POCKET_LABEL[p] }))}
+          value={pocket}
+          onChange={(v) => {
+            const p = pockets.find((x) => x === v);
+            if (p) setPocket(p);
+          }}
+        />
+        {errors.pocket ? <FieldError id={pocketError}>{errors.pocket}</FieldError> : null}
       </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-sm text-text-muted">Tipe</span>
-        <ChipGroup label="Tipe">
-          {WALLET_TYPES.map((t) => (
-            <Chip
-              key={t}
-              selected={walletType === t}
-              onSelect={() => {
-                setWalletType(t);
-              }}
-            >
-              {WALLET_TYPE_LABEL[t]}
-            </Chip>
-          ))}
-        </ChipGroup>
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel id={typeLabel}>Tipe</FieldLabel>
+        <SegmentedControl
+          labelledBy={typeLabel}
+          items={WALLET_TYPES.map((t) => ({ value: t, label: WALLET_TYPE_LABEL[t] }))}
+          value={walletType}
+          onChange={(v) => {
+            const t = WALLET_TYPES.find((x) => x === v);
+            if (t) setWalletType(t);
+          }}
+        />
       </div>
-      <div className="flex flex-col gap-1">
-        <MoneyInput label="Saldo hari ini" value={opening} onChange={setOpening} />
-        <p className="text-sm text-text-muted">
-          Dicatat sebagai &quot;Saldo awal&quot; di riwayat dompet ini. Kosongkan bila belum ada.
-        </p>
+      <div className="flex flex-col gap-1.5">
+        <MoneyInput
+          label="Saldo hari ini"
+          optional
+          value={opening}
+          onChange={setOpening}
+          describedBy={openingHint}
+        />
+        <FieldHint id={openingHint}>
+          Kosongkan bila belum tahu; bisa diisi nanti. Dicatat sebagai &quot;Saldo awal&quot; di
+          riwayat dompet.
+        </FieldHint>
       </div>
     </form>
   );
@@ -136,7 +144,13 @@ export function AddAccountSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={`Dompet baru · ${RUANG_NAME[ctx.ruang]}`}
+      title={`Tambah dompet · ${RUANG_NAME[ctx.ruang]}`}
+      titleContent={
+        <>
+          Tambah dompet
+          <SpaceTag space={ctx.ruang} />
+        </>
+      }
       tint={ctx.ruang}
       initialFocus={nameRef}
       footer={
