@@ -1,0 +1,210 @@
+/* DompetKu · Panel Malam — token semantik (Tailwind CSS v4)
+   Bawaan gelap. <html data-theme="dark|light|system"> */
+@import "tailwindcss";
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
+
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0F1211;
+  --surface: #1A1F1D;
+  --surface-2: #232927;
+  --surface-3: #2C3330;
+  --text: #EDF1EE;
+  --text-soft: #C9D1CD;
+  --text-muted: #9BA5A0;
+  --border: #737E79;
+  --hairline: #262C2A;
+  --accent: #C4EE6A;
+  --on-accent: #11160A;
+  --accent-hover: #D3F58C;
+  --accent-press: #B0DB52;
+  --accent-edge: transparent;
+  --accent-text: #C4EE6A;
+  --accent-tint: #26301A;
+  --income: #5FD8A4;
+  --danger: #FF8F7D;
+  --danger-tint: #3A201C;
+  --on-danger: #1A0905;
+  --warning: #F0B44C;
+  --warning-tint: #33290F;
+  --pribadi: #C4EE6A;
+  --pribadi-tint: #26301A;
+  --pribadi-fill: #C4EE6A;
+  --on-pribadi: #11160A;
+  --bersama: #B6A3FF;
+  --bersama-tint: #2A2540;
+  --bersama-fill: #B6A3FF;
+  --on-bersama: #160F33;
+  --focus: #C4EE6A;
+  --toast-bg: #EDF1EE;
+  --toast-text: #0F1211;
+  --toast-action: #3D5A0A;
+  --scrim: rgba(4,6,5,.66);
+  --chart-aman: #C4EE6A;
+  --chart-tagihan: #F0B44C;
+  --chart-tagihan-2: #B8862F;
+  --chart-wajib: #FF8F7D;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F4F6F3;
+  --surface: #FFFFFF;
+  --surface-2: #EBEFEA;
+  --surface-3: #E1E6E0;
+  --text: #141917;
+  --text-soft: #38423D;
+  --text-muted: #56605B;
+  --border: #7D8782;
+  --hairline: #DDE2DE;
+  --accent: #C4EE6A;
+  --on-accent: #11160A;
+  --accent-hover: #B5E54F;
+  --accent-press: #A5D63E;
+  --accent-edge: #4A6A0F;
+  --accent-text: #4A6A0F;
+  --accent-tint: #E8F6C8;
+  --income: #1B7A4B;
+  --danger: #B8322A;
+  --danger-tint: #FBE6E3;
+  --on-danger: #FFFFFF;
+  --warning: #9A5B00;
+  --warning-tint: #FBEFD9;
+  --pribadi: #4A6A0F;
+  --pribadi-tint: #E8F6C8;
+  --pribadi-fill: #C4EE6A;
+  --on-pribadi: #11160A;
+  --bersama: #5B45C9;
+  --bersama-tint: #ECE8FF;
+  --bersama-fill: #5B45C9;
+  --on-bersama: #FFFFFF;
+  --focus: #3F5F0A;
+  --toast-bg: #141917;
+  --toast-text: #F4F6F3;
+  --toast-action: #C4EE6A;
+  --scrim: rgba(20,25,23,.42);
+  --chart-aman: #7FAE2A;
+  --chart-tagihan: #D99A2B;
+  --chart-tagihan-2: #B07A1C;
+  --chart-wajib: #D9564B;
+}
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    color-scheme: light;
+    --bg: #F4F6F3;
+    --surface: #FFFFFF;
+    --surface-2: #EBEFEA;
+    --surface-3: #E1E6E0;
+    --text: #141917;
+    --text-soft: #38423D;
+    --text-muted: #56605B;
+    --border: #7D8782;
+    --hairline: #DDE2DE;
+    --accent: #C4EE6A;
+    --on-accent: #11160A;
+    --accent-hover: #B5E54F;
+    --accent-press: #A5D63E;
+    --accent-edge: #4A6A0F;
+    --accent-text: #4A6A0F;
+    --accent-tint: #E8F6C8;
+    --income: #1B7A4B;
+    --danger: #B8322A;
+    --danger-tint: #FBE6E3;
+    --on-danger: #FFFFFF;
+    --warning: #9A5B00;
+    --warning-tint: #FBEFD9;
+    --pribadi: #4A6A0F;
+    --pribadi-tint: #E8F6C8;
+    --pribadi-fill: #C4EE6A;
+    --on-pribadi: #11160A;
+    --bersama: #5B45C9;
+    --bersama-tint: #ECE8FF;
+    --bersama-fill: #5B45C9;
+    --on-bersama: #FFFFFF;
+    --focus: #3F5F0A;
+    --toast-bg: #141917;
+    --toast-text: #F4F6F3;
+    --toast-action: #C4EE6A;
+    --scrim: rgba(20,25,23,.42);
+    --chart-aman: #7FAE2A;
+    --chart-tagihan: #D99A2B;
+    --chart-tagihan-2: #B07A1C;
+    --chart-wajib: #D9564B;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text: var(--text);
+  --color-text-soft: var(--text-soft);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-hairline: var(--hairline);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-edge: var(--accent-edge);
+  --color-accent-text: var(--accent-text);
+  --color-accent-tint: var(--accent-tint);
+  --color-income: var(--income);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-on-danger: var(--on-danger);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-pribadi: var(--pribadi);
+  --color-pribadi-tint: var(--pribadi-tint);
+  --color-pribadi-fill: var(--pribadi-fill);
+  --color-on-pribadi: var(--on-pribadi);
+  --color-bersama: var(--bersama);
+  --color-bersama-tint: var(--bersama-tint);
+  --color-bersama-fill: var(--bersama-fill);
+  --color-on-bersama: var(--on-bersama);
+  --color-focus: var(--focus);
+  --color-toast-bg: var(--toast-bg);
+  --color-toast-text: var(--toast-text);
+  --color-toast-action: var(--toast-action);
+  --color-scrim: var(--scrim);
+  --color-chart-aman: var(--chart-aman);
+  --color-chart-tagihan: var(--chart-tagihan);
+  --color-chart-wajib: var(--chart-wajib);
+
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --spacing: 4px; /* p-1 = 4, p-3 = 12, p-4 = 16 ... */
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-sheet: 24px;
+
+  --text-display-xl: 56px;  --text-display-xl--line-height: 1;   --text-display-xl--letter-spacing: -0.025em;
+  --text-display: 44px;     --text-display--line-height: 1;      --text-display--letter-spacing: -0.025em;
+  --text-amount: 40px;      --text-amount--line-height: 1.05;    --text-amount--letter-spacing: -0.02em;
+  --text-title: 26px;       --text-title--line-height: 1.2;
+  --text-heading: 18px;     --text-heading--line-height: 1.2;
+  --text-body: 15px;        --text-body--line-height: 1.45;
+  --text-label: 14px;       --text-label--line-height: 1.2;
+  --text-meta: 13px;        --text-meta--line-height: 1.25;
+  --text-caption: 12px;     --text-caption--line-height: 1.2;
+
+  --breakpoint-tablet: 600px;
+  --breakpoint-laptop: 1024px;
+}
+
+@layer base {
+  html { font-family: var(--font-sans); background: var(--bg); color: var(--text); }
+  .tabular, [data-amount] { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0ms !important; transition-duration: 0ms !important; }
+  }
+}

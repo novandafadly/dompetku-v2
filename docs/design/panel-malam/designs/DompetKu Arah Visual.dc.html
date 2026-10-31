@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"><link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css"><link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css"><style>body{margin:0;background:#e9e7e3;font-family:system-ui,sans-serif}a{color:#1a1a1a}a:hover{color:#555}.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}.dv-tname{font:600 13px/1.2 system-ui,sans-serif;color:#1a1a1a}.dv-opts{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:12px;scroll-margin-top:16px;width:390px}.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none}.dv-olabel{display:flex;align-items:baseline;gap:8px;font:600 15px/1.3 system-ui,sans-serif;color:#1a1a1a}.dv-card{max-width:100%;border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}.dv-opt:target .dv-oid{background:#2a78d6;color:#fff}.dv-next{margin:28px 0 0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.55)}button{font:inherit}:focus-visible{outline:2px solid #2a78d6;outline-offset:2px}@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}</style></helmet>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Tiga arah visual · Beranda Pribadi · HP 390 px · data demo 17 Okt 2026</span></div>
+<p style="margin:0 0 28px;max-width:760px;font:13px/1.55 system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty">Isi dan urutan sama di ketiganya (layar.md §1), yang beda hanya bahasa visualnya. Angka diambil dari contoh-data.json. Tombol "Tidak ada pengeluaran hari ini" tidak tampil karena hari ini sudah ada dua pengeluaran. Tab bar memakai flex, bukan overlay, jadi tidak menutupi isi. Isi layar bisa digulir di dalam bingkai.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Buku Kas: terang, lapang, serif</div>
+<p style="margin:0;font:13px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.65);text-wrap:pretty">Uang dicatat seperti buku kas: rumus "Aman dipakai" ditulis sebagai hitungan bergaris, jadi angkanya terasa bisa dipercaya, bukan sekadar dipamerkan.</p>
+<div style="display:flex;gap:6px;flex-wrap:wrap;font:11px ui-monospace,Menlo,monospace;color:#333">
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#f3f2f2;border:1px solid #ccc"></span>bg #F3F2F2</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#201f1d"></span>text #201F1D</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#b68235"></span>accent #B68235</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#7a5520"></span>accent-ink #7A5520</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#2f5d62"></span>pribadi #2F5D62</span>
+</div>
+<div class="dv-card" style="width:390px;height:844px;display:flex;flex-direction:column;background:#f3f2f2;color:#201f1d;font-family:Lora,Georgia,serif;font-variant-numeric:tabular-nums">
+<div style="flex:none;background:#fbfaf9;border-bottom:1px solid #dcd8d3">
+<div style="text-align:center;font:500 11px/1 Lora,serif;letter-spacing:.08em;text-transform:uppercase;color:#5e5850;padding:7px 0;border-bottom:1px solid #e6e2dc">Data demo</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px 0 20px">
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font:500 11px/1 Lora,serif;letter-spacing:.1em;text-transform:uppercase;color:#5e5850">Ruang</span><span style="font:500 28px/1.1 'Cormorant Garamond',serif">Pribadi</span></div>
+<button style="height:44px;min-width:44px;padding:0 14px;display:flex;align-items:center;gap:6px;background:transparent;border:1px solid #8f877c;border-radius:4px;color:#201f1d;font:500 14px Lora,serif;cursor:pointer"><i class="ph ph-list" style="font-size:18px"></i>Menu</button>
+</div>
+<nav style="display:flex;gap:4px;padding:4px 12px 0 12px" aria-label="Pengalih ruang">
+<a href="#" aria-current="page" style="height:44px;padding:0 10px;display:flex;align-items:center;gap:6px;color:#201f1d;text-decoration:none;font:600 15px Lora,serif;border-bottom:2px solid #b68235"><i class="ph-bold ph-check" style="font-size:14px;color:#7a5520"></i>Pribadi</a>
+<a href="#" style="height:44px;padding:0 10px;display:flex;align-items:center;color:#5e5850;text-decoration:none;font:400 15px Lora,serif;border-bottom:2px solid transparent">Bersama</a>
+</nav>
+</div>
+<main style="flex:1;overflow:auto;padding:28px 20px 32px;display:flex;flex-direction:column;gap:36px">
+<section style="border:1px solid #dcd8d3;background:#fbfaf9;border-radius:4px;padding:24px 20px 20px;display:flex;flex-direction:column;gap:6px">
+<div style="font:500 12px/1.3 Lora,serif;letter-spacing:.1em;text-transform:uppercase;color:#7a5520">Aman dipakai sampai 31 Okt</div>
+<div style="display:flex;align-items:baseline;gap:6px;font-family:'Cormorant Garamond',serif;font-variant-numeric:tabular-nums lining-nums"><span style="font-size:30px;font-weight:500">Rp</span><span style="font-size:62px;font-weight:400;line-height:1;letter-spacing:-.01em">2.968.500</span></div>
+<div style="font:italic 400 15px/1.4 Lora,serif;color:#5e5850">≈ Rp 197.900 per hari untuk 15 hari</div>
+<div style="margin-top:18px;display:flex;flex-direction:column;font-size:14px">
+<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #dcd8d3"><span>Saldo operasional</span><span>Rp 4.253.500</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #e6e2dc"><span>Tagihan s.d. 31 Okt</span><span>−Rp 1.259.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #e6e2dc;border-bottom:3px double #201f1d"><span>Sisa anggaran wajib</span><span>−Rp 26.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0 0;font-weight:600"><span>Aman dipakai</span><span>Rp 2.968.500</span></div>
+</div>
+</section>
+<section style="display:flex;flex-direction:column">
+<h2 style="margin:0 0 6px;font:500 24px/1.2 'Cormorant Garamond',serif">Tagihan 7 hari</h2>
+<div style="display:flex;align-items:center;gap:14px;min-height:60px;border-top:1px solid #dcd8d3"><div style="width:40px;text-align:center;display:flex;flex-direction:column"><span style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5e5850">Rab</span><span style="font:500 22px/1 'Cormorant Garamond',serif">21</span></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Cicilan ponsel</span><span style="font-size:13px;color:#5e5850">4 hari lagi</span></div><span style="font-size:15px">Rp 450.000</span></div>
+<div style="display:flex;align-items:center;gap:14px;min-height:60px;border-top:1px solid #e6e2dc;border-bottom:1px solid #dcd8d3"><div style="width:40px;text-align:center;display:flex;flex-direction:column"><span style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5e5850">Sab</span><span style="font:500 22px/1 'Cormorant Garamond',serif">24</span></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Tagihan kartu kredit</span><span style="font-size:13px;color:#5e5850">7 hari lagi</span></div><span style="font-size:15px">Rp 809.000</span></div>
+</section>
+<section style="display:flex;flex-direction:column">
+<h2 style="margin:0 0 6px;font:500 24px/1.2 'Cormorant Garamond',serif">Anggaran hampir habis</h2>
+<div style="display:flex;flex-direction:column;gap:10px;padding:14px 0;border-top:1px solid #dcd8d3;border-bottom:1px solid #dcd8d3">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><span style="font-size:15px">Langganan</span><span style="display:flex;align-items:center;gap:5px;font-size:14px;color:#7a5520;font-weight:600"><i class="ph-fill ph-warning" style="font-size:16px"></i>85% terpakai</span></div>
+<div style="height:4px;background:#e6e2dc;border-radius:2px;overflow:hidden"><div style="width:85%;height:100%;background:#b68235"></div></div>
+<span style="font-size:13px;color:#5e5850">Rp 154.000 dari Rp 180.000 · sisa Rp 26.000</span>
+</div>
+</section>
+<section style="display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 0 6px"><h2 style="margin:0;font:500 24px/1.2 'Cormorant Garamond',serif">Terakhir</h2><a href="#" style="font-size:14px;color:#7a5520;min-height:44px;display:flex;align-items:center">Lihat semua</a></div>
+<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5e5850;padding:10px 0 4px;border-top:1px solid #dcd8d3">Hari ini</div>
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:56px;border-top:1px solid #e6e2dc"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Kopi sore (QRIS)</span><span style="font-size:13px;color:#5e5850">Kopi &amp; Camilan · BCA</span></div><span style="font-size:15px">−Rp 22.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:56px;border-top:1px solid #e6e2dc"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Kopi susu</span><span style="font-size:13px;color:#5e5850">Kopi &amp; Camilan · Tunai</span></div><span style="font-size:15px">−Rp 21.500</span></div>
+<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5e5850;padding:14px 0 4px;border-top:1px solid #dcd8d3">Kemarin</div>
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:56px;border-top:1px solid #e6e2dc"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Tol &amp; parkir</span><span style="font-size:13px;color:#5e5850">Transportasi · BCA</span></div><span style="font-size:15px">−Rp 25.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:56px;border-top:1px solid #e6e2dc"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Mie ayam</span><span style="font-size:13px;color:#5e5850">Makan Siang &amp; Minum · BCA</span></div><span style="font-size:15px">−Rp 48.500</span></div>
+<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#5e5850;padding:14px 0 4px;border-top:1px solid #dcd8d3">Kam, 15 Okt</div>
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;min-height:56px;border-top:1px solid #e6e2dc;border-bottom:1px solid #dcd8d3"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px">Kopi susu</span><span style="font-size:13px;color:#5e5850">Kopi &amp; Camilan · Tunai</span></div><span style="font-size:15px">−Rp 35.500</span></div>
+</section>
+</main>
+<nav style="flex:none;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;padding:6px 4px 14px;background:#fbfaf9;border-top:1px solid #dcd8d3;font:500 12px Lora,serif">
+<a href="#" aria-current="page" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#201f1d;text-decoration:none;font-weight:600"><i class="ph-fill ph-house" style="font-size:22px;color:#7a5520"></i>Beranda</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#5e5850;text-decoration:none"><i class="ph ph-list-bullets" style="font-size:22px"></i>Transaksi</a>
+<button style="min-height:52px;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;color:#201f1d;font:600 12px Lora,serif;cursor:pointer"><span style="width:48px;height:48px;margin-top:-18px;border-radius:50%;border:1.5px solid #b68235;background:#fbfaf9;display:flex;align-items:center;justify-content:center"><i class="ph-bold ph-plus" style="font-size:22px;color:#7a5520"></i></span>Catat</button>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#5e5850;text-decoration:none"><i class="ph ph-wallet" style="font-size:22px"></i>Dompet</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#5e5850;text-decoration:none"><i class="ph ph-calendar-check" style="font-size:22px"></i>Rencana</a>
+</nav>
+</div>
+<p style="margin:0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.55)">Cormorant Garamond + Lora · lapang · tema bawaan terang · kontras: text 15,1:1, muted #5E5850 6,3:1, accent-ink 6,1:1; emas #B68235 (3,2:1) hanya untuk garis dan ikon.</p>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Panel Malam: gelap, padat, sans</div>
+<p style="margin:0;font:13px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.65);text-wrap:pretty">Untuk cek cepat sebelum jajan: satu bilah memperlihatkan saldo operasional dibelah jadi tagihan, wajib, dan sisa aman, jadi hitungannya kebaca sekilas tanpa membaca rumus.</p>
+<div style="display:flex;gap:6px;flex-wrap:wrap;font:11px ui-monospace,Menlo,monospace;color:#333">
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#0f1211"></span>bg #0F1211</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#1a1f1d"></span>surface #1A1F1D</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#edf1ee;border:1px solid #ccc"></span>text #EDF1EE</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#c4ee6a"></span>accent #C4EE6A</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#f0b44c"></span>warning #F0B44C</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#b6a3ff"></span>bersama #B6A3FF</span>
+</div>
+<div class="dv-card" style="width:390px;height:844px;display:flex;flex-direction:column;background:#0f1211;color:#edf1ee;font-family:'Instrument Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;border-color:#000">
+<div style="flex:none;background:#0f1211;border-bottom:1px solid #262c2a">
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px">
+<div style="flex:1;display:flex;flex-direction:column;gap:1px"><span style="font:600 18px/1.15 'Instrument Sans',sans-serif">Pribadi</span><span style="display:flex;align-items:center;gap:5px;font:500 11px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0"><i class="ph ph-flask" style="font-size:12px"></i>Data demo</span></div>
+<nav aria-label="Pengalih ruang" style="display:flex;padding:3px;gap:2px;background:#1a1f1d;border:1px solid #39413e;border-radius:999px">
+<a href="#" aria-current="page" style="height:38px;padding:0 12px;display:flex;align-items:center;gap:5px;border-radius:999px;background:#c4ee6a;color:#11160a;text-decoration:none;font:600 13px 'Instrument Sans',sans-serif"><i class="ph-bold ph-check" style="font-size:12px"></i>Pribadi</a>
+<a href="#" style="height:38px;padding:0 12px;display:flex;align-items:center;border-radius:999px;color:#c9d1cd;text-decoration:none;font:500 13px 'Instrument Sans',sans-serif">Bersama</a>
+</nav>
+<button aria-label="Menu" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#1a1f1d;border:1px solid #39413e;border-radius:12px;color:#edf1ee;cursor:pointer"><i class="ph ph-dots-three-outline" style="font-size:20px"></i></button>
+</div>
+</div>
+<main style="flex:1;overflow:auto;padding:14px 12px 20px;display:flex;flex-direction:column;gap:12px">
+<section style="background:#1a1f1d;border:1px solid #262c2a;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font:500 13px/1.3 'Instrument Sans',sans-serif;color:#c9d1cd">Aman dipakai sampai 31 Okt</span><span style="font:600 11px/1 'Instrument Sans',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#c4ee6a;border:1px solid #4d5f2a;border-radius:6px;padding:4px 6px">Pribadi</span></div>
+<div style="font:600 44px/1 'Instrument Sans',sans-serif;letter-spacing:-.02em">Rp 2.968.500</div>
+<div style="font:500 14px/1.3 'Instrument Sans',sans-serif;color:#c9d1cd">≈ <span style="color:#edf1ee;font-weight:600">Rp 197.900</span> per hari untuk 15 hari</div>
+<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+<div role="img" aria-label="Saldo operasional Rp 4.253.500: aman Rp 2.968.500, tagihan Rp 1.259.000, sisa anggaran wajib Rp 26.000" style="display:flex;gap:2px;height:14px;border-radius:4px;overflow:hidden">
+<div style="width:69.8%;background:#c4ee6a"></div>
+<div style="width:29.6%;background:repeating-linear-gradient(135deg,#f0b44c 0 4px,#c48d2c 4px 7px)"></div>
+<div style="flex:1;min-width:4px;background:#ff8f7d"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font:500 12px 'Instrument Sans',sans-serif;color:#9ba5a0"><span>Saldo operasional</span><span style="color:#edf1ee">Rp 4.253.500</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr auto;gap:0;font:500 13px/1 'Instrument Sans',sans-serif;border-top:1px solid #262c2a;padding-top:4px">
+<span style="display:flex;align-items:center;gap:8px;padding:8px 0;color:#c9d1cd"><span style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#f0b44c 0 3px,#c48d2c 3px 5px)"></span>Tagihan s.d. 31 Okt</span><span style="padding:8px 0;text-align:right">−Rp 1.259.000</span>
+<span style="display:flex;align-items:center;gap:8px;padding:8px 0;color:#c9d1cd"><span style="width:10px;height:10px;border-radius:2px;background:#ff8f7d"></span>Sisa anggaran wajib</span><span style="padding:8px 0;text-align:right">−Rp 26.000</span>
+<span style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #262c2a;font-weight:600"><span style="width:10px;height:10px;border-radius:2px;background:#c4ee6a"></span>Aman dipakai</span><span style="padding:8px 0;text-align:right;border-top:1px solid #262c2a;font-weight:700;color:#c4ee6a">Rp 2.968.500</span>
+</div>
+</section>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<section style="background:#1a1f1d;border:1px solid #262c2a;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px">
+<h2 style="margin:0;font:600 13px/1.2 'Instrument Sans',sans-serif;color:#c9d1cd;display:flex;align-items:center;gap:6px"><i class="ph ph-calendar-dots" style="font-size:16px"></i>Tagihan 7 hari</h2>
+<div style="display:flex;flex-direction:column;gap:1px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Cicilan ponsel</span><span style="font:500 12px/1.4 'Instrument Sans',sans-serif;color:#9ba5a0">Rab, 21 Okt · 4 hari</span><span style="font:600 14px/1.3 'Instrument Sans',sans-serif">Rp 450.000</span></div>
+<div style="height:1px;background:#262c2a"></div>
+<div style="display:flex;flex-direction:column;gap:1px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Tagihan kartu kredit</span><span style="font:500 12px/1.4 'Instrument Sans',sans-serif;color:#9ba5a0">Sab, 24 Okt · 7 hari</span><span style="font:600 14px/1.3 'Instrument Sans',sans-serif">Rp 809.000</span></div>
+</section>
+<section style="background:#1a1f1d;border:1px solid #262c2a;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px">
+<h2 style="margin:0;font:600 13px/1.2 'Instrument Sans',sans-serif;color:#c9d1cd;display:flex;align-items:center;gap:6px"><i class="ph ph-gauge" style="font-size:16px"></i>Anggaran hampir habis</h2>
+<span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Langganan</span>
+<span style="display:flex;align-items:center;gap:5px;font:600 13px 'Instrument Sans',sans-serif;color:#f0b44c"><i class="ph-fill ph-warning" style="font-size:15px"></i>85% terpakai</span>
+<div style="height:6px;background:#262c2a;border-radius:3px;overflow:hidden"><div style="width:85%;height:100%;background:#f0b44c"></div></div>
+<span style="font:500 12px/1.4 'Instrument Sans',sans-serif;color:#9ba5a0">Rp 154.000 dari Rp 180.000</span>
+</section>
+</div>
+<section style="background:#1a1f1d;border:1px solid #262c2a;border-radius:16px;padding:4px 12px 4px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:center;min-height:44px"><h2 style="margin:0;font:600 13px/1.2 'Instrument Sans',sans-serif;color:#c9d1cd">Terakhir</h2><a href="#" style="min-height:44px;display:flex;align-items:center;gap:4px;color:#c4ee6a;text-decoration:none;font:600 13px 'Instrument Sans',sans-serif">Semua<i class="ph ph-caret-right" style="font-size:13px"></i></a></div>
+<div style="display:flex;align-items:center;gap:10px;min-height:56px;border-top:1px solid #262c2a"><span style="width:36px;height:36px;border-radius:10px;background:#232927;display:flex;align-items:center;justify-content:center;color:#c9d1cd"><i class="ph ph-coffee" style="font-size:18px"></i></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Kopi sore (QRIS)</span><span style="font:500 12px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0">Kopi &amp; Camilan · BCA · Hari ini</span></div><span style="font:600 14px 'Instrument Sans',sans-serif">−Rp 22.000</span></div>
+<div style="display:flex;align-items:center;gap:10px;min-height:56px;border-top:1px solid #262c2a"><span style="width:36px;height:36px;border-radius:10px;background:#232927;display:flex;align-items:center;justify-content:center;color:#c9d1cd"><i class="ph ph-coffee" style="font-size:18px"></i></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Kopi susu</span><span style="font:500 12px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0">Kopi &amp; Camilan · Tunai · Hari ini</span></div><span style="font:600 14px 'Instrument Sans',sans-serif">−Rp 21.500</span></div>
+<div style="display:flex;align-items:center;gap:10px;min-height:56px;border-top:1px solid #262c2a"><span style="width:36px;height:36px;border-radius:10px;background:#232927;display:flex;align-items:center;justify-content:center;color:#c9d1cd"><i class="ph ph-car-simple" style="font-size:18px"></i></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Tol &amp; parkir</span><span style="font:500 12px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0">Transportasi · BCA · Kemarin</span></div><span style="font:600 14px 'Instrument Sans',sans-serif">−Rp 25.000</span></div>
+<div style="display:flex;align-items:center;gap:10px;min-height:56px;border-top:1px solid #262c2a"><span style="width:36px;height:36px;border-radius:10px;background:#232927;display:flex;align-items:center;justify-content:center;color:#c9d1cd"><i class="ph ph-bowl-food" style="font-size:18px"></i></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Mie ayam</span><span style="font:500 12px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0">Makan Siang &amp; Minum · BCA · Kemarin</span></div><span style="font:600 14px 'Instrument Sans',sans-serif">−Rp 48.500</span></div>
+<div style="display:flex;align-items:center;gap:10px;min-height:56px;border-top:1px solid #262c2a"><span style="width:36px;height:36px;border-radius:10px;background:#232927;display:flex;align-items:center;justify-content:center;color:#c9d1cd"><i class="ph ph-coffee" style="font-size:18px"></i></span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 14px/1.2 'Instrument Sans',sans-serif">Kopi susu</span><span style="font:500 12px/1.2 'Instrument Sans',sans-serif;color:#9ba5a0">Kopi &amp; Camilan · Tunai · Kam, 15 Okt</span></div><span style="font:600 14px 'Instrument Sans',sans-serif">−Rp 35.500</span></div>
+</section>
+</main>
+<nav style="flex:none;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;padding:6px 6px 14px;background:#141816;border-top:1px solid #262c2a;font:500 11.5px 'Instrument Sans',sans-serif">
+<a href="#" aria-current="page" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#edf1ee;text-decoration:none;font-weight:600"><i class="ph-fill ph-house" style="font-size:22px;color:#c4ee6a"></i>Beranda</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#9ba5a0;text-decoration:none"><i class="ph ph-list-bullets" style="font-size:22px"></i>Transaksi</a>
+<button style="min-height:52px;display:flex;align-items:center;justify-content:center;background:none;border:0;cursor:pointer;padding:0"><span style="height:48px;padding:0 16px;border-radius:14px;background:#c4ee6a;color:#11160a;display:flex;align-items:center;gap:6px;font:700 14px 'Instrument Sans',sans-serif"><i class="ph-bold ph-plus" style="font-size:18px"></i>Catat</span></button>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#9ba5a0;text-decoration:none"><i class="ph ph-wallet" style="font-size:22px"></i>Dompet</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#9ba5a0;text-decoration:none"><i class="ph ph-calendar-check" style="font-size:22px"></i>Rencana</a>
+</nav>
+</div>
+<p style="margin:0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.55)">Instrument Sans · padat (grid 4 px, kartu 12–16) · tema bawaan gelap · kontras: text 16,9:1, muted #9BA5A0 7,4:1, lime pada bg 14,2:1, teks gelap di atas lime 13,9:1.</p>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Struk Pasar: hangat, ekspresif, berani</div>
+<p style="margin:0;font:13px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.65);text-wrap:pretty">Angka aman tampil sebesar poster, dan rinciannya disobek di bawahnya seperti struk belanja. Akrab, sedikit jenaka, dan langsung dikenali sebagai DompetKu.</p>
+<div style="display:flex;gap:6px;flex-wrap:wrap;font:11px ui-monospace,Menlo,monospace;color:#333">
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#f5f0e6;border:1px solid #ccc"></span>bg #F5F0E6</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#1d4a36"></span>pribadi #1D4A36</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#1f1b14"></span>text #1F1B14</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#f07a3e"></span>accent #F07A3E</span>
+<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:16px;border-radius:3px;background:#9a420f"></span>warning-ink #9A420F</span>
+</div>
+<div class="dv-card" style="width:390px;height:844px;display:flex;flex-direction:column;background:#f5f0e6;color:#1f1b14;font-family:Figtree,system-ui,sans-serif;font-variant-numeric:tabular-nums">
+<div style="flex:none;padding:0 0 8px">
+<div style="display:flex;justify-content:center;padding:6px 0;background:#1f1b14;color:#f5f0e6;font:600 11px/1 Figtree,sans-serif;letter-spacing:.06em;text-transform:uppercase">Data demo</div>
+<div style="display:flex;align-items:center;gap:8px;padding:10px 12px 0 16px">
+<nav aria-label="Pengalih ruang" style="flex:1;display:flex;gap:6px">
+<a href="#" aria-current="page" style="height:44px;padding:0 16px;display:flex;align-items:center;gap:6px;border-radius:999px;background:#1d4a36;color:#f5f0e6;text-decoration:none;font:700 15px 'Bricolage Grotesque',sans-serif"><i class="ph-fill ph-user" style="font-size:15px"></i>Pribadi</a>
+<a href="#" style="height:44px;padding:0 16px;display:flex;align-items:center;gap:6px;border-radius:999px;border:1.5px solid #8a7f6c;color:#1f1b14;text-decoration:none;font:600 15px 'Bricolage Grotesque',sans-serif"><i class="ph ph-users" style="font-size:15px"></i>Bersama</a>
+</nav>
+<button style="height:44px;padding:0 14px;display:flex;align-items:center;gap:6px;border-radius:999px;background:transparent;border:1.5px solid #8a7f6c;color:#1f1b14;font:600 14px Figtree,sans-serif;cursor:pointer">Menu</button>
+</div>
+</div>
+<main style="flex:1;overflow:auto;padding:8px 16px 28px;display:flex;flex-direction:column;gap:28px">
+<section style="display:flex;flex-direction:column">
+<div style="background:#1d4a36;color:#f5f0e6;border-radius:28px 28px 0 0;padding:22px 22px 26px;display:flex;flex-direction:column;gap:4px">
+<span style="font:600 14px/1.3 Figtree,sans-serif;color:#d9e6dc">Aman dipakai sampai 31 Okt</span>
+<span style="font:600 22px/1 'Bricolage Grotesque',sans-serif;margin-top:10px">Rp</span>
+<span style="font:800 76px/.92 'Bricolage Grotesque',sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums">2.968.500</span>
+<span style="align-self:flex-start;margin-top:16px;padding:8px 12px;border-radius:999px;background:#f07a3e;color:#1f1b14;font:700 14px/1.2 Figtree,sans-serif">≈ Rp 197.900 per hari untuk 15 hari</span>
+</div>
+<div style="background:#fffdf8;padding:22px 22px 18px;display:flex;flex-direction:column;font:500 14px/1.2 Figtree,sans-serif;border-radius:0 0 4px 4px;-webkit-mask:conic-gradient(from 135deg at top,#0000,#000 1deg 89deg,#0000 90deg) 50%/14px 100%;mask:conic-gradient(from 135deg at top,#0000,#000 1deg 89deg,#0000 90deg) top/14px 100%;margin-top:-7px;padding-top:26px;box-shadow:0 2px 0 #e6dccb">
+<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0"><span>Saldo operasional</span><span>Rp 4.253.500</span></div>
+<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0"><span>Tagihan s.d. 31 Okt</span><span>−Rp 1.259.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0 12px;border-bottom:2px dashed #8a7f6c"><span>Sisa anggaran wajib</span><span>−Rp 26.000</span></div>
+<div style="display:flex;justify-content:space-between;gap:8px;padding:12px 0 2px;font:800 17px 'Bricolage Grotesque',sans-serif"><span>Aman dipakai</span><span>Rp 2.968.500</span></div>
+</div>
+</section>
+<section style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font:800 22px/1.1 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em">Tagihan 7 hari</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="background:#fffdf8;border:1.5px solid #e3d8c4;border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:baseline;gap:6px"><span style="font:800 34px/1 'Bricolage Grotesque',sans-serif">21</span><span style="font:600 13px Figtree,sans-serif;color:#5d5546">Rab · Okt</span></div><span style="font:600 14px/1.25 Figtree,sans-serif">Cicilan ponsel</span><span style="font:700 15px Figtree,sans-serif">Rp 450.000</span><span style="font:500 12px Figtree,sans-serif;color:#5d5546">4 hari lagi</span></div>
+<div style="background:#fffdf8;border:1.5px solid #e3d8c4;border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:baseline;gap:6px"><span style="font:800 34px/1 'Bricolage Grotesque',sans-serif">24</span><span style="font:600 13px Figtree,sans-serif;color:#5d5546">Sab · Okt</span></div><span style="font:600 14px/1.25 Figtree,sans-serif">Tagihan kartu kredit</span><span style="font:700 15px Figtree,sans-serif">Rp 809.000</span><span style="font:500 12px Figtree,sans-serif;color:#5d5546">7 hari lagi</span></div>
+</div>
+</section>
+<section style="display:flex;flex-direction:column;gap:12px">
+<h2 style="margin:0;font:800 22px/1.1 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em">Anggaran hampir habis</h2>
+<div style="display:flex;align-items:center;gap:14px;background:#fde9d9;border-radius:20px;padding:14px 16px">
+<div role="img" aria-label="85 persen terpakai" style="width:56px;height:56px;flex:none;border-radius:50%;background:conic-gradient(#c2551a 0 85%,#f6cfb3 85% 100%);display:flex;align-items:center;justify-content:center"><span style="width:40px;height:40px;border-radius:50%;background:#fde9d9;display:flex;align-items:center;justify-content:center"><i class="ph-fill ph-warning" style="font-size:18px;color:#9a420f"></i></span></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font:700 16px Figtree,sans-serif">Langganan</span><span style="font:700 14px Figtree,sans-serif;color:#9a420f">85% terpakai</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Rp 154.000 dari Rp 180.000</span></div>
+</div>
+</section>
+<section style="display:flex;flex-direction:column;gap:4px">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font:800 22px/1.1 'Bricolage Grotesque',sans-serif;letter-spacing:-.01em">Terakhir</h2><a href="#" style="min-height:44px;display:flex;align-items:center;color:#1d4a36;font:700 14px Figtree,sans-serif">Lihat semua</a></div>
+<div style="background:#fffdf8;border-radius:20px;padding:4px 16px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:58px"><div style="display:flex;flex-direction:column;gap:2px"><span style="font:600 15px Figtree,sans-serif">Kopi sore (QRIS)</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Hari ini · Kopi &amp; Camilan · BCA</span></div><span style="font:700 15px Figtree,sans-serif">−Rp 22.000</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:58px;border-top:1px solid #ece3d3"><div style="display:flex;flex-direction:column;gap:2px"><span style="font:600 15px Figtree,sans-serif">Kopi susu</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Hari ini · Kopi &amp; Camilan · Tunai</span></div><span style="font:700 15px Figtree,sans-serif">−Rp 21.500</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:58px;border-top:1px solid #ece3d3"><div style="display:flex;flex-direction:column;gap:2px"><span style="font:600 15px Figtree,sans-serif">Tol &amp; parkir</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Kemarin · Transportasi · BCA</span></div><span style="font:700 15px Figtree,sans-serif">−Rp 25.000</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:58px;border-top:1px solid #ece3d3"><div style="display:flex;flex-direction:column;gap:2px"><span style="font:600 15px Figtree,sans-serif">Mie ayam</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Kemarin · Makan Siang &amp; Minum · BCA</span></div><span style="font:700 15px Figtree,sans-serif">−Rp 48.500</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:58px;border-top:1px solid #ece3d3"><div style="display:flex;flex-direction:column;gap:2px"><span style="font:600 15px Figtree,sans-serif">Kopi susu</span><span style="font:500 13px Figtree,sans-serif;color:#5d5546">Kam, 15 Okt · Kopi &amp; Camilan · Tunai</span></div><span style="font:700 15px Figtree,sans-serif">−Rp 35.500</span></div>
+</div>
+</section>
+</main>
+<nav style="flex:none;margin:0 10px 12px;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;padding:6px;background:#1f1b14;border-radius:26px;font:600 11.5px Figtree,sans-serif">
+<a href="#" aria-current="page" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#f5f0e6;text-decoration:none;font-weight:700"><i class="ph-fill ph-house" style="font-size:22px;color:#f07a3e"></i>Beranda</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#c9bfae;text-decoration:none"><i class="ph ph-list-bullets" style="font-size:22px"></i>Transaksi</a>
+<button style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#f07a3e;border:0;border-radius:20px;color:#1f1b14;font:800 12px Figtree,sans-serif;cursor:pointer;margin:0 2px"><i class="ph-bold ph-plus" style="font-size:22px"></i>Catat</button>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#c9bfae;text-decoration:none"><i class="ph ph-wallet" style="font-size:22px"></i>Dompet</a>
+<a href="#" style="min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#c9bfae;text-decoration:none"><i class="ph ph-calendar-check" style="font-size:22px"></i>Rencana</a>
+</nav>
+</div>
+<p style="margin:0;font:12px/1.5 system-ui,sans-serif;color:rgba(0,0,0,.55)">Bricolage Grotesque + Figtree · sedang, bulat · tema bawaan terang · kontras: krem di atas hijau 9,6:1, text 15,6:1, muted #5D5546 6,7:1, teks gelap di atas jingga 6,0:1. Ruang Bersama nanti memakai biru tinta sebagai pengganti hijau.</p>
+</div>
+
+</div>
+<p class="dv-next">Coba berikutnya: "pakai <a class="dv-oid" href="#1b">1b</a> tapi dengan bilah rincian dari <a class="dv-oid" href="#1a">1a</a>" · "<a class="dv-oid" href="#1c">1c</a> tapi tema gelap" · "<a class="dv-oid" href="#1a">1a</a>, lanjutkan ke semua layar"</p>
+</section>
+</x-dc>
+</body>
+</html>
