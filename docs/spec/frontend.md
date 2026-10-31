@@ -1,3 +1,5 @@
+> Sebagian digantikan oleh [docs/product/DBD.md](../product/DBD.md): token visual dan budget JS (target 120 kB atau 150 kB diganti batas 162 kB, ADR 0002). Rekomendasi arsitektur frontend lain tetap berlaku.
+
 # Round 1 — Frontend Engineer
 
 Peran: arsitektur `apps/web` (Next.js App Router), design system, performa, tes frontend, PWA.

@@ -1,3 +1,5 @@
+> Sebagian digantikan oleh [docs/product/DBD.md](../product/DBD.md): arah visual, token, dan R4 "buku kas" (Lampiran A) kini mengikuti Panel Malam (ADR 0006). Alur, IA, dan kriteria UX lain tetap berlaku.
+
 # Ronde 1 · UI/UX Specialist
 
 Dasar: `docs/v2/UX.md` (selanjutnya UX), spec revisi 2 `docs/superpowers/specs/2026-10-29-dompetku-v2-design.md` (selanjutnya Spec), `docs/audit/05-ux.md` (selanjutnya A5), screenshot `docs/audit/screenshots/v1/`.

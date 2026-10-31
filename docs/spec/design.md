@@ -1,3 +1,5 @@
+> Sebagian digantikan: §9.3 "Visual" (buku kas) oleh [docs/product/DBD.md](../product/DBD.md) (Panel Malam, ADR 0006); §6 dan §7a (milestone, self-hosted runner, bot Telegram) oleh §9 dokumen ini, dirinci di [docs/product/IPD.md](../product/IPD.md). Salinan spec induk; yang mengikat tetap `docs/superpowers/specs/2026-10-29-dompetku-v2-design.md`.
+
 # DompetKu v2 — Desain (revisi 2: self-hosted, ruang bersama)
 
 Tanggal: 2026-10-29 · Status: menunggu persetujuan pemilik · Menggantikan bagian stack/auth/deploy di `docs/v2/DESIGN.md` revisi 1.
