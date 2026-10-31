@@ -1,5 +1,5 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
-# S1: gw + placeholder (dihapus akhir S1) + postgres sementara (diganti image sendiri di S2).
+# S1: gw + postgres sementara (diganti image sendiri di S2).
 name: dompetku
 
 services:
@@ -25,17 +25,6 @@ services:
     mem_limit: 128m
     cpus: 0.5
     pids_limit: 100
-
-  placeholder:
-    # Hanya untuk verifikasi header S1 (rute /_s1/headers). Dihapus di langkah terakhir S1.
-    image: traefik/whoami:v1.11.0@sha256:200689790a0a0ea48ca45992e0450bc26ccab5307375b41c84dfc4f2475937ab
-    restart: unless-stopped
-    networks: [app]
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ['no-new-privileges:true']
-    mem_limit: 32m
-    cpus: 0.1
 
   postgres:
     # Sementara untuk membuktikan "tanpa port host". S2 menggantinya dengan Postgres 17 + WAL-G + pgaudit

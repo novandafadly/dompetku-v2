@@ -43,15 +43,8 @@
 	request_header -X-Forwarded-Host
 	request_header -X-Real-IP
 
-	# S1 saja: cermin header yang akan diterima web. Hapus bersama container placeholder.
-	handle /_s1/headers {
-		reverse_proxy placeholder:80 {
-			header_up X-Forwarded-For {client_ip}
-			header_up X-Forwarded-Proto https
-			header_up -X-Forwarded-Host
-		}
-	}
-
+	# S3: ganti dengan reverse_proxy web:3000 { header_up X-Forwarded-For {client_ip};
+	# header_up X-Forwarded-Proto https; header_up -X-Forwarded-Host } (diuji di S1).
 	handle {
 		header Content-Type "text/html; charset=utf-8"
 		header Cache-Control no-store

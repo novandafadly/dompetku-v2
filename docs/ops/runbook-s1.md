@@ -177,7 +177,7 @@ Sudah aktif di kedua VM. Verifikasi: `systemctl is-active unattended-upgrades` d
 
 ## Catatan eksekusi (2026-10-31)
 
-Langkah 0, 2, 4 sampai 9, dan 11 dijalankan. Penyimpangan dari rancangan awal, semuanya sudah masuk berkas di `infra/`:
+Semua langkah 0 sampai 12 dijalankan (langkah 1 dan 3 oleh pemilik). Penyimpangan dari rancangan awal, semuanya sudah masuk berkas di `infra/`:
 
 1. **`gw` gagal exec (`operation not permitted`).** Binary caddy di image resmi membawa file capability `cap_net_bind_service`; dengan `cap_drop: ALL` + `no-new-privileges` exec ditolak. Perbaikan: `cap_add: [NET_BIND_SERVICE]`.
 2. **Firewall men-drop balasan gw.** Paket SYN-ACK dari container juga cocok dengan `--ctorigdst/--ctorigdstport`, sehingga koneksi dari VM App timeout. Perbaikan: `--ctdir ORIGINAL`.
@@ -190,6 +190,8 @@ Hasil verifikasi:
 - Dengan `X-Forwarded-For`, `X-Real-IP`, `X-Middleware-Subrequest`, `X-Forwarded-Host`, `Forwarded` palsu, upstream menerima `X-Forwarded-For` satu nilai (IP koneksi) dan `X-Forwarded-Proto: https`; header lain tidak ada.
 - App lain: status HTTP 7 site sama dengan baseline, container dan `iptables` VM App identik, VM DB hanya bertambah aturan Docker untuk network `dompetku_app` + 2 aturan `dompetku-gw`. Peringatan nginx `protocol options redefined` sudah ada sebelum S1 (site `tanya-hpp`/`trading`).
 - Sertifikat mTLS `gw` dan `edge` berlaku sampai 2027-12-03; CA sampai 2031.
+- Postgres 17.11 healthy, `docker port` kosong, hanya di `dompetku_internal` (`internal=true`), tanpa egress, `password_encryption=scram-sha-256`, koneksi lokal pun wajib password. Host VM DB sendiri tetap bisa menjangkau IP bridge container (perilaku Docker); dari VCN tidak ada rute ke subnet bridge.
+- Pemilik membuka `/_s1/headers` dari perangkat luar; `X-Forwarded-For` = IP publiknya. Setelah itu placeholder dan rutenya dihapus (`/_s1/headers` kini halaman sementara), image `traefik/whoami` dibuang dari VM DB.
 
 ## Rollback total
 
