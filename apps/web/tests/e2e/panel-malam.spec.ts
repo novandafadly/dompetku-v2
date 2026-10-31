@@ -78,8 +78,15 @@ test.describe('Catat: judul = pemilih jenis', () => {
 
   test('menu jenis dengan keyboard; Escape menutup menu saja', async ({ page }) => {
     await page.goto(`/pribadi/beranda?${q}`);
-    await page.keyboard.press('c');
+    await page
+      .getByRole('navigation', { name: 'Tab utama' })
+      .getByRole('button', { name: 'Catat' })
+      .click();
     const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    // Tunggu kode sheet sebenarnya (bukan placeholder) termuat.
+    await expect(sheet.getByRole('radiogroup', { name: 'Kategori' })).toBeVisible({
+      timeout: 15_000,
+    });
     const title = sheet.getByRole('button', { name: 'Pengeluaran · Pribadi' });
     await expect(title).toHaveAttribute('aria-haspopup', 'menu');
     await expect(title).toHaveAttribute('aria-expanded', 'false');
@@ -110,8 +117,15 @@ test.describe('Catat: judul = pemilih jenis', () => {
     page,
   }) => {
     await page.goto(`/pribadi/beranda?${q}`);
-    await page.keyboard.press('c');
+    await page
+      .getByRole('navigation', { name: 'Tab utama' })
+      .getByRole('button', { name: 'Catat' })
+      .click();
     const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    // Tunggu kode sheet sebenarnya (bukan placeholder) termuat.
+    await expect(sheet.getByRole('radiogroup', { name: 'Kategori' })).toBeVisible({
+      timeout: 15_000,
+    });
     const group = sheet.getByRole('radiogroup', { name: 'Kategori' });
     await expect(group.getByRole('radio').first()).toBeVisible();
     await expect(group.getByRole('radio', { checked: true })).toHaveCount(0);
