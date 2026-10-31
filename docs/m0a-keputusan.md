@@ -57,3 +57,5 @@ Daftar lengkap keputusan yang diambil atas nama pemilik saat eksekusi plan M0a (
 - squashed 10e67c3+e21a6d9 into 3d8a43c before first push (keeps 9.7 MB of obsolete PNGs out of history; unpushed own branch) — none
 - T13 no preview.yml — Vercel Git integration deploys branch pushes; ADR numbering shifts (0002 = JS budget) → preview ADR 0003, results ADR 0004 — none
 - one fix wave covers findings 1,2,4,5,6,7,8 + ADR 0003 rewrite to Shareable Link option (owner confirms plan) — cheap, all in-scope — none
+- Owner 2026-10-31: keep violet Bersama on dark + uppercase "RUANG PRIBADI"/SpaceTag; keep handoff copy; drop M2 150 kB target (stay 162 kB); visual direction approved
+- A4 has no account form, so account creation moves to new `/buat-akun` (Terima undangan → Buat akun → Amankan): email comes from the invite token (read-only, not shown as a value in the prototype to avoid inventing an address), new password min 12 chars, then passkey + TOTP + recovery codes — matches spec §auth (email+password account, strong factor, recovery codes) and keeps A4 a pure decision screen — 12 may change when Better Auth policy is set in BSD/M0b

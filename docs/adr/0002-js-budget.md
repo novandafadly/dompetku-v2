@@ -62,4 +62,4 @@ Ikon Phosphor sudah ter-tree-shake per ikon. Satu ikon tetap membawa enam bobot 
 ## Konsekuensi
 
 - Penambahan fitur yang memuat ulang dialog, cmdk, atau toast ke muat awal akan menggagalkan tes.
-- Budget ROADMAP M2 (≤ 150 kB) juga di bawah angka sekarang (157 kB rute, 187 kB semua JS). Budget itu perlu diputuskan ulang sebelum M2: naikkan batasnya, atau kurangi kode, misalnya ikon dengan bobot terbatas atau data demo di server.
+- Budget ROADMAP M2 (≤ 150 kB) juga di bawah angka sekarang (157 kB rute, 187 kB semua JS). Budget itu perlu diputuskan ulang sebelum M2: naikkan batasnya, atau kurangi kode, misalnya ikon dengan bobot terbatas atau data demo di server. **Keputusan pemilik 2026-10-31:** target 150 kB di M2 dibatalkan; batas tetap 162 kB rute.
