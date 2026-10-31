@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
-      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,3 +80,66 @@ jobs:
       - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
         with:
           args: -no-color
+      # Online audit (impostor commit, versi tag) memakai token baca bawaan.
+      - uses: docker://ghcr.io/zizmorcore/zizmor@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9 # 1.31.1
+        with:
+          args: --format plain --min-severity low .github/workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep@sha256:451b3d875c00dac7ed5db5293e584a07de11449a409c10b3c2d2652f429630b6 # 1.182.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Semgrep OSS, aturan registry publik, tanpa akun dan tanpa metrik.
+      - run: >-
+          semgrep scan --error --metrics off
+          --config p/default --config p/typescript --config p/react --config p/nextjs
+          --config p/dockerfile --config p/github-actions
+
+  infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # shellcheck bawaan image runner; semua skrip bash di infra/.
+      - run: |
+          mapfile -t scripts < <(grep -rlE '^#!/usr/bin/env bash|^#!/bin/(ba)?sh' infra)
+          shellcheck --severity=warning "${scripts[@]}"
+      - run: bash infra/db-vm/deploy/test/deploy-test.sh
+
+  # TODO(S2): job pgTAP (Postgres 17 service, dbmate up, pg_prove) setelah packages/db punya tes
+  # pgTAP; saat ini packages/db hanya berisi migrasi dan role (TRD §5 butir 1).
+
+  image:
+    # Dockerfile tetap bisa dibangun dan lolos Trivy sebelum merge; tanpa push.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/arm64
+          build-args: BUILD_SHA=${{ github.sha }}
+          provenance: false
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+      - name: Trivy (HIGH/CRITICAL yang sudah ada perbaikannya)
+        env:
+          TAR_DIR: ${{ runner.temp }}
+        run: >-
+          docker run --rm -v "$TAR_DIR:/scan:ro"
+          ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+          image --input /scan/image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          --scanners vuln --no-progress

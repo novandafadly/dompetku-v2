@@ -1,0 +1,19 @@
+[Unit]
+Description=DompetKu: tarik dan deploy rilis main terbaru (pull-based)
+Documentation=file:///opt/dompetku/deploy/README.md
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dompetku/bin/deploy
+# Kode 3 = rilis gagal tetapi rollback berhasil: tetap ditandai gagal agar terlihat di systemctl.
+TimeoutStartSec=20min
+Nice=5
+StateDirectory=dompetku/deploy
+StateDirectoryMode=0700
+LogsDirectory=dompetku
+LogsDirectoryMode=0750
+PrivateTmp=true
+NoNewPrivileges=true

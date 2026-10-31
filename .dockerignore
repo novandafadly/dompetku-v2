@@ -1,0 +1,18 @@
+# Konteks build apps/web/Dockerfile: hanya sumber yang dibutuhkan build.
+**/node_modules
+**/.next
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!.env.example
+.git
+.github
+.superpowers
+docs
+infra
+**/*.md
+apps/web/tests
