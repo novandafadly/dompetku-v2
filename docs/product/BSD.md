@@ -1,6 +1,6 @@
 # BSD: Backend & Schema Design DompetKu v2
 
-Status: draf putaran 2 (temuan review backend dan security sudah diterapkan, keputusan pemilik 2026-10-31 sudah masuk), menunggu persetujuan pemilik; wajib disetujui sebelum M1. Tanggal: 2026-10-31.
+Status: **disetujui pemilik 2026-10-31** (putaran 2 + jawaban §15). Perubahan berikutnya lewat migrasi expand di sprint fiturnya. Tanggal: 2026-10-31.
 
 Dokumen ini memformalkan model data yang sekarang hidup di `packages/demo-data` (tipe dan selector `balances`, `safeToSpend`, `budgetProgress`, `monthSummary`, `activityFeed`) menjadi skema Postgres 17. Sumber yang mengikat: spec induk `docs/superpowers/specs/2026-10-29-dompetku-v2-design.md` §9.1 dan §9.2, `docs/m0a-keputusan.md`. Riset tim (`docs/team/round1/backend-engineer.md`, `data-engineer.md`, `security.md`, `docs/team/round2/*`) dipakai sebagai bahan; bagian yang belum disahkan ditandai **usulan** atau **Belum diputuskan**. Arsitektur dan NFR ada di `docs/product/TRD.md`.
 
@@ -1026,21 +1026,21 @@ Aturan 1 menang atas aturan 2: fee yang dibayar dari dompet kantor berkelas `x_k
 
 ### 8.2 Rumus "aman dipakai"
 
-`total = Σ saldo dompet operasional − Σ tagihan belum dibayar jatuh tempo ≤ akhir bulan (termasuk lewat) − Σ max(0, anggaran wajib − realisasi)`; `per_day = floor(total / sisa hari termasuk hari ini)`. Sama dengan `safeToSpend` demo (m0a-keputusan T6). Tagihan terarsip dan kemunculan yang dilewati tidak dihitung; kemunculan sebelum bulan tagihan dibuat tidak pernah ada (§2.2 butir 6). Dompet terarsip bersaldo 0 (§2.2 butir 4). Default sampai akhir bulan; tanggal gajian per orang (`profiles.payday_day`) disimpan, rumusnya **Belum diputuskan** (usulan di §8.2a).
+`total = Σ saldo dompet operasional − Σ tagihan belum dibayar jatuh tempo ≤ akhir bulan (termasuk lewat) − Σ max(0, anggaran wajib − realisasi)`; `per_day = floor(total / sisa hari termasuk hari ini)`. Sama dengan `safeToSpend` demo (m0a-keputusan T6). Tagihan terarsip dan kemunculan yang dilewati tidak dihitung; kemunculan sebelum bulan tagihan dibuat tidak pernah ada (§2.2 butir 6). Dompet terarsip bersaldo 0 (§2.2 butir 4). Default sampai akhir bulan; tanggal gajian per orang (`profiles.payday_day`) disimpan, rumusnya diputuskan di §8.2a.
 
-### 8.2a Usulan: periode gajian untuk ruang Pribadi (menunggu konfirmasi pemilik)
+### 8.2a Periode gajian (disetujui pemilik 2026-10-31)
 
 Masalah: gaji tanggal 25 membiayai bulan berikutnya. Dengan bulan kalender, setelah gajian "aman dipakai" hanya menghitung sampai akhir bulan, padahal uang itu harus cukup sampai gajian berikutnya; tagihan dan anggaran wajib awal bulan depan tidak ikut dipotong.
 
-Usulan (berlaku per orang, hanya ruang Pribadi; Bersama tetap bulan kalender):
+Aturan gajian disimpan per rumah tangga (`app.households.payday_rule`, Novanda dan Farida sama-sama tanggal 25) dan berlaku untuk **Pribadi dan Bersama**; `profiles.payday_day` tetap ada sebagai pengecualian per orang bila kelak berbeda.
 
 - **Hari gajian efektif** = `payday_day` (25); bila jatuh di Sabtu, Minggu, atau tanggal di tabel `app.holidays` (libur nasional dan cuti bersama), mundur ke hari kerja sebelumnya. Contoh: 25 Okt 2026 hari Minggu → Jumat 23 Okt; 25 Des 2026 libur Natal → Kamis 24 Des (atau 23 Des bila 24 Des ditetapkan cuti bersama).
-- **Periode anggaran Pribadi** = dari hari gajian efektif sampai sehari sebelum gajian efektif berikutnya, diberi nama bulan yang dibiayainya. Contoh: periode "November 2026" = 23 Okt sampai 24 Nov 2026. Anggaran Pribadi, realisasinya, dan review bulanan memakai periode ini.
-- **Aman dipakai Pribadi** = Σ saldo dompet operasional Pribadi − Σ tagihan Pribadi belum dibayar yang jatuh tempo sebelum gajian efektif berikutnya (termasuk lewat) − Σ max(0, anggaran wajib periode berjalan − realisasi periode berjalan); `per_day` dibagi sisa hari sampai sehari sebelum gajian berikutnya.
+- **Periode anggaran** = dari hari gajian efektif sampai sehari sebelum gajian efektif berikutnya, diberi nama bulan yang dibiayainya. Contoh: periode "November 2026" = 23 Okt sampai 24 Nov 2026. Anggaran (Pribadi dan Bersama), realisasinya, dan review bulanan memakai periode ini.
+- **Aman dipakai** (per ruang) = Σ saldo dompet operasional ruang itu − Σ tagihan ruang itu belum dibayar yang jatuh tempo sebelum gajian efektif berikutnya (termasuk lewat) − Σ max(0, anggaran wajib periode berjalan − realisasi periode berjalan); `per_day` dibagi sisa hari sampai sehari sebelum gajian berikutnya.
 - **Laporan dan ringkasan** tetap bisa dilihat per bulan kalender (pilihan tampilan); angka uangnya sama, hanya pemotongan tanggalnya yang berbeda.
 - **`app.holidays`** diisi dari SKB libur nasional dan cuti bersama, diperbarui sekali setahun (pengingat di job Desember). Bila tabel kosong untuk tahun itu, hanya akhir pekan yang dihitung dan Beranda memberi tanda.
-- Orang tanpa `payday_day` (misalnya Farida bila tidak diisi) memakai bulan kalender seperti sekarang.
-- Waktu: S9 (anggaran dan "aman dipakai" nyata). Skema: kolom `payday_rule` di `app.profiles`, tabel `app.holidays`, fungsi `app.pay_period(user, date)` sebagai satu sumber untuk anggaran, aman dipakai, dan review bulanan.
+- Bila aturan gajian rumah tangga kosong, semua ruang memakai bulan kalender seperti sekarang.
+- Waktu: S9 (anggaran dan "aman dipakai" nyata). Skema: kolom `payday_rule` di `app.households` (override per orang lewat `profiles.payday_day`), tabel `app.holidays`, fungsi `app.pay_period(space, date)` sebagai satu sumber untuk anggaran, aman dipakai, dan review bulanan.
 
 Alternatif yang ditolak: bulan kalender + horizon sampai gajian (anggaran wajib bulan depan diprorata). Lebih sedikit perubahan, tapi kewajiban seperti SPP atau cicilan bukan biaya harian sehingga prorata menyesatkan.
 
@@ -2705,7 +2705,7 @@ Dijawab pemilik 2026-10-31 (butir 1 sampai 10 di bawah). Butir yang mengubah ske
 6. **Disahkan:** `idempotency_keys` 30 hari, `audit.events` 1 tahun.
 7. **Angka backend:** web `statement_timeout=5s`, `lock_timeout=3s`, `idle_in_transaction_session_timeout=15s`. Rute berat (ekspor CSV/PDF) boleh menaikkan `statement_timeout` lewat `set_config(..., true)` lokal transaksi sampai 30 s, hanya di fungsi yang terdaftar. Ditinjau ulang dengan data nyata M1.
 8. **Disetujui:** `dompetku_monitor` sebagai role keenam.
-9. **Tanggal gajian: Novanda tanggal 25, maju ke hari kerja sebelumnya bila 25 jatuh di Sabtu, Minggu, atau libur nasional/cuti bersama.** Rumus menunggu konfirmasi pemilik (usulan di §8.2a).
+9. **Tanggal gajian: Novanda tanggal 25, maju ke hari kerja sebelumnya bila 25 jatuh di Sabtu, Minggu, atau libur nasional/cuti bersama.** Farida tanggal yang sama; berlaku untuk Pribadi dan Bersama. Rumus disetujui (§8.2a).
 10. **Diverifikasi di S4** saat versi Better Auth dipatok: nama opsi dicek di kode sumber versi itu, dicatat di ADR, dan dikunci dengan tes (cascade hapus user, `emailVerified` dari undangan, `amr` di sesi).
 
 ## 16. Catatan review (putaran 2)

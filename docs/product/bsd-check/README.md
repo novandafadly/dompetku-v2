@@ -9,4 +9,6 @@ Urutan: role (`00_roles`) sebagai superuser, lalu blok BSD berurutan sebagai `do
 
 Hasil putaran 2: ALL TESTS PASSED (130/130).
 
+**PostgreSQL 17 (2026-10-31, gerbang S2).** Dijalankan ulang di container `postgres:17.11-alpine` (arm64) sekali pakai di VM DB, tanpa jaringan, dengan DDL BSD versi yang disetujui (status §15 terjawab): blok 1 sebagai superuser (role + database `dompetku`), blok 2 sampai 10 sebagai `dompetku_owner` di database `dompetku` (blok 3 = stub auth), lalu `test.sql` sebagai superuser dengan `ON_ERROR_STOP` (satu asersi gagal menghentikan skrip). Hasil: semua blok sukses, 38 fungsi milik `dompetku_api`, **ALL TESTS PASSED**. Container dihapus sesudahnya. Tidak ada perbedaan perilaku 16 vs 17 yang terdeteksi.
+
 Di M0b, asersi ini dipindah ke pgTAP dan dijalankan di CI terhadap PostgreSQL 17; kasus dua koneksi pindah ke Vitest.

@@ -12,7 +12,7 @@ M0a selesai di branch `claude/m0a-prototype`: prototipe data demo, e2e hijau, bu
 
 **Gerbang urutan:**
 
-1. **Sebelum S2:** BSD disetujui (review backend dan security selesai) dan `bsd-check` dijalankan di PostgreSQL 17 (BSD sebelumnya divalidasi di 16.15; S2 memasang 17).
+1. **Sebelum S2:** BSD disetujui (review backend dan security selesai) dan `bsd-check` dijalankan di PostgreSQL 17 (BSD sebelumnya divalidasi di 16.15; S2 memasang 17). **Terpenuhi 2026-10-31:** BSD disetujui pemilik, `bsd-check` lulus di 17.11.
 2. **Sebelum S4:** ADR 0004 terbit (hasil penilaian M0a) dan bingkai desain auth ada (lihat §8).
 3. **Sebelum S6:** bingkai desain Catat (galat, "Menyimpan…", Sampah) ada (§8).
 
