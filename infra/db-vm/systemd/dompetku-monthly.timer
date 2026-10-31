@@ -1,0 +1,10 @@
+[Unit]
+Description=DompetKu: jadwal dump bulanan terenkripsi
+
+[Timer]
+OnCalendar=*-*-01 03:00:00 Asia/Jakarta
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

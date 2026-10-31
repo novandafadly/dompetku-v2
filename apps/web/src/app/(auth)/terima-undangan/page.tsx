@@ -32,8 +32,8 @@ export default function TerimaUndanganPage() {
           <span>Tidak pernah terlihat: isi ruang Pribadi masing-masing.</span>
         </li>
       </ul>
-      {/* Menerima undangan berlanjut ke pembuatan akun dan pengamanan (passkey + kode). */}
-      <LinkButton href={authHref('amankan')} size="lg">
+      {/* Menerima undangan berlanjut ke Buat akun (kata sandi), lalu Amankan (passkey + kode). */}
+      <LinkButton href={authHref('buat-akun')} size="lg">
         Terima undangan
       </LinkButton>
       <LinkButton href={authHref('masuk')} variant="text">

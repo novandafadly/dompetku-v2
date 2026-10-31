@@ -1,0 +1,11 @@
+[Unit]
+Description=DompetKu: uji restore mingguan
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dompetku/bin/restore-test.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

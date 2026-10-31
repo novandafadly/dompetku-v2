@@ -1,0 +1,58 @@
+# gw: satu-satunya pintu DompetKu di VM DB. Dipasang di /opt/dompetku/gw/Caddyfile.
+# Hanya nginx VM App (10.0.0.149) yang bisa masuk: firewall DOCKER-USER + mTLS dari CA DompetKu.
+{
+	auto_https off
+	admin off
+	default_sni dompetku-gw.internal
+	servers {
+		# Hanya edge yang dipercaya mengisi X-Forwarded-For; {client_ip} = nilai dari edge.
+		trusted_proxies static 10.0.0.149/32
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+		# SNI dari edge = dompetku-gw.internal, Host = domain publik. Cek SNI=Host hanya berguna
+		# untuk banyak site dengan mTLS; di sini satu site dan Host dicek eksplisit (@wrong_host).
+		strict_sni_host insecure_off
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+(mtls) {
+	tls /pki/gw.crt /pki/gw.key {
+		protocols tls1.3
+		client_auth {
+			mode require_and_verify
+			trust_pool file /pki/ca.crt
+		}
+	}
+}
+
+:8443 {
+	import mtls
+
+	@wrong_host not host dompet.novandafadly.com
+	handle @wrong_host {
+		respond 421
+	}
+
+	# Header yang tidak boleh sampai ke web, apa pun isinya dari edge.
+	request_header -X-Middleware-Subrequest
+	request_header -Forwarded
+	request_header -X-Forwarded-Host
+	request_header -X-Real-IP
+
+	# S3: ganti dengan reverse_proxy web:3000 { header_up X-Forwarded-For {client_ip};
+	# header_up X-Forwarded-Proto https; header_up -X-Forwarded-Host } (diuji di S1).
+	handle {
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control no-store
+		respond "<!doctype html><html lang=id><meta charset=utf-8><title>DompetKu</title><p>DompetKu sedang disiapkan.</p></html>" 200
+	}
+}
+
+:9443 {
+	import mtls
+	respond "metrik belum tersedia" 503
+}

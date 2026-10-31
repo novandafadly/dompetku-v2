@@ -29,7 +29,11 @@ const dark = block(":root,\n[data-theme='dark']");
 const light = block("[data-theme='light']");
 const system = block("  [data-theme='system']");
 
-/** Nilai handoff (docs/design/panel-malam/README.md, tabel Design tokens). */
+/**
+ * Nilai handoff (docs/design/panel-malam/README.md, tabel Design tokens).
+ * Tiga nilai terang sengaja digelapkan dari handoff (kontras): income 1B7A4B, warning 9A5B00,
+ * chart-aman 7FAE2A. Lihat IMPLEMENTATION-REPORT.md, bagian Penyimpangan.
+ */
 const HANDOFF: Record<string, [string, string]> = {
   bg: ['#0F1211', '#F4F6F3'],
   surface: ['#1A1F1D', '#FFFFFF'],
@@ -47,11 +51,11 @@ const HANDOFF: Record<string, [string, string]> = {
   'on-accent': ['#11160A', '#11160A'],
   'accent-text': ['#C4EE6A', '#4A6A0F'],
   'accent-tint': ['#26301A', '#E8F6C8'],
-  income: ['#5FD8A4', '#1B7A4B'],
+  income: ['#5FD8A4', '#1A7447'],
   danger: ['#FF8F7D', '#B8322A'],
   'danger-tint': ['#3A201C', '#FBE6E3'],
   'on-danger': ['#1A0905', '#FFFFFF'],
-  warning: ['#F0B44C', '#9A5B00'],
+  warning: ['#F0B44C', '#945700'],
   'warning-tint': ['#33290F', '#FBEFD9'],
   pribadi: ['#C4EE6A', '#4A6A0F'],
   'pribadi-tint': ['#26301A', '#E8F6C8'],
@@ -68,7 +72,7 @@ const HANDOFF: Record<string, [string, string]> = {
   scrim: ['RGB(4 6 5 / 0.66)', 'RGB(20 25 23 / 0.42)'],
   tab: ['#141816', '#FFFFFF'],
   hover: ['#212725', '#F0F3EF'],
-  'chart-aman': ['#C4EE6A', '#7FAE2A'],
+  'chart-aman': ['#C4EE6A', '#75A127'],
   'chart-tagihan': ['#F0B44C', '#D99A2B'],
   'chart-tagihan-2': ['#B8862F', '#B07A1C'],
   'chart-wajib': ['#FF8F7D', '#D9564B'],

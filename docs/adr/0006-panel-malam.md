@@ -16,13 +16,13 @@ Arah "gelap premium" (ADR 0005, aksen biru/emas, palet usulan agen) dibangun cep
 
 ## Akibat
 
-- Budget JS rute: 160,9 kB `/pribadi/beranda`, 161,0 kB `/pribadi/transaksi` (sisa ±1 kB). Target 150 kB di M2 makin perlu diputuskan ulang.
+- Budget JS rute: 160,9 kB `/pribadi/beranda`, 161,0 kB `/pribadi/transaksi` (sisa ±1 kB). Target 150 kB di M2 dibatalkan pemilik (2026-10-31); batas tetap 162 kB (ADR 0002).
 - Uji e2e yang menyentuh salinan atau semantik lama diperbarui (judul H1 halaman, tab Daftar/Ringkasan sebagai `tablist`, menu jenis di judul Catat, label auth baru). Anggaran tinggi mode keyboard Catat mengikuti handoff C1 (360×640, bilah status 24 + keyboard 260).
 - Penyimpangan kecil dari handoff dicatat di laporan implementasi beserta alasannya (mis. chip kategori tetap `radio` dengan `aria-checked`, bukan `aria-pressed`).
 
 ## Hal yang perlu konfirmasi pemilik
 
-Dua pola handoff bertabrakan dengan pola slop yang disebut antislop, dan diimplementasikan persis seperti handoff (R-37: arah pemilik): aksen violet untuk Bersama di tema gelap (R-01, "purple-and-black"), dan label kapital berjarak "RUANG PRIBADI" di header laptop serta `SpaceTag` (R-06). Pemilik diminta mempertahankan atau mengganti di penilaian M0a.
+Dua pola handoff bertabrakan dengan pola slop yang disebut antislop, dan diimplementasikan persis seperti handoff (R-37: arah pemilik): aksen violet untuk Bersama di tema gelap (R-01, "purple-and-black"), dan label kapital berjarak "RUANG PRIBADI" di header laptop serta `SpaceTag` (R-06). Pemilik diminta mempertahankan atau mengganti di penilaian M0a. **Dikonfirmasi pemilik 2026-10-31: keduanya dipertahankan**, begitu pula teks baru dari handoff.
 
 ## Alternatif yang ditolak
 

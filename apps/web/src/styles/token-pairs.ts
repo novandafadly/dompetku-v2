@@ -63,15 +63,22 @@ export const pairs: Pair[] = [
   pair('accent-text', 'tab', TEXT),
   pair('accent-text', 'accent-tint', TEXT),
   // Status.
-  pair('income', 'bg', TEXT, [10.6, 4.9]),
-  pair('income', 'surface', TEXT, [9.4, 5.3]),
+  // Terang: income digelapkan dari handoff (1B7A4B) agar lolos di surface-3 (4,22 menjadi 4,6); rasio terang tidak lagi dicocokkan.
+  pair('income', 'bg', TEXT, [10.6, null]),
+  pair('income', 'surface', TEXT, [9.4, null]),
+  pair('income', 'surface-2', TEXT),
+  pair('income', 'surface-3', TEXT),
+  pair('income', 'hover', TEXT),
   pair('danger', 'bg', TEXT),
   pair('danger', 'surface', TEXT, [7.5, 6.0]),
   pair('danger', 'surface-2', TEXT),
   pair('danger', 'danger-tint', TEXT, [6.8, 5.0]),
   pair('warning', 'bg', TEXT),
-  pair('warning', 'surface', TEXT, [9.0, 5.4]),
-  pair('warning', 'warning-tint', TEXT, [7.7, 4.8]),
+  // Terang: warning digelapkan dari handoff (9A5B00), alasan sama dengan income.
+  pair('warning', 'surface', TEXT, [9.0, null]),
+  pair('warning', 'surface-2', TEXT),
+  pair('warning', 'surface-3', TEXT),
+  pair('warning', 'warning-tint', TEXT, [7.7, null]),
   // Warna ruang: label, tag, chip terpilih, judul Catat.
   pair('pribadi', 'surface', TEXT, [12.6, 6.3]),
   pair('pribadi', 'pribadi-tint', TEXT, [10.4, 5.5]),
@@ -89,6 +96,8 @@ export const pairs: Pair[] = [
   pair('focus', 'bg', NON_TEXT, [14.2, 6.8]),
   pair('focus', 'surface', NON_TEXT, [12.6, 7.4]),
   pair('focus', 'surface-2', NON_TEXT),
+  // Bilah proporsi (grafik non-teks, WCAG 1.4.11): hanya segmen aman yang diuji; segmen lain dikecualikan karena nilainya diulang sebagai teks.
+  pair('chart-aman', 'surface', NON_TEXT),
   // Tema terang: lime tidak terbaca di latar terang, jadi tombol primer diberi garis accent-edge.
   pair('accent-edge', 'bg', NON_TEXT, [null, 5.8], 'light'),
   pair('accent-edge', 'surface', NON_TEXT, [null, 6.3], 'light'),

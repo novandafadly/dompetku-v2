@@ -80,6 +80,8 @@ Kode bingkai → diimplementasikan (ya / sebagian / tidak) + catatan. Hitungan: 
 - **Select Dompet/Tanggal Catat** memakai `<select>` bawaan bergaya handoff (ikon + nilai + caret) dengan label hanya untuk pembaca layar; ikon dompet/kalender menjadi label visual seperti di bingkai.
 - **Ikon Phosphor** disalin per berkas dengan bobot yang dipakai saja dan peta ikon kategori dimuat setelah hidrasi, karena paket React membawa enam bobot per ikon (168 kB, melampaui budget).
 - **Mode keyboard Catat**: uji e2e kini memakai anggaran handoff C1 (bilah status 24 + keyboard 260 = 284 px), sebelumnya 300 px.
+- **Token terang digelapkan minimal (kontras, review designer 2026-10-31)**, hue tetap: `income` `#1B7A4B` menjadi `#1A7447` (di `surface-3` 4,22 menjadi 4,57; di `bg` 4,9 menjadi 5,3), `warning` `#9A5B00` menjadi `#945700` (di `surface-3` 4,29 menjadi 4,58; di `surface` 5,4 menjadi 5,8), `chart-aman` terang `#7FAE2A` menjadi `#75A127` (di putih 2,63 menjadi 3,05, WCAG 1.4.11). Rasio terang `income`/`warning` tidak lagi dicocokkan dengan angka handoff di `token-pairs.ts`; pasangan di `surface-2`, `surface-3`, `hover` ditambahkan.
+- **Angka besar `display` mengecil di layar sempit** (`clamp(2rem, 11.3vw, 2.75rem)`: 44 px di 390, 36 px di 320) agar `Rp 12.345.678.900` tidak terpotong; disetujui pemilik 2026-10-31. Gaya tambahan di kode yang tidak ada di handoff: `display-lg` 52, `display-long` (clamp), `amount-sm` 36, `title-lg` 28, `headline` 20, `header` 19, `subheading` 17, `keypad` 22. Token `--hover` dan `--tab` berasal dari tabel README handoff (tidak ada di berkas CSS handoff); `--radius-xs` 3 px dan `--radius-toast` 14 px adalah tambahan kode.
 
 ## Tabrakan dengan pola slop antislop (diimplementasikan sesuai handoff, R-37)
 

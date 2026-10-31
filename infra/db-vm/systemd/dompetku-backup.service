@@ -1,0 +1,11 @@
+[Unit]
+Description=DompetKu: base backup harian WAL-G
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dompetku/bin/backup.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

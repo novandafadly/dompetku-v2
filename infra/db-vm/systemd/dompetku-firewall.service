@@ -1,0 +1,13 @@
+[Unit]
+Description=DompetKu: batasi port gw ke VM App (DOCKER-USER)
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/dompetku/bin/firewall.sh up
+ExecStop=/opt/dompetku/bin/firewall.sh down
+
+[Install]
+WantedBy=docker.service

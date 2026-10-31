@@ -45,6 +45,7 @@ const SCREENSHOT_ROUTES = new Set([
   'amankan',
   'undang',
   'terima-undangan',
+  'buat-akun',
 ]);
 
 /** Daftar panjang: screenshot sebatas viewport. */
@@ -75,5 +76,6 @@ export const ROUTES: AppRoute[] = [
   route('amankan', '/amankan'),
   route('undang', '/undang'),
   route('terima-undangan', '/terima-undangan'),
+  route('buat-akun', '/buat-akun'),
   route('dev-ui', '/dev/ui'),
 ];

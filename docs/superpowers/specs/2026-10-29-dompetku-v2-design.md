@@ -194,6 +194,8 @@ Bagian ini **mengalahkan** §1–8 di atas dan `docs/v2/*` bila bertentangan.
 - **Rantai pasok & CI:** gitleaks, Semgrep OSS, osv-scanner, Trivy, actionlint + zizmor, pgTAP keamanan, Playwright keamanan; Actions dipatok SHA; lockfile + `pnpm` dengan `minimumReleaseAge` / Renovate 3 hari; patch critical ≤ 48 jam. Secrets per file (`chmod 600`), redaksi log (tanpa nominal/deskripsi).
 
 ### 9.3 Produk & UX
+Arah visual digantikan ADR 0006 (Panel Malam).
+
 - **IA:** tab bar `Beranda · Transaksi · [Catat] · Dompet · Rencana` (Catat di slot tengah, bukan FAB); Rencana disembunyikan sampai ada isinya; Laporan = tampilan `Ringkasan` di tab Transaksi; "Menu" berlabel di header (Trip, Kategori, Kontak, Export, Analisis, Pengaturan). Segmen Transaksi: `Semua · Kantor · Talangan`.
 - **Ruang:** pengalih `Pribadi | Bersama` di header, warna aksen per ruang selalu dengan label; sheet Catat menyebut ruang tujuan, dompet terbatas ke ruang itu, "Pindah ke Bersama/Pribadi" atomik; feed aktivitas Bersama dengan pelaku dan sebelum/sesudah.
 - **Beranda:** "aman dipakai" per ruang (default sampai akhir bulan, tanggal gajian per orang opsional), tagihan mendatang, anggaran; net worth pindah ke Dompet. Tombol "Tidak ada pengeluaran hari ini".

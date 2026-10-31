@@ -43,7 +43,7 @@ Skala 1-5 berlaku untuk semua tugas: 1 = sangat sulit atau membingungkan, 5 = la
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: pertahankan atau ganti? Usulan warna lain: ____
+- [x] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: dipertahankan (pemilik, 2026-10-31).
 - [ ] **Tema:** gelap (bawaan) / terang / ikuti sistem (Menu → Tampilan): mana yang kamu pakai?
 
 ### Penilaian akhir
@@ -77,7 +77,7 @@ Apa yang mengganggu, apa yang menyenangkan, apa yang kurang?
 ### Pilihan
 
 - [ ] **Keypad:** varian A (bawaan) / varian B (`?keypad=app`)
-- [ ] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: pertahankan atau ganti? Usulan warna lain: ____
+- [x] **Warna ruang (Panel Malam):** Pribadi lime / Bersama violet: dipertahankan (pemilik, 2026-10-31).
 - [ ] **Tema:** gelap (bawaan) / terang / ikuti sistem (Menu → Tampilan): mana yang kamu pakai?
 
 ### Penilaian akhir

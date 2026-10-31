@@ -1,0 +1,17 @@
+#!/bin/sh
+# Entrypoint container uji restore (dipanggil restore-test.sh): base backup terbaru + WAL sampai
+# titik pulih $RP (atau sampai WAL terakhir bila RP kosong, untuk latihan RPO) ke /r/data, lalu promote. Archive mati: instance ini tidak pernah menulis ke bucket.
+set -eu
+if [ "$(id -u)" = 0 ]; then
+	mkdir -p /r/data
+	chown -R postgres:postgres /r
+	exec gosu postgres "$0" "$@"
+fi
+D=/r/data
+chmod 700 "$D"
+wal-g backup-fetch "$D" LATEST
+touch "$D/recovery.signal"
+exec postgres -D "$D" -c listen_addresses= -c ssl=off -c archive_mode=off \
+	-c shared_preload_libraries=pgaudit -c "hba_file=$D/pg_hba.conf" \
+	-c "restore_command=wal-g wal-fetch %f %p" \
+	${RP:+-c "recovery_target_name=$RP" -c recovery_target_action=promote}
