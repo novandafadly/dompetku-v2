@@ -5,7 +5,7 @@ Sumber: Spec §5.3, §5.4, §9.1 sampai §9.3; `docs/design/panel-malam/README.m
 
 Rute prototipe: `/` (mengalihkan ke `/pribadi/beranda`), `/masuk`, `/undang`, `/terima-undangan`, `/buat-akun`, `/amankan`, `/[ruang]/{beranda,transaksi,dompet,rencana}`, `/[ruang]/transaksi/[id]`, `/[ruang]/dompet/[id]`, dan `/dev/ui` (galeri keadaan, hanya dev), dengan `[ruang]` = `pribadi` atau `bersama`.
 
-Nama fungsi mengikuti `BSD.md` (skema `api.*`). Fungsi yang belum ada di BSD disebut generik: "fungsi tolak undangan (BSD)", "fungsi cabut undangan (BSD)", "fungsi daftar Sampah dan pulihkan (BSD)".
+Nama fungsi mengikuti `BSD.md` (skema `api.*`). Fungsi undangan dan Sampah: `api.decline_invitation`, `api.revoke_invitation`, `api.resend_invitation`, `api.trash_list`, `api.restore_entry`, `api.purge_entry`.
 
 **Selisih prototipe M0a dan rencana.** Di prototipe, `/masuk` dengan email dan kata sandi langsung menuju `/amankan` (pendaftaran faktor), bukan verifikasi TOTP; semua langkah auth tiruan. Diagram di bawah adalah rencana M0b.
 
@@ -22,7 +22,7 @@ flowchart TD
   A["Tautan undangan di email dibuka"] --> B{"Token valid: belum terpakai, tidak dicabut, tidak ditolak, < 72 jam?"}
   B -- "tidak" --> B1["Halaman galat seragam: undangan tidak berlaku, minta Novanda kirim ulang"]
   B -- "ya" --> C["/terima-undangan: lihat apa yang terlihat dan tidak terlihat (api.invitation_peek)"]
-  C -- "Tolak" --> C1["Fungsi tolak undangan (BSD): undangan hangus, selesai. Novanda melihat status Ditolak dan bisa kirim ulang"]
+  C -- "Tolak" --> C1["`api.decline_invitation`: undangan hangus, selesai. Novanda melihat status Ditolak dan bisa kirim ulang"]
   C -- "Terima undangan" --> D["/buat-akun: email dari token, kata sandi baru"]
   D --> D1{"Kata sandi lolos kebijakan?"}
   D1 -- "tidak" --> D2["Galat inline, fokus ke kolom"]
@@ -159,7 +159,7 @@ flowchart TD
   C --> D["Kembali ke daftar, total harian dihitung ulang, toast: dibatalkan + Urungkan"]
   D -- "Urungkan" --> E["api.restore_entry: voided_at dikosongkan, saldo kembali"]
   D -- "diabaikan" --> F["Masuk Sampah"]
-  F --> F1["Layar Sampah (M1): fungsi daftar Sampah (BSD) menampilkan entri batal 90 hari terakhir"]
+  F --> F1["Layar Sampah (M1): `api.trash_list` menampilkan entri batal 90 hari terakhir"]
   F1 --> G{"Pulihkan dari Sampah dalam 90 hari?"}
   G -- "ya" --> E
   G -- "tidak" --> H["Job purge_voided mingguan hapus permanen"]
@@ -186,7 +186,7 @@ flowchart TD
   F --> G["Farida membuka email dan tautan"]
   G --> H["Alur Onboarding §1"]
   F --> P["Undangan tertunda"]
-  P -- "Cabut (api.revoke_invitation atau fungsi cabut undangan di BSD)" --> P1["Token hangus; email salah ketik teratasi"]
+  P -- "Cabut (api.revoke_invitation)" --> P1["Token hangus; email salah ketik teratasi"]
   P1 --> D
   P -- "Kirim ulang" --> P2["Cabut yang lama, buat token baru, email baru"]
   P2 --> F
@@ -270,4 +270,4 @@ Ditutup keputusan pemilik 2026-10-31: aturan faktor kuat, pendaftaran pemilik pe
 1. Transfer lintas ruang di Catat: tampil di M1; belum ada di prototipe M0a.
 2. Letak layar Sampah dalam navigasi (ditetapkan saat desain).
 3. Pengganti langkah "Undang Farida" di checklist Farida: diputuskan tidak ada (3 langkah), desain perlu dibuat.
-4. Nama fungsi tolak undangan, cabut undangan, daftar Sampah, pindah ruang, arsip dompet, dan reimburse mengikuti BSD final.
+4. `api.move_entry_to_space` dan `api.create_reimbursement` masih berupa daftar di BSD (belum ditulis).
