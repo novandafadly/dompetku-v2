@@ -1,6 +1,6 @@
 # Prompt favicon DompetKu
 
-Tempel teks di bawah garis ke Claude Code atau Gemini. Hasilnya taruh di `apps/web/src/app/` (nama berkas sesuai daftar), atau kirim ke agen untuk dipasang.
+Tempel teks di bawah garis ke Claude Code atau Gemini. Hasilnya taruh di `apps/web/src/app/` (`icon.svg`, `favicon.ico`, `apple-icon.png`) dan `apps/web/public/icons/` (tiga PNG PWA), nama berkas sesuai daftar, atau kirim ke agen untuk dipasang. Berkas yang ada sekarang adalah placeholder sementara.
 
 ---
 
