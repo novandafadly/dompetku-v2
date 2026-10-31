@@ -1,5 +1,5 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
-# S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools).
+# S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools). S3: web (profil web).
 name: dompetku
 
 services:
@@ -70,6 +70,40 @@ services:
       - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro
     networks: [internal]
     depends_on: [postgres]
+
+  web:
+    # S3. Tidak pernah ditarik compose: /opt/dompetku/bin/deploy memverifikasi digest GHCR lalu
+    # memberi tag lokal dompetku-web:current (rollback = tag ulang). Profil web agar
+    # `docker compose up -d` tidak gagal sebelum deploy pertama; deployer memakai --profile web.
+    image: dompetku-web:current
+    pull_policy: never
+    profiles: [web]
+    restart: unless-stopped
+    env_file:
+      - path: ./env/web.env
+        required: false
+    # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4).
+    networks: [app, internal]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    user: '65532:65532'
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 200
+    healthcheck:
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 2s
 
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).

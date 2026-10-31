@@ -1,0 +1,11 @@
+[Unit]
+Description=DompetKu: cek rilis main tiap 5 menit
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

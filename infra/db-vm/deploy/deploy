@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+# Deployer pull-based DompetKu (Spec §9.2, TRD §2.4, IPD S3). Dipasang di /opt/dompetku/bin/deploy,
+# dijalankan dompetku-deploy.timer tiap 5 menit sebagai root.
+#
+# Alur: kunci -> baca digest tag `main` di GHCR -> lewati bila sama/pernah gagal -> verifikasi
+# attestation -> tarik -> tolak bila lebih tua -> preflight -> restore point + migrasi dbmate
+# (berkas migrasi diambil dari image rilis) -> ganti web ->
+# health -> selesai, atau rollback ke digest sebelumnya. Setiap hasil = satu baris audit JSON.
+#
+# Pemakaian:
+#   deploy                       siklus normal (timer)
+#   deploy --digest sha256:...   deploy digest tertentu (tetap diverifikasi)
+#   deploy --allow-older         izinkan digest lebih tua (rollback manual sengaja)
+#   deploy --status              cetak digest yang berjalan dan riwayat terakhir
+#
+# Kode keluar: 0 selesai/tidak ada rilis, 1 galat, 2 ditolak (verifikasi/lebih tua/preflight),
+# 3 rilis gagal health dan sudah di-rollback, 4 rollback juga gagal.
+set -euo pipefail
+umask 077
+
+ROOT=${DEPLOY_ROOT:-/opt/dompetku}
+CONFIG=${DEPLOY_CONFIG:-$ROOT/env/deploy.env}
+STATE_DIR=${DEPLOY_STATE_DIR:-/var/lib/dompetku/deploy}
+LOG_FILE=${DEPLOY_LOG_FILE:-/var/log/dompetku/deploy.log}
+LOCK_FILE=${DEPLOY_LOCK_FILE:-/run/lock/dompetku-deploy.lock}
+
+# Nilai bawaan; deploy.env boleh menimpa (tanpa rahasia di sana kecuali GHCR_*).
+IMAGE=ghcr.io/novandafadly/dompetku-web
+TAG=main
+SOURCE_REPO=novandafadly/dompetku-v2
+SIGNER_WORKFLOW=.github/workflows/release.yml
+VERIFY=gh                       # gh (GitHub artifact attestation) | cosign (keyless Sigstore)
+LOCAL_TAG=dompetku-web:current  # dirujuk layanan web di compose.yml (pull_policy: never)
+SERVICE=web
+HEALTH_RETRIES=30
+HEALTH_INTERVAL=5
+MIN_FREE_MB=2048
+HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
+GHCR_USER=''
+GHCR_TOKEN=''
+
+ALLOW_OLDER=0
+WANT_DIGEST=''
+
+log() { printf '%s deploy: %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
+die() {
+  log "GALAT: $1"
+  exit "${2:-1}"
+}
+
+usage() { awk '/^# Pemakaian/,/^set -euo/' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
+
+while (($#)); do
+  case $1 in
+    --digest)
+      WANT_DIGEST=${2:-}
+      shift 2
+      ;;
+    --allow-older)
+      ALLOW_OLDER=1
+      shift
+      ;;
+    --status)
+      cat "$STATE_DIR/current" 2>/dev/null || echo 'belum ada deploy'
+      tail -n 10 "$STATE_DIR/history.tsv" 2>/dev/null || true
+      exit 0
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) die "argumen tidak dikenal: $1" ;;
+  esac
+done
+
+[[ -z $WANT_DIGEST || $WANT_DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || die "format digest salah: $WANT_DIGEST"
+
+# shellcheck source=/dev/null
+[[ -r $CONFIG ]] && . "$CONFIG"
+[[ -n $GHCR_USER && -n $GHCR_TOKEN ]] || die "GHCR_USER/GHCR_TOKEN kosong di $CONFIG"
+[[ $VERIFY == gh || $VERIFY == cosign ]] || die "VERIFY harus gh atau cosign"
+
+mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
+touch "$STATE_DIR/history.tsv" "$STATE_DIR/failed"
+
+# Satu deploy pada satu waktu; timer berikutnya keluar diam-diam.
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  log 'deploy lain sedang berjalan, keluar'
+  exit 0
+fi
+
+# Kredensial registry terpisah dari ~/.docker milik root (dipakai docker pull, gh, cosign).
+export DOCKER_CONFIG=$STATE_DIR/docker
+mkdir -p "$DOCKER_CONFIG"
+
+compose() {
+  docker compose --project-directory "$ROOT" -f "$ROOT/compose.yml" --profile web "$@"
+}
+
+START=$(date +%s)
+FROM_DIGEST=''
+TO_DIGEST=''
+TO_SHA=''
+
+# Satu baris JSON per hasil: file log (dibaca promtail/operator) + journald.
+audit() {
+  local result=$1 detail=${2:-}
+  local line
+  line=$(printf '{"ts":"%s","event":"deploy","result":"%s","from":"%s","to":"%s","sha":"%s","seconds":%d,"detail":"%s"}' \
+    "$(date -u +%FT%TZ)" "$result" "$FROM_DIGEST" "$TO_DIGEST" "$TO_SHA" "$(($(date +%s) - START))" \
+    "${detail//\"/\'}")
+  printf '%s\n' "$line" >>"$LOG_FILE"
+  logger -t dompetku-deploy -- "$line" 2>/dev/null || true
+  printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$TO_DIGEST" "$result" "$TO_SHA" >>"$STATE_DIR/history.tsv"
+}
+
+alert() {
+  [[ -n $HC_PING_URL ]] || return 0
+  curl -fsS -m 10 --retry 3 --data-raw "$1" "$HC_PING_URL/fail" >/dev/null 2>&1 || log 'ping Healthchecks gagal'
+}
+
+fail() {
+  local code=$1 result=$2 detail=$3
+  log "$result: $detail"
+  audit "$result" "$detail"
+  alert "deploy $result: $detail"
+  exit "$code"
+}
+
+MANIFEST_TYPES='application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json'
+
+# Token dibaca dari stdin curl (-K -), tidak tampil di daftar proses.
+registry_digest() {
+  local path=${IMAGE#ghcr.io/} token
+  token=$(printf 'user = "%s:%s"\n' "$GHCR_USER" "$GHCR_TOKEN" |
+    curl -fsS -m 20 -K - "https://ghcr.io/token?scope=repository:$path:pull&service=ghcr.io" |
+    sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  [[ -n $token ]] || return 1
+  printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl -fsSI -m 20 -K - \
+      -H "Accept: $MANIFEST_TYPES" \
+      "https://ghcr.io/v2/$path/manifests/$TAG" |
+    tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }'
+}
+
+registry_login() {
+  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
+}
+
+verify_attestation() {
+  local ref="$IMAGE@$1"
+  case $VERIFY in
+    gh)
+      GH_TOKEN=$GHCR_TOKEN gh attestation verify "oci://$ref" \
+        --repo "$SOURCE_REPO" \
+        --signer-workflow "$SOURCE_REPO/$SIGNER_WORKFLOW" \
+        --source-ref refs/heads/main \
+        --bundle-from-oci >/dev/null
+      ;;
+    cosign)
+      cosign verify "$ref" \
+        --certificate-identity "https://github.com/$SOURCE_REPO/$SIGNER_WORKFLOW@refs/heads/main" \
+        --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+        --certificate-github-workflow-ref refs/heads/main >/dev/null
+      ;;
+  esac
+}
+
+label() {
+  docker image inspect "$1" --format "{{ index .Config.Labels \"$2\" }}" 2>/dev/null || true
+}
+
+running_cid() { compose ps -q "$SERVICE" 2>/dev/null | head -n 1; }
+
+# Sehat = HEALTHCHECK image "healthy" dan /api/health melaporkan SHA build yang diharapkan.
+wait_healthy() {
+  local want_sha=$1 i cid status body
+  for ((i = 1; i <= HEALTH_RETRIES; i++)); do
+    sleep "$HEALTH_INTERVAL"
+    cid=$(running_cid)
+    [[ -n $cid ]] || continue
+    status=$(docker inspect -f '{{ if .State.Health }}{{ .State.Health.Status }}{{ end }}' "$cid" 2>/dev/null || true)
+    [[ $status == unhealthy ]] && return 1
+    [[ $status == healthy ]] || continue
+    body=$(docker exec "$cid" /nodejs/bin/node -e \
+      "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text()).then(t=>process.stdout.write(t),()=>process.exit(1))" \
+      2>/dev/null || true)
+    if [[ $body == *'"status":"ok"'* && (-z $want_sha || $body == *"\"sha\":\"$want_sha\""*) ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+switch_to() {
+  docker tag "$IMAGE@$1" "$LOCAL_TAG"
+  compose up -d --no-deps "$SERVICE"
+}
+
+# Simpan image yang berjalan dan sebelumnya (target rollback); sisanya dihapus.
+prune_images() {
+  local d
+  docker images --digests --format '{{ .Digest }}' "$IMAGE" | sort -u | while read -r d; do
+    [[ $d == "$TO_DIGEST" || $d == "$FROM_DIGEST" || $d == '<none>' ]] && continue
+    docker rmi "$IMAGE@$d" >/dev/null 2>&1 || true
+  done
+}
+
+psql_postgres() {
+  compose exec -T postgres gosu postgres psql -X -v ON_ERROR_STOP=1 -Atqc "$1"
+}
+
+# Postgres sehat dan pengarsipan WAL (WAL-G) tidak sedang gagal.
+db_preflight() {
+  local cid health archive
+  cid=$(compose ps -q postgres | head -n 1)
+  [[ -n $cid ]] || return 1
+  health=$(docker inspect -f '{{ .State.Health.Status }}' "$cid") || return 1
+  [[ $health == healthy ]] || return 1
+  archive=$(psql_postgres "select last_archived_time is not null and (last_failed_time is null or last_failed_time < last_archived_time) from pg_stat_archiver") || return 1
+  [[ $archive == t ]]
+}
+
+# Migrasi ikut rilis: /app/db/migrations di image disalin ke $ROOT/migrations (dipasang
+# read-only ke container migrate). Salinan sebelumnya disimpan sebagai migrations.prev.
+extract_migrations() {
+  local cid new=$ROOT/migrations.new
+  rm -rf "$new"
+  mkdir -p "$new"
+  cid=$(docker create "$IMAGE@$TO_DIGEST") || return 1
+  if ! docker cp "$cid:/app/db/migrations/." "$new/" >/dev/null; then
+    docker rm "$cid" >/dev/null || true
+    return 1
+  fi
+  docker rm "$cid" >/dev/null || true
+  chmod -R u=rwX,go=rX "$new"
+  rm -rf "$ROOT/migrations.prev"
+  if [[ -d $ROOT/migrations ]]; then mv "$ROOT/migrations" "$ROOT/migrations.prev"; fi
+  mv "$new" "$ROOT/migrations"
+}
+
+# Restore point sebelum migrasi (target PITR bila migrasi merusak data), lalu dbmate up
+# sebagai dompetku_owner (env/migrate.env). Satu migrator: kunci flock deployer.
+migrate() {
+  psql_postgres "select pg_create_restore_point('deploy-${TO_SHA:0:12}')" >/dev/null || return 1
+  compose run --rm -T migrate --wait up
+}
+
+# --- 1. Digest kandidat ----------------------------------------------------------------------
+read -r FROM_DIGEST FROM_CREATED _ 2>/dev/null <"$STATE_DIR/current" || {
+  FROM_DIGEST=''
+  FROM_CREATED=''
+}
+
+if [[ -n $WANT_DIGEST ]]; then
+  TO_DIGEST=$WANT_DIGEST
+else
+  TO_DIGEST=$(registry_digest) || die "gagal membaca $IMAGE:$TAG dari GHCR"
+  [[ $TO_DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || die "digest tidak valid dari GHCR: '$TO_DIGEST'"
+fi
+
+if [[ $TO_DIGEST == "$FROM_DIGEST" ]]; then
+  exit 0 # tidak ada rilis baru; tanpa baris audit agar log tidak penuh tiap 5 menit
+fi
+if [[ -z $WANT_DIGEST ]] && grep -qxF "$TO_DIGEST" "$STATE_DIR/failed"; then
+  log "digest $TO_DIGEST pernah gagal, menunggu rilis baru"
+  exit 0
+fi
+# Digest yang pernah berjalan lalu digantikan = lebih tua (tag main dipaksa mundur).
+if ((!ALLOW_OLDER)) && awk -F'\t' -v d="$TO_DIGEST" '$2 == d && $3 == "ok"' "$STATE_DIR/history.tsv" | grep -q .; then
+  fail 2 rejected "digest $TO_DIGEST pernah dideploy sebelumnya (lebih tua dari yang berjalan)"
+fi
+
+log "kandidat $TO_DIGEST (berjalan: ${FROM_DIGEST:-tidak ada})"
+
+# --- 2. Verifikasi attestation sebelum menarik --------------------------------------------------
+registry_login || die 'docker login ghcr.io gagal'
+# Tidak dicatat sebagai `failed`: galat jaringan sementara tidak boleh mengunci rilis sah.
+verify_attestation "$TO_DIGEST" || fail 2 rejected "attestation $VERIFY tidak valid untuk $TO_DIGEST"
+
+docker pull -q "$IMAGE@$TO_DIGEST" >/dev/null || die "docker pull $TO_DIGEST gagal"
+TO_SHA=$(label "$IMAGE@$TO_DIGEST" org.opencontainers.image.revision)
+TO_CREATED=$(label "$IMAGE@$TO_DIGEST" org.opencontainers.image.created)
+[[ $TO_SHA =~ ^[0-9a-f]{40}$ ]] || fail 2 rejected "label revision tidak valid: '$TO_SHA'"
+[[ $TO_CREATED =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] || fail 2 rejected "label created tidak valid: '$TO_CREATED'"
+
+# --- 3. Tolak yang lebih tua (waktu commit UTC, dibandingkan leksikal) -------------------------
+if ((!ALLOW_OLDER)) && [[ -n $FROM_CREATED && $TO_CREATED < "$FROM_CREATED" ]]; then
+  echo "$TO_DIGEST" >>"$STATE_DIR/failed"
+  fail 2 rejected "commit $TO_CREATED lebih tua dari yang berjalan $FROM_CREATED"
+fi
+
+# --- 4. Preflight ------------------------------------------------------------------------------
+free_mb=$(df -Pm /var/lib/docker 2>/dev/null | awk 'NR == 2 { print $4 }')
+[[ ${free_mb:-0} -ge $MIN_FREE_MB ]] || fail 2 rejected "disk /var/lib/docker sisa ${free_mb:-?} MB < $MIN_FREE_MB MB"
+compose config --services | grep -qx "$SERVICE" || fail 2 rejected "layanan $SERVICE tidak ada di $ROOT/compose.yml"
+db_preflight || fail 2 rejected 'postgres tidak sehat atau pengarsipan WAL gagal'
+
+# --- 5. Migrasi (expand/contract; tidak ada down-migration saat rollback) ---------------------
+extract_migrations || fail 1 migrate_failed 'gagal menyalin migrasi dari image; web tidak diganti'
+migrate || {
+  echo "$TO_DIGEST" >>"$STATE_DIR/failed"
+  fail 1 migrate_failed 'dbmate up gagal; web tidak diganti'
+}
+
+# --- 6. Ganti web, cek health, rollback bila gagal --------------------------------------------
+switch_to "$TO_DIGEST" || log 'compose up rilis baru gagal'
+if wait_healthy "$TO_SHA"; then
+  printf '%s %s %s\n' "$TO_DIGEST" "$TO_CREATED" "$TO_SHA" >"$STATE_DIR/current.tmp"
+  mv "$STATE_DIR/current.tmp" "$STATE_DIR/current"
+  audit ok
+  log "selesai: $TO_SHA"
+  prune_images
+  exit 0
+fi
+
+echo "$TO_DIGEST" >>"$STATE_DIR/failed"
+if [[ -z $FROM_DIGEST ]]; then
+  compose stop "$SERVICE" || true
+  fail 3 failed_no_previous 'health gagal, tidak ada digest sebelumnya; web dihentikan'
+fi
+log "health gagal, rollback ke $FROM_DIGEST"
+FROM_SHA=$(label "$IMAGE@$FROM_DIGEST" org.opencontainers.image.revision)
+if switch_to "$FROM_DIGEST" && wait_healthy "$FROM_SHA"; then
+  fail 3 rolled_back "health $TO_SHA gagal, kembali ke $FROM_DIGEST"
+fi
+fail 4 rollback_failed "health $TO_SHA gagal dan rollback ke $FROM_DIGEST juga gagal"
