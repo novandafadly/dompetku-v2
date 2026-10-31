@@ -1,32 +1,32 @@
 'use client';
 
-import { WarningIcon } from '@phosphor-icons/react';
 import { budgetProgress } from '@dompetku/demo-data';
+import { formatRupiah } from '@dompetku/domain';
+import { GaugeIcon } from '@/components/ui/icons/gauge';
+import { EmptyLine, ListCard } from '@/components/ui/list-card';
+import { BudgetRow } from '@/components/ui/rows';
 import type { BerandaContext } from './context';
-import { BerandaSection, EmptyLine, Row } from './section';
 
 export function BudgetsNearLimit({ state, ruang, today }: BerandaContext) {
   const near = budgetProgress(state, ruang, today).filter((p) => p.pct >= 80);
 
   return (
-    <BerandaSection title="Anggaran hampir habis">
+    <ListCard title="Anggaran hampir habis" icon={<GaugeIcon size={18} />}>
       {near.length === 0 ? (
         <EmptyLine>Belum ada anggaran yang mendekati batas.</EmptyLine>
       ) : (
         <ul>
           {near.map((p) => (
-            <Row key={p.budget.categoryId}>
-              <span className="min-w-0 text-base break-words text-text">{p.category.name}</span>
-              <span
-                className={`flex shrink-0 items-center gap-1 text-base font-semibold ${p.pct >= 100 ? 'text-danger' : 'text-warning'}`}
-              >
-                <WarningIcon size={20} weight="fill" aria-hidden="true" />
-                <span>{`${String(p.pct)}% terpakai`}</span>
-              </span>
-            </Row>
+            <BudgetRow
+              key={p.budget.categoryId}
+              name={p.category.name}
+              wajib={p.budget.wajib}
+              pct={p.pct}
+              detail={`${formatRupiah(p.spent)} dari ${formatRupiah(p.budget.amount)} · sisa ${formatRupiah(Math.max(0, p.budget.amount - p.spent))}`}
+            />
           ))}
         </ul>
       )}
-    </BerandaSection>
+    </ListCard>
   );
 }

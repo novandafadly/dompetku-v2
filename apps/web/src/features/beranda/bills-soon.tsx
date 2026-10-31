@@ -1,10 +1,10 @@
 'use client';
 
-import { WarningIcon } from '@phosphor-icons/react';
-import { addDays, dayLabel, daysInclusive } from '@dompetku/domain';
-import { MoneyText } from '@/components/ui/money-text';
+import { addDays, dayOfMonth, dueLabel, weekdayShort } from '@dompetku/domain';
+import { CalendarDotsIcon } from '@/components/ui/icons/calendar-dots';
+import { EmptyLine, ListCard } from '@/components/ui/list-card';
+import { BillRow } from '@/components/ui/rows';
 import type { BerandaContext } from './context';
-import { BerandaSection, EmptyLine, Row } from './section';
 
 export function BillsSoon({ state, ruang, today }: BerandaContext) {
   const limit = addDays(today, 7);
@@ -13,32 +13,24 @@ export function BillsSoon({ state, ruang, today }: BerandaContext) {
     .sort((a, b) => (a.dueOn < b.dueOn ? -1 : a.dueOn > b.dueOn ? 1 : 0));
 
   return (
-    <BerandaSection title="Tagihan 7 hari">
+    <ListCard title="Tagihan 7 hari" icon={<CalendarDotsIcon size={18} />}>
       {bills.length === 0 ? (
         <EmptyLine>Tidak ada tagihan dalam 7 hari ke depan.</EmptyLine>
       ) : (
         <ul>
-          {bills.map((b) => {
-            const overdue = b.dueOn < today;
-            return (
-              <Row key={b.id}>
-                <div className="min-w-0">
-                  <p className="text-base break-words text-text">{b.name}</p>
-                  {overdue ? (
-                    <p className="flex items-center gap-1 text-sm text-danger">
-                      <WarningIcon size={16} weight="fill" aria-hidden="true" />
-                      <span>{`Lewat ${String(daysInclusive(b.dueOn, today) - 1)} hari`}</span>
-                    </p>
-                  ) : (
-                    <p className="text-sm text-text-muted">{dayLabel(b.dueOn, today)}</p>
-                  )}
-                </div>
-                <MoneyText value={b.amount} />
-              </Row>
-            );
-          })}
+          {bills.map((b) => (
+            <BillRow
+              key={b.id}
+              weekday={weekdayShort(b.dueOn)}
+              day={dayOfMonth(b.dueOn)}
+              name={b.name}
+              due={dueLabel(b.dueOn, today)}
+              overdue={b.dueOn < today}
+              amount={b.amount}
+            />
+          ))}
         </ul>
       )}
-    </BerandaSection>
+    </ListCard>
   );
 }

@@ -1,16 +1,19 @@
 'use client';
 
+import { fullDateLabel } from '@dompetku/domain';
 import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { ActivityFeed } from '@/features/beranda/activity-feed';
+import { BerandaError, BerandaLoading } from '@/features/beranda/beranda-states';
 import { BillsSoon } from '@/features/beranda/bills-soon';
 import { BudgetsNearLimit } from '@/features/beranda/budgets-near-limit';
 import { OnboardingChecklist } from '@/features/beranda/onboarding-checklist';
 import { RecentEntries } from '@/features/beranda/recent-entries';
-import { SafeToSpend } from '@/features/beranda/safe-to-spend';
+import { SafeToSpend, SafeToSpendEmpty } from '@/features/beranda/safe-to-spend';
 import { useOpenCatat, usePreloadCatat } from '@/features/shell/catat';
 import { useDemo } from '@/features/shell/demo-provider';
+import { PageHeader } from '@/features/shell/page-header';
 
 const AddAccountSheet = dynamic(
   () => import('@/features/dompet/add-account-sheet').then((m) => m.AddAccountSheet),
@@ -23,25 +26,61 @@ export default function BerandaPage() {
   const preloadCatat = usePreloadCatat();
   const [adding, setAdding] = useState(false);
   const addMounted = useOpenedOnce(adding);
-  const { state, store, ruang, today, authHref } = demo;
+  const { state, store, ruang, today, authHref, href, entryHref, dataState, retry } = demo;
+  const ctx = { state, store, ruang, today };
+  const header = (
+    <PageHeader
+      title="Beranda"
+      action={
+        <span className="text-label font-semibold text-text-muted">{fullDateLabel(today)}</span>
+      }
+    />
+  );
+
+  if (dataState !== 'ready') {
+    return (
+      <>
+        {header}
+        {dataState === 'loading' ? (
+          <BerandaLoading />
+        ) : (
+          <BerandaError
+            onRetry={retry}
+            onCatat={() => {
+              openCatat();
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const hasOperasional = state.accounts.some(
     (a) => a.ruang === ruang && a.pocket === 'operasional',
   );
   const hasExpense = state.entries.some(
     (e) => e.ruang === ruang && e.kind === 'expense' && e.voidedAt === undefined,
   );
+  const addWallet = () => {
+    setAdding(true);
+  };
   const checklist = (
     <OnboardingChecklist
       state={state}
       ruang={ruang}
       undangHref={authHref('undang')}
-      onAddWallet={() => {
-        setAdding(true);
-      }}
+      onAddWallet={addWallet}
       onCatatIntent={preloadCatat}
       onCatat={() => {
         openCatat();
       }}
+    />
+  );
+  const recent = (
+    <RecentEntries
+      {...ctx}
+      entryHref={(id) => entryHref(ruang, id)}
+      listHref={href(ruang, 'transaksi')}
     />
   );
   const sheet = addMounted ? (
@@ -54,36 +93,41 @@ export default function BerandaPage() {
       today={today}
     />
   ) : null;
+
   if (!hasOperasional) {
     return (
-      <div className="mx-auto max-w-2xl">
-        {checklist}
+      <>
+        {header}
+        <div className="flex flex-col gap-3 laptop:max-w-180 laptop:gap-4">
+          <SafeToSpendEmpty ruang={ruang} today={today} onAddWallet={addWallet} />
+          {checklist}
+          {recent}
+        </div>
         {sheet}
-      </div>
+      </>
     );
   }
 
-  // Tiga keadaan: satu kolom (< 768), daftar berpasangan di bawah kartu (768-1023),
-  // dua kolom kartu | daftar (>= 1024, spec R12).
+  // HP: Aman → Tagihan → Anggaran → (Bersama) Aktivitas → Terakhir, satu kolom.
+  // Tablet: Tagihan + Anggaran berdampingan. Laptop: keputusan di kiri, riwayat di kanan.
   return (
-    <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-      <div className="flex flex-col gap-8">
-        <SafeToSpend {...demo} />
-        {hasExpense ? null : checklist}
-      </div>
-      <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-1">
-        <BillsSoon {...demo} />
-        <BudgetsNearLimit {...demo} />
-        <div className="md:col-span-2 lg:col-span-1">
-          <RecentEntries {...demo} />
-        </div>
-        {ruang === 'bersama' ? (
-          <div className="md:col-span-2 lg:col-span-1">
-            <ActivityFeed {...demo} />
+    <>
+      {header}
+      <div className="grid grid-cols-1 gap-3 tablet:gap-4 laptop:max-w-250 laptop:grid-cols-beranda laptop:items-start laptop:gap-5">
+        <div className="flex flex-col gap-3 tablet:gap-4">
+          <SafeToSpend {...ctx} />
+          {hasExpense ? null : checklist}
+          <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 laptop:grid-cols-autofit-260">
+            <BillsSoon {...ctx} />
+            <BudgetsNearLimit {...ctx} />
           </div>
-        ) : null}
+        </div>
+        <div className="flex flex-col gap-3 tablet:gap-4">
+          {ruang === 'bersama' ? <ActivityFeed {...ctx} /> : null}
+          {recent}
+        </div>
       </div>
       {sheet}
-    </div>
+    </>
   );
 }
