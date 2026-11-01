@@ -63,12 +63,12 @@ describe('akun pertama lewat allowlist (app.settings.owner_email)', () => {
     let state = (await h.service.session(b.headers())).state;
     expect(state?.access.kind).toBe('securing');
     expect(state && (await h.service.securingStep(state))).toBe('verifikasi-email');
-    expect((await h.service.finishSecuring(b.headers())).kind).toBe('email_unverified');
+    expect((await h.service.finishSecuring(b.headers())).result.kind).toBe('email_unverified');
 
     expect(await h.service.verifyEmail(linkFromLastMail(h, 'token'))).toBe(true);
     state = (await h.service.session(b.headers())).state;
     expect(state && (await h.service.securingStep(state))).toBe('faktor');
-    expect((await h.service.finishSecuring(b.headers())).kind).toBe('no_factor');
+    expect((await h.service.finishSecuring(b.headers())).result.kind).toBe('no_factor');
 
     const { codes } = await secureWithTotp(h, b);
     expect(codes).toHaveLength(10);
@@ -122,7 +122,7 @@ describe('undangan', () => {
     const state = (await h.service.session(b.headers())).state;
     expect(state?.amr).toBe('password');
     expect(state?.access.kind).toBe('securing');
-    expect((await h.service.finishSecuring(b.headers())).kind).toBe('no_factor');
+    expect((await h.service.finishSecuring(b.headers())).result.kind).toBe('no_factor');
     const ownerId = await userId(h, OWNER);
     expect((await h.service.listInvitations(ownerId))[0]?.status).toBe('pending');
 
@@ -232,33 +232,107 @@ describe('undangan', () => {
   });
 });
 
-describe('passkey didaftarkan di /amankan', () => {
-  it('sesi enrolling yang baru membuat passkey naik ke amr passkey saat selesai', async () => {
+const insertPasskey = (id: string, cred: string) =>
+  h.admin.query(
+    `insert into auth.passkey ("publicKey", "userId", "credentialID", counter, "deviceType", "backedUp", "createdAt")
+     values ('pk', $1, $2, 0, 'singleDevice', false, now())`,
+    [id, cred],
+  );
+
+describe('faktor terikat ke sesi pendaftarnya', () => {
+  it('passkey: hanya sesi pendaftar yang naik; sesi kata sandi kedua dicabut; token diganti', async () => {
     const { browser: owner } = await bootstrapOwner(h);
     const token = await invite(owner);
-    const b = new Browser('198.51.100.9');
-    b.absorb((await h.service.signUpInvitee(b.headers(), token, 'Farida', PASSWORD)).setCookie);
-    const id = await userId(h, PARTNER);
-    // Baris passkey seperti hasil verifyPasskeyRegistration (WebAuthn tidak bisa di Vitest).
-    await h.admin.query(
-      `insert into auth.passkey ("publicKey", "userId", "credentialID", counter, "deviceType", "backedUp", "createdAt")
-       values ('pk', $1, 'cred-1', 0, 'singleDevice', false, now())`,
-      [id],
+    const victim = new Browser('198.51.100.9');
+    victim.absorb(
+      (await h.service.signUpInvitee(victim.headers(), token, 'Farida', PASSWORD)).setCookie,
     );
-    const state = (await h.service.session(b.headers())).state;
-    expect(state?.access.kind).toBe('securing');
-    expect(state && (await h.service.securingStep(state))).toBe('pemulihan');
-    await h.service.createRecoveryCodes(b.headers());
-    expect((await h.service.finishSecuring(b.headers())).kind).toBe('ok');
-    const after = (await h.service.session(b.headers())).state;
+    // Penyerang yang tahu kata sandi membuka sesi kata sandi kedua (enrolling, sah sebelum ada faktor).
+    const attacker = new Browser('192.0.2.66');
+    const signIn = await h.service.signInPassword(attacker.headers(), PARTNER, PASSWORD);
+    expect(signIn.result.kind).toBe('ok');
+    attacker.absorb(signIn.setCookie);
+    expect((await h.service.session(attacker.headers())).state?.access.kind).toBe('securing');
+
+    // Korban mendaftarkan passkey (baris dari Better Auth + pengikatan ke sesinya).
+    const id = await userId(h, PARTNER);
+    await insertPasskey(id, 'cred-korban');
+    const victimState = (await h.service.session(victim.headers())).state;
+    if (!victimState) throw new Error('sesi korban hilang');
+    await h.service.recordPasskeyEnrollment(victimState, victim.headers());
+
+    // Sesi penyerang dicabut; tanpa pencabutan pun ia tidak ikut naik (lihat tes berikut).
+    expect((await h.service.session(attacker.headers())).state).toBeNull();
+    const step = (await h.service.session(victim.headers())).state;
+    expect(step && (await h.service.securingStep(step))).toBe('pemulihan');
+
+    const oldCookie = victim.headers().get('cookie');
+    await h.service.createRecoveryCodes(victim.headers());
+    const done = await h.service.finishSecuring(victim.headers());
+    expect(done.result.kind).toBe('ok');
+    // Token lama tidak berlaku; cookie baru = sesi penuh ber-amr passkey.
+    expect((await h.service.session(new Headers({ cookie: oldCookie ?? '' }))).state).toBeNull();
+    victim.absorb(done.setCookie);
+    const after = (await h.service.session(victim.headers())).state;
     expect(after?.amr).toBe('passkey');
     expect(after?.access.kind).toBe('full');
+  });
 
-    // Sesi kata sandi baru pada akun berpasskey tidak membuka apa pun.
-    const other = new Browser('198.51.100.10');
-    const r = await h.service.signInPassword(other.headers(), PARTNER, PASSWORD);
-    expect(r.result.kind).toBe('use_passkey');
-    expect(r.setCookie).toBeNull();
+  it('passkey milik sesi lain tidak membuka sesi kata sandi mana pun', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const a = new Browser('198.51.100.9');
+    a.absorb((await h.service.signUpInvitee(a.headers(), token, 'Farida', PASSWORD)).setCookie);
+    const b = new Browser('192.0.2.66');
+    b.absorb((await h.service.signInPassword(b.headers(), PARTNER, PASSWORD)).setCookie);
+    // Passkey ada, tetapi tidak terikat ke sesi mana pun.
+    await insertPasskey(await userId(h, PARTNER), 'cred-lepas');
+    for (const x of [a, b]) {
+      const state = (await h.service.session(x.headers())).state;
+      expect(state?.access).toEqual({ kind: 'denied', reason: 'needs_strong_factor' });
+      expect((await h.service.finishSecuring(x.headers())).result.kind).toBe('not_allowed');
+      await expect(h.service.createRecoveryCodes(x.headers())).rejects.toThrow();
+    }
+  });
+
+  it('TOTP: sesi pendaftar diganti sesi password+totp; sesi kata sandi lain dicabut', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const a = new Browser('198.51.100.9');
+    a.absorb((await h.service.signUpInvitee(a.headers(), token, 'Farida', PASSWORD)).setCookie);
+    const b = new Browser('192.0.2.66');
+    b.absorb((await h.service.signInPassword(b.headers(), PARTNER, PASSWORD)).setCookie);
+    const oldCookie = a.headers().get('cookie') ?? '';
+    const begin = await h.service.totpBegin(a.headers(), PASSWORD);
+    if (begin.kind !== 'ok') throw new Error(begin.kind);
+    const confirm = await h.service.totpConfirm(a.headers(), totp(begin.secret));
+    expect(confirm.result.kind).toBe('ok');
+    a.absorb(confirm.setCookie);
+    expect((await h.service.session(new Headers({ cookie: oldCookie }))).state).toBeNull();
+    expect((await h.service.session(b.headers())).state).toBeNull();
+    const state = (await h.service.session(a.headers())).state;
+    expect(state?.amr).toBe('password+totp');
+    expect(state?.access.kind).toBe('securing');
+  });
+
+  it('kata sandi benar pada akun berpasskey: respons sama dengan kata sandi salah', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const a = new Browser('198.51.100.9');
+    a.absorb((await h.service.signUpInvitee(a.headers(), token, 'Farida', PASSWORD)).setCookie);
+    await insertPasskey(await userId(h, PARTNER), 'cred-1');
+    const right = await h.service.signInPassword(
+      new Browser('192.0.2.7').headers(),
+      PARTNER,
+      PASSWORD,
+    );
+    const wrong = await h.service.signInPassword(
+      new Browser('192.0.2.8').headers(),
+      PARTNER,
+      'salah-salah-salah',
+    );
+    expect(right).toEqual(wrong);
+    expect(right.result).toEqual({ kind: 'invalid' });
   });
 });
 
@@ -327,7 +401,7 @@ describe('kode pemulihan', () => {
       'invalid',
     );
     // Selesai mengamankan butuh kode pemulihan baru dari sesi ini.
-    expect((await h.service.finishSecuring(lost.headers())).kind).toBe('no_factor');
+    expect((await h.service.finishSecuring(lost.headers())).result.kind).toBe('no_factor');
   });
 
   it('kode salah dan email tak dikenal: respons sama', async () => {
@@ -389,5 +463,29 @@ describe('jeda gagal dan lupa kata sandi', () => {
     expect(r.result.kind).toBe('totp');
     b.absorb(r.setCookie);
     expect((await h.service.verifyTotpSignIn(b.headers(), totp(secret))).result.kind).toBe('ok');
+  });
+});
+
+describe('jeda tanpa celah periksa-lalu-catat', () => {
+  it('8 percobaan paralel: paling banyak 5 diperiksa, sisanya langsung dijeda', async () => {
+    await bootstrapOwner(h);
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        h.service.signInPassword(
+          new Browser(`192.0.2.${String(100 + i)}`).headers(),
+          OWNER,
+          'salah-salah-salah',
+        ),
+      ),
+    );
+    const invalid = results.filter((r) => r.result.kind === 'invalid').length;
+    expect(invalid).toBeLessThanOrEqual(4);
+    expect(results.filter((r) => r.result.kind === 'throttled').length).toBeGreaterThanOrEqual(4);
+    const after = await h.service.signInPassword(
+      new Browser('192.0.2.200').headers(),
+      OWNER,
+      PASSWORD,
+    );
+    expect(after.result.kind).toBe('throttled');
   });
 });

@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import pg from 'pg';
 import { createPools, type Pools } from '../../db';
 import type { ServerEnv } from '../../env';
-import { LogMailer } from '../mailer';
+import { LogMailer, type Mailer } from '../mailer';
 import { AuthService, type SetCookie } from '../service';
 
 export const OWNER = 'novanda@example.test';
@@ -23,7 +23,7 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-export function createHarness(): Harness {
+export function createHarness(extraMailer?: Mailer): Harness {
   const env: ServerEnv = {
     databaseUrl: url('TEST_DATABASE_URL'),
     authSecret: 'tes-integrasi-bukan-rahasia-0123456789abcdef',
@@ -37,9 +37,13 @@ export function createHarness(): Harness {
   };
   const pools = createPools(env.databaseUrl);
   const mailer = new LogMailer();
+  // Mailer tambahan (mis. lambat) menerima email yang sama; LogMailer tetap mencatatnya.
+  const sender: Mailer = extraMailer
+    ? { send: (m) => Promise.all([mailer.send(m), extraMailer.send(m)]).then(() => undefined) }
+    : mailer;
   const admin = new pg.Pool({ connectionString: url('TEST_DATABASE_ADMIN_URL'), max: 2 });
   return {
-    service: new AuthService(env, pools, mailer),
+    service: new AuthService(env, pools, sender),
     mailer,
     admin,
     pools,
@@ -138,7 +142,8 @@ export async function secureWithTotp(
   b.absorb(confirm.setCookie);
   const codes = await h.service.createRecoveryCodes(b.headers());
   const done = await h.service.finishSecuring(b.headers());
-  if (done.kind !== 'ok') throw new Error(`selesai gagal: ${done.kind}`);
+  if (done.result.kind !== 'ok') throw new Error(`selesai gagal: ${done.result.kind}`);
+  b.absorb(done.setCookie);
   return { secret: begin.secret, codes };
 }
 

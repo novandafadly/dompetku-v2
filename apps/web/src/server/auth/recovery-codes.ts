@@ -71,3 +71,13 @@ export async function verifyRecoveryCode(code: string, phc: string): Promise<boo
 /** Hash pengganti untuk user yang tidak ada, agar waktu respons setara (respons seragam). */
 export const DUMMY_RECOVERY_HASH =
   '$argon2id$v=19$m=4096,t=3,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+/**
+ * Tepat RECOVERY_CODE_COUNT hash untuk diverifikasi: sisa diisi hash pengganti, kelebihan
+ * dipotong. Jumlah verifikasi argon2 sama untuk email terdaftar, tak terdaftar, atau sisa kode.
+ */
+export function padRecoveryHashes(hashes: readonly string[]): string[] {
+  const out = hashes.slice(0, RECOVERY_CODE_COUNT);
+  while (out.length < RECOVERY_CODE_COUNT) out.push(DUMMY_RECOVERY_HASH);
+  return out;
+}

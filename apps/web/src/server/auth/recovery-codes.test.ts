@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DUMMY_RECOVERY_HASH,
+  RECOVERY_CODE_COUNT,
+  padRecoveryHashes,
   generateRecoveryCodes,
   hashRecoveryCode,
   normalizeRecoveryCode,
@@ -34,5 +36,15 @@ describe('kode pemulihan', () => {
 
   it('hash pengganti tidak pernah cocok', async () => {
     expect(await verifyRecoveryCode('00000-00000', DUMMY_RECOVERY_HASH)).toBe(false);
+  });
+
+  it('selalu tepat 10 hash untuk diverifikasi', () => {
+    expect(padRecoveryHashes([])).toHaveLength(RECOVERY_CODE_COUNT);
+    expect(padRecoveryHashes(['a', 'b'])).toEqual([
+      'a',
+      'b',
+      ...Array<string>(8).fill(DUMMY_RECOVERY_HASH),
+    ]);
+    expect(padRecoveryHashes(Array<string>(12).fill('x'))).toHaveLength(RECOVERY_CODE_COUNT);
   });
 });

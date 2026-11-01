@@ -8,7 +8,8 @@ import * as z from 'zod';
 import type { Pools } from '../db';
 import type { ServerEnv } from '../env';
 import { mails, type Mailer } from './mailer';
-import { FRESH_AGE_S, SESSION_IDLE_S, SESSION_UPDATE_AGE_S, amrForPath } from './policy';
+import { background } from './background';
+import { FRESH_AGE_S, SESSION_IDLE_S, SESSION_UPDATE_AGE_S, amrForPath, type Amr } from './policy';
 
 /**
  * Konfigurasi Better Auth 1.7.12 (ADR 0007). Opsi wajib TRD §3.4:
@@ -25,13 +26,18 @@ import { FRESH_AGE_S, SESSION_IDLE_S, SESSION_UPDATE_AGE_S, amrForPath } from '.
 /** Konteks pendaftaran dari tautan undangan yang sah: email terbukti milik pemegang tautan. */
 export const inviteSignup = new AsyncLocalStorage<{ email: string }>();
 
-/** Sesi yang dibuat di dalam konteks ini = masuk dengan kode pemulihan (`amr` = recovery). */
-const recoveryLogin = new AsyncLocalStorage<true>();
+/** Sesi yang dibuat di dalam konteks ini memakai `amr` ini (kode pemulihan, naik penuh). */
+const amrOverride = new AsyncLocalStorage<Amr>();
 
-/** Masuk dengan kode pemulihan: kode diverifikasi service; endpoint ini mencabut sesi lain lalu membuat sesi `recovery`. */
-const recoverySignIn = () =>
+/**
+ * Endpoint server-only (tidak ada handler HTTP):
+ * - `/recovery/sign-in`: kode sudah diverifikasi service; cabut semua sesi, buat sesi `recovery`.
+ * - `/session/promote`: akhir /amankan; ganti sesi lama dengan sesi baru (token baru) ber-`amr`
+ *   faktor kuat, sehingga token yang pernah beredar saat enrolling tidak ikut naik.
+ */
+const dompetkuSessions = () =>
   ({
-    id: 'dompetku-recovery',
+    id: 'dompetku-sessions',
     endpoints: {
       recoverySignIn: createAuthEndpoint.serverOnly(
         { path: '/recovery/sign-in', method: 'POST', body: z.object({ userId: z.uuid() }) },
@@ -39,11 +45,32 @@ const recoverySignIn = () =>
           const user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
           if (!user) throw new Error('user tidak ditemukan');
           await ctx.context.internalAdapter.deleteUserSessions(user.id);
-          const session = await recoveryLogin.run(true, () =>
+          const session = await amrOverride.run('recovery', () =>
             ctx.context.internalAdapter.createSession(user.id),
           );
           await setSessionCookie(ctx, { session, user });
           return ctx.json({ userId: user.id });
+        },
+      ),
+      promoteSession: createAuthEndpoint.serverOnly(
+        {
+          path: '/session/promote',
+          method: 'POST',
+          body: z.object({
+            userId: z.uuid(),
+            token: z.string().min(1),
+            amr: z.enum(['passkey', 'password+totp']),
+          }),
+        },
+        async (ctx) => {
+          const user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
+          if (!user) throw new Error('user tidak ditemukan');
+          const session = await amrOverride.run(ctx.body.amr, () =>
+            ctx.context.internalAdapter.createSession(user.id),
+          );
+          await ctx.context.internalAdapter.deleteSession(ctx.body.token);
+          await setSessionCookie(ctx, { session, user });
+          return ctx.json({ token: session.token });
         },
       ),
     },
@@ -81,7 +108,9 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
       resetPasswordTokenExpiresIn: 30 * 60,
       sendResetPassword: async ({ user, token }) => {
         const url = `${env.baseURL}/lupa-sandi/atur?token=${encodeURIComponent(token)}`;
-        await mailer.send(mails.resetPassword(user.email, url));
+        // Di latar: respons tidak menunggu Resend (waktu sama untuk email terdaftar/tidak).
+        background(mailer.send(mails.resetPassword(user.email, url)));
+        await Promise.resolve();
       },
       onPasswordReset: async ({ user }) => {
         await onPasswordReset?.(user.id);
@@ -93,7 +122,8 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
       expiresIn: 24 * 60 * 60,
       sendVerificationEmail: async ({ user, token }) => {
         const url = `${env.baseURL}/verifikasi-email?token=${encodeURIComponent(token)}`;
-        await mailer.send(mails.verifyEmail(user.email, url));
+        background(mailer.send(mails.verifyEmail(user.email, url)));
+        await Promise.resolve();
       },
     },
     // Email terikat undangan/owner_email dan dikunci trigger user_email_immutable (DK422).
@@ -107,6 +137,8 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
       additionalFields: { amr: { type: 'string', required: false, input: false } },
     },
     advanced: {
+      // Tugas latar Better Auth (runInBackgroundOrAwait) tidak ditunggu respons.
+      backgroundTasks: { handler: (task) => void task },
       database: { generateId: 'uuid' },
       ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
       useSecureCookies: false,
@@ -136,7 +168,7 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
             Promise.resolve({
               data: {
                 ...session,
-                amr: recoveryLogin.getStore() ? 'recovery' : amrForPath(ctx?.path),
+                amr: amrOverride.getStore() ?? amrForPath(ctx?.path),
               },
             }),
         },
@@ -162,7 +194,7 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
             }),
           ]
         : []),
-      recoverySignIn(),
+      dompetkuSessions(),
     ],
   });
 }
