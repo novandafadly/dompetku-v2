@@ -3,7 +3,7 @@
 -- dan jobs.purge_voided (tombstone tanpa nominal), purge_idempotency, append-only entry_history,
 -- dq_reconcile nol temuan. Jam dipatok 2026-03-20 WIB lalu dimajukan.
 begin;
-select plan(58);
+select plan(61);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -98,6 +98,15 @@ select tests.owner_exec(null, format($f$do $d$
     set constraints all immediate;
   end $d$$f$, :'np', :'tal', tests.n(), tests.n(), :'np', :'bca', :'np', tests.n()));
 select throws_ok(format($$select pg_temp.void(%L, 1)$$, :'tal'), 'DK422', 'has_dependents', 'talangan yang sudah diganti tidak bisa dibatalkan');
+
+-- expected_version NULL selalu DK400 (review S5: dulu lolos karena version <> NULL = NULL).
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), q), 'DK400', 'invalid_argument',
+  t || ' tanpa expected_version = DK400')
+from (values
+  ('update_entry', format($q$select api.update_entry(gen_random_uuid(), %L, null, %L, 1, null, null, null, false)$q$, :'e7', :'bca')),
+  ('void_entry', format($q$select api.void_entry(gen_random_uuid(), %L, null)$q$, :'tal')),
+  ('purge_entry', format($q$select api.purge_entry(%L, null)$q$, :'e7'))
+) v (t, q);
 
 -- ===== purge_entry (Sampah: hapus permanen) =====
 select pg_temp.spend(:'bca', 'expense', 3000) as p \gset

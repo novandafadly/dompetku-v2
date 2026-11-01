@@ -3,7 +3,7 @@
 -- idempotensi, versi, saldo negatif, saldo awal 7 hari, cocokkan saldo, arsip, angka ringkasan.
 -- Semua lewat fungsi api.* sebagai role web; jam dipatok 2026-03-20 WIB.
 begin;
-select plan(95);
+select plan(101);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -234,6 +234,12 @@ select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
     $q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1, null, null, null, false)$q$, :'e5', :'bca')),
   'DK422', 'kind_not_editable', 'transfer tidak diubah lewat update_entry');
 select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
+    $q$select api.update_entry(gen_random_uuid(), %L, 3, null, 1, null, null, null, false)$q$, :'e1')),
+  'DK400', 'invalid_argument', 'update tanpa dompet = DK400 (bukan DK404)');
+select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
+    $q$select api.update_entry(gen_random_uuid(), %L, null, %L, 1, null, null, null, false)$q$, :'e1', :'bca')),
+  'DK400', 'invalid_argument', 'update tanpa expected_version = DK400 (bukan lolos)');
+select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
     $q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1, null, null, null, false)$q$, :'e2', :'kas')),
   'DK422', 'space_mismatch', 'update ke dompet ruang lain ditolak');
 
@@ -287,6 +293,22 @@ select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
 select is(tests.web_val(tests.n(), format($$select (s.operasional = w.operasional)::text
   from api.safe_to_spend(%L) s, api.net_worth(%L) w$$, :'np', :'np')), 'true',
   'safe_to_spend dan net_worth memakai himpunan dompet operasional yang sama');
+
+-- ===== Bersama: setoran dan pengambilan dengan fee dari dompet Bersama (Februari) =====
+select tests.web_val(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 70000, 0, '2026-02-15', 'setor feb')$$,
+  :'np', :'bca', :'kas'));
+select tests.web_val(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 20000, 2000, '2026-02-15', 'ambil feb', 'Ambil')$$,
+  :'sh', :'kas', :'bca'));
+select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month_summary(%L, '2026-02-01') m$$, :'sh')),
+  '(0,2000,-2000,0,0,90000)', 'month_summary Bersama: fee dari dompet Bersama = pengeluaran, setoran bukan pemasukan');
+select is(tests.web_val(tests.f(), format($$select string_agg(report_class || '=' || inflow || '/' || outflow, ',' order by report_class)
+  from api.period_summary(%L, '2026-02-01', '2026-02-28')$$, :'sh')),
+  'expense_fee=0/2000,x_diambil_anggota=0/20000,x_setoran_anggota=70000/0', 'period_summary Bersama: x_setoran_anggota, x_diambil_anggota, expense_fee');
+select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month_summary(%L, '2026-02-01') m$$, :'np')),
+  '(0,30000,-30000,0,0,90000)', 'month_summary Pribadi Februari: setor/ambil hanya transfer, fee Bersama tidak dobel');
+select is(tests.web_val(tests.n(), format($$select string_agg(report_class, ',' order by report_class)
+  from api.period_summary(%L, '2026-02-01', '2026-02-28')$$, :'np')), 'expense,x_ambil_bersama,x_setor_bersama',
+  'period_summary Pribadi Februari');
 
 -- ===== Bentuk lines rusak (lewat owner) = DK500 saat set constraints all immediate (BSD §13 #18) =====
 select throws_ok(format($$select tests.owner_exec(null, %L)$$, format($q$do $d$

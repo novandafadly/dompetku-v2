@@ -4,10 +4,11 @@
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 begin;
-select plan(11);
+select plan(18);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
+select tests.peer_val('adm', $$update app.settings set value = 'prod' where key = 'env' returning value$$);
 select tests.peer_val('adm', 'select tests.fixture()');
 select tests.peer_val('adm', $$select tests.space_id(tests.n(), 'personal')$$) as np \gset
 select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'A', 'operasional', 100)$$, :'np')) as acc_a \gset
@@ -70,6 +71,43 @@ select tests.peer_blocked('b');
 select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '^ERROR: .*balance_not_zero', 'arsip paralel catat = balance_not_zero');
 select tests.peer_exec('b', 'rollback');
+
+-- ===== Void paralel update entri yang sama: yang kedua = DK409 =====
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'income', 3)$$, :'np', :'acc_b'))::jsonb)
+  ->> 'entry_id' as ent \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.update_entry(gen_random_uuid(), %L, 1, %L, 4, null, null, null, false)$$, :'ent', :'acc_b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'ent'));
+select ok(tests.peer_blocked('b'), 'void menunggu kunci entri');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*version_conflict', 'void dengan versi sebelum update = DK409');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) from app.entries where id = %L$$, :'ent')),
+  '2 true', 'entri tetap hidup dengan versi update');
+
+-- ===== jobs.purge_voided paralel pulihkan: entri yang dipulihkan tidak ditombstone =====
+-- Jam tiruan per koneksi (env test di-commit lewat adm, dikembalikan ke prod di akhir).
+select tests.peer_val('adm', $$update app.settings set value = 'test' where key = 'env' returning value$$);
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'income', 9)$$, :'np', :'acc_b'))::jsonb)
+  ->> 'entry_id' as rv \gset
+select tests.peer_val('a', $$select set_config('app.now_override', '2026-01-01 10:00+07', false)$$);
+select tests.peer_val('a', format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'rv'));
+select tests.peer_val('a', $$select set_config('app.now_override', '2026-03-31 10:00+07', false)$$);
+select tests.peer_open('w', 'dompetku_worker');
+select tests.peer_val('w', $$select set_config('app.now_override', '2026-04-02 10:00+07', false)$$);
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.restore_entry(gen_random_uuid(), %L, 2)$$, :'rv'));
+select tests.peer_send('w', 'select jobs.purge_voided()');
+select ok(tests.peer_blocked('w'), 'purge_voided menunggu kunci entri yang sedang dipulihkan');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('w'), '0', 'purge_voided melewati entri yang dipulihkan');
+select is(tests.owner_val(null, format($$select (select count(*) from app.entries where id = %1$L and voided_at is null) || ' '
+  || (select count(*) from app.entry_tombstones where entry_id = %1$L)$$, :'rv')), '1 0', 'entri hidup, tanpa tombstone');
+select is(tests.peer_val('w', 'select jobs.purge_voided()::text'), '0', 'purge berikutnya tetap jalan');
+select tests.peer_close('w');
+select tests.peer_val('a', $$select set_config('app.now_override', '', false)$$);
+select tests.peer_val('adm', $$update app.settings set value = 'prod' where key = 'env' returning value$$);
 
 select tests.peer_close('a');
 select tests.peer_close('b');

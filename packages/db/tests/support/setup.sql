@@ -179,6 +179,7 @@ create function tests.peer_blocked(p_name text) returns boolean
 language plpgsql security definer set search_path = tests, pg_catalog as $$
 begin
   for i in 1..500 loop
+    perform pg_stat_clear_snapshot();  -- pg_stat_activity di-cache per transaksi
     if exists (select 1 from pg_stat_activity a
                where a.application_name = 'peer_' || p_name and a.wait_event_type = 'Lock') then
       return true;
