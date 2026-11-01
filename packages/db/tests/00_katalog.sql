@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #8), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(21);
+select plan(23);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -114,6 +114,21 @@ select set_eq($$
     ('dompetku_auditor', 'app.invitations', 'SELECT'),
     ('dompetku_auditor', 'app.product_events', 'SELECT') $$,
   'matriks hak tabel web/api/worker/auditor');
+
+-- BSD §12: role audit objek pgaudit punya S/I/U/D di semua tabel app/audit/auth, juga tabel baru.
+select is_empty($$
+  select n.nspname || '.' || c.relname || ' ' || p.priv
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) p (priv)
+  where n.nspname in ('app', 'audit', 'auth') and c.relkind in ('r', 'p')
+    and not has_table_privilege('dompetku_auditlog', c.oid, p.priv) $$,
+  'dompetku_auditlog punya hak audit objek di semua tabel');
+select set_eq($$
+  select n.nspname::text from pg_default_acl d join pg_namespace n on n.oid = d.defaclnamespace,
+         aclexplode(d.defaclacl) a
+  where d.defaclrole = 'dompetku_owner'::regrole and d.defaclobjtype = 'r'
+    and a.grantee = 'dompetku_auditlog'::regrole and a.privilege_type = 'DELETE' $$,
+  array['app', 'audit', 'auth'], 'default privileges auditlog untuk tabel baru di app, audit, auth');
 
 -- Matriks EXECUTE fungsi (pemilik fungsi otomatis punya hak).
 select set_eq($$

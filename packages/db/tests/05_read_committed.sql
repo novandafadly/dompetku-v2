@@ -1,7 +1,7 @@
 -- Isolasi wajib READ COMMITTED (BSD §3, §13 #23): penjaga batas user dan undangan hanya benar
 -- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4 harus menolak.
 begin isolation level repeatable read;
-select plan(7);
+select plan(8);
 
 select throws_ok(q, 'DK500', 'isolation_not_read_committed', 'REPEATABLE READ ditolak: ' || t)
 from (values
@@ -11,6 +11,7 @@ from (values
   ('revoke_invitation', $$select tests.web_exec(tests.n(), $q$select api.revoke_invitation(gen_random_uuid())$q$)$$),
   ('decline_invitation', $$select tests.web_exec(null, $q$select api.decline_invitation(pg_catalog.sha256('x'))$q$)$$),
   ('accept_invitation', $$select tests.web_exec(tests.n(), $q$select api.accept_invitation(pg_catalog.sha256('x'), 'N')$q$)$$),
+  ('purge_unfinished_users', $$select tests.worker_val(null, $q$select jobs.purge_unfinished_users()$q$)$$),
   ('provision_user', $$select tests.api_exec(tests.n(), $q$select private.provision_user(app.current_user_id(), 'N', null, null)$q$)$$)
 ) v (t, q);
 
