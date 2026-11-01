@@ -2,6 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import { isAPIError } from 'better-auth/api';
+import { hashPassword } from 'better-auth/crypto';
+import { isPasswordCompromised } from 'better-auth/plugins';
 import { domainError, withAnon, withUser, type Pools } from '../db';
 import type { ServerEnv } from '../env';
 import { createAuth, inviteSignup, type Auth } from './config';
@@ -313,7 +315,10 @@ export class AuthService {
       return fail();
     }
     if ('twoFactorRedirect' in res.response) {
-      await this.succeeded(keys);
+      // Baru langkah pertama: hanya hitungan akun yang dihapus. Hitungan IP tetap sampai masuk
+      // penuh (verifyTotpSignIn), agar satu akun ber-TOTP yang kata sandinya diketahui tidak
+      // bisa dipakai untuk mereset jeda IP saat menebak kata sandi akun lain.
+      await this.succeeded([throttleKey('password', 'akun', normalized)]);
       return { result: { kind: 'totp' }, setCookie: res.headers };
     }
     const userId = res.response.user.id;
@@ -348,7 +353,8 @@ export class AuthService {
         returnHeaders: true,
       });
       const userId = res.response.user.id;
-      await this.succeeded(keys);
+      // Masuk penuh: hitungan IP kata sandi yang ditahan di signInPassword ikut dihapus.
+      await this.succeeded([...keys, ...this.keys('password', headers, null)]);
       await this.audit(userId, 'login_success', headers, { amr: 'password+totp' });
       const facts = await this.userFacts(userId);
       return {
@@ -468,8 +474,8 @@ export class AuthService {
    * Akun pertama (keputusan pemilik #5): hanya email `app.settings.owner_email`, dan hanya
    * sebelum rumah tangga ada (trigger user_admission). Respons selalu "periksa email", apa pun
    * hasilnya; tidak ada sesi yang dibuat. Sesi pertama lahir di /masuk setelah email dikonfirmasi.
-   * Email lain tetap menghitung hash kata sandi dan email dikirim di latar, agar waktu respons
-   * tidak membocorkan owner_email.
+   * Email lain menjalankan cek yang sama (panjang, HIBP bila aktif, hash kata sandi) dan email
+   * dikirim di latar, agar isi dan waktu respons tidak membocorkan owner_email.
    */
   async signUpOwner(
     headers: Headers,
@@ -492,8 +498,21 @@ export class AuthService {
       return r.rows[0]?.value ?? null;
     });
     if (owner === null || owner !== normalized) {
-      if (password.length >= 12 && password.length <= 128)
-        await (await this.auth.$context).password.hash(password);
+      // Meniru signUpEmail jalur pemilik: batas panjang, cek HIBP (bila aktif), lalu hash.
+      // Respons dan waktunya sama, jadi tidak membocorkan owner_email. Hash langsung dari
+      // better-auth/crypto: hash di $context dibungkus plugin HIBP yang butuh konteks endpoint.
+      if (password.length < 12) return { kind: 'weak', reason: 'too_short' };
+      if (password.length > 128) return { kind: 'weak', reason: 'too_long' };
+      if (this.env.checkPwnedPasswords) {
+        try {
+          if (await isPasswordCompromised(password)) return { kind: 'weak', reason: 'compromised' };
+        } catch (e) {
+          // Sama dengan jalur pemilik saat HIBP gagal: signUpEmail gagal, respons seragam.
+          if (!isAPIError(e)) throw e;
+          return { kind: 'check_email' };
+        }
+      }
+      await hashPassword(password);
       return { kind: 'check_email' };
     }
     try {
@@ -708,7 +727,14 @@ export class AuthService {
       await this.succeeded(keys);
       // Token sesi baru hanya ada di Set-Cookie (respons verifyTOTP membawa token lama).
       const fresh = sessionTokenFromSetCookie(res.headers);
-      if (fresh) await this.revokeOtherSessions(state.userId, fresh);
+      if (!fresh) {
+        // Sesi baru tidak bisa dikenali: tutup gagal. Semua sesi user dicabut (termasuk yang
+        // baru) agar sesi kata sandi lain tidak tetap hidup; user masuk lagi dengan TOTP.
+        await this.pools.auth.query('delete from auth.session where "userId" = $1', [state.userId]);
+        await this.audit(state.userId, 'session_revoked', headers, { reason: 'totp_no_token' });
+        throw new Error('token sesi baru tidak ada di Set-Cookie verifyTOTP');
+      }
+      await this.revokeOtherSessions(state.userId, fresh);
       await this.audit(state.userId, 'factor_added', headers, { method: 'totp' });
       return { result: { kind: 'ok' }, setCookie: res.headers };
     } catch (e) {

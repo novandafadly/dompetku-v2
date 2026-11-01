@@ -9,6 +9,10 @@ export async function expectNoSeriousViolations(
   page: Page,
   opts: { tags?: string[]; include?: string } = {},
 ): Promise<void> {
+  // Next 16 mengalirkan metadata (termasuk <title>) dalam batas Suspense terpisah dari isi
+  // halaman. Setelah navigasi klien atau aksi server, isi bisa tampil lebih dulu sementara
+  // <title> belum ter-commit; tunggu judulnya, lalu audit layar yang sudah lengkap.
+  await expect(page).toHaveTitle(/\S/);
   let builder = new AxeBuilder({ page });
   if (opts.tags) builder = builder.withTags(opts.tags);
   if (opts.include) builder = builder.include(opts.include);

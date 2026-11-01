@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Browser,
   OWNER,
@@ -12,6 +13,7 @@ import {
   totp,
   userId,
 } from './harness';
+import { throttleKey } from '../throttle';
 
 const h = createHarness();
 afterAll(() => h.close());
@@ -46,6 +48,40 @@ describe('akun pertama lewat allowlist (app.settings.owner_email)', () => {
     const { rows } = await h.admin.query('select 1 from auth."user"');
     expect(rows).toHaveLength(0);
     expect(h.mailer.sent).toHaveLength(0);
+  });
+
+  it('cek kata sandi bocor dan batas panjang sama untuk owner_email dan email lain', async () => {
+    const pwned = createHarness(undefined, { checkPwnedPasswords: true });
+    // Rentang HIBP palsu yang memuat sufiks SHA-1 kata sandi uji: dianggap bocor.
+    const sha1 = createHash('sha1').update(PASSWORD).digest('hex').toUpperCase();
+    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
+      const href = input instanceof Request ? input.url : input.toString();
+      expect(href).toBe(`https://api.pwnedpasswords.com/range/${sha1.slice(0, 5)}`);
+      return Promise.resolve(new Response(`${sha1.slice(5)}:3\r\n`, { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const signUp = (email: string, password: string, ip: string) =>
+        pwned.service.signUpOwner(new Browser(ip).headers(), 'X', email, password);
+      expect(await signUp('orang@example.test', PASSWORD, '192.0.2.31')).toEqual({
+        kind: 'weak',
+        reason: 'compromised',
+      });
+      expect(await signUp(OWNER, PASSWORD, '192.0.2.32')).toEqual({
+        kind: 'weak',
+        reason: 'compromised',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const long = 'a'.repeat(129);
+      expect(await signUp('orang@example.test', long, '192.0.2.33')).toEqual(
+        await signUp(OWNER, long, '192.0.2.34'),
+      );
+      const { rows } = await h.admin.query('select 1 from auth."user"');
+      expect(rows).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+      await pwned.close();
+    }
   });
 
   it('pemilik: konfirmasi email, amankan dengan TOTP, rumah tangga dibuat, sesi penuh', async () => {
@@ -315,6 +351,35 @@ describe('faktor terikat ke sesi pendaftarnya', () => {
     expect(state?.access.kind).toBe('securing');
   });
 
+  it('TOTP: token sesi baru tidak terbaca = semua sesi dicabut, bukan sesi lain dibiarkan', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const a = new Browser('198.51.100.9');
+    a.absorb((await h.service.signUpInvitee(a.headers(), token, 'Farida', PASSWORD)).setCookie);
+    const b = new Browser('192.0.2.66');
+    b.absorb((await h.service.signInPassword(b.headers(), PARTNER, PASSWORD)).setCookie);
+    const begin = await h.service.totpBegin(a.headers(), PASSWORD);
+    if (begin.kind !== 'ok') throw new Error(begin.kind);
+    // Set-Cookie verifyTOTP tanpa token sesi (mis. format cookie Better Auth berubah).
+    const api = h.service.auth.api;
+    const original = api.verifyTOTP as unknown as (...a: unknown[]) => Promise<object>;
+    const stripped = async (...args: unknown[]) => ({
+      ...(await original(...args)),
+      headers: new Headers(),
+    });
+    const spy = vi
+      .spyOn(api, 'verifyTOTP')
+      .mockImplementationOnce(stripped as unknown as typeof api.verifyTOTP);
+    await expect(h.service.totpConfirm(a.headers(), totp(begin.secret))).rejects.toThrow();
+    spy.mockRestore();
+    const partner = await userId(h, PARTNER);
+    const { rows } = await h.admin.query('select 1 from auth.session where "userId" = $1', [
+      partner,
+    ]);
+    expect(rows).toHaveLength(0);
+    expect((await h.service.session(b.headers())).state).toBeNull();
+  });
+
   it('kata sandi benar pada akun berpasskey: respons sama dengan kata sandi salah', async () => {
     const { browser: owner } = await bootstrapOwner(h);
     const token = await invite(owner);
@@ -439,6 +504,41 @@ describe('jeda gagal dan lupa kata sandi', () => {
       'salah-salah-salah',
     );
     expect(unknown.result.kind).toBe('invalid');
+  });
+
+  it('kata sandi benar sebelum TOTP hanya menghapus hitungan akun, bukan hitungan IP', async () => {
+    const { secret } = await bootstrapOwner(h);
+    const b = new Browser('192.0.2.60');
+    for (let i = 0; i < 3; i++)
+      expect(
+        (
+          await h.service.signInPassword(
+            b.headers(),
+            `x${String(i)}@example.test`,
+            'salah-salah-salah',
+          )
+        ).result.kind,
+      ).toBe('invalid');
+    const step1 = await h.service.signInPassword(b.headers(), OWNER, PASSWORD);
+    expect(step1.result.kind).toBe('totp');
+    b.absorb(step1.setCookie);
+    // Hitungan IP (3 gagal + 1) tetap: percobaan berikutnya dari IP ini mencapai ambang 5.
+    expect(
+      (await h.service.signInPassword(b.headers(), 'y@example.test', 'salah-salah-salah')).result,
+    ).toEqual({ kind: 'throttled', seconds: 60 });
+    // Hitungan akun dihapus: dari IP lain, akun pemilik tidak membawa gagal sebelumnya.
+    const other = new Browser('192.0.2.61');
+    const again = await h.service.signInPassword(other.headers(), OWNER, PASSWORD);
+    expect(again.result.kind).toBe('totp');
+    other.absorb(again.setCookie);
+    // Masuk penuh (TOTP benar) baru menghapus hitungan IP kata sandi.
+    expect((await h.service.verifyTotpSignIn(other.headers(), totp(secret))).result.kind).toBe(
+      'ok',
+    );
+    const { rows } = await h.admin.query('select 1 from auth.login_throttle where key = $1', [
+      throttleKey('password', 'ip', '192.0.2.61'),
+    ]);
+    expect(rows).toHaveLength(0);
   });
 
   it('reset kata sandi: respons seragam, semua sesi dicabut, TOTP tetap aktif', async () => {

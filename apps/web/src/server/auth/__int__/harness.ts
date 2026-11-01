@@ -23,7 +23,7 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-export function createHarness(extraMailer?: Mailer): Harness {
+export function createHarness(extraMailer?: Mailer, overrides: Partial<ServerEnv> = {}): Harness {
   const env: ServerEnv = {
     databaseUrl: url('TEST_DATABASE_URL'),
     authSecret: 'tes-integrasi-bukan-rahasia-0123456789abcdef',
@@ -34,6 +34,7 @@ export function createHarness(extraMailer?: Mailer): Harness {
     emailFrom: 'DompetKu <tes@example.test>',
     checkPwnedPasswords: false,
     emailFile: null,
+    ...overrides,
   };
   const pools = createPools(env.databaseUrl);
   const mailer = new LogMailer();
