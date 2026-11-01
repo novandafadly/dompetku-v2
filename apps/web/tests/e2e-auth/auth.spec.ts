@@ -216,7 +216,7 @@ test('pasangan: terima, buat akun, amankan dengan TOTP (kode salah lalu benar)',
   // Sesi kata sandi saja: request RSC langsung ke page ruang tetap dialihkan, tanpa isi page.
   for (const path of ['/pribadi/beranda', '/bersama/transaksi', '/pribadi/dompet']) {
     const rsc = await page.request.get(path, { headers: { RSC: '1' } });
-    const location = rsc.headers()['location'] ?? '';
+    const location = rsc.headers().location ?? '';
     const body = await rsc.text();
     expect(location + body).toContain('/amankan');
   }
