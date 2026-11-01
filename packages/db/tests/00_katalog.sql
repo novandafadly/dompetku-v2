@@ -52,7 +52,7 @@ select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' $$,
   array['bootstrap_owner', 'create_invitation', 'revoke_invitation', 'resend_invitation',
-        'invitation_peek', 'decline_invitation', 'accept_invitation'],
+        'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations'],
   'daftar fungsi api S4');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -155,7 +155,7 @@ select set_eq($$
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
                                    'resend_invitation', 'invitation_peek', 'decline_invitation',
-                                   'accept_invitation']) f
+                                   'accept_invitation', 'list_invitations']) f
      union all
      select 'dompetku_api', f from unnest(array['private.require_read_committed',
                       'private.require_user', 'private.provision_user']) f
