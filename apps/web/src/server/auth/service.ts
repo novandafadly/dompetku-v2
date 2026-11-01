@@ -723,7 +723,14 @@ export class AuthService {
       await this.succeeded(keys);
       // Token sesi baru hanya ada di Set-Cookie (respons verifyTOTP membawa token lama).
       const fresh = sessionTokenFromSetCookie(res.headers);
-      if (fresh) await this.revokeOtherSessions(state.userId, fresh);
+      if (!fresh) {
+        // Sesi baru tidak bisa dikenali: tutup gagal. Semua sesi user dicabut (termasuk yang
+        // baru) agar sesi kata sandi lain tidak tetap hidup; user masuk lagi dengan TOTP.
+        await this.pools.auth.query('delete from auth.session where "userId" = $1', [state.userId]);
+        await this.audit(state.userId, 'session_revoked', headers, { reason: 'totp_no_token' });
+        throw new Error('token sesi baru tidak ada di Set-Cookie verifyTOTP');
+      }
+      await this.revokeOtherSessions(state.userId, fresh);
       await this.audit(state.userId, 'factor_added', headers, { method: 'totp' });
       return { result: { kind: 'ok' }, setCookie: res.headers };
     } catch (e) {

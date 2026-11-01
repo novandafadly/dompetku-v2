@@ -350,6 +350,35 @@ describe('faktor terikat ke sesi pendaftarnya', () => {
     expect(state?.access.kind).toBe('securing');
   });
 
+  it('TOTP: token sesi baru tidak terbaca = semua sesi dicabut, bukan sesi lain dibiarkan', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const a = new Browser('198.51.100.9');
+    a.absorb((await h.service.signUpInvitee(a.headers(), token, 'Farida', PASSWORD)).setCookie);
+    const b = new Browser('192.0.2.66');
+    b.absorb((await h.service.signInPassword(b.headers(), PARTNER, PASSWORD)).setCookie);
+    const begin = await h.service.totpBegin(a.headers(), PASSWORD);
+    if (begin.kind !== 'ok') throw new Error(begin.kind);
+    // Set-Cookie verifyTOTP tanpa token sesi (mis. format cookie Better Auth berubah).
+    const api = h.service.auth.api;
+    const original = api.verifyTOTP as unknown as (...a: unknown[]) => Promise<object>;
+    const stripped = async (...args: unknown[]) => ({
+      ...(await original(...args)),
+      headers: new Headers(),
+    });
+    const spy = vi
+      .spyOn(api, 'verifyTOTP')
+      .mockImplementationOnce(stripped as unknown as typeof api.verifyTOTP);
+    await expect(h.service.totpConfirm(a.headers(), totp(begin.secret))).rejects.toThrow();
+    spy.mockRestore();
+    const partner = await userId(h, PARTNER);
+    const { rows } = await h.admin.query('select 1 from auth.session where "userId" = $1', [
+      partner,
+    ]);
+    expect(rows).toHaveLength(0);
+    expect((await h.service.session(b.headers())).state).toBeNull();
+  });
+
   it('kata sandi benar pada akun berpasskey: respons sama dengan kata sandi salah', async () => {
     const { browser: owner } = await bootstrapOwner(h);
     const token = await invite(owner);
