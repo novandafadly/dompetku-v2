@@ -129,7 +129,14 @@ create index on audit.events (user_id, at desc);
 create index on audit.events (at);
 
 -- migrate:down
--- Hanya lokal/CI (BSD §12: maju-saja di produksi).
+-- Hanya lokal/CI (BSD §12: maju-saja di produksi). Ditolak bila app.settings env = 'prod'
+-- (nilai bawaan dari 0001); CI/lokal mengubah env dulu sebelum rollback.
+do $$
+begin
+  if (select s.value from app.settings s where s.key = 'env') = 'prod' then
+    raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
+  end if;
+end $$;
 drop table audit.events;
 drop table app.product_events;
 drop table app.invitations;

@@ -1,7 +1,7 @@
 -- audit.events dan product_events (BSD §6, §10, §13 #17, #32): user_id dari konteks, daftar
 -- tertutup event dan kunci meta, tanpa INSERT langsung, append-only, retensi lewat job.
 begin;
-select plan(32);
+select plan(44);
 select tests.fixture();
 
 -- user_id selalu dari konteks request.
@@ -15,14 +15,21 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
 select tests.web_exec(null, $$select audit.log('login_failed', '5.6.7.8'::inet)$$);
 select is(tests.owner_val(null, $$select coalesce(user_id::text, 'null') from audit.events where event = 'login_failed'$$),
   'null', 'event pra-login tanpa user_id');
-select tests.worker_exec(null, $$select audit.log('deploy', null, null, null, '{"status": "ok", "via": "cli"}')$$);
-select is(tests.owner_val(null, $$select meta ->> 'status' from audit.events where event = 'deploy'$$), 'ok',
+select tests.worker_exec(null, $$select audit.log('export', null, null, null, '{"status": "ok", "via": "job"}')$$);
+select is(tests.owner_val(null, $$select meta ->> 'status' from audit.events where event = 'export'$$), 'ok',
   'worker bisa menulis audit lewat audit.log');
 
+-- Event sistem (review S4) tidak bisa ditulis lewat audit.log oleh web maupun worker.
+select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(), format('select audit.log(%L)', e)),
+  'DK422', 'audit_event_reserved', r || ': event sistem ditolak: ' || e)
+from unnest(array['web', 'worker']) r,
+     unnest(array['space_member_change', 'unfinished_user_purged', 'entry_purged', 'purge_voided',
+                  'db_manual_access', 'deploy']) e;
+
 -- space_id hanya ruang milik pemanggil.
-select tests.web_exec(tests.n(), format($$select audit.log('export', null, null, %L, '{"count": 1}')$$,
+select tests.web_exec(tests.n(), format($$select audit.log('step_up', null, null, %L, '{"count": 1}')$$,
   tests.space_id(tests.f(), 'personal')));
-select is(tests.owner_val(null, $$select coalesce(space_id::text, 'null') from audit.events where event = 'export'$$),
+select is(tests.owner_val(null, $$select coalesce(space_id::text, 'null') from audit.events where event = 'step_up'$$),
   'null', 'space_id ruang pasangan dibuang');
 select tests.web_exec(tests.n(), format($$select audit.log('space_move', null, null, %L)$$, tests.space_id(tests.n(), 'personal')));
 select is(tests.owner_val(null, $$select space_id::text from audit.events where event = 'space_move'$$),
@@ -58,7 +65,7 @@ select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(),
 from unnest(array['web', 'api', 'worker']) r;
 
 -- Web hanya membaca event miliknya.
-select is(tests.web_val(tests.f(), $$select count(*) from audit.events where event in ('login_success', 'export', 'space_move')$$),
+select is(tests.web_val(tests.f(), $$select count(*) from audit.events where event in ('login_success', 'step_up', 'space_move')$$),
   '0', 'F tidak melihat event N');
 
 -- Append-only, juga untuk owner (BSD §13 #32).

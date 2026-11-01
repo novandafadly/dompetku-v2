@@ -110,7 +110,14 @@ create trigger audit_events_no_truncate before truncate on audit.events
   for each statement execute function private.tg_append_only();
 
 -- migrate:down
--- Hanya lokal/CI (BSD §12: maju-saja di produksi).
+-- Hanya lokal/CI (BSD §12: maju-saja di produksi). Ditolak bila app.settings env = 'prod'
+-- (nilai bawaan dari 0001); CI/lokal mengubah env dulu sebelum rollback.
+do $$
+begin
+  if (select s.value from app.settings s where s.key = 'env') = 'prod' then
+    raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
+  end if;
+end $$;
 drop trigger audit_events_no_truncate on audit.events;
 drop trigger audit_events_append_only on audit.events;
 drop function private.tg_append_only();

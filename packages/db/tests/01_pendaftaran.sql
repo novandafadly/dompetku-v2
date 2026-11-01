@@ -1,14 +1,15 @@
 -- Pendaftaran tertutup, akun pertama, batas keras 2 user (BSD §5, §9.3, §13 #16).
 begin;
-select plan(26);
+select plan(28);
 
-select tests.owner_exec(null, $$insert into app.settings (key, value) values ('owner_email', 'novanda@example.test')$$);
+-- Nilai owner_email dari env bisa berhuruf besar/berspasi; pembanding menormalkannya (review S4).
+select tests.owner_exec(null, $$insert into app.settings (key, value) values ('owner_email', ' Novanda@Example.TEST ')$$);
 
 -- Sebelum rumah tangga ada hanya owner_email yang boleh mendaftar.
 select throws_ok($$select tests.signup(tests.x(), 'orang@example.test', true, true)$$,
   'DK422', 'signup_closed', 'email selain owner_email ditolak sebelum rumah tangga ada');
 select lives_ok($$select tests.signup(tests.n(), 'novanda@example.test', false, false)$$,
-  'owner_email boleh mendaftar');
+  'owner_email (beda huruf besar/spasi) boleh mendaftar');
 
 -- Provisioning akun pertama: urutan pemeriksaan.
 select throws_ok($$select tests.web_exec(null, $q$select api.bootstrap_owner('Novanda')$q$)$$,
@@ -31,10 +32,16 @@ select throws_ok($$select tests.web_exec(tests.n(), $q$select api.bootstrap_owne
 select tests.owner_exec(null, $$update app.settings set value = 'lain@example.test' where key = 'owner_email'$$);
 select throws_ok($$select tests.web_exec(tests.n(), $q$select api.bootstrap_owner('Novanda')$q$)$$,
   'DK422', 'not_owner', 'bootstrap hanya untuk owner_email');
-select tests.owner_exec(null, $$update app.settings set value = 'novanda@example.test' where key = 'owner_email'$$);
+select tests.owner_exec(null, $$update app.settings set value = 'NOVANDA@example.test' where key = 'owner_email'$$);
 
 select ok(tests.web_val(tests.n(), $$select api.bootstrap_owner('Novanda') ? 'household_id'$$)::boolean,
-  'bootstrap pemilik berhasil');
+  'bootstrap pemilik berhasil (owner_email berhuruf besar)');
+
+-- Email tidak bisa diganti setelah daftar (review S4; changeEmail Better Auth tetap mati).
+select throws_ok($$select tests.web_exec(tests.n(), $q$update auth."user" set email = 'baru@example.test' where id = app.current_user_id()$q$)$$,
+  'DK422', 'email_immutable', 'ganti email ditolak');
+select is(tests.web_exec(tests.n(), $$update auth."user" set email = email, name = 'Novanda F' where id = app.current_user_id()$$),
+  1::bigint, 'update lain tanpa mengubah email tetap boleh');
 select throws_ok($$select tests.web_exec(tests.n(), $q$select api.bootstrap_owner('Novanda')$q$)$$,
   'DK422', 'already_provisioned', 'bootstrap kedua ditolak');
 select is(tests.web_val(tests.n(), $$select count(*) from app.spaces$$), '2', 'Novanda: ruang Pribadi + Bersama');

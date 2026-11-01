@@ -59,6 +59,12 @@ grant update         on app.profiles to dompetku_api;
 
 grant select on all tables in schema app to dompetku_auditor;
 
+-- BSD §12: audit objek pgaudit lewat role dompetku_auditlog (nologin) di semua tabel app, audit,
+-- auth, termasuk tabel yang dibuat migrasi berikutnya (S5, Better Auth).
+grant select, insert, update, delete on all tables in schema app, audit, auth to dompetku_auditlog;
+alter default privileges for role dompetku_owner in schema app, audit, auth
+  grant select, insert, update, delete on tables to dompetku_auditlog;
+
 -- ===== EXECUTE fungsi (api.* sudah lewat private.own_api_functions di 0007) =====
 grant execute on function app.my_space_ids(), app.space_roster(uuid), app.assert_member(uuid)
   to dompetku_web, dompetku_api, dompetku_auditor;
@@ -77,12 +83,22 @@ begin
 end $$;
 
 -- migrate:down
--- Hanya lokal/CI (BSD §12: maju-saja di produksi).
+-- Hanya lokal/CI (BSD §12: maju-saja di produksi). Ditolak bila app.settings env = 'prod'
+-- (nilai bawaan dari 0001); CI/lokal mengubah env dulu sebelum rollback.
+do $$
+begin
+  if (select s.value from app.settings s where s.key = 'env') = 'prod' then
+    raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
+  end if;
+end $$;
 revoke execute on function jobs.purge_unfinished_users(), jobs.purge_audit() from dompetku_worker;
 revoke execute on function audit.log(text, inet, text, uuid, jsonb) from dompetku_web, dompetku_worker;
 revoke execute on function private.provision_user(uuid, text, uuid, text) from dompetku_api;
 revoke execute on function app.my_space_ids(), app.space_roster(uuid), app.assert_member(uuid)
   from dompetku_web, dompetku_api, dompetku_auditor;
+alter default privileges for role dompetku_owner in schema app, audit, auth
+  revoke select, insert, update, delete on tables from dompetku_auditlog;
+revoke all on all tables in schema app, audit, auth from dompetku_auditlog;
 revoke select on all tables in schema app from dompetku_auditor;
 grant select on app.settings to dompetku_auditor;  -- dari 0001
 revoke all on app.households, app.spaces, app.space_members, app.profiles, app.product_events,

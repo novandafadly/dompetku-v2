@@ -121,7 +121,14 @@ end $$;
 select private.own_api_functions();
 
 -- migrate:down
--- Hanya lokal/CI (BSD §12: maju-saja di produksi).
+-- Hanya lokal/CI (BSD §12: maju-saja di produksi). Ditolak bila app.settings env = 'prod'
+-- (nilai bawaan dari 0001); CI/lokal mengubah env dulu sebelum rollback.
+do $$
+begin
+  if (select s.value from app.settings s where s.key = 'env') = 'prod' then
+    raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
+  end if;
+end $$;
 drop function api.accept_invitation(bytea, text);
 drop function api.decline_invitation(bytea);
 drop function api.invitation_peek(bytea);
