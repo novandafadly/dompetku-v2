@@ -20,6 +20,8 @@ export interface ServerEnv {
   emailFrom: string;
   /** Tolak kata sandi yang pernah bocor (Have I Been Pwned, k-anonymity). */
   checkPwnedPasswords: boolean;
+  /** Hanya tes e2e auth: email ditulis sebagai JSON per baris ke berkas ini, bukan dikirim. */
+  emailFile: string | null;
 }
 
 export class EnvError extends Error {
@@ -57,7 +59,12 @@ export function readServerEnv(env: Source = process.env): ServerEnv {
   if (production && url.protocol !== 'https:' && !localhost)
     throw new EnvError('BETTER_AUTH_URL wajib https di produksi');
   const resendApiKey = env.RESEND_API_KEY?.trim() ?? '';
-  if (production && resendApiKey === '' && env.AUTH_EMAIL_LOG !== '1')
+  if (
+    production &&
+    resendApiKey === '' &&
+    env.AUTH_EMAIL_LOG !== '1' &&
+    optional(env, 'AUTH_EMAIL_FILE') === undefined
+  )
     throw new EnvError('Variabel lingkungan RESEND_API_KEY wajib diisi');
   return {
     databaseUrl,
@@ -68,6 +75,8 @@ export function readServerEnv(env: Source = process.env): ServerEnv {
     resendApiKey: resendApiKey === '' ? null : resendApiKey,
     emailFrom: optional(env, 'AUTH_EMAIL_FROM') ?? 'DompetKu <dompet@novandafadly.com>',
     checkPwnedPasswords: env.AUTH_CHECK_PWNED !== '0',
+    // Diabaikan bila Resend aktif: email sungguhan tidak pernah dialihkan ke berkas.
+    emailFile: resendApiKey === '' ? (optional(env, 'AUTH_EMAIL_FILE') ?? null) : null,
   };
 }
 

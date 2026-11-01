@@ -3,7 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createPools } from '../db';
 import { readServerEnv } from '../env';
-import { LogMailer, ResendMailer } from './mailer';
+import { FileMailer, LogMailer, ResendMailer } from './mailer';
 import { SESSION_ABSOLUTE_MS } from './policy';
 import { AuthService, type SessionState, type SetCookie } from './service';
 
@@ -20,7 +20,9 @@ export function authService(): AuthService {
     const env = readServerEnv();
     const mailer = env.resendApiKey
       ? new ResendMailer(env.resendApiKey, env.emailFrom)
-      : new LogMailer(true);
+      : env.emailFile
+        ? new FileMailer(env.emailFile)
+        : new LogMailer(true);
     instance = new AuthService(env, createPools(env.databaseUrl), mailer);
   }
   return instance;
@@ -41,13 +43,22 @@ interface ParsedCookie {
   sameSite?: 'lax' | 'strict' | 'none';
 }
 
+function safeDecode(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
 export function parseSetCookie(line: string): ParsedCookie | null {
   const [pair = '', ...attrs] = line.split(';');
   const eq = pair.indexOf('=');
   if (eq <= 0) return null;
   const out: ParsedCookie = {
     name: pair.slice(0, eq).trim(),
-    value: pair.slice(eq + 1).trim(),
+    // Better Auth mengirim nilai ter-encode; cookies().set meng-encode lagi, jadi dibuka dulu.
+    value: safeDecode(pair.slice(eq + 1).trim()),
     httpOnly: false,
     secure: false,
   };

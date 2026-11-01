@@ -1,4 +1,3 @@
-import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { isPrototype } from '@/server/env';
 import { InvalidLink } from '../../_components/invalid-link';
@@ -13,7 +12,7 @@ export default async function AturSandiPage({ searchParams }: { searchParams: Se
       <InvalidLink
         title="Tautan tidak lengkap"
         description="Buka tautan dari email atur ulang kata sandi, atau minta tautan baru."
-        action={{ href: '/lupa-sandi' as Route, label: 'Minta tautan baru' }}
+        action={{ href: '/lupa-sandi', label: 'Minta tautan baru' }}
       />
     );
   return <AturSandiReal token={token} />;

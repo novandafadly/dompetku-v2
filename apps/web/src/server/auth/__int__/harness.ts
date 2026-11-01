@@ -33,6 +33,7 @@ export function createHarness(): Harness {
     resendApiKey: null,
     emailFrom: 'DompetKu <tes@example.test>',
     checkPwnedPasswords: false,
+    emailFile: null,
   };
   const pools = createPools(env.databaseUrl);
   const mailer = new LogMailer();

@@ -1,6 +1,5 @@
 'use client';
 
-import type { Route } from 'next';
 import Link from 'next/link';
 import { useActionState, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
@@ -54,17 +53,7 @@ function TotpStep({ onBack }: { onBack: () => void }) {
       <AuthTitle>Masukkan kode 6 digit</AuthTitle>
       <AuthText>Buka aplikasi autentikator, lalu ketik kode untuk DompetKu.</AuthText>
       <form action={action} noValidate className="flex flex-col gap-4">
-        <CodeField
-          value={code}
-          onChange={setCode}
-          invalid={state.kind === 'error'}
-          {...(state.kind === 'error' ? { describedBy: 'totp-galat' } : {})}
-        />
-        {state.kind === 'error' ? (
-          <p id="totp-galat" className="sr-only">
-            {state.message}
-          </p>
-        ) : null}
+        <CodeField value={code} onChange={setCode} invalid={state.kind === 'error'} />
         {state.kind === 'error' ? <Notice tone="error">{state.message}</Notice> : null}
         <Button type="submit" size="lg" disabled={code.length !== 6} loading={pending}>
           Verifikasi
@@ -201,7 +190,7 @@ export function MasukReal({ notice }: { notice: string | null }) {
         </Button>
       </form>
       <div className="flex flex-col items-start">
-        <Link href={'/lupa-sandi' as Route} className={linkText}>
+        <Link href={'/lupa-sandi'} className={linkText}>
           Lupa kata sandi?
         </Link>
         <button

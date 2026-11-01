@@ -39,6 +39,8 @@ export interface SessionFacts {
   now: Date;
   /** User sudah punya passkey atau TOTP terverifikasi. */
   hasStrongFactor: boolean;
+  /** Faktor kuat itu didaftarkan oleh sesi ini (passkey dibuat setelah sesi dimulai). */
+  factorFromThisSession: boolean;
   /** Baris app.profiles ada (akun pertama dibuat atau undangan diterima). */
   provisioned: boolean;
 }
@@ -57,8 +59,9 @@ export function sessionAccess(f: SessionFacts): Access {
   if (f.amr === 'recovery') return { kind: 'securing' };
   // Kata sandi saja: hanya untuk akun yang belum punya faktor kuat (lanjutkan mengamankan).
   // Akun yang sudah punya passkey/TOTP wajib memakainya; kalau tidak, kata sandi bocor cukup
-  // untuk mendaftarkan faktor baru.
-  return f.hasStrongFactor
+  // untuk mendaftarkan faktor baru. Pengecualian: faktor yang baru didaftarkan sesi ini sendiri
+  // (langkah 2 /amankan, sebelum finishSecuring menaikkan amr).
+  return f.hasStrongFactor && !f.factorFromThisSession
     ? { kind: 'denied', reason: 'needs_strong_factor' }
     : { kind: 'securing' };
 }

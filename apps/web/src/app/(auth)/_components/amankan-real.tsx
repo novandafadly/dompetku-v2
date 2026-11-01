@@ -153,9 +153,15 @@ function TotpSetup({ onBack }: { onBack: () => void }) {
           <rect width="100%" height="100%" fill="#fff" />
           <path d={setup.qrPath} fill="#000" />
         </svg>
-        <p id={secretId} className="num text-center text-label font-bold break-all text-text">
-          {setup.secret.replace(/(.{4})/g, '$1 ').trim()}
+        <p id={secretId} className="text-caption font-semibold text-text-soft">
+          Kunci manual
         </p>
+        <code
+          aria-describedby={secretId}
+          className="text-center text-label font-bold tabular-nums break-all text-text"
+        >
+          {setup.secret.replace(/(.{4})/g, '$1 ').trim()}
+        </code>
       </div>
       <form action={confirmAction} noValidate className="flex flex-col gap-4">
         <CodeField value={code} onChange={setCode} invalid={confirm.kind === 'error'} />

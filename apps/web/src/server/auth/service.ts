@@ -82,9 +82,12 @@ export function newInviteToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/** IP klien: hanya X-Forwarded-For satu nilai dari edge (TRD §3.4); selain itu null. */
+/**
+ * IP klien dari X-Forwarded-For (TRD §3.4): edge menimpa header dengan IP koneksi, jadi nilai
+ * pertama = IP edge. Hop berikutnya (gw, server Next) diabaikan. Bukan IP valid = null.
+ */
 export function clientIp(headers: Headers): string | null {
-  const raw = headers.get('x-forwarded-for')?.trim() ?? '';
+  const raw = headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '';
   return isIP(raw) === 0 ? null : raw;
 }
 
@@ -150,11 +153,16 @@ export class AuthService {
     const { session, user } = response;
     const facts = await this.userFacts(user.id);
     const amr = isAmr(session.amr) ? session.amr : null;
+    const { rows } = await this.pools.auth.query<{ ok: boolean }>(
+      `select exists (select 1 from auth.passkey where "userId" = $1 and "createdAt" >= $2) as ok`,
+      [user.id, session.createdAt],
+    );
     const access = sessionAccess({
       amr,
       createdAt: new Date(session.createdAt),
       now: new Date(),
       hasStrongFactor: facts.hasPasskey || facts.hasTotp,
+      factorFromThisSession: rows[0]?.ok === true,
       provisioned: facts.provisioned,
     });
     if (access.kind === 'denied' && access.reason === 'expired') {

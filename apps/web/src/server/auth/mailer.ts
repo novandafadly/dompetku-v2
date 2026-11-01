@@ -48,6 +48,16 @@ export class LogMailer implements Mailer {
   }
 }
 
+/** Hanya tes e2e auth (AUTH_EMAIL_FILE): satu JSON per baris, dibaca Playwright. */
+export class FileMailer implements Mailer {
+  constructor(private readonly path: string) {}
+
+  async send(mail: Mail): Promise<void> {
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(this.path, `${JSON.stringify(mail)}\n`, { mode: 0o600 });
+  }
+}
+
 const FOOTER = '\n\nDompetKu, aplikasi keuangan Novanda dan Farida.';
 
 export const mails = {
