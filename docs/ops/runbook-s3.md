@@ -2,7 +2,7 @@
 
 Panduan: `infra/db-vm/deploy/README.md` (bagian Pemasangan). Dokumen ini mencatat eksekusinya. Tanpa rahasia.
 
-## Status (2026-10-31)
+## Status (2026-11-01): **S3 selesai**
 
 | Langkah README           | Status                                                                                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -12,7 +12,7 @@ Panduan: `infra/db-vm/deploy/README.md` (bagian Pemasangan). Dokumen ini mencata
 | 4. Deploy manual pertama | Selesai 21:07 UTC: kode 0, 34 detik, `"result":"ok"`, digest `sha256:748e0af2…`, SHA `2e58c3e` (PR #5). `cosign verify` dan `verify-attestation` lulus |
 | 5. gw ke web             | Selesai. Caddyfile dari branch ini terpasang (salinan lama `gw/Caddyfile.s2`), `docker compose restart gw`                                             |
 | 6. Timer                 | Selesai. `dompetku-deploy.timer` aktif; run pertama lewat systemd: sukses, tanpa rilis baru (keluar diam)                                              |
-| 7. Uji rollback          | **Menunggu pemilik:** PR `claude/m0b-s3-rollback-test` ke `main` (lihat di bawah)                                                                      |
+| 7. Uji rollback          | Lulus 2026-10-31/11-01 (lihat Hasil uji rollback)                                                                                                      |
 | 8. Smoke K12             | Lulus (lihat di bawah)                                                                                                                                 |
 
 Verifikasi langkah 2: `--profile web config --services` = `gw postgres web`; tanpa profil = `gw postgres`; diff ke `compose.yml.s2` hanya blok `web` dan komentar baris 2.
@@ -42,7 +42,22 @@ Verifikasi langkah 2: `--profile web config --services` = `gw postgres web`; tan
 
 Lalu beri tahu sesi Claude; langkah 4 sampai 8 dijalankan agen.
 
-## Uji rollback (langkah 7)
+## Hasil uji rollback
+
+Semua lewat timer (tanpa campur tangan), `deploy.log`:
+
+| Waktu (UTC) | Rilis                            | Hasil         | Detik | Catatan                                                               |
+| ----------- | -------------------------------- | ------------- | ----- | --------------------------------------------------------------------- |
+| 10-31 21:07 | `2e58c3e` (PR #5)                | `ok`          | 34    | deploy manual pertama                                                 |
+| 10-31 21:14 | `caf272f` (PR #6, gw + runbook)  | `ok`          | 25    | timer                                                                 |
+| 10-31 21:22 | `a39455e` (PR #7, sengaja rusak) | `rolled_back` | 119   | kode 3, systemd `Failed`; kembali ke `caf272f`; digest masuk `failed` |
+| 11-01 04:04 | `ebb7b0d` (revert PR #7)         | `ok`          | 24    | timer; `/api/health` lewat domain = `ebb7b0d`                         |
+
+Selama rilis rusak, `/api/health` lewat domain tetap melaporkan `caf272f`. Timer berikutnya tidak mencoba ulang digest rusak (keluar 0, "pernah gagal"). Restore point `deploy-<sha12>` dibuat di setiap deploy. Revert didorong langsung ke `main` oleh agen atas izin pemilik.
+
+PWA: `/manifest.webmanifest` (standalone, `start_url /`, ikon 192, 512, maskable 512, SVG) dan semua ikon 200 lewat domain; `<link rel="manifest">` ada di HTML.
+
+## Prosedur uji rollback (langkah 7)
 
 Branch `claude/m0b-s3-rollback-test` (commit `36bacd3`): `/api/health` menjawab 500 hanya bila `BUILD_SHA` berisi SHA asli (build rilis); build lokal dan e2e tetap 200 sehingga CI hijau.
 
