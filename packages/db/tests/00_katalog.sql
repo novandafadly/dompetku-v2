@@ -1,6 +1,6 @@
--- Tes katalog (BSD §13 #1 sampai #8), otomatis mencakup objek baru di skema aplikasi.
+-- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(23);
+select plan(33);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -9,8 +9,8 @@ select is_empty($$
     and not (c.relrowsecurity and c.relforcerowsecurity) $$,
   'RLS aktif dan dipaksa di semua tabel app/audit');
 select ok((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
-           where n.nspname in ('app', 'audit') and c.relkind = 'r' and c.relforcerowsecurity) >= 8,
-          'tabel S4 ikut terperiksa (>= 8 tabel ber-RLS)');
+           where n.nspname in ('app', 'audit') and c.relkind = 'r' and c.relforcerowsecurity) >= 14,
+          'tabel S4 dan S5 ikut terperiksa (>= 14 tabel ber-RLS)');
 
 -- #2 Tidak ada fungsi yang bisa dieksekusi PUBLIC.
 select is_empty($$
@@ -46,22 +46,42 @@ select set_eq($$
   'DEFINER baca di app = my_space_ids, space_roster');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'api' and (not p.prosecdef or p.proowner <> 'dompetku_api'::regrole) $$,
-  'semua fungsi api.* S4 DEFINER milik dompetku_api');
+  where n.nspname = 'api' and p.prosecdef and p.proowner <> 'dompetku_api'::regrole $$,
+  'semua fungsi api.* DEFINER milik dompetku_api');
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'api' $$,
+  where n.nspname = 'api' and p.prosecdef $$,
   array['bootstrap_owner', 'create_invitation', 'revoke_invitation', 'resend_invitation',
-        'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations'],
-  'daftar fungsi api S4');
+        'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
+        'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
+        'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account'],
+  'daftar fungsi api DEFINER (tulis S4 + S5, invitation_peek, list_invitations)');
+-- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
+select set_eq($$
+  select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
+  array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
+        'trash_list'],
+  'daftar fungsi baca api INVOKER (S5)');
+select is_empty($$
+  select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
+  'fungsi api INVOKER hanya baca (STABLE)');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where p.prosecdef and p.proowner = 'dompetku_owner'::regrole
     and n.nspname in ('app', 'api', 'private', 'jobs', 'audit', 'auth') $$,
   array['app.my_space_ids', 'app.space_roster', 'audit.log',
-        'jobs.purge_audit', 'jobs.purge_unfinished_users',
-        'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4');
+        'jobs.purge_audit', 'jobs.purge_unfinished_users', 'jobs.purge_voided',
+        'jobs.purge_idempotency',
+        'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
+        'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
+        'private.tg_entry_shape', 'private.tg_category_depth'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5');
+select set_eq($$
+  select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where p.proowner = 'dompetku_auditor'::regrole $$,
+  array['private.dq_run', 'jobs.dq_reconcile'], 'fungsi milik dompetku_auditor = dq_run, dq_reconcile');
 select is((select p.proowner::regrole::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'private' and p.proname = 'require_user'),
           'dompetku_api', 'private.require_user milik dompetku_api (own_api_functions)');
@@ -136,7 +156,44 @@ select set_eq($$
     ('dompetku_auditor', 'app.profiles', 'SELECT'),
     ('dompetku_auditor', 'app.idempotency_keys', 'SELECT'),
     ('dompetku_auditor', 'app.invitations', 'SELECT'),
-    ('dompetku_auditor', 'app.product_events', 'SELECT') $$,
+    ('dompetku_auditor', 'app.product_events', 'SELECT'),
+    -- S5 ledger: web baca saja; api tulis lewat fungsi (DELETE hanya entry_lines).
+    ('dompetku_web', 'app.accounts', 'SELECT'),
+    ('dompetku_web', 'app.categories', 'SELECT'),
+    ('dompetku_web', 'app.entries', 'SELECT'),
+    ('dompetku_web', 'app.entry_lines', 'SELECT'),
+    ('dompetku_web', 'app.entry_history', 'SELECT'),
+    ('dompetku_web', 'app.entry_tombstones', 'SELECT'),
+    ('dompetku_web', 'app.account_balances', 'SELECT'),
+    ('dompetku_web', 'app.report_lines', 'SELECT'),
+    ('dompetku_api', 'app.accounts', 'SELECT'),
+    ('dompetku_api', 'app.accounts', 'INSERT'),
+    ('dompetku_api', 'app.accounts', 'UPDATE'),
+    ('dompetku_api', 'app.categories', 'SELECT'),
+    ('dompetku_api', 'app.categories', 'INSERT'),
+    ('dompetku_api', 'app.categories', 'UPDATE'),
+    ('dompetku_api', 'app.entries', 'SELECT'),
+    ('dompetku_api', 'app.entries', 'INSERT'),
+    ('dompetku_api', 'app.entries', 'UPDATE'),
+    ('dompetku_api', 'app.entry_lines', 'SELECT'),
+    ('dompetku_api', 'app.entry_lines', 'INSERT'),
+    ('dompetku_api', 'app.entry_lines', 'DELETE'),
+    ('dompetku_api', 'app.entry_history', 'SELECT'),
+    ('dompetku_api', 'app.entry_history', 'INSERT'),
+    ('dompetku_api', 'app.entry_tombstones', 'SELECT'),
+    ('dompetku_api', 'app.account_balances', 'SELECT'),
+    ('dompetku_api', 'app.report_lines', 'SELECT'),
+    ('dompetku_auditor', 'app.accounts', 'SELECT'),
+    ('dompetku_auditor', 'app.categories', 'SELECT'),
+    ('dompetku_auditor', 'app.entries', 'SELECT'),
+    ('dompetku_auditor', 'app.entry_lines', 'SELECT'),
+    ('dompetku_auditor', 'app.entry_history', 'SELECT'),
+    ('dompetku_auditor', 'app.entry_tombstones', 'SELECT'),
+    ('dompetku_auditor', 'app.account_balances', 'SELECT'),
+    ('dompetku_auditor', 'app.report_lines', 'SELECT'),
+    ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
+    ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
+    ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
   'matriks hak tabel web/api/worker/auditor');
 
 -- BSD §12: role audit objek pgaudit punya S/I/U/D di semua tabel app/audit/auth, juga tabel baru.
@@ -165,17 +222,31 @@ select set_eq($$
                       unnest(array['app.current_user_id', 'app.now', 'app.today']) f
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api', 'dompetku_auditor']) r,
-                      unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member']) f
+                      unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member',
+                                   'app.report_class']) f
      union all
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
                                    'resend_invitation', 'invitation_peek', 'decline_invitation',
-                                   'accept_invitation', 'list_invitations']) f
+                                   'accept_invitation', 'list_invitations', 'create_account',
+                                   'create_entry',
+                                   'create_transfer', 'update_entry', 'void_entry',
+                                   'restore_entry', 'purge_entry', 'reconcile_balance',
+                                   'archive_account']) f
      union all
-     select 'dompetku_api', f from unnest(array['private.require_read_committed',
-                      'private.require_user', 'private.provision_user']) f
+     select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
+                      'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list']) f
      union all
-     select 'dompetku_worker', f from unnest(array['jobs.purge_unfinished_users', 'jobs.purge_audit']) f
+     select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
+                      'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
+                      'lock_accounts', 'get_account', 'balance', 'assert_balance',
+                      'entry_snapshot', 'write_history', 'check_date', 'check_amount',
+                      'clean_text', 'set_void_state', 'purge_entries']) f
+     union all
+     select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
+     union all
+     select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
+                      'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');
@@ -222,6 +293,67 @@ select ok((select count(*) = 2 from pg_trigger g join pg_class c on c.oid = g.tg
            join pg_namespace n on n.oid = c.relnamespace
            where n.nspname = 'audit' and c.relname = 'events' and g.tgname in ('audit_events_append_only', 'audit_events_no_truncate')),
           'audit.events append-only (UPDATE/DELETE/TRUNCATE)');
+select ok((select count(*) = 2 from pg_trigger g join pg_class c on c.oid = g.tgrelid
+           join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname = 'entry_history'
+             and g.tgname in ('entry_history_append_only', 'entry_history_no_truncate')),
+          'entry_history append-only (UPDATE/DELETE/TRUNCATE)');
+-- Cek bentuk lines dan pasangan berjalan sebagai constraint trigger DEFERRABLE INITIALLY DEFERRED.
+select set_eq($$
+  select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'app' and g.tgconstraint <> 0 and g.tgdeferrable and g.tginitdeferred $$,
+  array['entries.entries_shape', 'entry_lines.entry_lines_shape'],
+  'cek bentuk entri = constraint trigger deferred');
+select has_trigger('app', 'categories', 'category_depth', 'penjaga kedalaman kategori');
+
+-- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
+select is(tests.owner_val(null, $$
+  select count(*) filter (where app.report_class(k, r, p, s, d, x) is null) || '/' || count(*)
+  from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r,
+       unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
+       (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
+       unnest(array[true, false]) x $$),
+  '0/756', 'report_class tidak NULL untuk semua kombinasi (7 x 3 x 3 x 2 x 3 x 2)');
+
+-- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
+-- DEFINER/owner (atau lewat private.purge_entries), ditambah deploy dan db_manual_access dari skrip
+-- host. Semuanya wajib ada di daftar reserved audit.log agar web/worker tidak bisa memalsukannya.
+-- Event baru di fungsi sistem tanpa memperbarui audit.log gagal di sini.
+create temp table audit_ev on commit drop as
+with allowed as (
+  select (regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''::text', 'g'))[1] as ev
+  from pg_constraint c
+  join pg_class t on t.oid = c.conrelid join pg_namespace tn on tn.oid = t.relnamespace
+  where tn.nspname = 'audit' and t.relname = 'events' and c.contype = 'c'
+    and pg_get_constraintdef(c.oid) ~ '\(event = ANY'
+), reserved as (
+  select (regexp_matches(substring(p.prosrc from 'p_event in \(([^)]*)\)'), '''([a-z_]+)''', 'g'))[1] as ev
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'audit' and p.proname = 'log'
+), sys as (
+  select (regexp_matches(p.prosrc, '''([a-z_]+)''', 'g'))[1] as ev
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('app', 'api', 'private', 'jobs', 'audit')
+    and not (n.nspname = 'audit' and p.proname = 'log')
+    and (p.prosrc ~* 'insert\s+into\s+audit\.events' or p.prosrc ~ 'private\.purge_entries\(')
+  union select unnest(array['deploy', 'db_manual_access'])
+)
+select 'allowed' as k, ev from allowed
+union all select 'reserved', ev from reserved
+union all select 'system', ev from sys where ev in (select ev from allowed);
+select set_eq($$ select ev from audit_ev where k = 'system' $$,
+  array['space_member_change', 'unfinished_user_purged', 'entry_purged', 'purge_voided',
+        'deploy', 'db_manual_access'],
+  'event sistem terdeteksi dari fungsi DEFINER/owner + skrip host');
+select is_empty($$
+  select ev from audit_ev where k = 'system'
+  except select ev from audit_ev where k = 'reserved' $$,
+  'setiap event sistem ada di daftar reserved audit.log');
+select is_empty($$
+  select ev from audit_ev where k = 'reserved'
+  except select ev from audit_ev where k = 'allowed' $$,
+  'daftar reserved audit.log bagian dari CHECK audit.events');
 
 select * from finish();
 rollback;
