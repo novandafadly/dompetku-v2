@@ -4,7 +4,7 @@ import { EntryList } from '@/features/transaksi/entry-list';
 import { useDemo } from '@/features/shell/demo-provider';
 import { PageHeader } from '@/features/shell/page-header';
 
-export default function TransaksiPage() {
+export function TransaksiPage() {
   const { state, store, ruang, today, href, entryHref, month, monthHref, dataState } = useDemo();
   return (
     <EntryList

@@ -20,7 +20,7 @@ const AddAccountSheet = dynamic(
   { ssr: false },
 );
 
-export default function BerandaPage() {
+export function BerandaPage() {
   const demo = useDemo();
   const openCatat = useOpenCatat();
   const preloadCatat = usePreloadCatat();

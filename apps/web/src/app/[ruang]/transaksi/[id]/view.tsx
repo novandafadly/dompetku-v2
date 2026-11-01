@@ -4,7 +4,7 @@ import { notFound, useParams } from 'next/navigation';
 import { useDemo } from '@/features/shell/demo-provider';
 import { EntryDetail } from '@/features/transaksi/entry-detail';
 
-export default function TransaksiDetailPage() {
+export function TransaksiDetailPage() {
   const { state, store, ruang, today, href, entryHref, month, monthHref } = useDemo();
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(params.id);

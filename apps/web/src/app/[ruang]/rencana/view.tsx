@@ -9,7 +9,7 @@ import { PageHeader } from '@/features/shell/page-header';
 import Link from 'next/link';
 
 /** R1: keadaan kosong jujur; ringkasan anggaran dan tagihan tetap di Beranda. */
-export default function RencanaPage() {
+export function RencanaPage() {
   const { ruang, href } = useDemo();
   return (
     <>

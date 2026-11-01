@@ -12,7 +12,7 @@ const AddAccountSheet = dynamic(
   { ssr: false },
 );
 
-export default function DompetPage() {
+export function DompetPage() {
   const { state, store, ruang, today, accountHref } = useDemo();
   const [adding, setAdding] = useState(false);
   const addMounted = useOpenedOnce(adding);

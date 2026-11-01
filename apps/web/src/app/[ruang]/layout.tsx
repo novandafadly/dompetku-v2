@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { isRuang } from '@/features/shell/hrefs';
-import { requireUser } from '@/server/auth/next';
-import { isPrototype } from '@/server/env';
+import { requireDataUser } from '@/server/auth/next';
 import { RuangShell } from './ruang-shell';
 
 // Segmen lain dijawab 404 sejak awal; Suspense di root layout membuat status stream 200 bila baru dilempar di render.
@@ -22,6 +21,6 @@ export default async function RuangLayout({
   const { ruang } = await params;
   if (!isRuang(ruang)) notFound();
   // Mode nyata: halaman data hanya untuk sesi penuh (faktor kuat + akun diprovisikan).
-  if (!isPrototype()) await requireUser('full');
+  await requireDataUser();
   return <RuangShell ruang={ruang}>{children}</RuangShell>;
 }

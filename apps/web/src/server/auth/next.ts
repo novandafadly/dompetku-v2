@@ -2,7 +2,7 @@ import type { Route } from 'next';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createPools } from '../db';
-import { readServerEnv } from '../env';
+import { isPrototype, readServerEnv } from '../env';
 import { FileMailer, LogMailer, ResendMailer } from './mailer';
 import { SESSION_ABSOLUTE_MS } from './policy';
 import { AuthService, type SessionState, type SetCookie } from './service';
@@ -131,4 +131,13 @@ export async function requireUser(level: Level): Promise<SessionState> {
   if (level === 'full' && access.kind !== 'full') redirect('/amankan');
   if (level === 'securing' && access.kind === 'full') redirect('/pribadi/beranda' as Route);
   return state;
+}
+
+/**
+ * Gerbang setiap page ruang (/pribadi, /bersama). Mode prototipe: tanpa gerbang (data demo).
+ * Aturan M1: query data ruang hanya sesudah gerbang ini, memakai state.userId di withUser.
+ */
+export async function requireDataUser(): Promise<SessionState | null> {
+  if (isPrototype()) return null;
+  return requireUser('full');
 }
