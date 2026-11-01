@@ -181,7 +181,14 @@ jobs:
               -e DBMATE_MIGRATIONS_DIR=/db/migrations -e DBMATE_NO_DUMP_SCHEMA=true \
               "$DBMATE_IMAGE" "$@"
           }
+          setenv() {
+            docker exec "$PG" psql -U postgres -d dompetku -v ON_ERROR_STOP=1 -qc \
+              "update app.settings set value = '$1' where key = 'env'"
+          }
+          # Blok down ditolak selama env = prod (bawaan 0001, nilai di VM).
+          if dbmate rollback; then echo "rollback lolos padahal env = prod"; exit 1; fi
           # 0001 maju-saja (blok down kosong); semua migrasi sesudahnya wajib bisa di-rollback.
+          setenv dev
           n=$(($(find packages/db/migrations -name '*.sql' | wc -l) - 1))
           for _ in $(seq "$n"); do dbmate rollback; done
           left=$(docker exec "$PG" psql -U postgres -d dompetku -Atc \
@@ -189,6 +196,7 @@ jobs:
              where s.nspname in ('app','api','private','jobs','audit','auth') and c.relkind in ('r','v','m')")
           test "$left" = 1 || { echo "sisa relasi setelah rollback: $left (harus hanya app.settings)"; exit 1; }
           dbmate up
+          setenv prod
           docker exec "$PG" pg_dump -U postgres -s -N tap -N tests dompetku \
             | grep -v '^\\\(un\)\?restrict' >"$RUNNER_TEMP/schema-2.sql"
           diff -u "$RUNNER_TEMP/schema-1.sql" "$RUNNER_TEMP/schema-2.sql"
