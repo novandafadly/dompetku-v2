@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "kantor-agent": {
+      "source": {
+        "source": "github",
+        "repo": "humaedihume/kantor-agent"
+      }
+    }
+  }
+}
