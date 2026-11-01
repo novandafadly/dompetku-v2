@@ -232,6 +232,36 @@ describe('undangan', () => {
   });
 });
 
+describe('passkey didaftarkan di /amankan', () => {
+  it('sesi enrolling yang baru membuat passkey naik ke amr passkey saat selesai', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    const token = await invite(owner);
+    const b = new Browser('198.51.100.9');
+    b.absorb((await h.service.signUpInvitee(b.headers(), token, 'Farida', PASSWORD)).setCookie);
+    const id = await userId(h, PARTNER);
+    // Baris passkey seperti hasil verifyPasskeyRegistration (WebAuthn tidak bisa di Vitest).
+    await h.admin.query(
+      `insert into auth.passkey ("publicKey", "userId", "credentialID", counter, "deviceType", "backedUp", "createdAt")
+       values ('pk', $1, 'cred-1', 0, 'singleDevice', false, now())`,
+      [id],
+    );
+    const state = (await h.service.session(b.headers())).state;
+    expect(state?.access.kind).toBe('securing');
+    expect(state && (await h.service.securingStep(state))).toBe('pemulihan');
+    await h.service.createRecoveryCodes(b.headers());
+    expect((await h.service.finishSecuring(b.headers())).kind).toBe('ok');
+    const after = (await h.service.session(b.headers())).state;
+    expect(after?.amr).toBe('passkey');
+    expect(after?.access.kind).toBe('full');
+
+    // Sesi kata sandi baru pada akun berpasskey tidak membuka apa pun.
+    const other = new Browser('198.51.100.10');
+    const r = await h.service.signInPassword(other.headers(), PARTNER, PASSWORD);
+    expect(r.result.kind).toBe('use_passkey');
+    expect(r.setCookie).toBeNull();
+  });
+});
+
 describe('sesi tanpa faktor kuat', () => {
   it('sesi kata sandi saja hanya boleh mengamankan, tidak penuh', async () => {
     const { browser: owner } = await bootstrapOwner(h);
