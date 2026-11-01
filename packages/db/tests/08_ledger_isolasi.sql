@@ -1,0 +1,225 @@
+-- Isolasi ruang tabel ledger (BSD §13 #10 sampai #14; IPD S5: isolasi penuh semua tabel baru):
+-- dua user x tabel/view ledger x SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; fungsi api.*
+-- dengan id pasangan = DK404; tanpa konteks = 0 baris / DK401; Bersama tidak pernah membuka data
+-- Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
+begin;
+select plan(143);
+select tests.fixture();
+select tests.clock_at('2026-03-20 10:00+07');
+
+select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'personal') as fp,
+       tests.space_id(tests.n(), 'shared') as sh \gset
+
+select tests.owner_val(null, format($$insert into app.categories (space_id, type, name, icon)
+  values (%L, 'expense', 'Makan', 'ForkKnife') returning id$$, :'np')) as ncat \gset
+select tests.owner_val(null, format($$insert into app.categories (space_id, type, name, icon)
+  values (%L, 'expense', 'Makan', 'ForkKnife') returning id$$, :'fp')) as fcat \gset
+
+select tests.account(tests.n(), :'np', 'BCA', 'operasional', 1000000, '2026-01-01') as bca,
+       tests.account(tests.n(), :'sh', 'Kas Rumah', 'operasional', 300000, '2026-01-01') as kas,
+       tests.account(tests.f(), :'fp', 'BCA Farida', 'operasional', 400000, '2026-01-01') as fbca \gset
+
+create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
+language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
+
+-- Data: entri biasa, entri batal (Sampah), entri dipurge (tombstone), setor dan ambil Bersama.
+select pg_temp.call(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 10000, %L, null, 'rahasia N')$$,
+  :'np', :'bca', :'ncat')) ->> 'entry_id' as ne \gset
+select pg_temp.call(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 20000, %L, null, 'rahasia F')$$,
+  :'fp', :'fbca', :'fcat')) ->> 'entry_id' as fe \gset
+select pg_temp.call(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000, null, null, 'rahasia void N')$$,
+  :'np', :'bca')) ->> 'entry_id' as nv \gset
+select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'nv'));
+select pg_temp.call(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 2000, null, null, 'rahasia void F')$$,
+  :'fp', :'fbca')) ->> 'entry_id' as fv \gset
+select pg_temp.call(tests.f(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'fv'));
+select pg_temp.call(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 3, null, null, 'purge N')$$,
+  :'np', :'bca')) ->> 'entry_id' as np_purge \gset
+select pg_temp.call(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 4, null, null, 'purge F')$$,
+  :'fp', :'fbca')) ->> 'entry_id' as fp_purge \gset
+select pg_temp.call(u, format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, e))
+  from (values (tests.n(), :'np_purge'), (tests.f(), :'fp_purge')) v (u, e);
+select pg_temp.call(u, format($$select api.purge_entry(%L, 2)$$, e))
+  from (values (tests.n(), :'np_purge'), (tests.f(), :'fp_purge')) v (u, e);
+select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 150000, 0, null, 'rahasia setor', 'Setoran')$$,
+  :'np', :'bca', :'kas')) as setor \gset
+select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 50000, 0, null, 'rahasia ambil', 'Diambil')$$,
+  :'sh', :'kas', :'bca')) as ambil \gset
+
+create temp table rel as select unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines',
+  'app.entry_history', 'app.entry_tombstones', 'app.account_balances', 'app.report_lines']) as t;
+
+-- ===== web: SELECT (dua user x 8 relasi) =====
+select ok(tests.web_val(tests.n(), format('select count(*) from %s where space_id = %L', t, :'np'))::int > 0,
+          'web/N melihat Pribadi sendiri: ' || t) from rel;
+select ok(tests.web_val(tests.f(), format('select count(*) from %s where space_id = %L', t, :'fp'))::int > 0,
+          'web/F melihat Pribadi sendiri: ' || t) from rel;
+select is(tests.web_val(tests.f(), format('select count(*) from %s where space_id = %L', t, :'np')), '0',
+          'web/F tidak melihat Pribadi N: ' || t) from rel;
+select is(tests.web_val(tests.n(), format('select count(*) from %s where space_id = %L', t, :'fp')), '0',
+          'web/N tidak melihat Pribadi F: ' || t) from rel;
+select is(tests.web_val(null, format('select count(*) from %s', t)), '0', 'tanpa konteks: ' || t || ' 0 baris') from rel;
+select is(tests.web_val(tests.f(), format('select count(*) from %s where space_id = %L', 'app.entries', :'sh')),
+          tests.web_val(tests.n(), format('select count(*) from %s where space_id = %L', 'app.entries', :'sh')),
+          'Bersama: N dan F melihat entri yang sama');
+
+-- ===== web: INSERT / UPDATE / DELETE ditolak (tanpa hak) =====
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), q), '42501', null, 'web INSERT ditolak: ' || t)
+from (values
+  ('accounts', format($q$insert into app.accounts (space_id, space_kind, name, pocket, wallet_type, opened_on, created_by)
+     values (%L, 'personal', 'X', 'operasional', 'bank', '2026-01-01', app.current_user_id())$q$, :'fp')),
+  ('categories', format($q$insert into app.categories (space_id, type, name, icon) values (%L, 'expense', 'X', 'X')$q$, :'fp')),
+  ('entries', format($q$insert into app.entries (space_id, space_kind, kind, occurred_on, created_by, updated_by)
+     values (%L, 'personal', 'income', '2026-03-01', app.current_user_id(), app.current_user_id())$q$, :'fp')),
+  ('entry_lines', format($q$insert into app.entry_lines (entry_id, space_id, role, account_id, amount) values (%L, %L, 'fee', %L, -1)$q$, :'fe', :'fp', :'fbca')),
+  ('entry_history', format($q$insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by)
+     values (%L, %L, 9, 'update', '{}', app.current_user_id())$q$, :'fe', :'fp')),
+  ('entry_tombstones', format($q$insert into app.entry_tombstones (entry_id, space_id, kind, occurred_on, voided_at, voided_by)
+     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp'))
+) v (t, q);
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), 'update ' || t || ' set space_id = space_id'), '42501', null,
+  'web UPDATE ditolak: ' || t)
+from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
+                  'app.entry_tombstones']) t;
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), 'delete from ' || t), '42501', null,
+  'web DELETE ditolak: ' || t)
+from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
+                  'app.entry_tombstones']) t;
+
+-- ===== api (pemilik fungsi api.*): policy yang sama =====
+select is(tests.api_val(tests.f(), format('select count(*) from %s where space_id = %L', t, :'np')), '0',
+          'api/F tidak melihat Pribadi N: ' || t)
+from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
+                  'app.entry_tombstones', 'app.account_balances', 'app.report_lines']) t;
+select is(tests.api_val(null, format('select count(*) from %s', t)), '0', 'api tanpa konteks: ' || t || ' 0 baris')
+from unnest(array['app.accounts', 'app.entries', 'app.entry_lines', 'app.entry_history']) t;
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), q), '42501', null, 'api/F INSERT ke Pribadi N ditolak: ' || t)
+from (values
+  ('accounts', format($q$insert into app.accounts (space_id, space_kind, name, pocket, wallet_type, opened_on, created_by)
+     values (%L, 'personal', 'X', 'operasional', 'bank', '2026-01-01', app.current_user_id())$q$, :'np')),
+  ('categories', format($q$insert into app.categories (space_id, type, name, icon) values (%L, 'expense', 'X', 'X')$q$, :'np')),
+  ('entries', format($q$insert into app.entries (space_id, space_kind, kind, occurred_on, created_by, updated_by)
+     values (%L, 'personal', 'income', '2026-03-01', app.current_user_id(), app.current_user_id())$q$, :'np')),
+  ('entry_lines', format($q$insert into app.entry_lines (entry_id, space_id, role, account_id, amount) values (%L, %L, 'fee', %L, -1)$q$, :'ne', :'np', :'bca')),
+  ('entry_history', format($q$insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by)
+     values (%L, %L, 9, 'update', '{}', app.current_user_id())$q$, :'ne', :'np')),
+  ('entry_tombstones', format($q$insert into app.entry_tombstones (entry_id, space_id, kind, occurred_on, voided_at, voided_by)
+     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp'))
+) v (t, q);
+select is(tests.api_exec(tests.f(), format('update %s set %s where space_id = %L', t, c, :'np')), 0::bigint,
+          'api/F UPDATE Pribadi N: 0 baris: ' || t)
+from (values ('app.accounts', 'name = ''X'''), ('app.categories', 'name = ''X'''), ('app.entries', 'version = version')) v (t, c);
+select is(tests.api_exec(tests.f(), format('delete from app.entry_lines where space_id = %L', :'np')), 0::bigint,
+          'api/F DELETE entry_lines Pribadi N: 0 baris');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), q), '42501', null, 'api tanpa hak: ' || q)
+from unnest(array['update app.entry_lines set amount = amount', 'update app.entry_history set version = version',
+                  'update app.entry_tombstones set kind = kind', 'delete from app.accounts',
+                  'delete from app.categories', 'delete from app.entries', 'delete from app.entry_history',
+                  'delete from app.entry_tombstones']) q;
+
+-- ===== worker: tanpa akses tabel ledger =====
+select throws_ok(format($$select tests.worker_val(null, %L)$$, 'select count(*) from ' || t), '42501', null,
+  'worker SELECT ditolak: ' || t) from rel;
+
+-- ===== Fungsi api.* dengan id milik N, dipanggil F = DK404 (BSD §13 #11, #12) =====
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), q), 'DK404', null, 'F -> id N = DK404: ' || t)
+from (values
+  ('create_account', format($q$select api.create_account(gen_random_uuid(), %L, 'X', 'operasional', 'bank')$q$, :'np')),
+  ('create_entry', format($q$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1)$q$, :'np', :'bca')),
+  ('create_transfer dari', format($q$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 1)$q$, :'np', :'bca', :'kas')),
+  ('create_transfer ke', format($q$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 1)$q$, :'fp', :'fbca', :'bca')),
+  ('update_entry', format($q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1, null, null, null, false)$q$, :'ne', :'fbca')),
+  ('void_entry', format($q$select api.void_entry(gen_random_uuid(), %L, 1)$q$, :'ne')),
+  ('restore_entry', format($q$select api.restore_entry(gen_random_uuid(), %L, 2)$q$, :'nv')),
+  ('purge_entry', format($q$select api.purge_entry(%L, 2)$q$, :'nv')),
+  ('reconcile_balance', format($q$select api.reconcile_balance(gen_random_uuid(), %L, 0)$q$, :'bca')),
+  ('archive_account', format($q$select api.archive_account(%L)$q$, :'bca')),
+  ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'np')),
+  ('period_summary', format($q$select api.period_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
+  ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'np')),
+  ('net_worth', format($q$select api.net_worth(%L)$q$, :'np')),
+  ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
+  ('trash_list', format($q$select api.trash_list(%L)$q$, :'np'))
+) v (t, q);
+select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
+  'entri N tidak tersentuh');
+
+-- Tanpa konteks: fungsi tulis dan baca = DK401.
+select throws_ok(format($$select tests.web_exec(null, %L)$$, q), 'DK401', 'unauthenticated', 'tanpa konteks = DK401: ' || t)
+from (values
+  ('create_account', format($q$select api.create_account(gen_random_uuid(), %L, 'X', 'operasional', 'bank')$q$, :'sh')),
+  ('create_entry', format($q$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1)$q$, :'sh', :'kas')),
+  ('create_transfer', format($q$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 1)$q$, :'np', :'bca', :'kas')),
+  ('update_entry', format($q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1, null, null, null, false)$q$, :'ne', :'bca')),
+  ('void_entry', format($q$select api.void_entry(gen_random_uuid(), %L, 1)$q$, :'ne')),
+  ('restore_entry', format($q$select api.restore_entry(gen_random_uuid(), %L, 2)$q$, :'nv')),
+  ('purge_entry', format($q$select api.purge_entry(%L, 2)$q$, :'nv')),
+  ('reconcile_balance', format($q$select api.reconcile_balance(gen_random_uuid(), %L, 0)$q$, :'kas')),
+  ('archive_account', format($q$select api.archive_account(%L)$q$, :'kas')),
+  ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'sh')),
+  ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
+  ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
+  ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh'))
+) v (t, q);
+
+-- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====
+select is(tests.web_val(tests.f(), format($$select count(*) || ' ' || string_agg(direction::text, ',') || ' '
+    || coalesce(string_agg(description, ','), '-') || ' ' || string_agg(shared_note, ',')
+  from app.entries where link_id = %L$$, (:'setor'::jsonb) ->> 'link_id')), '1 in - Setoran',
+  'setor N: F melihat tepat satu kaki (in), tanpa deskripsi, dengan catatan');
+select is(tests.web_val(tests.f(), format($$select string_agg(account_id::text, ',') from app.entry_lines where entry_id = %L$$,
+  (:'setor'::jsonb) ->> 'linked_entry_id')), :'kas', 'kaki in hanya menyentuh dompet Bersama');
+select is(tests.web_val(tests.f(), format($$select count(*) from app.accounts where id = %L$$, :'bca')), '0',
+  'F tidak melihat dompet sumber');
+select is(tests.web_val(tests.f(), format($$select count(*) from app.entry_lines where account_id = %L$$, :'bca')), '0',
+  'F tidak melihat line dompet sumber');
+select is(tests.web_val(tests.f(), format($$select count(*) || ' ' || string_agg(direction::text, ',') || ' '
+    || coalesce(string_agg(description, ','), '-') || ' ' || string_agg(shared_note, ',')
+  from app.entries where link_id = %L$$, (:'ambil'::jsonb) ->> 'link_id')), '1 out - Diambil',
+  'ambil dari Bersama: F melihat kaki out tanpa deskripsi');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
+    $q$select api.void_entry(gen_random_uuid(), %L, 1)$q$, (:'setor'::jsonb) ->> 'linked_entry_id')),
+  'DK404', 'entry_not_found', 'void kaki Bersama oleh bukan pencatat = DK404');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
+    $q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1, null, null, null, false)$q$,
+    (:'setor'::jsonb) ->> 'linked_entry_id', :'kas')),
+  'DK422', 'kind_not_editable', 'kaki space_transfer tidak bisa diubah lewat update_entry');
+
+-- N membatalkan setoran: kedua kaki batal, Sampah Bersama tetap tanpa deskripsi.
+select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, (:'setor'::jsonb) ->> 'entry_id'));
+select is(tests.web_val(tests.f(), format($$select count(*) || ' ' || coalesce(string_agg(description, ','), '-') || ' ' || sum(amount)
+  from api.trash_list(%L)$$, :'sh')), '1 - 150000', 'Sampah Bersama: kaki in, tanpa deskripsi');
+select is(tests.web_val(tests.n(), format($$select string_agg(description, ',' order by description) from api.trash_list(%L)$$, :'np')),
+  'rahasia setor,rahasia void N', 'Sampah Pribadi N: deskripsi ada di kaki Pribadi');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
+    $q$select api.restore_entry(gen_random_uuid(), %L, 2)$q$, (:'setor'::jsonb) ->> 'linked_entry_id')),
+  'DK404', 'entry_not_found', 'pulihkan kaki Bersama oleh bukan pencatat = DK404');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
+    $q$select api.purge_entry(%L, 2)$q$, (:'setor'::jsonb) ->> 'linked_entry_id')),
+  'DK404', 'entry_not_found', 'purge kaki Bersama oleh bukan pencatat = DK404');
+
+-- Tidak ada teks Pribadi atau id dompet Pribadi di semua yang terlihat F.
+select is(tests.web_val(tests.f(), format($$select count(*) from (
+    select e::text as x from app.entries e
+    union all select h::text from app.entry_history h
+    union all select l::text from app.entry_lines l
+    union all select r::text from app.report_lines r
+    union all select t::text from api.trash_list(%L) t
+    union all select a::text from api.activity_feed(%L, 100) a
+  ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like %L$$,
+  :'sh', :'sh', '%' || :'bca' || '%')), '0', 'F: tidak ada deskripsi Pribadi N atau id dompet N di entri/riwayat/line/laporan/Sampah/feed');
+select is(tests.web_val(tests.n(), format($$select count(*) from (
+    select e::text as x from app.entries e union all select h::text from app.entry_history h
+    union all select t::text from app.entry_tombstones t
+  ) s where x like '%%rahasia F%%' or x like '%%rahasia void F%%' or x like %L$$, '%' || :'fbca' || '%')), '0',
+  'N: tidak ada data Pribadi F');
+select is(tests.web_val(tests.f(), format($$select count(*) from app.entry_history where entry_id = %L$$,
+  (:'setor'::jsonb) ->> 'entry_id')), '0', 'F tidak melihat riwayat kaki Pribadi');
+select is(tests.web_val(tests.f(), format($$select string_agg(op::text || ':' || amount, ',' order by at, version)
+  from api.activity_feed(%L, 100) where entry_id = %L$$, :'sh', (:'setor'::jsonb) ->> 'linked_entry_id')),
+  'create:150000,void:150000', 'feed Bersama: kaki in dibuat lalu dibatalkan');
+select is(tests.web_val(tests.f(), format($$select count(*) from app.entry_tombstones where space_id = %L$$, :'np')), '0',
+  'F tidak melihat tombstone N');
+
+select * from finish();
+rollback;

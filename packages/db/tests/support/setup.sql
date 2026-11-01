@@ -121,8 +121,113 @@ begin
   perform set_config('app.now_override', (now() + p_shift)::text, true);
 end $$;
 
+-- Jam tiruan pada waktu tetap (tes angka per bulan), lokal transaksi.
+create function tests.clock_at(p_at timestamptz) returns void
+language plpgsql as $$
+begin
+  perform tests.owner_exec(null, $q$update app.settings set value = 'test' where key = 'env'$q$);
+  perform set_config('app.now_override', p_at::text, true);
+end $$;
+
+-- Dompet baru lewat api.create_account (role web, user p_uid); kembalikan id dompet.
+create function tests.account(p_uid uuid, p_space uuid, p_name text, p_pocket text,
+                              p_opening bigint default 0, p_opened_on date default null)
+returns uuid language sql as $$
+  select tests.web_val(p_uid, format(
+    $q$select api.create_account(gen_random_uuid(), %L, %L, %L, 'bank', %L::date, %s) ->> 'account_id'$q$,
+    p_space, p_name, p_pocket, p_opened_on, p_opening))::uuid
+$$;
+
+-- Saldo dompet (dibaca owner, langsung dari lines, tanpa view).
+create function tests.balance(p_account uuid) returns bigint
+language sql as $$
+  select tests.owner_val(null, format(
+    $q$select coalesce(sum(l.amount), 0) from app.entry_lines l join app.entries e on e.id = l.entry_id
+       where l.account_id = %L and e.voided_at is null$q$, p_account))::bigint
+$$;
+
+-- ===== Koneksi kedua lewat dblink (tes konkurensi, 99_konkurensi.sql) =====
+-- Helper milik superuser (SECURITY DEFINER): dblink tanpa password hanya untuk superuser.
+-- Koneksi lewat socket lokal cluster ini sebagai role aplikasi (atau postgres untuk fixture
+-- yang harus di-commit). HANYA cluster tes; skema tests tidak pernah ada di VM.
+create extension if not exists dblink schema tests;
+
+create function tests.peer_open(p_name text, p_role text) returns text
+language sql security definer set search_path = tests, pg_catalog as $$
+  select tests.dblink_connect(p_name, format('dbname=%s port=%s host=%s user=%s application_name=%s',
+    current_database(), current_setting('port'),
+    split_part(current_setting('unix_socket_directories'), ',', 1), p_role, 'peer_' || p_name))
+$$;
+create function tests.peer_close(p_name text) returns text
+language sql security definer set search_path = tests, pg_catalog as $$
+  select tests.dblink_disconnect(p_name)
+$$;
+create function tests.peer_exec(p_name text, p_sql text) returns text
+language sql security definer set search_path = tests, pg_catalog as $$
+  select tests.dblink_exec(p_name, p_sql)
+$$;
+create function tests.peer_val(p_name text, p_sql text) returns text
+language sql security definer set search_path = tests, pg_catalog as $$
+  select v from tests.dblink(p_name, p_sql) as t (v text)
+$$;
+create function tests.peer_send(p_name text, p_sql text) returns int
+language sql security definer set search_path = tests, pg_catalog as $$
+  select tests.dblink_send_query(p_name, p_sql)
+$$;
+-- true bila koneksi p_name menunggu lock (maksimal 5 detik).
+create function tests.peer_blocked(p_name text) returns boolean
+language plpgsql security definer set search_path = tests, pg_catalog as $$
+begin
+  for i in 1..500 loop
+    if exists (select 1 from pg_stat_activity a
+               where a.application_name = 'peer_' || p_name and a.wait_event_type = 'Lock') then
+      return true;
+    end if;
+    perform pg_sleep(0.01);
+  end loop;
+  return false;
+end $$;
+-- Hasil query yang dikirim peer_send: nilai kolom pertama, atau 'ERROR: <pesan>'.
+create function tests.peer_result(p_name text) returns text
+language plpgsql security definer set search_path = tests, pg_catalog as $$
+declare
+  v text;
+  e text;
+begin
+  select string_agg(t.v, ',') into v from tests.dblink_get_result(p_name, false) as t (v text);
+  e := tests.dblink_error_message(p_name);
+  perform 1 from tests.dblink_get_result(p_name, false) as t (v text);
+  return case when e is not null and e <> 'OK' then 'ERROR: ' || e else v end;
+end $$;
+
+-- Kosongkan semua data aplikasi (hanya lewat koneksi peer superuser, di-commit). Dipakai tes
+-- konkurensi yang butuh fixture ter-commit; tes lain selalu rollback.
+create function tests.wipe() returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform pg_catalog.set_config('dompetku.purge', 'on', true);
+  delete from app.entries;
+  delete from app.entry_tombstones;
+  delete from app.accounts;
+  delete from app.categories;
+  delete from app.idempotency_keys;
+  delete from app.product_events;
+  delete from audit.events;
+  delete from app.invitations;
+  delete from app.profiles;
+  delete from app.space_members;
+  delete from app.spaces;
+  delete from app.households;
+  delete from auth."user";
+  delete from app.settings where key = 'owner_email';
+end $$;
+
 revoke all on all functions in schema tests from public;
 grant execute on function tests.n(), tests.f(), tests.x(),
   tests.signup(uuid, text, boolean, boolean), tests.fixture(boolean),
-  tests.space_id(uuid, text), tests.clock(interval)
+  tests.space_id(uuid, text), tests.clock(interval), tests.clock_at(timestamptz),
+  tests.account(uuid, uuid, text, text, bigint, date), tests.balance(uuid),
+  tests.peer_open(text, text), tests.peer_close(text), tests.peer_exec(text, text),
+  tests.peer_val(text, text), tests.peer_send(text, text), tests.peer_blocked(text),
+  tests.peer_result(text), tests.wipe()
   to dompetku_test;
