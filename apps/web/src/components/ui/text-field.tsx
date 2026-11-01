@@ -19,6 +19,7 @@ export function TextField({
   readOnly,
   trailing,
   inputRef,
+  name,
 }: {
   label: string;
   value: string;
@@ -37,6 +38,8 @@ export function TextField({
   /** Kontrol di sisi kanan field, mis. tombol Tampilkan. */
   trailing?: ReactNode;
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** Nama field form (Server Action membaca FormData). */
+  name?: string;
 }) {
   const id = useId();
   const hintId = `${id}-hint`;
@@ -51,6 +54,7 @@ export function TextField({
       <div className={`${fieldShell(Boolean(error))} pl-3.5 ${trailing ? 'pr-0.5' : 'pr-3.5'}`}>
         <input
           id={id}
+          name={name}
           ref={inputRef}
           type={type}
           value={value}
