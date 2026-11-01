@@ -1,7 +1,7 @@
 import 'server-only';
 import { refresh } from 'next/cache';
 import { unstable_rethrow } from 'next/navigation';
-import { z, ZodError } from 'zod';
+import { z, ZodError, type ZodType } from 'zod';
 import type { ActionResult, LedgerErrorCode } from '@/features/ledger/types';
 import { authService, requireDataUser } from '@/server/auth/next';
 import type { Pools } from '@/server/db';
@@ -20,7 +20,9 @@ import { resolveSpace } from '@/server/ledger/space';
  *
  * Galat ke klien:
  * - mode prototipe (`requireDataUser()` = null) dan redirect/notFound Next = DILEMPAR (satu-satunya);
- * - ZodError (input) = `{ code: 'invalid', field }`, field = jalur isu pertama digabung titik;
+ * - input ditolak `parseInput` (`ActionInputError`) = `{ code: 'invalid', field }`, field = jalur
+ *   isu pertama digabung titik; ZodError lain (kontrak hasil `api.*`/kueri baca) = invarian server
+ *   rusak, jadi `unknown` + log `ZodError`, bukan galat input;
  * - galat domain/jaringan = `toLedgerError`;
  * - lainnya = `{ code: 'unknown' }`, dilog hanya nama action + SQLSTATE/errno atau nama galat
  *   (tanpa pesan, detail, atau parameter: bisa memuat nominal/deskripsi).
@@ -32,6 +34,26 @@ export class PrototypeActionError extends Error {
     super('prototipe');
     this.name = 'PrototypeActionError';
   }
+}
+
+const FIELD = /^[A-Za-z0-9_.]{1,128}$/;
+
+/** Input action ditolak Zod; satu-satunya galat yang dipetakan `invalid`. */
+export class ActionInputError extends Error {
+  readonly field: string | undefined;
+  constructor(field: string | undefined) {
+    super('invalid_input');
+    this.name = 'ActionInputError';
+    this.field = field;
+  }
+}
+
+/** Validasi input action (bukan hasil DB): ZodError → `ActionInputError(field)`. */
+export function parseInput<S extends ZodType>(schema: S, input: unknown): z.output<S> {
+  const r = schema.safeParse(input);
+  if (r.success) return r.data;
+  const field = r.error.issues[0]?.path.map(String).join('.') ?? '';
+  throw new ActionInputError(FIELD.test(field) ? field : undefined);
 }
 
 export interface ActionCtx {
@@ -52,7 +74,7 @@ const ruangInput = z.object({ ruang: z.enum(['pribadi', 'bersama']) });
 export async function actionContext(ruang: unknown): Promise<ActionCtx> {
   const state = await requireDataUser();
   if (state === null) throw new PrototypeActionError();
-  const parsed = ruangInput.parse({ ruang });
+  const parsed = parseInput(ruangInput, { ruang });
   const pools = authService().pools;
   const { spaceId, kind } = await resolveSpace(pools, state.userId, parsed.ruang);
   return { pools, userId: state.userId, spaceId, kind };
@@ -75,15 +97,17 @@ function errorTag(e: unknown): string {
   return 'unknown';
 }
 
-const FIELD = /^[A-Za-z0-9_.]{1,128}$/;
-
 function toActionError(name: string, e: unknown): { code: LedgerErrorCode; field?: string } {
   // Redirect sesi (requireUser), notFound, dan sinyal Next lain bukan galat action.
   unstable_rethrow(e);
   if (e instanceof PrototypeActionError) throw e;
+  if (e instanceof ActionInputError) {
+    return e.field === undefined ? { code: 'invalid' } : { code: 'invalid', field: e.field };
+  }
+  // ZodError di sini bukan input (input lewat parseInput): kontrak hasil rusak, log `ZodError`.
   if (e instanceof ZodError) {
-    const field = e.issues[0]?.path.map(String).join('.') ?? '';
-    return FIELD.test(field) ? { code: 'invalid', field } : { code: 'invalid' };
+    console.error('[ledger action]', name, 'ZodError');
+    return { code: 'unknown' };
   }
   const mapped = toLedgerError(e);
   if (mapped) return mapped;
@@ -105,9 +129,10 @@ export async function query<T>(
 }
 
 /**
- * Tulis: seperti `query`, lalu `refresh()` (Next 16, hanya di Server Action) agar RSC ruang dimuat
- * ulang tanpa cache data. Di luar `try`: kegagalan refresh = salah pakai, bukan galat ledger, dan
- * tidak boleh membuat entri yang sudah tersimpan tampak gagal.
+ * Tulis: seperti `query`, lalu `refresh()` (Next 16) agar RSC ruang dimuat ulang tanpa cache data.
+ * Di luar `try` dengan sengaja: `refresh()` hanya melempar bila dipanggil di luar fase Server
+ * Action, yaitu salah pakai kode, dan salah pakai harus terdengar (dilempar), bukan disamarkan
+ * menjadi `ActionResult` galat.
  */
 export async function mutate<T>(
   name: string,

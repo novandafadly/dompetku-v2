@@ -487,8 +487,8 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
     });
 
     it('markNoSpendDay: hari WIB server, dua kali = satu baris', async () => {
-      await expect(markNoSpendDay(nBersama)).resolves.toBeUndefined();
-      await expect(markNoSpendDay(nBersama)).resolves.toBeUndefined();
+      await expect(markNoSpendDay(nBersama)).resolves.toEqual({ created: true });
+      await expect(markNoSpendDay(nBersama)).resolves.toEqual({ created: false });
       const { rows } = await h.admin.query<{ ok: boolean }>(
         'select on_date = app.today() as ok from app.no_spend_days where space_id = $1',
         [nBersama.spaceId],

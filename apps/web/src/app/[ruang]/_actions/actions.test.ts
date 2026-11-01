@@ -206,7 +206,7 @@ beforeEach(() => {
   m.createCategory.mockResolvedValue({ categoryId: A });
   m.updateCategory.mockResolvedValue(undefined);
   m.archiveCategory.mockResolvedValue({ affected: 1 });
-  m.markNoSpendDay.mockResolvedValue(undefined);
+  m.markNoSpendDay.mockResolvedValue({ created: true });
   m.listAccounts.mockResolvedValue([]);
   m.listCategories.mockResolvedValue([]);
   m.suggestCategories.mockResolvedValue([A, B]);
@@ -264,23 +264,87 @@ describe('gerbang (Review Focus 5)', () => {
     );
     const seen: string[] = [];
     for (const file of files) {
-      const src = readFileSync(path.join(dir, file), 'utf8');
-      const fns = exportedAsyncFunctions(src);
-      if (fns.length === 0) continue;
-      expect(src.startsWith("'use server';"), `${file} tanpa 'use server'`).toBe(true);
-      for (const { name, firstLine } of fns) {
-        seen.push(name);
-        // Baris pertama badan: `return <wrapper>('<nama>', actionContext(ruang), …`.
-        // Argumen dievaluasi kiri ke kanan, jadi actionContext (requireDataUser) dipanggil sebelum
-        // apa pun; wrapper hanya meng-await hasilnya di dalam try untuk memetakan galat.
-        expect(firstLine, `${file}:${name}`).toMatch(
-          new RegExp(`^return \\w+\\('${name}', actionContext\\(ruang\\)`),
-        );
-      }
+      const { names, violations } = scanActionFile(
+        file,
+        readFileSync(path.join(dir, file), 'utf8'),
+      );
+      expect(violations).toEqual([]);
+      seen.push(...names);
     }
     expect(seen.sort()).toEqual([...NAMES].sort());
   });
+
+  it('pemindai menolak bentuk yang melompati gerbang', () => {
+    const head = "'use server';\n\n";
+    const ok = `${head}export async function a(ruang: unknown): Promise<X> {\n  return mutate('a', actionContext(ruang), async () => 1);\n}\n`;
+    expect(scanActionFile('ok.ts', ok).violations).toEqual([]);
+    // Pembungkus lain (tanpa pemetaan galat yang dikenal).
+    expect(
+      scanActionFile('x.ts', ok.replace('return mutate(', 'return run(')).violations,
+    ).toHaveLength(1);
+    // Nama log tidak sama dengan nama fungsi.
+    expect(scanActionFile('x.ts', ok.replace("mutate('a'", "mutate('b'")).violations).toHaveLength(
+      1,
+    );
+    // Kerja sebelum gerbang.
+    expect(
+      scanActionFile('x.ts', ok.replace('  return mutate(', '  await db();\n  return mutate('))
+        .violations,
+    ).toHaveLength(1);
+    // Ekspor arrow di berkas 'use server' (endpoint tanpa pemindaian).
+    expect(
+      scanActionFile('x.ts', `${head}export const b = async (ruang: unknown) => db(ruang);\n`)
+        .violations,
+    ).toHaveLength(1);
+    expect(
+      scanActionFile('x.ts', `${head}const b = async () => 1;\nexport { b };\n`).violations,
+    ).toHaveLength(1);
+    expect(
+      scanActionFile('x.ts', `${head}export default async function (ruang: unknown) {}\n`)
+        .violations,
+    ).toHaveLength(1);
+    // Tipe boleh.
+    expect(
+      scanActionFile('x.ts', `${head}export interface A {\n  a: string;\n}\nexport type B = A;\n`)
+        .violations,
+    ).toEqual([]);
+    // Action tanpa 'use server' = bukan endpoint, berarti salah taruh.
+    expect(scanActionFile('x.ts', ok.slice(head.length)).violations).toHaveLength(1);
+  });
 });
+
+const HELPERS = '(mutate|query|quietly)';
+
+/**
+ * Pelanggaran bentuk berkas action:
+ * - berkas `'use server'` hanya boleh mengekspor `async function`, `interface`, dan `type`
+ *   (setiap ekspor nilai lain = endpoint publik yang lolos pemindaian);
+ * - `export async function` hanya di berkas `'use server'`;
+ * - baris pertama badan: `return (mutate|query|quietly)('<nama>', actionContext(ruang)…`.
+ *   Argumen dievaluasi kiri ke kanan, jadi actionContext (requireDataUser) dipanggil sebelum apa
+ *   pun; pembungkus hanya meng-await hasilnya di dalam try untuk memetakan galat.
+ */
+function scanActionFile(file: string, src: string): { names: string[]; violations: string[] } {
+  const violations: string[] = [];
+  const useServer = src.startsWith("'use server';");
+  const fns = exportedAsyncFunctions(src);
+  if (useServer) {
+    for (const line of src.split('\n')) {
+      if (
+        /^\s*export\b/.test(line) &&
+        !/^export (async function \w+|interface \w+|type \w+)/.test(line)
+      )
+        violations.push(`${file}: ekspor selain async function/interface/type: ${line.trim()}`);
+    }
+  } else if (fns.length > 0) {
+    violations.push(`${file}: export async function tanpa 'use server'`);
+  }
+  for (const { name, firstLine } of fns) {
+    const shape = new RegExp(`^return ${HELPERS}\\('${name}', actionContext\\(ruang\\)`);
+    if (!shape.test(firstLine)) violations.push(`${file}:${name}: ${firstLine}`);
+  }
+  return { names: fns.map((f) => f.name), violations };
+}
 
 /**
  * Nama dan baris pertama badan setiap `export async function`: lewati daftar parameter (kurung
@@ -420,6 +484,26 @@ describe('pemetaan galat', () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith('[ledger action]', 'saveCatat', '23503');
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/rahasia|35\.000|kopi/);
+  });
+
+  it('ZodError kontrak hasil (bukan input) = unknown, log hanya nama + ZodError', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Bentuk galat `entryResult.parse(rows[0]?.r)` di dalam callApi bila jsonb api.* berubah.
+    const { z } = await import('zod');
+    const contract = z.object({ entry_id: z.uuid(), version: z.number().int() });
+    const broken = contract.safeParse({ entry_id: 'Rp 35.000 kopi', version: 'x' }).error;
+    m.createEntry.mockRejectedValue(broken);
+    await expect(call('saveCatat')).resolves.toEqual({ ok: false, error: { code: 'unknown' } });
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith('[ledger action]', 'saveCatat', 'ZodError');
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/entry_id|35\.000|kopi/);
+  });
+
+  it('ZodError dari loader baca = unknown, bukan invalid', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { z } = await import('zod');
+    m.suggestCategories.mockRejectedValue(z.uuid().safeParse('x').error);
+    await expect(call('suggestFor')).resolves.toEqual({ ok: false, error: { code: 'unknown' } });
   });
 
   it('galat tak dikenal tanpa kode: log nama galat saja', async () => {
@@ -664,6 +748,16 @@ describe('beranda', () => {
     m.recordProductEvent.mockRejectedValue(new Error('boom'));
     await expect(call('markNoSpendDayAction')).resolves.toEqual({ ok: true, value: undefined });
     expect(m.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('tanda ulang di hari yang sama (created: false): tanpa event kedua', async () => {
+    m.markNoSpendDay
+      .mockResolvedValueOnce({ created: true })
+      .mockResolvedValueOnce({ created: false });
+    await expect(call('markNoSpendDayAction')).resolves.toEqual({ ok: true, value: undefined });
+    await expect(call('markNoSpendDayAction')).resolves.toEqual({ ok: true, value: undefined });
+    expect(m.markNoSpendDay).toHaveBeenCalledTimes(2);
+    expect(m.recordProductEvent).toHaveBeenCalledTimes(1);
   });
 
   it('tanda gagal: tanpa event', async () => {

@@ -436,14 +436,22 @@ export async function archiveCategory(
 }
 
 // ===== Hari tanpa pengeluaran =====
-/** Tanggal = `app.today()` (WIB server), bukan zona browser; dua kali = satu baris. */
-export async function markNoSpendDay(ctx: LedgerCtx): Promise<void> {
-  await callApi(
-    ctx,
-    null,
-    'select api.mark_no_spend_day(p_space_id => $1) as r',
-    [ctx.spaceId],
-    // Fungsi `returns void`: tidak ada jsonb untuk divalidasi (pg mengembalikan '').
-    z.unknown(),
-  );
+/**
+ * Tanggal = `app.today()` (WIB server), bukan zona browser; dua kali = satu baris.
+ * `created` = hari ini belum ditandai sebelum panggilan ini (dibaca di transaksi yang sama, sebelum
+ * `api.mark_no_spend_day`): event `tanpa_pengeluaran` hanya dicatat untuk tanda baru.
+ * Dua klik serentak (READ COMMITTED) bisa sama-sama `created: true`; baris tetap satu.
+ */
+export async function markNoSpendDay(ctx: LedgerCtx): Promise<{ created: boolean }> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const { rows } = await c.query<{ marked: boolean }>(
+      `select exists (
+         select 1 from app.no_spend_days where space_id = $1 and on_date = app.today()
+       ) as marked`,
+      [ctx.spaceId],
+    );
+    // Fungsi `returns void`: tidak ada jsonb untuk divalidasi.
+    await c.query('select api.mark_no_spend_day(p_space_id => $1)', [ctx.spaceId]);
+    return { created: rows[0]?.marked === false };
+  });
 }

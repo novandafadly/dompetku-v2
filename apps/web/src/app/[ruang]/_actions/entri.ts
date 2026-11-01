@@ -12,7 +12,7 @@ import {
   voidEntry,
   voidEntrySchema,
 } from '@/server/ledger/write';
-import { actionContext, ledger, mutate, query } from './context';
+import { actionContext, ledger, mutate, parseInput, query } from './context';
 import { entryIdInput } from './inputs';
 
 /**
@@ -26,7 +26,7 @@ export async function updateEntryAction(
   input: z.input<typeof updateEntrySchema>,
 ): Promise<ActionResult<{ entryId: string; version: number }>> {
   return mutate('updateEntryAction', actionContext(ruang), async (ctx) =>
-    updateEntry(ledger(ctx), updateEntrySchema.parse(input)),
+    updateEntry(ledger(ctx), parseInput(updateEntrySchema, input)),
   );
 }
 
@@ -36,7 +36,7 @@ export async function voidEntryAction(
   input: z.input<typeof voidEntrySchema>,
 ): Promise<ActionResult<{ version: number }>> {
   return mutate('voidEntryAction', actionContext(ruang), async (ctx) =>
-    voidEntry(ledger(ctx), voidEntrySchema.parse(input)),
+    voidEntry(ledger(ctx), parseInput(voidEntrySchema, input)),
   );
 }
 
@@ -46,7 +46,7 @@ export async function restoreEntryAction(
   input: z.input<typeof restoreEntrySchema>,
 ): Promise<ActionResult<{ version: number }>> {
   return mutate('restoreEntryAction', actionContext(ruang), async (ctx) =>
-    restoreEntry(ledger(ctx), restoreEntrySchema.parse(input)),
+    restoreEntry(ledger(ctx), parseInput(restoreEntrySchema, input)),
   );
 }
 
@@ -61,7 +61,7 @@ export async function reloadEntry(
   entryId: string,
 ): Promise<ActionResult<ReloadedEntry>> {
   return query('reloadEntry', actionContext(ruang), async (ctx) => {
-    const v = entryIdInput.parse({ entryId });
+    const v = parseInput(entryIdInput, { entryId });
     const found = await getEntry(ledger(ctx), v.entryId);
     // Tidak ada di ruang ini (atau bukan uuid ruang ini) = DK404 → `not_found`.
     if (!found) throw new NotInSpaceError();

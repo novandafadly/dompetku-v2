@@ -10,7 +10,7 @@ import {
   updateCategory,
   updateCategorySchema,
 } from '@/server/ledger/write';
-import { actionContext, ledger, mutate } from './context';
+import { actionContext, ledger, mutate, parseInput } from './context';
 
 /** Server Action kelola kategori (endpoint publik; pola di `context.ts`). */
 
@@ -19,7 +19,7 @@ export async function createCategoryAction(
   input: z.input<typeof createCategorySchema>,
 ): Promise<ActionResult<{ categoryId: string }>> {
   return mutate('createCategoryAction', actionContext(ruang), async (ctx) =>
-    createCategory(ledger(ctx), createCategorySchema.parse(input)),
+    createCategory(ledger(ctx), parseInput(createCategorySchema, input)),
   );
 }
 
@@ -29,7 +29,7 @@ export async function updateCategoryAction(
   input: z.input<typeof updateCategorySchema>,
 ): Promise<ActionResult<void>> {
   return mutate('updateCategoryAction', actionContext(ruang), async (ctx) =>
-    updateCategory(ledger(ctx), updateCategorySchema.parse(input)),
+    updateCategory(ledger(ctx), parseInput(updateCategorySchema, input)),
   );
 }
 
@@ -39,6 +39,6 @@ export async function archiveCategoryAction(
   input: z.input<typeof archiveCategorySchema>,
 ): Promise<ActionResult<{ affected: number }>> {
   return mutate('archiveCategoryAction', actionContext(ruang), async (ctx) =>
-    archiveCategory(ledger(ctx), archiveCategorySchema.parse(input)),
+    archiveCategory(ledger(ctx), parseInput(archiveCategorySchema, input)),
   );
 }

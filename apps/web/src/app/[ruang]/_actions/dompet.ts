@@ -3,7 +3,7 @@
 import type { z } from 'zod';
 import type { ActionResult } from '@/features/ledger/types';
 import { createAccount, createAccountSchema } from '@/server/ledger/write';
-import { actionContext, ledger, mutate } from './context';
+import { actionContext, ledger, mutate, parseInput } from './context';
 
 /** Server Action Dompet (endpoint publik; pola di `context.ts`). */
 
@@ -13,6 +13,6 @@ export async function createAccountAction(
   input: z.input<typeof createAccountSchema>,
 ): Promise<ActionResult<{ accountId: string }>> {
   return mutate('createAccountAction', actionContext(ruang), async (ctx) =>
-    createAccount(ledger(ctx), createAccountSchema.parse(input)),
+    createAccount(ledger(ctx), parseInput(createAccountSchema, input)),
   );
 }

@@ -163,6 +163,18 @@ describe('server action ruang terhadap DB', () => {
     expect(ids).not.toContain(pribadi);
   });
 
+  it('tombol tanpa pengeluaran ditekan dua kali = satu baris, satu event', async () => {
+    as(ps.n);
+    expect(await markNoSpendDayAction('bersama')).toEqual({ ok: true, value: undefined });
+    expect(await markNoSpendDayAction('bersama')).toEqual({ ok: true, value: undefined });
+    const { rows } = await h.admin.query<{ days: number; events: number }>(
+      `select (select count(*)::int from app.no_spend_days) as days,
+              (select count(*)::int from app.product_events
+                where event = 'tanpa_pengeluaran') as events`,
+    );
+    expect(rows[0]).toEqual({ days: 1, events: 1 });
+  });
+
   it('event Catat dan tanpa_pengeluaran: space_kind dari server, tanpa nominal', async () => {
     as(must(ps.f));
     const flowId = randomUUID();
