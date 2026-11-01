@@ -2728,3 +2728,12 @@ Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-
 - §10: `jobs.purge_unfinished_users` memanggil `private.require_read_committed()` sebelum kunci `dompetku.user_cap`.
 - §5: trigger `user_email_immutable` (`BEFORE UPDATE OF email` di `auth."user"`) menolak ganti email (`DK422 email_immutable`); `changeEmail` Better Auth tetap mati.
 - §12: blok `migrate:down` 0002 sampai 0008 ditolak (`DK500 migrate_down_blocked_prod`) selama `app.settings.env = 'prod'`.
+
+**Catatan S5 (2026-11-01, branch `claude/m1-s5-ledger`):** ledger di migrasi `0100` sampai `0105` (nomor 0009 sampai 0099 dicadangkan untuk migrasi Better Auth). SQL disalin persis dari §6 sampai §11, kecuali:
+
+- §6/§11: hanya tabel S5 (`accounts`, `categories`, `entries`, `entry_lines`, `entry_history`, `entry_tombstones`, `jobs.job_runs`). `bills`, `bill_occurrences`, `budgets`, `no_spend_days`, view `bill_schedule`, `budget_progress`, `materialize_bills`, dan fungsi api kategori, anggaran, tagihan, profil menyusul di sprint fiturnya. `categories` ikut S5 karena FK komposit `entries`.
+- §7: `tg_category_depth` tanpa cabang `category_in_obligation` (tabel tagihan/anggaran belum ada); versi lengkap dipasang dengan `create or replace` di migrasi tagihan/anggaran.
+- §8: `api.safe_to_spend` S5 memakai tanda tangan dan kolom yang sama, tetapi `bills_until_eom` dan `budget_wajib_remaining` selalu 0; badan lengkap (lalu periode gajian §8.2a) menyusul di S9.
+- §11: `dompetku_auditor` diberi SELECT tabel/view S5 secara eksplisit (grant `all tables` di 0008 tidak berlaku untuk tabel baru).
+- §13: konkurensi ledger (pengeluaran paralel, klik ganda paralel, transfer berlawanan, arsip paralel catat) diuji di pgTAP lewat dblink (`tests/99_konkurensi.sql`), bukan menunggu Vitest.
+- Temuan: sesudah fungsi `api.*` menutup dengan `set constraints all immediate`, mode itu berlaku sampai akhir transaksi. Fungsi `api.*` berikutnya aman (dibuka `deferred`), tetapi DML mentah owner di transaksi yang sama harus membuka `set constraints all deferred` sendiri.
