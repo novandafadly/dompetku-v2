@@ -16,6 +16,7 @@ export default defineConfig({
     environment: 'happy-dom',
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
-    exclude: ['tests/e2e/**', 'node_modules/**'],
+    // *.int.test.ts butuh Postgres: `pnpm test:int` (vitest.integration.config.ts).
+    exclude: ['tests/e2e/**', 'node_modules/**', 'src/**/*.int.test.ts'],
   },
 });

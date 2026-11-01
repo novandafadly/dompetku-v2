@@ -1,6 +1,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ENFORCED_BASELINE_CSP, contentSecurityPolicy, createNonce } from '@/lib/security-headers';
 import { TABS, isRuang } from '@/features/shell/hrefs';
+import { isPrototype } from '@/server/env';
+
+/** Nama cookie sesi Better Auth (server/auth/config.ts cookiePrefix + `.session_token`). */
+const SESSION_COOKIES = ['__Host-dompetku.session_token', 'dompetku.session_token'];
+
+/**
+ * Mode nyata: halaman ruang tanpa cookie sesi langsung 307 ke /masuk. Pemeriksaan sesi
+ * sungguhan (DB, faktor kuat) tetap di requireUser; ini hanya jalan pintas tanpa render.
+ */
+function needsSignIn(request: NextRequest): boolean {
+  if (isPrototype()) return false;
+  const [, first] = request.nextUrl.pathname.split('/');
+  return isRuang(first) && !SESSION_COOKIES.some((n) => request.cookies.has(n));
+}
 
 /**
  * `/<bukan-ruang>/<tab>`: halaman dinamis (wajib untuk nonce) melempar notFound di dalam
@@ -17,6 +31,7 @@ function unknownRuang(pathname: string): boolean {
  * `CSP_REPORT_ONLY=1` (env runtime) = minggu report-only M0b; baseline tetap ditegakkan.
  */
 export function proxy(request: NextRequest) {
+  if (needsSignIn(request)) return NextResponse.redirect(new URL('/masuk', request.url));
   const nonce = createNonce();
   const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === 'development');
   const reportOnly = process.env.CSP_REPORT_ONLY === '1';

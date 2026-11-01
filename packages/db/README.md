@@ -14,6 +14,8 @@ Skema Postgres DompetKu: role (`roles/`), migrasi dbmate (`migrations/`), dan te
 | `0006_provisioning_audit_job.sql` | §10: `private.provision_user`, `audit.log`, `jobs.purge_unfinished_users`, `jobs.purge_audit`                                                                           |
 | `0007_api_undangan.sql`           | §9.3: `api.bootstrap_owner`, `create/revoke/resend/decline/accept_invitation`, `invitation_peek`                                                                        |
 | `0008_rls_hak.sql`                | §11: RLS ENABLE + FORCE, policy, hak tabel, EXECUTE                                                                                                                     |
+| `0009_better_auth.sql`            | §5, ADR 0007: kolom `twoFactorEnabled` + CHECK email di `auth."user"`, tabel `session` (`amr`), `account`, `verification`, `twoFactor`, `passkey`, `login_throttle`     |
+| `0010_api_daftar_undangan.sql`    | `api.list_invitations()` untuk layar Undangan tertunda (web tidak bisa membaca `app.invitations`)                                                                       |
 | `0100_ledger_tabel.sql`           | §6 (S5): enum ledger, `accounts`, `categories`, `entries`, `entry_lines`, `entry_history`, `entry_tombstones`, `jobs.job_runs`                                          |
 | `0101_ledger_helper_trigger.sql`  | §7 (S5): helper `api.*` (idempotensi, lock akun, saldo, riwayat), cek bentuk + pasangan deferred, kedalaman kategori, append-only `entry_history`                       |
 | `0102_ledger_baca.sql`            | §8 (S5): `account_balances`, `report_class`, `report_lines`, `period_summary`, `month_summary`, `safe_to_spend`, `net_worth`, `activity_feed`, `trash_list`             |
@@ -35,7 +37,7 @@ Aturan file baru (BSD §12):
 
 BSD memasang FK nyata dari tabel domain dan trigger `user_admission` ke `auth."user"`, padahal tabel itu milik Better Auth. Dipilih: **`auth."user"` dibuat di `0002` dengan kolom inti Better Auth** (bentuk stub `bsd-check`, id `uuid`), bukan menunda FK. Alasannya FK dan trigger aktif dan teruji sejak S4 tanpa jendela tanpa pagar.
 
-Akibatnya untuk migrasi Better Auth (S4 sisi server):
+Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0007):
 
 - File hasil generator **tidak boleh** `create table "user"`. Kolom plugin ditambah lewat `alter table auth."user" add column ...` (mis. `"twoFactorEnabled"`).
 - Tabel `session`, `account`, `verification`, `passkey`, `twoFactor` dibuat di skema `auth` dengan id dan FK `uuid` ke `auth."user" (id) on delete cascade` (dibutuhkan `jobs.purge_unfinished_users`). Hak `dompetku_web` ikut otomatis lewat default privileges dari `0003`.
@@ -83,6 +85,7 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server):
 | `07_ledger_uang.sql`      | saldo awal, transfer Σ = −fee, `space_transfer`, kantor, idempotensi, versi DK409, saldo negatif, saldo awal 7 hari, cocokkan saldo, arsip, angka ringkasan |
 | `08_ledger_isolasi.sql`   | dua user × tabel/view ledger × operasi (web, api, worker), DK404 lintas ruang, DK401, Bersama tanpa data Pribadi                                            |
 | `09_sampah_purge.sql`     | void/restore pasangan, 90 hari, purge_entry, `purge_voided`, `purge_idempotency`, append-only riwayat, `dq_reconcile`                                       |
+| `10_daftar_undangan.sql`  | `api.list_invitations`: status, tanpa undangan yang diganti kirim ulang, tidak terlihat user lain atau tanpa konteks                                        |
 | `99_konkurensi.sql`       | dua koneksi (dblink): pengeluaran paralel, klik ganda paralel, transfer berlawanan, arsip paralel catat; data di-commit lalu dibersihkan                    |
 
 Konkurensi ledger diuji di pgTAP lewat dblink (`99_konkurensi.sql`, helper `tests.peer_*` milik superuser, hanya cluster tes). Pendaftaran paralel tetap menyusul di Vitest (TRD §4).
@@ -96,3 +99,15 @@ DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable'
 psql -U postgres -d dompetku -f packages/db/tests/support/setup.sql
 pg_prove -U dompetku_test -d dompetku packages/db/tests/*.sql
 ```
+
+## Tes integrasi auth
+
+`apps/web` punya tes Vitest terhadap Postgres sungguhan (`src/server/auth/__int__/`) dan e2e Playwright mode nyata (`tests/e2e-auth/`). Lokal, setelah `dbmate up` di cluster sekali pakai:
+
+```bash
+TEST_DATABASE_URL='postgres://dompetku_web@127.0.0.1:5432/dompetku' \
+TEST_DATABASE_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku' \
+  pnpm --filter @dompetku/web test:int
+```
+
+Tes mengosongkan data (sebagai superuser) dan memasang `owner_email` sendiri; jangan arahkan ke DB yang dipakai. Langkah operasi: `docs/ops/auth.md`.

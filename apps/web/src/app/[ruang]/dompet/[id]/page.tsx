@@ -1,23 +1,11 @@
-'use client';
+import { requireDataUser } from '@/server/auth/next';
+import { DompetRiwayatPage } from './view';
 
-import { notFound, useParams } from 'next/navigation';
-import { AccountHistory } from '@/features/dompet/account-history';
-import { useDemo } from '@/features/shell/demo-provider';
-
-export default function DompetRiwayatPage() {
-  const { state, ruang, today, href, entryHref } = useDemo();
-  const params = useParams<{ id: string }>();
-  const id = decodeURIComponent(params.id);
-  const account = state.accounts.find((a) => a.id === id && a.ruang === ruang);
-  if (account === undefined) notFound();
-  return (
-    <AccountHistory
-      state={state}
-      ruang={ruang}
-      today={today}
-      account={account}
-      dompetHref={href(ruang, 'dompet')}
-      entryHref={(eid) => entryHref(ruang, eid)}
-    />
-  );
+/**
+ * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
+ * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ */
+export default async function Page() {
+  await requireDataUser();
+  return <DompetRiwayatPage />;
 }

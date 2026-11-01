@@ -1,79 +1,37 @@
-'use client';
+import { nowIsoWIB, timeLabelWIB, todayWIB, weekdayDateLabel } from '@dompetku/domain';
+import { authService, requireUser } from '@/server/auth/next';
+import { isPrototype } from '@/server/env';
+import { param, type SearchParams } from '../_components/params';
+import { UndangReal, type InvitationView } from '../_components/undang-real';
+import { UndangPrototype } from '../_prototype/undang';
 
-import { useState } from 'react';
-import { BackLink } from '@/components/ui/back-link';
-import { Button } from '@/components/ui/button';
-import { CheckCircleIcon } from '@/components/ui/icons/check-circle';
-import { PaperPlaneTiltIcon } from '@/components/ui/icons/paper-plane-tilt';
-import { TextField } from '@/components/ui/text-field';
-import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
-import { LinkButton } from '@/features/auth/link-button';
-import { useDemo } from '@/features/shell/demo-provider';
+const STATUSES = ['pending', 'accepted', 'declined', 'revoked', 'expired'] as const;
 
-export default function UndangPage() {
-  const { authHref, href } = useDemo();
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [sentTo, setSentTo] = useState<string | null>(null);
+function expiresLabel(d: Date): string {
+  return `${weekdayDateLabel(todayWIB(d))}, ${timeLabelWIB(nowIsoWIB(d))} WIB`;
+}
+
+export default async function UndangPage({ searchParams }: { searchParams: SearchParams }) {
+  if (isPrototype()) return <UndangPrototype />;
+  const state = await requireUser('full');
+  const service = authService();
+  const [household, list] = await Promise.all([
+    service.household(state.userId),
+    service.listInvitations(state.userId),
+  ]);
+  const invitations: InvitationView[] = list.flatMap((i) => {
+    const status = STATUSES.find((s) => s === i.status);
+    return status
+      ? [{ id: i.id, email: i.email, status, expiresLabel: expiresLabel(i.expiresAt) }]
+      : [];
+  });
+  const status = await param(searchParams, 'status');
   return (
-    <>
-      <BackLink href={href('pribadi', 'beranda')}>Beranda</BackLink>
-      <AuthTitle>Undang Farida ke ruang Bersama</AuthTitle>
-      <AuthText>
-        Farida hanya akan melihat dompet, transaksi, dan rencana Bersama. Ruang Pribadi kalian tetap
-        terpisah.
-      </AuthText>
-      <form
-        noValidate
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const trimmed = email.trim();
-          if (trimmed === '') {
-            setError('Isi email Farida.');
-            return;
-          }
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-            setError('Email belum lengkap, contoh: nama@email.com.');
-            return;
-          }
-          setError(undefined);
-          setSentTo(trimmed);
-        }}
-      >
-        <TextField
-          label="Email pasangan"
-          type="email"
-          inputMode="email"
-          autoComplete="off"
-          placeholder="nama@email.com"
-          value={email}
-          onChange={setEmail}
-          error={error}
-          hint="Tautan berlaku 72 jam, sekali pakai."
-        />
-        <Button type="submit">
-          <PaperPlaneTiltIcon size={18} weight="bold" />
-          Kirim undangan
-        </Button>
-      </form>
-      {sentTo === null ? null : (
-        <section
-          aria-label="Tautan undangan"
-          role="status"
-          className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface-2 p-4"
-        >
-          <p className="flex items-start gap-2 text-body font-medium text-text">
-            <CheckCircleIcon size={20} weight="fill" className="mt-0.5 shrink-0 text-accent-text" />
-            <span>
-              Tautan untuk {sentTo} siap dikirim. Berlaku 72 jam dan hanya bisa dipakai sekali.
-            </span>
-          </p>
-          <LinkButton href={authHref('terima-undangan')} variant="secondary">
-            Buka sebagai Farida
-          </LinkButton>
-        </section>
-      )}
-    </>
+    <UndangReal
+      invitations={invitations}
+      owner={household?.role === 'owner'}
+      full={(household?.members ?? 0) >= 2}
+      notice={status === 'dicabut' ? 'Undangan dicabut. Tautannya tidak berlaku lagi.' : null}
+    />
   );
 }

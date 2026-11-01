@@ -1,26 +1,11 @@
-'use client';
+import { requireDataUser } from '@/server/auth/next';
+import { TransaksiDetailPage } from './view';
 
-import { notFound, useParams } from 'next/navigation';
-import { useDemo } from '@/features/shell/demo-provider';
-import { EntryDetail } from '@/features/transaksi/entry-detail';
-
-export default function TransaksiDetailPage() {
-  const { state, store, ruang, today, href, entryHref, month, monthHref } = useDemo();
-  const params = useParams<{ id: string }>();
-  const id = decodeURIComponent(params.id);
-  const entry = state.entries.find((e) => e.id === id && e.ruang === ruang);
-  if (entry === undefined) notFound();
-  return (
-    <EntryDetail
-      entry={entry}
-      state={state}
-      store={store}
-      ruang={ruang}
-      today={today}
-      listHref={href(ruang, 'transaksi')}
-      month={month}
-      monthHref={(m) => monthHref(ruang, m)}
-      entryHref={(eid) => entryHref(ruang, eid)}
-    />
-  );
+/**
+ * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
+ * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ */
+export default async function Page() {
+  await requireDataUser();
+  return <TransaksiDetailPage />;
 }

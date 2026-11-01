@@ -1,55 +1,22 @@
-'use client';
+import type { Route } from 'next';
+import { redirect } from 'next/navigation';
+import { currentSession } from '@/server/auth/next';
+import { isPrototype } from '@/server/env';
+import { MasukReal } from '../_components/masuk-real';
+import { param, type SearchParams } from '../_components/params';
+import { MasukPrototype } from '../_prototype/masuk';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { FingerprintIcon } from '@/components/ui/icons/fingerprint';
-import { TextField } from '@/components/ui/text-field';
-import { AuthTitle } from '@/features/auth/auth-frame';
-import { LinkButton } from '@/features/auth/link-button';
-import { PasswordField } from '@/features/auth/password-field';
-import { useDemo } from '@/features/shell/demo-provider';
-import { Wordmark } from '@/features/shell/sidebar';
+const NOTICE: Record<string, string> = {
+  terverifikasi: 'Email terkonfirmasi. Masuk untuk melanjutkan mengamankan akun.',
+  'sandi-diganti': 'Kata sandi sudah diganti dan semua perangkat dikeluarkan. Masuk lagi.',
+  keluar: 'Kamu sudah keluar.',
+  faktor: 'Masuk dengan passkey, atau kata sandi dan kode 6 digit, untuk membuka DompetKu.',
+};
 
-export default function MasukPage() {
-  const { href, authHref } = useDemo();
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  return (
-    <>
-      <p className="pb-4">
-        <Wordmark className="text-title" />
-      </p>
-      <AuthTitle>Masuk ke DompetKu</AuthTitle>
-      <LinkButton href={href('pribadi', 'beranda')} size="lg">
-        <FingerprintIcon size={20} weight="bold" />
-        Masuk dengan passkey
-      </LinkButton>
-      <p className="flex items-center gap-3 text-label font-medium text-text-muted before:h-px before:flex-1 before:bg-hairline after:h-px after:flex-1 after:bg-hairline">
-        atau dengan email
-      </p>
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push(authHref('amankan'));
-        }}
-      >
-        <TextField
-          label="Email"
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="nama@email.com"
-          value={email}
-          onChange={setEmail}
-        />
-        <PasswordField value={password} onChange={setPassword} />
-        <Button type="submit" variant="secondary">
-          Masuk
-        </Button>
-      </form>
-    </>
-  );
+export default async function MasukPage({ searchParams }: { searchParams: SearchParams }) {
+  if (isPrototype()) return <MasukPrototype />;
+  const state = await currentSession();
+  if (state?.access.kind === 'full') redirect('/pribadi/beranda' as Route);
+  if (state?.access.kind === 'securing') redirect('/amankan');
+  return <MasukReal notice={NOTICE[await param(searchParams, 'status')] ?? null} />;
 }

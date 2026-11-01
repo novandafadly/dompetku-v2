@@ -52,10 +52,10 @@ select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and p.prosecdef $$,
   array['bootstrap_owner', 'create_invitation', 'revoke_invitation', 'resend_invitation',
-        'invitation_peek', 'decline_invitation', 'accept_invitation',
+        'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account'],
-  'daftar fungsi api DEFINER (tulis S4 + S5, invitation_peek)');
+  'daftar fungsi api DEFINER (tulis S4 + S5, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -112,6 +112,30 @@ select set_eq($$
     ('dompetku_web', 'auth.recovery_codes', 'INSERT'),
     ('dompetku_web', 'auth.recovery_codes', 'UPDATE'),
     ('dompetku_web', 'auth.recovery_codes', 'DELETE'),
+    ('dompetku_web', 'auth.session', 'SELECT'),
+    ('dompetku_web', 'auth.session', 'INSERT'),
+    ('dompetku_web', 'auth.session', 'UPDATE'),
+    ('dompetku_web', 'auth.session', 'DELETE'),
+    ('dompetku_web', 'auth.account', 'SELECT'),
+    ('dompetku_web', 'auth.account', 'INSERT'),
+    ('dompetku_web', 'auth.account', 'UPDATE'),
+    ('dompetku_web', 'auth.account', 'DELETE'),
+    ('dompetku_web', 'auth.verification', 'SELECT'),
+    ('dompetku_web', 'auth.verification', 'INSERT'),
+    ('dompetku_web', 'auth.verification', 'UPDATE'),
+    ('dompetku_web', 'auth.verification', 'DELETE'),
+    ('dompetku_web', 'auth.twoFactor', 'SELECT'),
+    ('dompetku_web', 'auth.twoFactor', 'INSERT'),
+    ('dompetku_web', 'auth.twoFactor', 'UPDATE'),
+    ('dompetku_web', 'auth.twoFactor', 'DELETE'),
+    ('dompetku_web', 'auth.passkey', 'SELECT'),
+    ('dompetku_web', 'auth.passkey', 'INSERT'),
+    ('dompetku_web', 'auth.passkey', 'UPDATE'),
+    ('dompetku_web', 'auth.passkey', 'DELETE'),
+    ('dompetku_web', 'auth.login_throttle', 'SELECT'),
+    ('dompetku_web', 'auth.login_throttle', 'INSERT'),
+    ('dompetku_web', 'auth.login_throttle', 'UPDATE'),
+    ('dompetku_web', 'auth.login_throttle', 'DELETE'),
     ('dompetku_api', 'app.settings', 'SELECT'),
     ('dompetku_api', 'app.households', 'SELECT'),
     ('dompetku_api', 'app.spaces', 'SELECT'),
@@ -204,7 +228,8 @@ select set_eq($$
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
                                    'resend_invitation', 'invitation_peek', 'decline_invitation',
-                                   'accept_invitation', 'create_account', 'create_entry',
+                                   'accept_invitation', 'list_invitations', 'create_account',
+                                   'create_entry',
                                    'create_transfer', 'update_entry', 'void_entry',
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account']) f
@@ -249,13 +274,14 @@ select is_empty($$
             = (select array_agg(k order by k) from unnest(c.conkey) k)) $$,
   'setiap FK berindeks');
 
--- FK domain ke auth."user" selalu on delete restrict (BSD §5); hanya kode pemulihan cascade.
+-- FK domain ke auth."user" selalu on delete restrict (BSD §5); hanya tabel di skema auth cascade.
 select set_eq($$
   select c.conrelid::regclass::text, c.confdeltype::text from pg_constraint c
   join pg_class t on t.oid = c.confrelid join pg_namespace n on n.oid = t.relnamespace
   where c.contype = 'f' and n.nspname = 'auth' and t.relname = 'user' and c.confdeltype <> 'r' $$,
-  $$ values ('auth.recovery_codes', 'c') $$,
-  'FK ke auth.user restrict, kecuali recovery_codes cascade');
+  $$ values ('auth.recovery_codes', 'c'), ('auth.session', 'c'), ('auth.account', 'c'),
+            ('auth."twoFactor"', 'c'), ('auth.passkey', 'c') $$,
+  'FK ke auth.user restrict, kecuali tabel auth (kode pemulihan, Better Auth) cascade');
 
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');

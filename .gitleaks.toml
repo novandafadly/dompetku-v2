@@ -1,0 +1,12 @@
+# Konfigurasi gitleaks: aturan bawaan + pengecualian sempit untuk nilai tiruan di tes.
+# Hanya berkas tes (integrasi auth dan e2e auth) yang memuat kata sandi dan secret contoh;
+# nilai itu dipakai terhadap Postgres sekali pakai dan tidak pernah sampai ke produksi.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Kredensial tiruan di tes auth"
+paths = [
+  '''^apps/web/src/server/auth/__int__/''',
+  '''^apps/web/tests/e2e-auth/''',
+]

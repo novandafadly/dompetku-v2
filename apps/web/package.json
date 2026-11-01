@@ -10,19 +10,28 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "e2e": "playwright test",
-    "e2e:screens": "SCREENS=1 playwright test"
+    "e2e:screens": "SCREENS=1 playwright test",
+    "test:int": "vitest run --config vitest.integration.config.ts",
+    "e2e:auth": "playwright test -c playwright.auth.config.ts"
   },
   "dependencies": {
+    "@better-auth/passkey": "1.7.12",
     "@dompetku/demo-data": "workspace:*",
     "@dompetku/domain": "workspace:*",
+    "@noble/hashes": "2.4.0",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-alert-dialog": "1.2.1",
     "@radix-ui/react-dialog": "^1.3.1",
     "@radix-ui/react-toast": "^1.3.1",
+    "@simplewebauthn/browser": "13.3.0",
+    "better-auth": "1.7.12",
     "cmdk": "^1.1.1",
     "next": "^16.4.3",
+    "pg": "8.23.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "uqr": "0.1.3",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -34,6 +43,7 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/node": "^24.19.2",
+    "@types/pg": "8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

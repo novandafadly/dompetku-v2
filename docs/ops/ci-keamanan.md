@@ -18,3 +18,7 @@ Saat kedaluwarsa: cek apakah ESLint/typescript-eslint sudah memakai minimatch ya
 - Sisa isi `.semgrepignore` adalah salinan bawaan Semgrep (berkas ini menggantikan bawaan), termasuk `test/` dan `tests/`.
 
 Tidak ada komentar `nosemgrep` di kode. Temuan `react-dangerouslysetinnerhtml` di `apps/web/src/components/ui/icon.tsx` diperbaiki dengan merender `<path d>` langsung.
+
+## gitleaks: kredensial tiruan di tes auth
+
+`.gitleaks.toml` memakai aturan bawaan dan hanya mengecualikan `apps/web/src/server/auth/__int__/` dan `apps/web/tests/e2e-auth/`. Berkas itu memuat kata sandi dan secret contoh untuk Postgres sekali pakai di tes integrasi dan e2e auth; nilai produksi selalu dari env di VM. Pengecualian berbasis path (bukan komentar inline) karena gitleaks memindai seluruh commit PR, termasuk commit lama.

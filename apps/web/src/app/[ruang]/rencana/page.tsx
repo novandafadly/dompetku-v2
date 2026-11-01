@@ -1,34 +1,11 @@
-'use client';
+import { requireDataUser } from '@/server/auth/next';
+import { RencanaPage } from './view';
 
-import { buttonClass } from '@/components/ui/button';
-import { CalendarCheckIcon } from '@/components/ui/icons/calendar-check';
-import { HouseIcon } from '@/components/ui/icons/house';
-import { EmptyState } from '@/components/ui/state';
-import { useDemo } from '@/features/shell/demo-provider';
-import { PageHeader } from '@/features/shell/page-header';
-import Link from 'next/link';
-
-/** R1: keadaan kosong jujur; ringkasan anggaran dan tagihan tetap di Beranda. */
-export default function RencanaPage() {
-  const { ruang, href } = useDemo();
-  return (
-    <>
-      <PageHeader title="Rencana" />
-      <div className="laptop:max-w-180">
-        <EmptyState
-          tone="accent"
-          icon={<CalendarCheckIcon size={28} />}
-          title="Rencana segera hadir"
-          headingLevel={2}
-          description="Anggaran dan tagihan akan diatur di sini. Untuk sekarang ringkasannya tetap tampil di Beranda."
-          action={
-            <Link href={href(ruang, 'beranda')} className={buttonClass('secondary')}>
-              <HouseIcon size={18} />
-              Ke Beranda
-            </Link>
-          }
-        />
-      </div>
-    </>
-  );
+/**
+ * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
+ * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ */
+export default async function Page() {
+  await requireDataUser();
+  return <RencanaPage />;
 }

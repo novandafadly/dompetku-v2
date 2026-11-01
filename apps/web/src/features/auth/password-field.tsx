@@ -7,19 +7,27 @@ import { focusRing } from '@/components/ui/styles';
 import { TextField } from '@/components/ui/text-field';
 
 /**
- * Field kata sandi layar auth tiruan. Tempel tetap boleh (WCAG 3.3.8), tetapi pengelola sandi
- * tidak diajak mengisi atau menyimpan: prototipe tidak boleh menerima kata sandi asli.
+ * Field kata sandi layar auth. Tempel tetap boleh (WCAG 3.3.8). Di prototipe pengelola sandi
+ * tidak diajak mengisi atau menyimpan (tidak boleh menerima kata sandi asli); di mode nyata
+ * `autoComplete` diisi (`current-password`/`new-password`) agar pengelola sandi bekerja.
  */
 export function PasswordField({
   value,
   onChange,
   label = 'Kata sandi',
   error,
+  name,
+  autoComplete,
+  hint,
 }: {
   value: string;
   onChange: (value: string) => void;
   label?: string;
   error?: string | undefined;
+  name?: string;
+  /** Diisi = mode nyata (tanpa peringatan prototipe). */
+  autoComplete?: 'current-password' | 'new-password';
+  hint?: string;
 }) {
   const [shown, setShown] = useState(false);
   return (
@@ -30,9 +38,13 @@ export function PasswordField({
       value={value}
       onChange={onChange}
       placeholder={label}
-      autoComplete="off"
-      hint="Prototipe: jangan isi kata sandi asli."
-      hintTone="warning"
+      {...(name === undefined ? {} : { name })}
+      autoComplete={autoComplete ?? 'off'}
+      {...(autoComplete === undefined
+        ? { hint: 'Prototipe: jangan isi kata sandi asli.', hintTone: 'warning' as const }
+        : hint === undefined
+          ? {}
+          : { hint })}
       trailing={
         <button
           type="button"
