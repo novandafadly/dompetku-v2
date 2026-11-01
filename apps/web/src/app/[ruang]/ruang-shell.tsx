@@ -12,11 +12,11 @@ import { RUANG_LABEL } from '@/features/shell/hrefs';
 
 // Sheet Catat (dan cmdk di dalamnya) tidak ikut muat awal. Kodenya dimuat saat browser senggang,
 // saat pointer/fokus di tombol Catat, atau paling lambat saat sheet dibuka.
-const loadCatatSheet = () => import('@/features/catat/catat-sheet');
+const loadCatatSheet = () => import('./catat-demo');
 const preloadCatatSheet = () => {
   void loadCatatSheet();
 };
-const CatatSheet = lazy(() => loadCatatSheet().then((m) => ({ default: m.CatatSheet })));
+const CatatSheet = lazy(() => loadCatatSheet().then((m) => ({ default: m.DemoCatatSheet })));
 
 /** Merangkai shell dengan sheet Catat; fitur tidak saling mengimpor, jadi app/ yang menyambung. */
 function CatatSlot(props: CatatSheetSlotProps) {
@@ -49,7 +49,6 @@ function CatatSlot(props: CatatSheetSlotProps) {
         store={store}
         today={today}
         keypad={keypad}
-        ruangLabel={RUANG_LABEL}
         initialAmount={early}
       />
     </Suspense>

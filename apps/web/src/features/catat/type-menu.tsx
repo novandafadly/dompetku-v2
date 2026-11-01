@@ -6,7 +6,7 @@ import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { CheckIcon } from '@/components/ui/icons/check';
 import { SpaceIcon } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
-import type { CatatType } from './use-catat';
+import type { CatatType } from './source';
 
 export const TYPE_TITLE: Record<CatatType, string> = {
   expense: 'Pengeluaran',

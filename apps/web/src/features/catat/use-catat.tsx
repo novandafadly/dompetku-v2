@@ -1,29 +1,23 @@
 'use client';
 
-import { suggestCategories } from '@dompetku/demo-data';
-import type { Account, Category, DemoState, DemoStore, Entry, Ruang } from '@dompetku/demo-data';
 import { nowTimeWIB, type IsoDate, type Rupiah } from '@dompetku/domain';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
+import { newClientId } from './client-id';
+import {
+  isPromise,
+  type CatatDraft,
+  type CatatOptions,
+  type CatatSource,
+  type CatatStatus,
+  type CatatType,
+  type SaveOutcome,
+} from './source';
 
-export type CatatType = 'expense' | 'income' | 'transfer';
-
-export interface CatatDraft {
-  type: CatatType;
-  amount: Rupiah | null;
-  categoryId?: string;
-  accountId: string;
-  /** Hanya transfer: dompet tujuan di ruang yang sama. */
-  counterAccountId?: string;
-  date: IsoDate;
-  description?: string;
-  ruang: Ruang;
-  /** Kunci idempoten: tetap sama saat simpan gagal lalu diulang. */
-  clientId: string;
-}
+export type { CatatDraft, CatatStatus, CatatType } from './source';
 
 export interface UseCatatArgs {
-  state: DemoState;
-  store: DemoStore;
+  source: CatatSource;
   today: IsoDate;
   ruang: Ruang;
   /** Jam WIB untuk saran kategori; bawaan jam sekarang. */
@@ -32,30 +26,25 @@ export interface UseCatatArgs {
   initialAmount?: Rupiah | null | undefined;
 }
 
-const SAVE_ERROR =
-  'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan mencatat dua kali.';
+/** Galat yang terikat ke satu kolom (S6-C5): kode → nama kolom server. */
+const FIELD_OF: Partial<Record<LedgerErrorCode, 'occurred_on' | 'account_id'>> = {
+  before_opening: 'occurred_on',
+  account_archived: 'account_id',
+};
 
-/** getRandomValues tersedia juga di konteks non-HTTPS (mis. HP di jaringan lokal). */
-function newClientId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+export type FieldCode = 'before_opening' | 'account_archived';
+
+function usable(o: CatatOptions | null, hidden: ReadonlySet<string>): AccountVM[] {
+  return (o?.accounts ?? []).filter((a) => !a.archived && !hidden.has(a.id));
 }
 
-function accountsOf(state: DemoState, ruang: Ruang): Account[] {
-  return state.accounts.filter((a) => a.ruang === ruang);
-}
-
-/** Dompet operasional dengan entri hidup terbaru; lalu operasional pertama; lalu dompet pertama. */
-function defaultAccountId(state: DemoState, ruang: Ruang): string {
-  const accounts = accountsOf(state, ruang);
-  const operasional = accounts.filter((a) => a.pocket === 'operasional');
-  const ids = new Set(operasional.map((a) => a.id));
-  let latest: Entry | undefined;
-  for (const e of state.entries) {
-    if (e.voidedAt !== undefined || !ids.has(e.accountId)) continue;
-    if (latest === undefined || e.createdAt > latest.createdAt) latest = e;
+/** `defaultAccountId` dari sumber; lalu operasional pertama; lalu dompet pertama. */
+function defaultAccountId(o: CatatOptions): string {
+  const accounts = usable(o, new Set());
+  if (o.defaultAccountId !== undefined && accounts.some((a) => a.id === o.defaultAccountId)) {
+    return o.defaultAccountId;
   }
-  return latest?.accountId ?? operasional[0]?.id ?? accounts[0]?.id ?? '';
+  return accounts.find((a) => a.pocket === 'operasional')?.id ?? accounts[0]?.id ?? '';
 }
 
 function clear(
@@ -69,111 +58,270 @@ function clear(
   return next;
 }
 
-function chipsFor(state: DemoState, ruang: Ruang, type: CatatType, hourWIB: number): Category[] {
-  if (type === 'transfer') return [];
-  return suggestCategories(state, ruang, { hourWIB, type });
+/** Saldo cukup untuk draf ini (pemasukan tidak pernah mengurangi saldo). */
+function enough(d: CatatDraft, account: AccountVM | undefined): boolean {
+  if (d.type === 'income' || account === undefined || d.amount === null) return true;
+  return d.amount <= account.balance;
 }
 
-export function useCatat({ state, store, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
+export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
   const [hour] = useState(() => hourWIB ?? Number(nowTimeWIB().slice(0, 2)));
+  // Opsi ruang awal: sinkron di prototipe (render pertama sudah lengkap), Promise di mode nyata.
+  const [initial] = useState(() => source.options(ruang));
+  const [opts, setOpts] = useState<CatatOptions | null>(() =>
+    isPromise(initial) ? null : initial,
+  );
   const [draft, setDraft] = useState<CatatDraft>(() => ({
     type: 'expense',
     amount: initialAmount ?? null,
-    accountId: defaultAccountId(state, ruang),
+    accountId: isPromise(initial) ? '' : defaultAccountId(initial),
     date: today,
+    dateChosen: false,
     ruang,
     clientId: newClientId(),
   }));
-  // Posisi chip tidak berubah selama sheet terbuka; dihitung ulang hanya saat ruang/jenis berganti.
-  const [chips, setChips] = useState(() => chipsFor(state, ruang, 'expense', hour));
-  const [error, setError] = useState<string | null>(null);
+  // Posisi chip tidak berubah selama sheet terbuka; diminta ulang hanya saat ruang/jenis berganti.
+  const [initialChips] = useState(() =>
+    isPromise(initial) ? null : source.chips(ruang, 'expense', hour),
+  );
+  const [chips, setChips] = useState<CategoryVM[]>(() =>
+    initialChips === null || isPromise(initialChips) ? [] : initialChips,
+  );
+  const [status, setStatus] = useState<CatatStatus>('idle');
+  const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [switchFailed, setSwitchFailed] = useState<Ruang | null>(null);
 
-  const accounts = accountsOf(state, draft.ruang);
+  // Ref, bukan state: klik ganda dalam satu tick (sebelum render ulang) tetap satu permintaan.
+  const busy = useRef(false);
+  const allowNegative = useRef(false);
+  const optsSeq = useRef(0);
+  const chipsSeq = useRef(0);
+
+  const requestChips = (r: Ruang, type: CatatType) => {
+    const seq = ++chipsSeq.current;
+    if (type === 'transfer') {
+      setChips([]);
+      return;
+    }
+    const got = source.chips(r, type, hour);
+    if (!isPromise(got)) {
+      setChips(got);
+      return;
+    }
+    setChips([]);
+    got.then(
+      (c) => {
+        if (seq === chipsSeq.current) setChips(c);
+      },
+      () => {
+        if (seq === chipsSeq.current) setChips([]);
+      },
+    );
+  };
+
+  /** Opsi ruang tiba (Promise): dompet bawaan ruang itu, lalu chip. */
+  const receive = (r: Ruang, o: CatatOptions, type: CatatType) => {
+    setOpts(o);
+    setDraft((d) => (d.ruang === r ? { ...d, accountId: defaultAccountId(o) } : d));
+    requestChips(r, type);
+  };
+
+  useEffect(() => {
+    if (initialChips !== null && isPromise(initialChips)) {
+      const seq = chipsSeq.current;
+      initialChips.then(
+        (c) => {
+          if (seq === chipsSeq.current) setChips(c);
+        },
+        () => undefined,
+      );
+    }
+    if (!isPromise(initial)) return;
+    const seq = optsSeq.current;
+    initial.then(
+      (o) => {
+        if (seq === optsSeq.current) receive(ruang, o, 'expense');
+      },
+      () => {
+        if (seq === optsSeq.current) setOpts({ accounts: [], categories: [] });
+      },
+    );
+    // Hanya sekali saat sheet dibuka.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loading = opts === null;
+  const saving = status === 'menyimpan';
+  const accounts = usable(opts, hidden);
+  const selectedAccount = opts?.accounts.find((a) => a.id === draft.accountId);
   const destinations = accounts.filter((a) => a.id !== draft.accountId);
-  const allCategories = state.categories
-    .filter((c) => c.ruang === draft.ruang && draft.type !== 'transfer' && c.type === draft.type)
+  const allCategories = (opts?.categories ?? [])
+    .filter((c) => !c.archived && draft.type !== 'transfer' && c.type === draft.type)
     .sort((a, b) => a.name.localeCompare(b.name, 'id'));
 
   const hasAmount = draft.amount !== null && draft.amount > 0;
-  const canSave =
+  const valid =
+    !loading &&
     hasAmount &&
     draft.accountId !== '' &&
     (draft.type === 'transfer'
       ? draft.counterAccountId !== undefined
       : draft.categoryId !== undefined);
+  const canSave = valid && !saving;
 
+  const toIdle = () => {
+    setStatus('idle');
+    setFieldCode(null);
+  };
+
+  /** Isian dikunci selama menyimpan (S6-C1). */
   const update = (patch: (d: CatatDraft) => CatatDraft) => {
+    if (busy.current) return;
     setDraft(patch);
   };
 
   const setAmount = (amount: Rupiah | null) => {
+    if (busy.current) return;
     update((d) => ({ ...d, amount }));
+    if (status === 'saldo_kurang' && enough({ ...draft, amount }, selectedAccount)) toIdle();
   };
   const setCategory = (categoryId: string) => {
     update((d) => ({ ...d, categoryId }));
   };
   const setAccount = (accountId: string) => {
+    if (busy.current) return;
     update((d) => clear({ ...d, accountId }, { counter: d.counterAccountId === accountId }));
+    const next = opts?.accounts.find((a) => a.id === accountId);
+    if (status === 'field' && fieldCode === 'account_archived') toIdle();
+    if (status === 'saldo_kurang' && enough(draft, next)) toIdle();
   };
   const setCounterAccount = (counterAccountId: string) => {
     update((d) => ({ ...d, counterAccountId }));
   };
   const setDate = (date: IsoDate) => {
-    update((d) => ({ ...d, date }));
+    if (busy.current) return;
+    update((d) => ({ ...d, date, dateChosen: true }));
+    if (status === 'field' && fieldCode === 'before_opening') toIdle();
   };
   const setDescription = (description: string) => {
     update((d) => (description === '' ? clear(d, { description: true }) : { ...d, description }));
   };
   const setType = (type: CatatType) => {
+    if (busy.current) return;
     update((d) => clear({ ...d, type }, { category: true, counter: true }));
-    setChips(chipsFor(state, draft.ruang, type, hour));
+    requestChips(draft.ruang, type);
   };
-  /** Dompet dan kategori milik ruang lama tidak sah di ruang baru; nominal tetap. Ruang baru = niat baru, jadi clientId baru. */
+
+  /**
+   * Dompet dan kategori ruang lama tidak sah di ruang baru; nominal tetap. Ruang baru = niat baru,
+   * jadi clientId baru. Opsi ruang tujuan diminta dari sumber (mode nyata: action, data ruang itu saja).
+   */
   const switchRuang = (next: Ruang) => {
-    update((d) =>
-      clear(
-        { ...d, ruang: next, accountId: defaultAccountId(state, next), clientId: newClientId() },
-        { category: true, counter: true },
-      ),
-    );
-    setChips(chipsFor(state, next, draft.type, hour));
-  };
-  const save = (): Entry | null => {
-    if (!canSave || draft.amount === null) return null;
-    const base = {
-      ruang: draft.ruang,
-      kind: draft.type,
-      occurredOn: draft.date,
-      createdBy: state.members[0]?.id ?? '',
-      accountId: draft.accountId,
-      amount: draft.amount,
-      clientId: draft.clientId,
-      ...(draft.description === undefined ? {} : { description: draft.description }),
+    if (busy.current) return;
+    const prev = { draft, opts, chips };
+    const seq = ++optsSeq.current;
+    toIdle();
+    setSwitchFailed(null);
+    setHidden(new Set());
+    const got = source.options(next);
+    const reset = (accountId: string) => {
+      setDraft((d) =>
+        clear(
+          { ...d, ruang: next, accountId, clientId: newClientId() },
+          { category: true, counter: true },
+        ),
+      );
     };
-    const input =
-      draft.type === 'transfer'
-        ? { ...base, counterAccountId: draft.counterAccountId ?? '' }
-        : { ...base, categoryId: draft.categoryId ?? '' };
-    try {
-      const entry = store.addEntry(input);
-      setError(null);
-      update((d) => ({ ...d, clientId: newClientId() }));
-      return entry;
-    } catch {
-      // Demo store sinkron; kegagalan di sini mewakili koneksi putus. Isian tetap utuh.
-      setError(SAVE_ERROR);
-      return null;
+    if (!isPromise(got)) {
+      setOpts(got);
+      reset(defaultAccountId(got));
+      requestChips(next, draft.type);
+      return;
     }
+    setOpts(null);
+    setChips([]);
+    reset('');
+    got.then(
+      (o) => {
+        if (seq === optsSeq.current) receive(next, o, draft.type);
+      },
+      () => {
+        if (seq !== optsSeq.current) return;
+        // Gagal memuat ruang tujuan: tetap di ruang lama dengan isian utuh.
+        setOpts(prev.opts);
+        setDraft(prev.draft);
+        setChips(prev.chips);
+        setSwitchFailed(next);
+      },
+    );
   };
+
+  const send = async (clientId: string, negative: boolean): Promise<SaveOutcome | null> => {
+    if (busy.current || !valid) return null;
+    busy.current = true;
+    allowNegative.current = negative;
+    setStatus('menyimpan');
+    setFieldCode(null);
+    setSwitchFailed(null);
+    let out: SaveOutcome;
+    try {
+      out = await source.save({ ...draft, clientId, allowNegative: negative });
+    } catch {
+      out = { ok: false, code: 'network' };
+    } finally {
+      busy.current = false;
+    }
+    if (out.ok) {
+      setStatus('idle');
+      // Simpan berikutnya (sheet yang sama) adalah niat baru.
+      setDraft((d) => ({ ...d, clientId: newClientId() }));
+      return out;
+    }
+    const field = FIELD_OF[out.code];
+    if (out.code === 'saldo_negatif') setStatus('saldo_kurang');
+    else if (out.code === 'idem_mismatch') setStatus('idem_mismatch');
+    else if (field !== undefined) {
+      setStatus('field');
+      setFieldCode(out.code as FieldCode);
+      if (out.code === 'account_archived') setHidden((h) => new Set([...h, draft.accountId]));
+    } else setStatus('galat');
+    return out;
+  };
+
+  /** Simpan biasa (tanpa saldo negatif). Tidak berbuat apa-apa selama menyimpan. */
+  const save = () => send(draft.clientId, false);
+  /** "Coba lagi" (S6-C2): clientId yang sama, jadi server mengembalikan entri yang sama bila sudah tercatat. */
+  const retry = () => send(draft.clientId, allowNegative.current);
+  /** "Tetap simpan" (S6-C3): clientId sama, `allowNegative`. */
+  const saveAnyway = () => send(draft.clientId, true);
+  /** "Simpan sebagai catatan baru" (S6-C4): satu-satunya jalan (selain pindah ruang) ke clientId baru. */
+  const saveAsNew = () => {
+    if (busy.current) return Promise.resolve(null);
+    const id = newClientId();
+    setDraft((d) => ({ ...d, clientId: id }));
+    return send(id, allowNegative.current);
+  };
+
+  const archivedAccount =
+    fieldCode === 'account_archived'
+      ? opts?.accounts.find((a) => a.id === draft.accountId)
+      : undefined;
 
   return {
     draft,
     chips,
     allCategories,
     accounts,
+    selectedAccount,
+    archivedAccount,
     destinations,
     canSave,
-    error,
+    loading,
+    status,
+    field: fieldCode === null ? null : (FIELD_OF[fieldCode] ?? null),
+    fieldCode,
+    switchFailed,
     setAmount,
     setCategory,
     setAccount,
@@ -183,5 +331,8 @@ export function useCatat({ state, store, today, ruang, hourWIB, initialAmount }:
     setType,
     switchRuang,
     save,
+    retry,
+    saveAnyway,
+    saveAsNew,
   };
 }

@@ -39,6 +39,7 @@ export function Sheet({
   returnFocus,
   fill = false,
   compact = false,
+  describedBy,
   children,
 }: {
   open: boolean;
@@ -65,6 +66,8 @@ export function Sheet({
   fill?: boolean;
   /** Mode keyboard HP: tanpa pegangan, jarak 8, padding 6 16 10. */
   compact?: boolean;
+  /** Id teks yang menjadi deskripsi dialog (mis. keadaan kosong). */
+  describedBy?: string | undefined;
   children: ReactNode;
 }) {
   const vvHeight = useVisualViewportHeight(open);
@@ -75,7 +78,7 @@ export function Sheet({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-30 bg-scrim data-[state=open]:animate-fade-in" />
         <Dialog.Content
-          aria-describedby={undefined}
+          aria-describedby={describedBy}
           data-ruang={tint}
           data-compact={compact ? '' : undefined}
           onOpenAutoFocus={(e) => {

@@ -1,7 +1,6 @@
 'use client';
 
-import type { Account } from '@dompetku/demo-data';
-import { useId, type ReactNode } from 'react';
+import { useId, type ReactNode, type Ref } from 'react';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 
@@ -16,6 +15,9 @@ export function MetaSelect({
   onChange,
   options,
   dataDate,
+  invalid = false,
+  describedBy,
+  selectRef,
 }: {
   label: string;
   icon: ReactNode;
@@ -23,6 +25,10 @@ export function MetaSelect({
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   dataDate?: string;
+  /** Galat kolom (S6-C5): border 2 px `danger` + `aria-invalid`. */
+  invalid?: boolean;
+  describedBy?: string | undefined;
+  selectRef?: Ref<HTMLSelectElement>;
 }) {
   const id = useId();
   return (
@@ -38,12 +44,15 @@ export function MetaSelect({
       </span>
       <select
         id={id}
+        ref={selectRef}
         data-date={dataDate}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
         }}
-        className="h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent pr-8 pl-9.5 text-label font-semibold text-text hover-pointer:bg-hover"
+        className="h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent pr-8 pl-9.5 text-label font-semibold text-text hover-pointer:bg-hover aria-invalid:border-2 aria-invalid:border-danger"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value} className="bg-surface text-text">
@@ -67,7 +76,7 @@ export function DestinationChips({
   value,
   onChange,
 }: {
-  accounts: Account[];
+  accounts: { id: string; name: string }[];
   value: string | undefined;
   onChange: (accountId: string) => void;
 }) {

@@ -1,7 +1,6 @@
 'use client';
 
-import type { DemoState, DemoStore, Entry, Ruang } from '@dompetku/demo-data';
-import { addDays, dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
+import { addDays, dayLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { CategoryIcon } from '@/components/ui/category-icon';
@@ -14,14 +13,26 @@ import { CalendarBlankIcon } from '@/components/ui/icons/calendar-blank';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { NotePencilIcon } from '@/components/ui/icons/note-pencil';
 import { WalletIcon } from '@/components/ui/icons/wallet';
-import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/toast';
+import type { Ruang } from '@/features/ledger/types';
 import { AppKeypad } from './app-keypad';
+import {
+  accountArchivedText,
+  beforeOpeningText,
+  CATAT_COPY,
+  CatatAlert,
+  FieldErrorText,
+  NoAccountState,
+  SaldoKurangRow,
+  SavingLabel,
+  saldoKurangText,
+} from './catat-status';
 import { CategoryChips } from './category-chips';
+import type { CatatSource, CatatType, SaveOutcome } from './source';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
-import { useCatat, type CatatType } from './use-catat';
+import { useCatat } from './use-catat';
 import { useKeyboardMode } from './use-keyboard-mode';
 import { DestinationChips, MetaSelect } from './wallet-picker';
 
@@ -30,34 +41,24 @@ export interface CatatSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Ruang tujuan saat sheet dibuka. */
   ruang: Ruang;
-  state: DemoState;
-  store: DemoStore;
+  /** Prototipe: `demoCatatSource`; mode nyata: `realCatatSource` (app/[ruang]/_real). */
+  source: CatatSource;
   today: IsoDate;
   keypad: 'os' | 'app';
-  ruangLabel: Record<Ruang, string>;
   /** Ke mana fokus kembali saat sheet ditutup. */
   returnFocus?: HTMLElement | null;
   /** Nominal yang diketik di placeholder sebelum kode sheet termuat. */
   initialAmount?: Rupiah | null;
+  /** S6-C6: menutup Catat lalu membuka Tambah dompet di ruang itu. */
+  onAddAccount?: (ruang: Ruang) => void;
+  /** Jam WIB untuk saran kategori (galeri/tes); bawaan jam sekarang. */
+  hourWIB?: number;
 }
 
 /** Hari ini dan 13 hari ke belakang; mencatat ke masa depan tidak ditawarkan. */
 const DATE_CHOICES = 14;
 
 const other = (r: Ruang): Ruang => (r === 'pribadi' ? 'bersama' : 'pribadi');
-
-function savedMessage(state: DemoState, entry: Entry, label: string): string {
-  const name = (id: string | undefined) => state.accounts.find((a) => a.id === id)?.name ?? '';
-  const head = `Tersimpan di ${label} · ${formatRupiah(entry.amount)}`;
-  switch (entry.kind) {
-    case 'income':
-      return `${head} ke ${name(entry.accountId)}`;
-    case 'transfer':
-      return `${head} dari ${name(entry.accountId)} ke ${name(entry.counterAccountId)}`;
-    default:
-      return `${head} dari ${name(entry.accountId)}`;
-  }
-}
 
 /** Satu sesi = satu kali sheet dibuka: draf dan clientId lahir baru setiap kali dibuka. */
 export function CatatSheet(props: CatatSheetProps) {
@@ -74,23 +75,38 @@ function CatatSession({
   open,
   onOpenChange,
   ruang,
-  state,
-  store,
+  source,
   today,
   keypad,
-  ruangLabel,
   returnFocus,
   initialAmount,
+  onAddAccount,
+  hourWIB,
 }: CatatSheetProps) {
-  const c = useCatat({ state, store, today, ruang, initialAmount });
-  const { draft } = c;
+  const c = useCatat({
+    source,
+    today,
+    ruang,
+    initialAmount,
+    ...(hourWIB === undefined ? {} : { hourWIB }),
+  });
+  const { draft, status } = c;
+  const { ruangLabel } = source;
+  const saving = status === 'menyimpan';
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const accountRef = useRef<HTMLSelectElement>(null);
+  const dateRef = useRef<HTMLSelectElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
+  const alertId = useId();
+  const saldoId = useId();
+  const fieldErrorId = useId();
+  const emptyId = useId();
   const amountRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLInputElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLButtonElement>(null);
   const formId = useId();
   const noteId = useId();
-  const errorId = useId();
   const hintId = useId();
   const typeHintId = useId();
   const [page, setPage] = useState<'form' | 'kategori'>('form');
@@ -113,23 +129,48 @@ function CatatSession({
     else chipsRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
 
-  function submit(e: SyntheticEvent) {
+  // Jawaban simpan tiba: galat/kunci bentrok/saldo kurang → tombol kaki; galat kolom → kolomnya.
+  const lastStatus = useRef(status);
+  useEffect(() => {
+    const was = lastStatus.current;
+    lastStatus.current = status;
+    if (was !== 'menyimpan' || status === 'menyimpan') return;
+    if (status === 'field') (c.field === 'occurred_on' ? dateRef : accountRef).current?.focus();
+    else if (status !== 'idle') primaryRef.current?.focus();
+  }, [status, c.field]);
+
+  /** Menutup di tengah simpan menghasilkan toast tanpa sheet: Esc dan Tutup ditahan (S6-C1). */
+  const onSheetOpenChange = (next: boolean) => {
+    if (!next && saving) return;
+    onOpenChange(next);
+  };
+
+  async function submit(e: SyntheticEvent) {
     e.preventDefault();
-    const entry = c.save();
-    if (entry === null) return;
+    const run =
+      status === 'galat'
+        ? c.retry
+        : status === 'saldo_kurang'
+          ? c.saveAnyway
+          : status === 'idem_mismatch'
+            ? c.saveAsNew
+            : c.save;
+    const out: SaveOutcome | null = await run();
+    if (out?.ok !== true) return;
+    const saved = { entryId: out.entryId, version: out.version, ruang: draft.ruang };
     toast({
-      message: savedMessage(state, entry, label),
+      message: out.toast,
       action: {
         label: 'Urungkan',
         onAction: () => {
-          store.voidEntry(entry.id);
+          void source.undo(saved);
         },
       },
     });
     onOpenChange(false);
   }
 
-  const hasAccounts = c.accounts.length > 0;
+  const hasAccounts = c.loading || c.accounts.length > 0 || c.selectedAccount !== undefined;
   const isTransfer = draft.type === 'transfer';
   const hasAmount = draft.amount !== null && draft.amount > 0;
   const missing = isTransfer
@@ -141,7 +182,7 @@ function CatatSession({
     return (
       <Sheet
         open={open}
-        onOpenChange={onOpenChange}
+        onOpenChange={onSheetOpenChange}
         title={title}
         titleHidden
         tint={draft.ruang}
@@ -184,50 +225,87 @@ function CatatSession({
     );
   }
 
+  const primaryLabel =
+    status === 'galat'
+      ? CATAT_COPY.cobaLagi
+      : status === 'saldo_kurang'
+        ? CATAT_COPY.tetapSimpan
+        : status === 'idem_mismatch'
+          ? CATAT_COPY.simpanBaru
+          : 'Simpan';
+  const alertShown = status === 'galat' || status === 'idem_mismatch';
+  // Label kaki yang panjang tetap satu baris (S6-C3/C4): "Pindah ke …" jadi ikon berlabel di HP.
+  const moveLabelClass =
+    status === 'idem_mismatch'
+      ? 'sr-only tablet:not-sr-only'
+      : status === 'saldo_kurang'
+        ? 'sr-only narrow:not-sr-only'
+        : undefined;
+  const saldoShown = status === 'saldo_kurang' && c.selectedAccount !== undefined;
+  const describedBy =
+    [alertShown ? alertId : null, saldoShown ? saldoId : null, showHint ? hintId : null]
+      .filter((x) => x !== null)
+      .join(' ') || undefined;
+
   const footer = hasAccounts ? (
     <>
       {keypad === 'app' ? <AppKeypad value={draft.amount} onChange={c.setAmount} /> : null}
-      {c.error === null ? null : (
-        <p
-          id={errorId}
-          role="alert"
-          className="flex items-start gap-1.5 text-label font-semibold text-danger"
-        >
-          <WarningCircleIcon size={18} weight="fill" className="mt-px shrink-0" />
-          {c.error}
-        </p>
+      {status === 'galat' ? (
+        <CatatAlert id={alertId} tone="danger" compact={compact}>
+          {CATAT_COPY.galat}
+        </CatatAlert>
+      ) : null}
+      {status === 'idem_mismatch' ? (
+        <CatatAlert id={alertId} tone="warning" compact={compact}>
+          {CATAT_COPY.idem}
+        </CatatAlert>
+      ) : null}
+      {c.switchFailed === null ? null : (
+        <CatatAlert id={alertId} tone="danger" compact={compact}>
+          {`Belum bisa pindah ke ${ruangLabel[c.switchFailed]}. Periksa koneksi lalu coba lagi.`}
+        </CatatAlert>
       )}
+      <p role="status" className="sr-only">
+        {saving ? CATAT_COPY.menyimpan : ''}
+      </p>
       <div className="flex items-center gap-2">
         <Button
           variant="text"
           size="sm"
           className="px-2.5"
+          aria-disabled={saving || undefined}
           onClick={() => {
             c.switchRuang(target);
           }}
         >
           <ArrowsLeftRightIcon size={18} weight="bold" />
-          Pindah ke {ruangLabel[target]}
+          <span className={moveLabelClass}>Pindah ke {ruangLabel[target]}</span>
         </Button>
         <Button
+          ref={primaryRef}
           type="submit"
           form={formId}
           size={compact ? 'sm' : 'md'}
-          disabled={!c.canSave}
-          aria-describedby={
-            [c.error === null ? null : errorId, showHint ? hintId : null]
-              .filter((x) => x !== null)
-              .join(' ') || undefined
-          }
-          className="flex-1"
+          // Menyimpan: aria-disabled (bukan disabled) agar fokus tidak jatuh ke <body> (R8).
+          disabled={!saving && !c.canSave}
+          aria-disabled={saving || undefined}
+          aria-busy={saving || undefined}
+          aria-describedby={describedBy}
+          className="flex-1 aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted aria-disabled:hover-pointer:bg-surface-2"
         >
-          Simpan
-          <kbd
-            aria-hidden="true"
-            className="ml-auto hidden rounded-sm border border-current px-1.5 py-0.5 font-mono text-tag font-bold laptop:inline"
-          >
-            ↵
-          </kbd>
+          {saving ? (
+            <SavingLabel />
+          ) : (
+            <>
+              {primaryLabel}
+              <kbd
+                aria-hidden="true"
+                className="ml-auto hidden rounded-sm border border-current px-1.5 py-0.5 font-mono text-tag font-bold laptop:inline"
+              >
+                ↵
+              </kbd>
+            </>
+          )}
         </Button>
       </div>
       <p className="hidden text-caption font-medium text-text-muted laptop:block">
@@ -236,10 +314,33 @@ function CatatSession({
     </>
   ) : undefined;
 
+  const opened = c.selectedAccount?.openedOn;
+  // Tanggal sebelum dompet dibuka tidak ditawarkan (S6-C5); nilai sekarang tetap ada agar Select jujur.
+  const dates = Array.from({ length: DATE_CHOICES }, (_, i) => addDays(today, -i)).filter(
+    (d) => opened === undefined || d >= opened || d === draft.date,
+  );
+  const accountOptions = [
+    ...c.accounts,
+    ...(c.selectedAccount !== undefined && !c.accounts.includes(c.selectedAccount)
+      ? [c.selectedAccount]
+      : []),
+  ];
+  const fieldError =
+    status !== 'field' || c.selectedAccount === undefined
+      ? null
+      : c.fieldCode === 'before_opening'
+        ? beforeOpeningText(c.selectedAccount.name, c.selectedAccount.openedOn)
+        : accountArchivedText(c.selectedAccount.name);
+  const account = c.selectedAccount;
+  const saldoText =
+    saldoShown && account !== undefined && draft.amount !== null
+      ? saldoKurangText(account.name, account.balance, account.balance - draft.amount)
+      : null;
+
   return (
     <Sheet
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={onSheetOpenChange}
       title={title}
       titleContent={
         hasAccounts ? (
@@ -277,15 +378,18 @@ function CatatSession({
       }
       tint={draft.ruang}
       footer={footer}
-      initialFocus={hasAccounts ? amountRef : undefined}
+      initialFocus={hasAccounts ? amountRef : addRef}
       returnFocus={returnFocus}
       fill
       compact={compact}
+      describedBy={hasAccounts ? undefined : emptyId}
     >
       {hasAccounts ? (
         <form
           id={formId}
-          onSubmit={submit}
+          onSubmit={(e) => {
+            void submit(e);
+          }}
           className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}
         >
           <MoneyInput
@@ -334,7 +438,10 @@ function CatatSession({
               icon={<WalletIcon size={18} />}
               value={draft.accountId}
               onChange={c.setAccount}
-              options={c.accounts.map((a) => ({ value: a.id, label: a.name }))}
+              options={accountOptions.map((a) => ({ value: a.id, label: a.name }))}
+              selectRef={accountRef}
+              invalid={c.field === 'account_id'}
+              describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
             />
             <MetaSelect
               label="Tanggal"
@@ -342,9 +449,10 @@ function CatatSession({
               value={draft.date}
               dataDate={draft.date}
               onChange={c.setDate}
-              options={Array.from({ length: DATE_CHOICES }, (_, i) => addDays(today, -i)).map(
-                (d) => ({ value: d, label: dayLabel(d, today) }),
-              )}
+              options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
+              selectRef={dateRef}
+              invalid={c.field === 'occurred_on'}
+              describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
             />
             <IconButton
               label="Tambah keterangan"
@@ -358,6 +466,10 @@ function CatatSession({
               }}
             />
           </div>
+          {fieldError === null ? null : (
+            <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
+          )}
+          {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}
           <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
             <FieldLabel htmlFor={noteId} optional>
               Keterangan
@@ -377,9 +489,15 @@ function CatatSession({
           </div>
         </form>
       ) : (
-        <p className="text-body font-medium text-text-soft">
-          Belum ada dompet di {label}. Tambahkan dompet dulu, lalu catat dari sini.
-        </p>
+        <NoAccountState
+          id={emptyId}
+          ruang={label}
+          buttonRef={addRef}
+          onAdd={() => {
+            onOpenChange(false);
+            onAddAccount?.(draft.ruang);
+          }}
+        />
       )}
     </Sheet>
   );

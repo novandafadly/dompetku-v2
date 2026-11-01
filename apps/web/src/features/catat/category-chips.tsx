@@ -1,10 +1,10 @@
 'use client';
 
-import type { Category } from '@dompetku/demo-data';
 import type { RefObject } from 'react';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { MagnifyingGlassIcon } from '@/components/ui/icons/magnifying-glass';
+import type { CategoryVM } from '@/features/ledger/types';
 
 /**
  * Chip saran berurutan tetap selama sheet terbuka; tidak ada yang terpilih otomatis.
@@ -19,8 +19,8 @@ export function CategoryChips({
   onMore,
   moreRef,
 }: {
-  chips: Category[];
-  all: Category[];
+  chips: CategoryVM[];
+  all: CategoryVM[];
   value: string | undefined;
   onChange: (categoryId: string) => void;
   onMore: () => void;
