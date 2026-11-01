@@ -62,7 +62,9 @@ export function MoneyInput({
   // Jumlah angka di kiri caret yang harus dipertahankan setelah format ulang.
   const pendingDigits = useRef<number | null>(null);
   // Ketikan bersatuan ("35rb", "1,5jt") ditampung sebagai teks, dikonversi saat blur atau Enter.
-  const [buffer, setBuffer] = useState<string | null>(null);
+  // `forValue`: nilai prop saat buffer dibuat; bila nilai berubah dari luar, buffer basi diabaikan.
+  const [buf, setBuffer] = useState<{ text: string; forValue: Rupiah | null } | null>(null);
+  const buffer = buf !== null && buf.forValue === value ? buf.text : null;
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -87,8 +89,12 @@ export function MoneyInput({
       onChange(null);
       return;
     }
-    if (/^[\d\s.,rbkjtiua]+$/i.test(raw) && (buffer !== null || /[^\d.]/.test(raw))) {
-      setBuffer(raw);
+    // Titik di ujung ("1.") juga ditampung: "1.5jt" tidak boleh jadi 15jt.
+    if (/^[\d\s.,rbkjtiua]+$/i.test(raw) && (buffer !== null || /[^\d.]|\.$/.test(raw))) {
+      // Tanpa satuan, nilai sah (mis. "1.250") tetap dikirim langsung.
+      const live = /^[\d.]+$/.test(raw) ? parseNominal(raw) : null;
+      if (live !== null) onChange(live);
+      setBuffer({ text: raw, forValue: live ?? value });
       return;
     }
     // Ketikan di luar angka dan titik ditolak diam: input terkontrol kembali ke nilai lama.

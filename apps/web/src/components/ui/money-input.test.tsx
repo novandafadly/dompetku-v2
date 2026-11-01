@@ -156,4 +156,63 @@ describe('MoneyInput', () => {
     await user.tab();
     expect(input).toHaveValue('2.000');
   });
+
+  it.each(['1.5jt', '1,5jt'])('keyboard: "%s" = 1500000', async (text) => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.type(input, text);
+    await user.tab();
+    expect(onValue).toHaveBeenLastCalledWith(1500000);
+    expect(input).toHaveValue('1.500.000');
+  });
+
+  it('keyboard: "35.000" dengan titik ribuan tetap 35000', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.type(input, '35.000');
+    expect(onValue).toHaveBeenLastCalledWith(35000);
+    await user.tab();
+    expect(input).toHaveValue('35.000');
+  });
+
+  it('MoneyInput tempel "1e3" tidak mengubah nilai', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} initial={2000} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.click(input);
+    await user.paste('1e3');
+    expect(onValue).not.toHaveBeenCalled();
+    expect(input).toHaveValue('2.000');
+  });
+
+  it('buffer basi dibuang saat nilai berubah dari luar', async () => {
+    const user = userEvent.setup();
+    function Reset() {
+      const [v, setV] = useState<Rupiah | null>(5);
+      return (
+        <>
+          <MoneyInput label="Nominal" value={v} onChange={setV} />
+          <button
+            type="button"
+            onClick={() => {
+              setV(null);
+            }}
+          >
+            reset
+          </button>
+        </>
+      );
+    }
+    render(<Reset />);
+    const input = screen.getByLabelText('Nominal');
+    await user.type(input, 'r');
+    expect(input).toHaveValue('5r');
+    await user.click(screen.getByRole('button', { name: 'reset' }));
+    expect(input).toHaveValue('');
+  });
 });
