@@ -9,18 +9,11 @@ import { withUser, type Pools } from '../db';
  * input ketat: kunci lain (mis. `amount`) ditolak Zod sebelum DB, bukan dibuang diam-diam.
  * `catat_disimpan`/`catat_batal` wajib `flowId`, `taps`, `durationMs` (sama dengan CHECK tabel).
  */
-export interface ProductEventInput {
-  event: 'catat_dibuka' | 'catat_disimpan' | 'catat_batal' | 'tanpa_pengeluaran';
-  spaceKind: 'personal' | 'shared';
-  flowId?: string;
-  taps?: number;
-  durationMs?: number;
-}
-
 const spaceKind = z.enum(['personal', 'shared']);
-const flowId = z.uuid();
-const taps = z.number().int().min(0).max(100);
-const durationMs = z.number().int().min(0).max(3_600_000);
+/** Diekspor untuk server action `logCatatEvent` (satu sumber batas). */
+export const flowId = z.uuid();
+export const taps = z.number().int().min(0).max(100);
+export const durationMs = z.number().int().min(0).max(3_600_000);
 
 const productEventSchema = z.discriminatedUnion('event', [
   z.strictObject({
@@ -38,6 +31,12 @@ const productEventSchema = z.discriminatedUnion('event', [
     durationMs: durationMs.optional(),
   }),
 ]);
+
+/**
+ * Input event = bentuk masuk skema (union terdiskriminasi pada `event`): `catat_disimpan` tanpa
+ * `taps` adalah galat kompilasi, bukan hanya galat Zod saat jalan.
+ */
+export type ProductEventInput = z.input<typeof productEventSchema>;
 
 export async function recordProductEvent(
   pools: Pools,

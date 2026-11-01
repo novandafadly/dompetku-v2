@@ -38,7 +38,7 @@ export class NotInSpaceError extends Error {
   }
 }
 
-// ===== Skema input =====
+// ===== Skema input (diekspor untuk validasi server action: satu sumber batas) =====
 const id = z.uuid();
 const amount = z
   .number()
@@ -51,7 +51,7 @@ const categoryName = z.string().trim().min(1).max(40);
 const icon = z.string().regex(/^[A-Z][A-Za-z0-9]{0,39}$/);
 const version = z.number().int().min(1).max(2_147_483_647);
 
-const createEntrySchema = z.object({
+export const createEntrySchema = z.object({
   clientId: id,
   accountId: id,
   kind: z.enum(['income', 'expense']),
@@ -62,7 +62,7 @@ const createEntrySchema = z.object({
   allowNegative: z.boolean().optional(),
 });
 
-const createTransferSchema = z
+export const createTransferSchema = z
   .object({
     clientId: id,
     fromAccountId: id,
@@ -74,7 +74,7 @@ const createTransferSchema = z
   })
   .refine((v) => v.fromAccountId !== v.toAccountId, { path: ['toAccountId'] });
 
-const updateEntrySchema = z.object({
+export const updateEntrySchema = z.object({
   clientId: id,
   entryId: id,
   expectedVersion: version,
@@ -87,11 +87,11 @@ const updateEntrySchema = z.object({
   allowNegative: z.boolean().optional(),
 });
 
-const voidEntrySchema = z.object({ clientId: id, entryId: id, expectedVersion: version });
+export const voidEntrySchema = z.object({ clientId: id, entryId: id, expectedVersion: version });
 
-const restoreEntrySchema = voidEntrySchema.extend({ allowNegative: z.boolean().optional() });
+export const restoreEntrySchema = voidEntrySchema.extend({ allowNegative: z.boolean().optional() });
 
-const createAccountSchema = z.object({
+export const createAccountSchema = z.object({
   clientId: id,
   name: z.string().trim().min(1).max(40),
   pocket: z.enum(['operasional', 'tabungan', 'kantor']),
@@ -103,7 +103,7 @@ const createAccountSchema = z.object({
     .max(10 ** 13),
 });
 
-const createCategorySchema = z.object({
+export const createCategorySchema = z.object({
   clientId: id,
   type: z.enum(['income', 'expense']),
   name: categoryName,
@@ -111,14 +111,14 @@ const createCategorySchema = z.object({
   parentId: id.optional(),
 });
 
-const updateCategorySchema = z.object({
+export const updateCategorySchema = z.object({
   categoryId: id,
   name: categoryName,
   icon,
   parentId: id.nullable(),
 });
 
-const archiveCategorySchema = z.object({ categoryId: id });
+export const archiveCategorySchema = z.object({ categoryId: id });
 
 // ===== Skema hasil jsonb (kunci lain dibuang) =====
 const entryResult = z.object({
@@ -181,9 +181,9 @@ export interface CreateEntryInput {
   kind: 'income' | 'expense';
   amount: Rupiah;
   categoryId: string;
-  occurredOn?: IsoDate;
-  description?: string;
-  allowNegative?: boolean;
+  occurredOn?: IsoDate | undefined;
+  description?: string | undefined;
+  allowNegative?: boolean | undefined;
 }
 
 export async function createEntry(
@@ -219,9 +219,9 @@ export interface CreateTransferInput {
   fromAccountId: string;
   toAccountId: string;
   amount: Rupiah;
-  occurredOn?: IsoDate;
-  description?: string;
-  allowNegative?: boolean;
+  occurredOn?: IsoDate | undefined;
+  description?: string | undefined;
+  allowNegative?: boolean | undefined;
 }
 
 /** Transfer dalam satu ruang saja (S6): kedua dompet wajib di ruang konteks. */
@@ -262,7 +262,7 @@ export interface UpdateEntryInput {
   occurredOn: IsoDate | null;
   description: string | null;
   reimbursable: boolean;
-  allowNegative?: boolean;
+  allowNegative?: boolean | undefined;
 }
 
 /** Ganti-penuh (BSD §9.1): semua field dikirim; `occurredOn` null = tanggal lama. */
@@ -318,7 +318,7 @@ export async function voidEntry(ctx: LedgerCtx, i: VoidEntryInput): Promise<{ ve
 }
 
 export interface RestoreEntryInput extends VoidEntryInput {
-  allowNegative?: boolean;
+  allowNegative?: boolean | undefined;
 }
 
 /** Pulihkan dari Sampah; lewat 90 hari sejak dibatalkan = DK422 `restore_window_closed`. */
@@ -372,7 +372,7 @@ export interface CreateCategoryInput {
   type: 'income' | 'expense';
   name: string;
   icon: string;
-  parentId?: string;
+  parentId?: string | undefined;
 }
 
 export async function createCategory(

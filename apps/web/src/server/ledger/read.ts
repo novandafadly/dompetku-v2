@@ -37,7 +37,8 @@ import type { LedgerCtx } from './write';
 const uuid = z.uuid();
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 const limit = z.number().int().min(1).max(100);
-const suggestSchema = z.object({
+/** Diekspor untuk server action `suggestFor` (satu sumber batas). */
+export const suggestSchema = z.object({
   type: z.enum(['income', 'expense']),
   hour: z.number().int().min(0).max(23).optional(),
   amount: z
@@ -367,7 +368,12 @@ export async function listCategories(
 /** Id kategori saran (urutan `api.suggest_categories`, 6 teratas); jam kosong = jam WIB DB. */
 export async function suggestCategories(
   ctx: LedgerCtx,
-  i: { type: 'income' | 'expense'; hour?: number; amount?: Rupiah; description?: string },
+  i: {
+    type: 'income' | 'expense';
+    hour?: number | undefined;
+    amount?: Rupiah | undefined;
+    description?: string | undefined;
+  },
 ): Promise<string[]> {
   const v = suggestSchema.parse(i);
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
