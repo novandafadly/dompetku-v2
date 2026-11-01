@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Browser,
   OWNER,
@@ -46,6 +47,40 @@ describe('akun pertama lewat allowlist (app.settings.owner_email)', () => {
     const { rows } = await h.admin.query('select 1 from auth."user"');
     expect(rows).toHaveLength(0);
     expect(h.mailer.sent).toHaveLength(0);
+  });
+
+  it('cek kata sandi bocor dan batas panjang sama untuk owner_email dan email lain', async () => {
+    const pwned = createHarness(undefined, { checkPwnedPasswords: true });
+    // Rentang HIBP palsu yang memuat sufiks SHA-1 kata sandi uji: dianggap bocor.
+    const sha1 = createHash('sha1').update(PASSWORD).digest('hex').toUpperCase();
+    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
+      const href = input instanceof Request ? input.url : input.toString();
+      expect(href).toBe(`https://api.pwnedpasswords.com/range/${sha1.slice(0, 5)}`);
+      return Promise.resolve(new Response(`${sha1.slice(5)}:3\r\n`, { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const signUp = (email: string, password: string, ip: string) =>
+        pwned.service.signUpOwner(new Browser(ip).headers(), 'X', email, password);
+      expect(await signUp('orang@example.test', PASSWORD, '192.0.2.31')).toEqual({
+        kind: 'weak',
+        reason: 'compromised',
+      });
+      expect(await signUp(OWNER, PASSWORD, '192.0.2.32')).toEqual({
+        kind: 'weak',
+        reason: 'compromised',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const long = 'a'.repeat(129);
+      expect(await signUp('orang@example.test', long, '192.0.2.33')).toEqual(
+        await signUp(OWNER, long, '192.0.2.34'),
+      );
+      const { rows } = await h.admin.query('select 1 from auth."user"');
+      expect(rows).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+      await pwned.close();
+    }
   });
 
   it('pemilik: konfirmasi email, amankan dengan TOTP, rumah tangga dibuat, sesi penuh', async () => {

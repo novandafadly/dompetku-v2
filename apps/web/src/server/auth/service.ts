@@ -2,6 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 import { isAPIError } from 'better-auth/api';
+import { hashPassword } from 'better-auth/crypto';
+import { isPasswordCompromised } from 'better-auth/plugins';
 import { domainError, withAnon, withUser, type Pools } from '../db';
 import type { ServerEnv } from '../env';
 import { createAuth, inviteSignup, type Auth } from './config';
@@ -468,8 +470,8 @@ export class AuthService {
    * Akun pertama (keputusan pemilik #5): hanya email `app.settings.owner_email`, dan hanya
    * sebelum rumah tangga ada (trigger user_admission). Respons selalu "periksa email", apa pun
    * hasilnya; tidak ada sesi yang dibuat. Sesi pertama lahir di /masuk setelah email dikonfirmasi.
-   * Email lain tetap menghitung hash kata sandi dan email dikirim di latar, agar waktu respons
-   * tidak membocorkan owner_email.
+   * Email lain menjalankan cek yang sama (panjang, HIBP bila aktif, hash kata sandi) dan email
+   * dikirim di latar, agar isi dan waktu respons tidak membocorkan owner_email.
    */
   async signUpOwner(
     headers: Headers,
@@ -492,8 +494,21 @@ export class AuthService {
       return r.rows[0]?.value ?? null;
     });
     if (owner === null || owner !== normalized) {
-      if (password.length >= 12 && password.length <= 128)
-        await (await this.auth.$context).password.hash(password);
+      // Meniru signUpEmail jalur pemilik: batas panjang, cek HIBP (bila aktif), lalu hash.
+      // Respons dan waktunya sama, jadi tidak membocorkan owner_email. Hash langsung dari
+      // better-auth/crypto: hash di $context dibungkus plugin HIBP yang butuh konteks endpoint.
+      if (password.length < 12) return { kind: 'weak', reason: 'too_short' };
+      if (password.length > 128) return { kind: 'weak', reason: 'too_long' };
+      if (this.env.checkPwnedPasswords) {
+        try {
+          if (await isPasswordCompromised(password)) return { kind: 'weak', reason: 'compromised' };
+        } catch (e) {
+          // Sama dengan jalur pemilik saat HIBP gagal: signUpEmail gagal, respons seragam.
+          if (!isAPIError(e)) throw e;
+          return { kind: 'check_email' };
+        }
+      }
+      await hashPassword(password);
       return { kind: 'check_email' };
     }
     try {
