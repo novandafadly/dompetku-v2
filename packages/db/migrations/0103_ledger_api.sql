@@ -286,12 +286,17 @@ begin
     return v_r;
   end if;
   perform private.check_amount(p_amount, 'amount');
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
 
   select * into v_e from app.entries where id = p_entry_id for update;
   if v_e.id is null then
     raise exception using errcode = 'DK404', message = 'entry_not_found';
   end if;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if v_e.voided_at is not null then
@@ -399,7 +404,9 @@ begin
   end if;
   perform 1 from app.entries where id = any (v_ids) order by id for update;
   select * into v_e from app.entries where id = p_entry_id;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if (v_e.voided_at is not null) = p_void then
@@ -493,7 +500,9 @@ begin
   end if;
   perform 1 from app.entries where id = any (v_ids) order by id for update;
   select * into v_e from app.entries where id = p_entry_id;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if v_e.voided_at is null then
@@ -569,11 +578,17 @@ language plpgsql security definer set search_path = '' as $$
 declare v_n int;
 begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
-  insert into app.entry_tombstones (entry_id, link_id, space_id, kind, occurred_on, voided_at, voided_by)
-  select e.id, e.link_id, e.space_id, e.kind, e.occurred_on, e.voided_at, e.voided_by
-    from app.entries e where e.id = any (p_ids) and e.voided_at is not null;
-  delete from app.entries e where e.id = any (p_ids) and e.voided_at is not null;
-  get diagnostics v_n = row_count;
+  -- Tombstone dari baris yang benar-benar terhapus (DELETE memeriksa ulang voided_at sesudah
+  -- menunggu lock), jadi entri yang dipulihkan paralel tidak mendapat tombstone (review S5).
+  with d as (
+    delete from app.entries e where e.id = any (p_ids) and e.voided_at is not null
+    returning e.id, e.link_id, e.space_id, e.kind, e.occurred_on, e.voided_at, e.voided_by
+  ), t as (
+    insert into app.entry_tombstones (entry_id, link_id, space_id, kind, occurred_on, voided_at, voided_by)
+    select * from d
+    on conflict (entry_id) do nothing
+  )
+  select count(*) into v_n from d;
   perform pg_catalog.set_config('dompetku.purge', 'off', true);
   if v_n > 0 then
     insert into audit.events (user_id, event, meta)

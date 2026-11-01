@@ -9,14 +9,21 @@ create function jobs.purge_voided() returns int
 language plpgsql security definer set search_path = '' as $$
 declare v_ids uuid[];
 begin
-  select coalesce(array_agg(e.id), '{}') into v_ids
-  from app.entries e
-  where e.voided_at < app.now() - interval '90 days'
-    and not exists (select 1 from app.entries r where r.reimburses_entry_id = e.id)
-    and (e.link_id is null or not exists (
-          select 1 from app.entries p
-          where p.link_id = e.link_id
-            and (p.voided_at is null or p.voided_at >= app.now() - interval '90 days')));
+  -- Kunci urut id (sama dengan void/restore); baris yang dipulihkan paralel diperiksa ulang
+  -- sesudah lock (READ COMMITTED) dan tidak ikut (review S5).
+  select coalesce(array_agg(x.id), '{}') into v_ids
+  from (
+    select e.id
+    from app.entries e
+    where e.voided_at < app.now() - interval '90 days'
+      and not exists (select 1 from app.entries r where r.reimburses_entry_id = e.id)
+      and (e.link_id is null or not exists (
+            select 1 from app.entries p
+            where p.link_id = e.link_id
+              and (p.voided_at is null or p.voided_at >= app.now() - interval '90 days')))
+    order by e.id
+    for update of e
+  ) x;
   return private.purge_entries(v_ids, 'purge_voided');
 end $$;
 
