@@ -315,7 +315,10 @@ export class AuthService {
       return fail();
     }
     if ('twoFactorRedirect' in res.response) {
-      await this.succeeded(keys);
+      // Baru langkah pertama: hanya hitungan akun yang dihapus. Hitungan IP tetap sampai masuk
+      // penuh (verifyTotpSignIn), agar satu akun ber-TOTP yang kata sandinya diketahui tidak
+      // bisa dipakai untuk mereset jeda IP saat menebak kata sandi akun lain.
+      await this.succeeded([throttleKey('password', 'akun', normalized)]);
       return { result: { kind: 'totp' }, setCookie: res.headers };
     }
     const userId = res.response.user.id;
@@ -350,7 +353,8 @@ export class AuthService {
         returnHeaders: true,
       });
       const userId = res.response.user.id;
-      await this.succeeded(keys);
+      // Masuk penuh: hitungan IP kata sandi yang ditahan di signInPassword ikut dihapus.
+      await this.succeeded([...keys, ...this.keys('password', headers, null)]);
       await this.audit(userId, 'login_success', headers, { amr: 'password+totp' });
       const facts = await this.userFacts(userId);
       return {

@@ -13,6 +13,7 @@ import {
   totp,
   userId,
 } from './harness';
+import { throttleKey } from '../throttle';
 
 const h = createHarness();
 afterAll(() => h.close());
@@ -503,6 +504,41 @@ describe('jeda gagal dan lupa kata sandi', () => {
       'salah-salah-salah',
     );
     expect(unknown.result.kind).toBe('invalid');
+  });
+
+  it('kata sandi benar sebelum TOTP hanya menghapus hitungan akun, bukan hitungan IP', async () => {
+    const { secret } = await bootstrapOwner(h);
+    const b = new Browser('192.0.2.60');
+    for (let i = 0; i < 3; i++)
+      expect(
+        (
+          await h.service.signInPassword(
+            b.headers(),
+            `x${String(i)}@example.test`,
+            'salah-salah-salah',
+          )
+        ).result.kind,
+      ).toBe('invalid');
+    const step1 = await h.service.signInPassword(b.headers(), OWNER, PASSWORD);
+    expect(step1.result.kind).toBe('totp');
+    b.absorb(step1.setCookie);
+    // Hitungan IP (3 gagal + 1) tetap: percobaan berikutnya dari IP ini mencapai ambang 5.
+    expect(
+      (await h.service.signInPassword(b.headers(), 'y@example.test', 'salah-salah-salah')).result,
+    ).toEqual({ kind: 'throttled', seconds: 60 });
+    // Hitungan akun dihapus: dari IP lain, akun pemilik tidak membawa gagal sebelumnya.
+    const other = new Browser('192.0.2.61');
+    const again = await h.service.signInPassword(other.headers(), OWNER, PASSWORD);
+    expect(again.result.kind).toBe('totp');
+    other.absorb(again.setCookie);
+    // Masuk penuh (TOTP benar) baru menghapus hitungan IP kata sandi.
+    expect((await h.service.verifyTotpSignIn(other.headers(), totp(secret))).result.kind).toBe(
+      'ok',
+    );
+    const { rows } = await h.admin.query('select 1 from auth.login_throttle where key = $1', [
+      throttleKey('password', 'ip', '192.0.2.61'),
+    ]);
+    expect(rows).toHaveLength(0);
   });
 
   it('reset kata sandi: respons seragam, semua sesi dicabut, TOTP tetap aktif', async () => {
