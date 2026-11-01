@@ -115,9 +115,12 @@ export function totp(secretBase32: string, at = Date.now()): string {
 export function linkFromLastMail(h: Harness, param: string): string {
   const mail = h.mailer.sent.at(-1);
   if (!mail) throw new Error('tidak ada email');
-  const m = new RegExp(`[?&]${param}=([^\\s&]+)`).exec(mail.text);
-  if (!m?.[1]) throw new Error(`email tanpa parameter ${param}`);
-  return decodeURIComponent(m[1]);
+  // Ambil tautan dari isi email lalu baca parameternya lewat URL, tanpa regex dinamis.
+  for (const raw of mail.text.match(/https?:\/\/\S+/g) ?? []) {
+    const value = new URL(raw).searchParams.get(param);
+    if (value) return value;
+  }
+  throw new Error(`email tanpa parameter ${param}`);
 }
 
 /**
