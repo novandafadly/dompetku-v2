@@ -3,7 +3,7 @@
 -- dengan id pasangan = DK404; tanpa konteks = 0 baris / DK401; Bersama tidak pernah membuka data
 -- Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
 begin;
-select plan(150);
+select plan(152);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -142,7 +142,8 @@ from (values
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'np')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'np')),
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
-  ('trash_list', format($q$select api.trash_list(%L)$q$, :'np'))
+  ('trash_list', format($q$select api.trash_list(%L)$q$, :'np')),
+  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np'))
 ) v (t, q);
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
@@ -167,7 +168,8 @@ from (values
   ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'sh')),
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
-  ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh'))
+  ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
+  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====

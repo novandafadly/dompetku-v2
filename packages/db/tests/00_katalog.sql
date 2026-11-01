@@ -62,8 +62,8 @@ select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
-        'trash_list'],
-  'daftar fungsi baca api INVOKER (S5)');
+        'trash_list', 'suggest_categories'],
+  'daftar fungsi baca api INVOKER (S5, S6)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
@@ -231,7 +231,7 @@ select set_eq($$
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api', 'dompetku_auditor']) r,
                       unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member',
-                                   'app.report_class']) f
+                                   'app.report_class', 'app.category_keywords']) f
      union all
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
@@ -244,7 +244,8 @@ select set_eq($$
                                    'archive_category']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
-                      'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list']) f
+                      'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
+                      'suggest_categories']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
