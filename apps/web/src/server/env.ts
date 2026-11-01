@@ -59,13 +59,15 @@ export function readServerEnv(env: Source = process.env): ServerEnv {
   if (production && url.protocol !== 'https:' && !localhost)
     throw new EnvError('BETTER_AUTH_URL wajib https di produksi');
   const resendApiKey = env.RESEND_API_KEY?.trim() ?? '';
-  if (
-    production &&
-    resendApiKey === '' &&
-    env.AUTH_EMAIL_LOG !== '1' &&
-    optional(env, 'AUTH_EMAIL_FILE') === undefined
-  )
-    throw new EnvError('Variabel lingkungan RESEND_API_KEY wajib diisi');
+  const emailLog = env.AUTH_EMAIL_LOG === '1';
+  const emailFile = optional(env, 'AUTH_EMAIL_FILE');
+  // Produksi sungguhan (bukan localhost): email wajib lewat Resend; pengalihan ke log/berkas
+  // (berisi tautan undangan dan reset) ditolak. Build produksi di localhost = tes e2e auth.
+  if (production && !localhost) {
+    if (emailLog || emailFile !== undefined)
+      throw new EnvError('AUTH_EMAIL_LOG dan AUTH_EMAIL_FILE dilarang di produksi');
+    if (resendApiKey === '') throw new EnvError('Variabel lingkungan RESEND_API_KEY wajib diisi');
+  }
   return {
     databaseUrl,
     authSecret,
@@ -76,7 +78,7 @@ export function readServerEnv(env: Source = process.env): ServerEnv {
     emailFrom: optional(env, 'AUTH_EMAIL_FROM') ?? 'DompetKu <dompet@novandafadly.com>',
     checkPwnedPasswords: env.AUTH_CHECK_PWNED !== '0',
     // Diabaikan bila Resend aktif: email sungguhan tidak pernah dialihkan ke berkas.
-    emailFile: resendApiKey === '' ? (optional(env, 'AUTH_EMAIL_FILE') ?? null) : null,
+    emailFile: resendApiKey === '' ? (emailFile ?? null) : null,
   };
 }
 

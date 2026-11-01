@@ -29,11 +29,14 @@ describe('readServerEnv', () => {
     expect(() => readServerEnv({ ...ok, DATABASE_URL: undefined })).toThrow('DATABASE_URL');
   });
 
-  it('berkas email tidak pernah dipakai bila Resend aktif', () => {
-    expect(readServerEnv({ ...ok, AUTH_EMAIL_FILE: '/tmp/x' }).emailFile).toBeNull();
-    expect(readServerEnv({ ...ok, RESEND_API_KEY: '', AUTH_EMAIL_FILE: '/tmp/x' }).emailFile).toBe(
-      '/tmp/x',
-    );
+  it('email ke log/berkas ditolak di produksi, boleh di localhost (tes e2e)', () => {
+    expect(() => readServerEnv({ ...ok, AUTH_EMAIL_FILE: '/tmp/x' })).toThrow('AUTH_EMAIL_FILE');
+    expect(() => readServerEnv({ ...ok, AUTH_EMAIL_LOG: '1' })).toThrow('AUTH_EMAIL_LOG');
+    const local = { ...ok, BETTER_AUTH_URL: 'http://localhost:3300', RESEND_API_KEY: '' };
+    expect(readServerEnv({ ...local, AUTH_EMAIL_FILE: '/tmp/x' }).emailFile).toBe('/tmp/x');
+    expect(
+      readServerEnv({ ...local, RESEND_API_KEY: 're_x', AUTH_EMAIL_FILE: '/tmp/x' }).emailFile,
+    ).toBeNull();
   });
 });
 
