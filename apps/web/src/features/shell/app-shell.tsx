@@ -1,7 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useLayoutEffect, useState, type ReactNode } from 'react';
 import type { Ruang } from '@dompetku/demo-data';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { Toaster } from '@/components/ui/toast';
@@ -10,8 +9,9 @@ import { CatatProvider, type CatatSheetSlotProps } from './catat';
 import { Sidebar } from './sidebar';
 import { TabBar } from './tab-bar';
 
-// Sheet Menu (Radix Dialog) dimuat saat pertama dibuka.
-const MenuSheet = dynamic(() => import('./menu-sheet').then((m) => m.MenuSheet), { ssr: false });
+// Sheet Menu (Radix Dialog) dimuat saat pertama dibuka. React.lazy, bukan next/dynamic: runtime
+// next/dynamic (~1,5 kB gzip) tidak ikut muat awal (ADR 0002).
+const MenuSheet = lazy(() => import('./menu-sheet').then((m) => ({ default: m.MenuSheet })));
 
 export function AppShell({
   ruang,
@@ -42,7 +42,11 @@ export function AppShell({
           {children}
         </main>
         <TabBar />
-        {menuMounted ? <MenuSheet open={menuOpen} onOpenChange={setMenuOpen} /> : null}
+        {menuMounted ? (
+          <Suspense fallback={null}>
+            <MenuSheet open={menuOpen} onOpenChange={setMenuOpen} />
+          </Suspense>
+        ) : null}
         <Toaster />
       </div>
     </CatatProvider>

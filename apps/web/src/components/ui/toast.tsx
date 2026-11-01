@@ -1,7 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useToasts } from './toast-store';
 import { useOpenedOnce } from './use-opened-once';
 
@@ -9,7 +8,7 @@ export { toast, type ToastInput } from './toast-store';
 
 // Tampilan toast (Radix Toast) dimuat saat toast pertama muncul; wilayah dan live region-nya
 // selalu terpasang supaya pembaca layar sudah mengenalnya sebelum toast pertama.
-const ToastList = dynamic(() => import('./toast-list').then((m) => m.ToastList), { ssr: false });
+const ToastList = lazy(() => import('./toast-list').then((m) => ({ default: m.ToastList })));
 
 export function Toaster() {
   const mounted = useOpenedOnce(useToasts().length > 0);
@@ -40,7 +39,11 @@ export function Toaster() {
         tabIndex={-1}
         className="fixed inset-x-3 bottom-toast z-50 outline-none laptop:inset-x-auto laptop:right-6 laptop:bottom-6 laptop:w-100"
       >
-        {mounted && announcer ? <ToastList announcer={announcer} /> : null}
+        {mounted && announcer ? (
+          <Suspense fallback={null}>
+            <ToastList announcer={announcer} />
+          </Suspense>
+        ) : null}
       </section>
     </>
   );
