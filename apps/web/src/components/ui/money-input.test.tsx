@@ -101,4 +101,59 @@ describe('MoneyInput', () => {
     expect(input).toHaveValue('1.000.000');
     expect(input.selectionStart).toBe(5); // "1.000|.000"
   });
+
+  it('paste "1,5jt" = 1500000', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} initial={2000} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.click(input);
+    await user.paste('1,5jt');
+    expect(onValue).toHaveBeenLastCalledWith(1500000);
+    expect(input).toHaveValue('1.500.000');
+  });
+
+  it('paste "35rb" menimpa nilai lama', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.click(input);
+    await user.paste('35rb');
+    expect(onValue).toHaveBeenLastCalledWith(35000);
+  });
+
+  it('keyboard: "35rb" ditampung lalu dikonversi saat blur', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.type(input, '35rb');
+    expect(input).toHaveValue('35rb');
+    expect(onValue).not.toHaveBeenCalledWith(35000);
+    await user.tab();
+    expect(onValue).toHaveBeenLastCalledWith(35000);
+    expect(input).toHaveValue('35.000');
+  });
+
+  it('keyboard: "1,5jt" + Enter dikonversi', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.type(input, '1,5jt{Enter}');
+    expect(onValue).toHaveBeenLastCalledWith(1500000);
+    expect(input).toHaveValue('1.500.000');
+  });
+
+  it('keyboard: buffer tidak sah dibuang saat blur, nilai lama tetap', async () => {
+    const onValue = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onValue={onValue} initial={2000} />);
+    const input = screen.getByLabelText('Nominal');
+    await user.click(input);
+    await user.keyboard('rbrb');
+    await user.tab();
+    expect(input).toHaveValue('2.000');
+  });
 });

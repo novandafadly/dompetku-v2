@@ -4,11 +4,13 @@ import {
   useId,
   useLayoutEffect,
   useRef,
+  useState,
   type ChangeEvent,
   type ClipboardEvent,
+  type KeyboardEvent,
   type RefObject,
 } from 'react';
-import { formatRibuan, parseRupiah, type Rupiah } from '@dompetku/domain';
+import { formatRibuan, parseNominal, parseRupiah, type Rupiah } from '@dompetku/domain';
 import { FieldLabel, fieldShell } from './field';
 
 function display(value: Rupiah | null): string {
@@ -59,6 +61,8 @@ export function MoneyInput({
   const inputRef = externalRef ?? ownRef;
   // Jumlah angka di kiri caret yang harus dipertahankan setelah format ulang.
   const pendingDigits = useRef<number | null>(null);
+  // Ketikan bersatuan ("35rb", "1,5jt") ditampung sebagai teks, dikonversi saat blur atau Enter.
+  const [buffer, setBuffer] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -79,7 +83,12 @@ export function MoneyInput({
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
     if (raw === '') {
+      setBuffer(null);
       onChange(null);
+      return;
+    }
+    if (/^[\d\s.,rbkjtiua]+$/i.test(raw) && (buffer !== null || /[^\d.]/.test(raw))) {
+      setBuffer(raw);
       return;
     }
     // Ketikan di luar angka dan titik ditolak diam: input terkontrol kembali ke nilai lama.
@@ -88,10 +97,31 @@ export function MoneyInput({
     commit(digitsOf(raw), digitsOf(raw.slice(0, caret)).length);
   }
 
+  function flushBuffer() {
+    if (buffer === null) return;
+    const n = parseNominal(buffer);
+    setBuffer(null);
+    if (n !== null) onChange(n);
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter' || buffer === null) return;
+    e.preventDefault();
+    flushBuffer();
+  }
+
   function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text');
-    if (parseRupiah(pasted) === null) return;
+    const n = parseNominal(pasted);
+    if (n === null) return;
+    setBuffer(null);
+    // Bersatuan atau desimal: hasil hitungan menggantikan seluruh nilai, bukan disisipkan.
+    if (parseRupiah(pasted) === null) {
+      pendingDigits.current = String(n).length;
+      onChange(n);
+      return;
+    }
     const input = e.currentTarget;
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
@@ -109,10 +139,12 @@ export function MoneyInput({
       inputMode={inputMode}
       autoComplete="off"
       disabled={disabled}
-      value={display(value)}
+      value={buffer ?? display(value)}
       placeholder={size === 'base' ? '0' : undefined}
       onChange={handleChange}
       onPaste={handlePaste}
+      onBlur={flushBuffer}
+      onKeyDown={handleKeyDown}
       aria-describedby={describedBy}
       className={`num min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:text-text-muted ${
         size === 'base'
