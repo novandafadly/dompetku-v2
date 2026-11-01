@@ -26,6 +26,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Tipe rute (typedRoutes) dibuat dulu supaya lint dan typecheck melihat tipe yang sama dengan build.
+      - run: pnpm --filter @dompetku/web exec next typegen
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
