@@ -3,7 +3,7 @@
 -- dengan id pasangan = DK404; tanpa konteks = 0 baris / DK401; Bersama tidak pernah membuka data
 -- Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
 begin;
-select plan(152);
+select plan(168);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -46,10 +46,15 @@ select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uu
 select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 50000, 0, null, 'rahasia ambil', 'Diambil')$$,
   :'sh', :'kas', :'bca')) as ambil \gset
 
-create temp table rel as select unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines',
-  'app.entry_history', 'app.entry_tombstones', 'app.account_balances', 'app.report_lines']) as t;
+-- Hari tanpa pengeluaran (S6): N menandai Pribadi N, F menandai Pribadi F.
+select tests.web_exec(u, format('select api.mark_no_spend_day(%L)', sp))
+  from (values (tests.n(), :'np'::uuid), (tests.f(), :'fp'::uuid)) v (u, sp) \g /dev/null
 
--- ===== web: SELECT (dua user x 8 relasi) =====
+create temp table rel as select unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines',
+  'app.entry_history', 'app.entry_tombstones', 'app.account_balances', 'app.report_lines',
+  'app.no_spend_days']) as t;
+
+-- ===== web: SELECT (dua user x 9 relasi) =====
 select ok(tests.web_val(tests.n(), format('select count(*) from %s where space_id = %L', t, :'np'))::int > 0,
           'web/N melihat Pribadi sendiri: ' || t) from rel;
 select ok(tests.web_val(tests.f(), format('select count(*) from %s where space_id = %L', t, :'fp'))::int > 0,
@@ -75,24 +80,26 @@ from (values
   ('entry_history', format($q$insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by)
      values (%L, %L, 9, 'update', '{}', app.current_user_id())$q$, :'fe', :'fp')),
   ('entry_tombstones', format($q$insert into app.entry_tombstones (entry_id, space_id, kind, occurred_on, voided_at, voided_by)
-     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp'))
+     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp')),
+  ('no_spend_days', format($q$insert into app.no_spend_days (space_id, on_date, marked_by)
+     values (%L, '2026-03-01', app.current_user_id())$q$, :'fp'))
 ) v (t, q);
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), 'update ' || t || ' set space_id = space_id'), '42501', null,
   'web UPDATE ditolak: ' || t)
 from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
-                  'app.entry_tombstones']) t;
+                  'app.entry_tombstones', 'app.no_spend_days']) t;
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), 'delete from ' || t), '42501', null,
   'web DELETE ditolak: ' || t)
 from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
-                  'app.entry_tombstones']) t;
+                  'app.entry_tombstones', 'app.no_spend_days']) t;
 
 -- ===== api (pemilik fungsi api.*): policy yang sama =====
 select is(tests.api_val(tests.f(), format('select count(*) from %s where space_id = %L', t, :'np')), '0',
           'api/F tidak melihat Pribadi N: ' || t)
 from unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines', 'app.entry_history',
-                  'app.entry_tombstones', 'app.account_balances', 'app.report_lines']) t;
+                  'app.entry_tombstones', 'app.account_balances', 'app.report_lines', 'app.no_spend_days']) t;
 select is(tests.api_val(null, format('select count(*) from %s', t)), '0', 'api tanpa konteks: ' || t || ' 0 baris')
-from unnest(array['app.accounts', 'app.entries', 'app.entry_lines', 'app.entry_history']) t;
+from unnest(array['app.accounts', 'app.entries', 'app.entry_lines', 'app.entry_history', 'app.no_spend_days']) t;
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), q), '42501', null, 'api/F INSERT ke Pribadi N ditolak: ' || t)
 from (values
   ('accounts', format($q$insert into app.accounts (space_id, space_kind, name, pocket, wallet_type, opened_on, created_by)
@@ -104,18 +111,22 @@ from (values
   ('entry_history', format($q$insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by)
      values (%L, %L, 9, 'update', '{}', app.current_user_id())$q$, :'ne', :'np')),
   ('entry_tombstones', format($q$insert into app.entry_tombstones (entry_id, space_id, kind, occurred_on, voided_at, voided_by)
-     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp'))
+     values (gen_random_uuid(), %L, 'income', '2026-03-01', now(), app.current_user_id())$q$, :'fp')),
+  ('no_spend_days', format($q$insert into app.no_spend_days (space_id, on_date, marked_by)
+     values (%L, '2026-03-01', app.current_user_id())$q$, :'np'))
 ) v (t, q);
 select is(tests.api_exec(tests.f(), format('update %s set %s where space_id = %L', t, c, :'np')), 0::bigint,
           'api/F UPDATE Pribadi N: 0 baris: ' || t)
 from (values ('app.accounts', 'name = ''X'''), ('app.categories', 'name = ''X'''), ('app.entries', 'version = version')) v (t, c);
 select is(tests.api_exec(tests.f(), format('delete from app.entry_lines where space_id = %L', :'np')), 0::bigint,
           'api/F DELETE entry_lines Pribadi N: 0 baris');
+select is(tests.api_exec(tests.f(), format('delete from app.no_spend_days where space_id = %L', :'np')), 0::bigint,
+          'api/F DELETE no_spend_days Pribadi N: 0 baris');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), q), '42501', null, 'api tanpa hak: ' || q)
 from unnest(array['update app.entry_lines set amount = amount', 'update app.entry_history set version = version',
                   'update app.entry_tombstones set kind = kind', 'delete from app.accounts',
                   'delete from app.categories', 'delete from app.entries', 'delete from app.entry_history',
-                  'delete from app.entry_tombstones']) q;
+                  'delete from app.entry_tombstones', 'update app.no_spend_days set on_date = on_date']) q;
 
 -- ===== worker: tanpa akses tabel ledger =====
 select throws_ok(format($$select tests.worker_val(null, %L)$$, 'select count(*) from ' || t), '42501', null,
@@ -143,7 +154,8 @@ from (values
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'np')),
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'np')),
-  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np'))
+  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np')),
+  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np'))
 ) v (t, q);
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
@@ -169,7 +181,8 @@ from (values
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
-  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh'))
+  ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh')),
+  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====

@@ -1,7 +1,7 @@
 -- Isolasi wajib READ COMMITTED (BSD §3, §13 #23): penjaga batas user dan undangan hanya benar
 -- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4, S5, dan S6 harus menolak.
 begin isolation level repeatable read;
-select plan(20);
+select plan(21);
 
 select throws_ok(q, 'DK500', 'isolation_not_read_committed', 'REPEATABLE READ ditolak: ' || t)
 from (values
@@ -24,7 +24,8 @@ from (values
   ('archive_account', $$select tests.web_exec(tests.n(), $q$select api.archive_account(gen_random_uuid())$q$)$$),
   ('create_category', $$select tests.web_exec(tests.n(), $q$select api.create_category(gen_random_uuid(), gen_random_uuid(), 'expense', 'X', 'X')$q$)$$),
   ('update_category', $$select tests.web_exec(tests.n(), $q$select api.update_category(gen_random_uuid(), 'X', 'X', null)$q$)$$),
-  ('archive_category', $$select tests.web_exec(tests.n(), $q$select api.archive_category(gen_random_uuid())$q$)$$)
+  ('archive_category', $$select tests.web_exec(tests.n(), $q$select api.archive_category(gen_random_uuid())$q$)$$),
+  ('mark_no_spend_day', $$select tests.web_exec(tests.n(), $q$select api.mark_no_spend_day(gen_random_uuid())$q$)$$)
 ) v (t, q);
 
 select * from finish();

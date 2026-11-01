@@ -211,6 +211,7 @@ begin
   delete from app.entry_tombstones;
   delete from app.accounts;
   delete from app.categories;
+  delete from app.no_spend_days;
   delete from app.idempotency_keys;
   delete from app.product_events;
   delete from audit.events;

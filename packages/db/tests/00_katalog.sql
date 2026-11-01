@@ -55,7 +55,7 @@ select set_eq($$
         'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
-        'create_category', 'update_category', 'archive_category'],
+        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day'],
   'daftar fungsi api DEFINER (tulis S4 + S5 + S6, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
@@ -199,6 +199,12 @@ select set_eq($$
     ('dompetku_auditor', 'app.entry_tombstones', 'SELECT'),
     ('dompetku_auditor', 'app.account_balances', 'SELECT'),
     ('dompetku_auditor', 'app.report_lines', 'SELECT'),
+    -- S6: hari tanpa pengeluaran (pola ruang; api tulis lewat mark_no_spend_day).
+    ('dompetku_web', 'app.no_spend_days', 'SELECT'),
+    ('dompetku_api', 'app.no_spend_days', 'SELECT'),
+    ('dompetku_api', 'app.no_spend_days', 'INSERT'),
+    ('dompetku_api', 'app.no_spend_days', 'DELETE'),
+    ('dompetku_auditor', 'app.no_spend_days', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -241,7 +247,7 @@ select set_eq($$
                                    'create_transfer', 'update_entry', 'void_entry',
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account', 'create_category', 'update_category',
-                                   'archive_category']) f
+                                   'archive_category', 'mark_no_spend_day']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
