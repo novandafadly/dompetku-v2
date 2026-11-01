@@ -31,6 +31,7 @@ const PASSKEY_ERROR = {
   cancelled:
     'Passkey dibatalkan atau tidak ditemukan di perangkat ini. Coba lagi, atau masuk dengan email dan kata sandi.',
   failed: 'Passkey ini tidak dikenali. Coba passkey lain, atau masuk dengan email dan kata sandi.',
+  limited: 'Terlalu banyak percobaan passkey dari jaringan ini. Coba lagi dalam beberapa menit.',
 } as const;
 
 const linkText = `inline-flex min-h-11 items-center self-start rounded-md px-1 -ml-1 text-body font-bold text-accent-text hover-pointer:underline ${focusRing}`;
@@ -149,8 +150,12 @@ export function MasukReal({ notice }: { notice: string | null }) {
         onClick={() => {
           setPasskeyError(null);
           startPasskey(async () => {
-            const options = await passkeySignInOptionsAction();
-            const r = await getAssertion(options);
+            const opts = await passkeySignInOptionsAction();
+            if (!opts.ok) {
+              setPasskeyError('limited');
+              return;
+            }
+            const r = await getAssertion(opts.options);
             if ('error' in r) {
               setPasskeyError(r.error);
               return;
@@ -189,6 +194,9 @@ export function MasukReal({ notice }: { notice: string | null }) {
           Masuk
         </Button>
       </form>
+      <AuthText>
+        Sudah memasang passkey? Masuk dengan tombol passkey di atas; kata sandi saja tidak cukup.
+      </AuthText>
       <div className="flex flex-col items-start">
         <Link href={'/lupa-sandi'} className={linkText}>
           Lupa kata sandi?

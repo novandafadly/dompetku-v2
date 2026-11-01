@@ -8,15 +8,17 @@ import { heroCard } from '@/components/ui/styles';
 import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
 import { declineInvitationAction } from '@/server/auth/actions';
-import { authService } from '@/server/auth/next';
+import { authService, requestHeaders } from '@/server/auth/next';
 import { isPrototype } from '@/server/env';
-import { INVALID_INVITE, InvalidLink } from '../_components/invalid-link';
+import { INVALID_INVITE, InvalidLink, TOO_MANY_INVITE_TRIES } from '../_components/invalid-link';
 import { param, type SearchParams } from '../_components/params';
 import { TerimaUndanganPrototype } from '../_prototype/terima-undangan';
 
 export default async function TerimaUndanganPage({ searchParams }: { searchParams: SearchParams }) {
   if (isPrototype()) return <TerimaUndanganPrototype />;
-  if ((await param(searchParams, 'status')) === 'ditolak')
+  const status = await param(searchParams, 'status');
+  if (status === 'terlalu-sering') return <InvalidLink {...TOO_MANY_INVITE_TRIES} />;
+  if (status === 'ditolak')
     return (
       <section role="status" className={`flex flex-col items-start gap-3 p-5 ${heroCard}`}>
         <span
@@ -33,6 +35,9 @@ export default async function TerimaUndanganPage({ searchParams }: { searchParam
       </section>
     );
   const token = await param(searchParams, 't');
+  // Intip undangan dibatasi per IP (20 per 10 menit): menebak token lewat halaman ini mahal.
+  if (!(await authService().allowed('rl-undangan', await requestHeaders(), 20, 10 * 60)))
+    return <InvalidLink {...TOO_MANY_INVITE_TRIES} />;
   const invite = await authService().peekInvitation(token);
   if (!invite) return <InvalidLink {...INVALID_INVITE} />;
   return (

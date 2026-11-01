@@ -39,3 +39,10 @@ export const INVALID_INVITE = {
     'Tautan sudah dipakai, ditolak, dicabut, atau lewat 72 jam. Minta pengundang mengirim undangan baru.',
   action: { href: '/masuk' as Route, label: 'Ke halaman Masuk' },
 };
+
+export const TOO_MANY_INVITE_TRIES = {
+  title: 'Terlalu banyak percobaan',
+  description:
+    'Tautan undangan dari jaringan ini dibuka terlalu sering. Tunggu 10 menit, lalu buka lagi tautan dari email.',
+  action: { href: '/masuk' as Route, label: 'Ke halaman Masuk' },
+};

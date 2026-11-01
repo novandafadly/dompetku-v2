@@ -91,6 +91,7 @@ function VerifyEmail({ email }: { email: string }) {
         Kami mengirim tautan konfirmasi ke {email}. Buka tautan itu, lalu muat ulang halaman ini.
       </AuthText>
       {state.kind === 'done' ? <Notice tone="ok">{state.message}</Notice> : null}
+      {state.kind === 'error' ? <Notice tone="error">{state.message}</Notice> : null}
       <form action={action}>
         <Button type="submit" variant="secondary" loading={pending}>
           Kirim ulang tautan

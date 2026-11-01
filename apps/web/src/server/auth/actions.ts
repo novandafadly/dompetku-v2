@@ -58,12 +58,6 @@ export async function signInPasswordAction(_: SignInState, form: FormData): Prom
       return { kind: 'totp' };
     case 'throttled':
       return throttled(result.seconds);
-    case 'use_passkey':
-      return {
-        kind: 'error',
-        message:
-          'Akun ini sudah memakai passkey. Masuk dengan passkey, atau pakai kode pemulihan bila perangkatmu hilang.',
-      };
     case 'invalid':
       return { kind: 'error', message: 'Email atau kata sandi salah.' };
   }
@@ -108,12 +102,13 @@ export async function recoverySignInAction(_: FormState, form: FormData): Promis
   return { kind: 'error', message: 'Email atau kode pemulihan salah.' };
 }
 
-export async function passkeySignInOptionsAction(): Promise<unknown> {
-  const { options, setCookie } = await authService().passkeyAuthenticationOptions(
-    await requestHeaders(),
-  );
-  await applySetCookie(setCookie);
-  return options;
+export async function passkeySignInOptionsAction(): Promise<
+  { ok: true; options: unknown } | { ok: false }
+> {
+  const r = await authService().passkeyAuthenticationOptions(await requestHeaders());
+  if (!r) return { ok: false };
+  await applySetCookie(r.setCookie);
+  return { ok: true, options: r.options };
 }
 
 export async function passkeySignInAction(
@@ -178,7 +173,11 @@ export async function signUpAction(_: FormState, form: FormData): Promise<FormSt
 }
 
 export async function declineInvitationAction(form: FormData): Promise<void> {
-  const ok = await authService().declineInvitation(await requestHeaders(), text(form, 'token'));
+  const headers = await requestHeaders();
+  const service = authService();
+  if (!(await service.allowed('rl-undangan', headers, 20, 10 * 60)))
+    redirect('/terima-undangan?status=terlalu-sering');
+  const ok = await service.declineInvitation(headers, text(form, 'token'));
   redirect((ok ? '/terima-undangan?status=ditolak' : '/terima-undangan') as Route);
 }
 
@@ -239,6 +238,7 @@ export async function totpBeginAction(_: TotpSetupState, form: FormData): Promis
   const r = await authService().totpBegin(await requestHeaders(), text(form, 'password'));
   if (r.kind === 'wrong_password')
     return { kind: 'error', field: 'password', message: 'Kata sandi salah.' };
+  if (r.kind === 'throttled') return throttled(r.seconds);
   if (r.kind !== 'ok') redirect('/amankan');
   const qr = qrPath(r.uri);
   return { kind: 'scan', secret: r.secret, qrPath: qr.path, qrSize: qr.size };
@@ -292,15 +292,22 @@ export async function finishSecuringAction(_: FormState, form: FormData): Promis
   await requireUser('securing');
   if (text(form, 'saved') !== 'ya')
     return { kind: 'error', field: 'saved', message: 'Centang dulu setelah kode tersimpan.' };
-  const r = await authService().finishSecuring(await requestHeaders());
-  if (r.kind === 'ok') redirect('/pribadi/beranda' as Route);
-  return { kind: 'error', message: FINISH_ERROR[r.kind] ?? FINISH_ERROR.not_allowed ?? '' };
+  const { result, setCookie } = await authService().finishSecuring(await requestHeaders());
+  await applySetCookie(setCookie);
+  if (result.kind === 'ok') redirect('/pribadi/beranda' as Route);
+  return {
+    kind: 'error',
+    message: FINISH_ERROR[result.kind] ?? FINISH_ERROR.not_allowed ?? '',
+  };
 }
 
 export async function resendVerificationAction(): Promise<FormState> {
   const state = await requireUser('securing');
-  await authService()
-    .auth.api.sendVerificationEmail({ body: { email: state.email } })
+  const service = authService();
+  if (!(await service.allowed('rl-verifikasi', await requestHeaders(), 5, 60 * 60, state.userId)))
+    return { kind: 'error', message: 'Tautan sudah dikirim beberapa kali. Coba lagi nanti.' };
+  await service.auth.api
+    .sendVerificationEmail({ body: { email: state.email } })
     .catch(() => undefined);
   return { kind: 'done', message: `Tautan baru dikirim ke ${state.email}.` };
 }
