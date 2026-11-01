@@ -27,12 +27,19 @@ export interface UseCatatArgs {
 }
 
 /** Galat yang terikat ke satu kolom (S6-C5): kode → nama kolom server. */
-const FIELD_OF: Partial<Record<LedgerErrorCode, 'occurred_on' | 'account_id'>> = {
+const FIELD_OF: Partial<Record<LedgerErrorCode, 'occurred_on' | 'account_id' | 'category_id'>> = {
   before_opening: 'occurred_on',
   account_archived: 'account_id',
+  category_archived: 'category_id',
 };
 
-export type FieldCode = 'before_opening' | 'account_archived';
+export type FieldCode = 'before_opening' | 'account_archived' | 'category_archived';
+
+/**
+ * Jenis galat simpan tanpa bingkai sendiri (keputusan controller, s6-bingkai.md "Tambahan
+ * salinan"): `network` = S6-C2; `not_found` tanpa Coba lagi; lainnya = kendala server.
+ */
+export type GalatKind = 'network' | 'server' | 'not_found';
 
 function usable(o: CatatOptions | null, hidden: ReadonlySet<string>): AccountVM[] {
   return (o?.accounts ?? []).filter((a) => !a.archived && !hidden.has(a.id));
@@ -90,6 +97,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const [status, setStatus] = useState<CatatStatus>('idle');
   const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [hiddenCategories, setHiddenCategories] = useState<ReadonlySet<string>>(() => new Set());
+  const [archivedCategoryId, setArchivedCategoryId] = useState<string | null>(null);
+  const [galatKind, setGalatKind] = useState<GalatKind | null>(null);
   const [switchFailed, setSwitchFailed] = useState<Ruang | null>(null);
 
   // Ref, bukan state: klik ganda dalam satu tick (sebelum render ulang) tetap satu permintaan.
@@ -97,6 +107,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const allowNegative = useRef(false);
   const optsSeq = useRef(0);
   const chipsSeq = useRef(0);
+  // Jenis terbaru untuk jawaban opsi yang tiba terlambat (state di closure bisa basi).
+  const typeRef = useRef<CatatType>('expense');
 
   const requestChips = (r: Ruang, type: CatatType) => {
     const seq = ++chipsSeq.current;
@@ -121,10 +133,10 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   };
 
   /** Opsi ruang tiba (Promise): dompet bawaan ruang itu, lalu chip. */
-  const receive = (r: Ruang, o: CatatOptions, type: CatatType) => {
+  const receive = (r: Ruang, o: CatatOptions) => {
     setOpts(o);
     setDraft((d) => (d.ruang === r ? { ...d, accountId: defaultAccountId(o) } : d));
-    requestChips(r, type);
+    requestChips(r, typeRef.current);
   };
 
   useEffect(() => {
@@ -141,7 +153,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     const seq = optsSeq.current;
     initial.then(
       (o) => {
-        if (seq === optsSeq.current) receive(ruang, o, 'expense');
+        if (seq === optsSeq.current) receive(ruang, o);
       },
       () => {
         if (seq === optsSeq.current) setOpts({ accounts: [], categories: [] });
@@ -157,7 +169,13 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const selectedAccount = opts?.accounts.find((a) => a.id === draft.accountId);
   const destinations = accounts.filter((a) => a.id !== draft.accountId);
   const allCategories = (opts?.categories ?? [])
-    .filter((c) => !c.archived && draft.type !== 'transfer' && c.type === draft.type)
+    .filter(
+      (c) =>
+        !c.archived &&
+        !hiddenCategories.has(c.id) &&
+        draft.type !== 'transfer' &&
+        c.type === draft.type,
+    )
     .sort((a, b) => a.name.localeCompare(b.name, 'id'));
 
   const hasAmount = draft.amount !== null && draft.amount > 0;
@@ -168,11 +186,12 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     (draft.type === 'transfer'
       ? draft.counterAccountId !== undefined
       : draft.categoryId !== undefined);
-  const canSave = valid && !saving;
+  const canSave = valid && !saving && galatKind !== 'not_found';
 
   const toIdle = () => {
     setStatus('idle');
     setFieldCode(null);
+    setGalatKind(null);
   };
 
   /** Isian dikunci selama menyimpan (S6-C1). */
@@ -187,7 +206,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     if (status === 'saldo_kurang' && enough({ ...draft, amount }, selectedAccount)) toIdle();
   };
   const setCategory = (categoryId: string) => {
+    if (busy.current) return;
     update((d) => ({ ...d, categoryId }));
+    if (status === 'field' && fieldCode === 'category_archived') toIdle();
   };
   const setAccount = (accountId: string) => {
     if (busy.current) return;
@@ -209,7 +230,11 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   };
   const setType = (type: CatatType) => {
     if (busy.current) return;
+    typeRef.current = type;
     update((d) => clear({ ...d, type }, { category: true, counter: true }));
+    if (status === 'saldo_kurang' || (status === 'field' && fieldCode === 'category_archived')) {
+      toIdle();
+    }
     requestChips(draft.ruang, type);
   };
 
@@ -219,11 +244,12 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
    */
   const switchRuang = (next: Ruang) => {
     if (busy.current) return;
-    const prev = { draft, opts, chips };
+    const prev = { ruang: draft.ruang, accountId: draft.accountId, clientId: draft.clientId, opts };
     const seq = ++optsSeq.current;
     toIdle();
     setSwitchFailed(null);
     setHidden(new Set());
+    setHiddenCategories(new Set());
     const got = source.options(next);
     const reset = (accountId: string) => {
       setDraft((d) =>
@@ -236,7 +262,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     if (!isPromise(got)) {
       setOpts(got);
       reset(defaultAccountId(got));
-      requestChips(next, draft.type);
+      requestChips(next, typeRef.current);
       return;
     }
     setOpts(null);
@@ -244,14 +270,19 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     reset('');
     got.then(
       (o) => {
-        if (seq === optsSeq.current) receive(next, o, draft.type);
+        if (seq === optsSeq.current) receive(next, o);
       },
       () => {
         if (seq !== optsSeq.current) return;
-        // Gagal memuat ruang tujuan: tetap di ruang lama dengan isian utuh.
+        // Gagal memuat ruang tujuan: kembali ke ruang lama; suntingan lain selama memuat tetap.
         setOpts(prev.opts);
-        setDraft(prev.draft);
-        setChips(prev.chips);
+        setDraft((d) => ({
+          ...d,
+          ruang: prev.ruang,
+          accountId: prev.accountId,
+          clientId: prev.clientId,
+        }));
+        requestChips(prev.ruang, typeRef.current);
         setSwitchFailed(next);
       },
     );
@@ -263,6 +294,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     allowNegative.current = negative;
     setStatus('menyimpan');
     setFieldCode(null);
+    setGalatKind(null);
     setSwitchFailed(null);
     let out: SaveOutcome;
     try {
@@ -285,14 +317,27 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
       setStatus('field');
       setFieldCode(out.code as FieldCode);
       if (out.code === 'account_archived') setHidden((h) => new Set([...h, draft.accountId]));
-    } else setStatus('galat');
+      if (out.code === 'category_archived' && draft.categoryId !== undefined) {
+        const archived = draft.categoryId;
+        setArchivedCategoryId(archived);
+        setHiddenCategories((h) => new Set([...h, archived]));
+        setChips((c) => c.filter((x) => x.id !== archived));
+        setDraft((d) => clear(d, { category: true }));
+      }
+    } else {
+      setStatus('galat');
+      setGalatKind(
+        out.code === 'network' ? 'network' : out.code === 'not_found' ? 'not_found' : 'server',
+      );
+    }
     return out;
   };
 
   /** Simpan biasa (tanpa saldo negatif). Tidak berbuat apa-apa selama menyimpan. */
   const save = () => send(draft.clientId, false);
   /** "Coba lagi" (S6-C2): clientId yang sama, jadi server mengembalikan entri yang sama bila sudah tercatat. */
-  const retry = () => send(draft.clientId, allowNegative.current);
+  const retry = () =>
+    galatKind === 'not_found' ? Promise.resolve(null) : send(draft.clientId, allowNegative.current);
   /** "Tetap simpan" (S6-C3): clientId sama, `allowNegative`. */
   const saveAnyway = () => send(draft.clientId, true);
   /** "Simpan sebagai catatan baru" (S6-C4): satu-satunya jalan (selain pindah ruang) ke clientId baru. */
@@ -308,9 +353,16 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
       ? opts?.accounts.find((a) => a.id === draft.accountId)
       : undefined;
 
+  const archivedCategory =
+    fieldCode === 'category_archived' && archivedCategoryId !== null
+      ? opts?.categories.find((c) => c.id === archivedCategoryId)
+      : undefined;
+
   return {
     draft,
     chips,
+    archivedCategory,
+    galatKind,
     allCategories,
     accounts,
     selectedAccount,

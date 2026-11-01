@@ -19,6 +19,18 @@ export const CATAT_COPY = {
   tambahDompet: 'Tambah dompet',
 } as const;
 
+/** Salinan galat simpan per jenis (s6-bingkai.md, "Tambahan salinan (keputusan controller)"). */
+export function galatText(kind: 'network' | 'server' | 'not_found'): string {
+  if (kind === 'network') return CATAT_COPY.galat;
+  if (kind === 'not_found') return 'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.';
+  return 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.';
+}
+
+/** Galat kolom kategori (`category_archived`, gaya S6-C5). */
+export function categoryArchivedText(kategori: string): string {
+  return `${kategori} sudah diarsipkan. Pilih kategori lain.`;
+}
+
 /** S6-C3. `after` negatif, ditulis dengan tanda minus (`−Rp`). */
 export function saldoKurangText(dompet: string, balance: Rupiah, after: Rupiah): string {
   return `Saldo ${dompet} tinggal ${formatRupiah(balance)}. Kalau disimpan, saldonya jadi ${formatRupiah(after)}.`;

@@ -63,7 +63,17 @@ const OPTIONS: CatatOptions = {
   categories: CATEGORIES,
 };
 
-type FrameId = 'c1' | 'c2' | 'c3' | 'c4' | 'c5-tanggal' | 'c5-dompet' | 'c6';
+type FrameId =
+  | 'c1'
+  | 'c2'
+  | 'c2-server'
+  | 'c2-tidak-ada'
+  | 'c3'
+  | 'c4'
+  | 'c5-tanggal'
+  | 'c5-dompet'
+  | 'c5-kategori'
+  | 'c6';
 
 const FRAMES: { id: FrameId; label: string; fail?: LedgerErrorCode }[] = [
   { id: 'c1', label: 'S6-C1 Menyimpan…' },
@@ -72,6 +82,9 @@ const FRAMES: { id: FrameId; label: string; fail?: LedgerErrorCode }[] = [
   { id: 'c4', label: 'S6-C4 Kunci bentrok', fail: 'idem_mismatch' },
   { id: 'c5-tanggal', label: 'S6-C5 Sebelum dompet dibuka', fail: 'before_opening' },
   { id: 'c5-dompet', label: 'S6-C5 Dompet diarsipkan', fail: 'account_archived' },
+  { id: 'c5-kategori', label: 'S6-C5 Kategori diarsipkan', fail: 'category_archived' },
+  { id: 'c2-server', label: 'Galat server', fail: 'unknown' },
+  { id: 'c2-tidak-ada', label: 'Data tidak ada', fail: 'not_found' },
   { id: 'c6', label: 'S6-C6 Ruang tanpa dompet' },
 ];
 

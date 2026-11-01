@@ -71,6 +71,10 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
       if (got === undefined) {
         got = fetchChips(r, type, hour);
         frozen.set(key, got);
+        // Opsi ruang gagal dimuat: jangan bekukan penolakan, permintaan berikutnya mencoba lagi.
+        got.catch(() => {
+          frozen.delete(key);
+        });
       }
       return got;
     },

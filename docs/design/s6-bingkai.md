@@ -182,6 +182,17 @@ Rujukan handoff: D1 (detail), D2 (AlertDialog Batalkan), D3, D4 (toast dibatalka
 
 Salinan tetap dari rencana S6 (Global Constraints) tidak diulang di sini dan tidak diubah.
 
+## Tambahan salinan (keputusan controller)
+
+Diputuskan controller atas nama pemilik (2026-11-01, review Task 12) untuk kode galat simpan Catat yang tidak punya bingkai sendiri; `network` tetap memakai salinan S6-C2.
+
+| Kode                              | Tampilan                                                                                    | Teks                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `category_archived`               | galat kolom gaya S6-C5 di bawah chip kategori; chip terpilih dilepas, fokus ke chip pertama | `{kategori} sudah diarsipkan. Pilih kategori lain.`                               |
+| `not_found`                       | kotak `role="alert"` gaya S6-C2, tanpa `Coba lagi` (Simpan nonaktif)                        | `Data ini sudah tidak ada. Tutup lalu buka Catat lagi.`                           |
+| `unknown`, `invalid`, `conflict`  | kotak `role="alert"` gaya S6-C2 + `Coba lagi` (clientId sama)                               | `Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.` |
+| Urungkan gagal (toast `Urungkan`) | toast pemberitahuan `role="status"`                                                         | `Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.`                 |
+
 ## Catatan review
 
 Kursi design reviewer (pass terpisah dari penulisan, 2026-11-01), diperiksa terhadap `docs/design/panel-malam/README.md`, `DESIGN.md`, DBD §3 sampai §7, dan antislop (ui, human, copywriting, layoutmobile). Setiap temuan sudah diterapkan di bingkai di atas.

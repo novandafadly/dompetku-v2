@@ -116,6 +116,17 @@ describe('realCatatSource', () => {
     expect(chips.map((c) => c.id)).toEqual(['k1', 'k2', 'k3', 'k4', 'k5', 'k6']);
   });
 
+  it('chips: options ruang lain gagal tidak dibekukan; permintaan berikutnya mencoba lagi', async () => {
+    m.catatOptions.mockResolvedValueOnce({ ok: false, error: { code: 'network' } });
+    const s = source();
+    await expect(s.chips('bersama', 'expense', 9)).rejects.toThrow();
+    m.catatOptions.mockResolvedValueOnce({ ok: true, value: BERSAMA });
+    m.suggestFor.mockResolvedValue({ ok: true, value: ['b1'] });
+    const chips = await s.chips('bersama', 'expense', 9);
+    expect(chips.map((c) => c.id)).toEqual(['b1']);
+    expect(m.catatOptions).toHaveBeenCalledTimes(2);
+  });
+
   it('save tanpa tanggal dipilih: occurredOn TIDAK dikirim (server memakai app.today())', async () => {
     m.saveCatat.mockResolvedValue({
       ok: true,

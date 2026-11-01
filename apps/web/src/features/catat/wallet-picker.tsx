@@ -18,6 +18,7 @@ export function MetaSelect({
   invalid = false,
   describedBy,
   selectRef,
+  busy = false,
 }: {
   label: string;
   icon: ReactNode;
@@ -29,6 +30,8 @@ export function MetaSelect({
   invalid?: boolean;
   describedBy?: string | undefined;
   selectRef?: Ref<HTMLSelectElement>;
+  /** Selama menyimpan: `aria-disabled`, perubahan diabaikan, fokus tetap. */
+  busy?: boolean;
 }) {
   const id = useId();
   return (
@@ -47,12 +50,13 @@ export function MetaSelect({
         ref={selectRef}
         data-date={dataDate}
         aria-invalid={invalid || undefined}
+        aria-disabled={busy || undefined}
         aria-describedby={describedBy}
         value={value}
         onChange={(e) => {
-          onChange(e.target.value);
+          if (!busy) onChange(e.target.value);
         }}
-        className="h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent pr-8 pl-9.5 text-label font-semibold text-text hover-pointer:bg-hover aria-invalid:border-2 aria-invalid:border-danger"
+        className="h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent pr-8 pl-9.5 text-label font-semibold text-text hover-pointer:bg-hover aria-invalid:border-2 aria-invalid:border-danger aria-disabled:border-hairline aria-disabled:text-text-muted"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value} className="bg-surface text-text">

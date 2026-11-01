@@ -35,6 +35,7 @@ export function MoneyInput({
   onChange,
   label,
   disabled,
+  readOnly = false,
   labelHidden = false,
   inputMode = 'numeric',
   size = 'base',
@@ -46,6 +47,8 @@ export function MoneyInput({
   onChange: (value: Rupiah | null) => void;
   label: string;
   disabled?: boolean;
+  /** Sementara tidak bisa diubah tanpa melepas fokus (mis. selama menyimpan): `aria-disabled`. */
+  readOnly?: boolean;
   /** Label hanya untuk pembaca layar, bila awalan "Rp" dan konteks sudah menjelaskan field. */
   labelHidden?: boolean;
   /** 'none' untuk keypad dalam aplikasi: keyboard OS tidak muncul, keyboard fisik tetap jalan. */
@@ -145,6 +148,8 @@ export function MoneyInput({
       inputMode={inputMode}
       autoComplete="off"
       disabled={disabled}
+      readOnly={readOnly || undefined}
+      aria-disabled={readOnly || undefined}
       value={buffer ?? display(value)}
       placeholder={size === 'base' ? '0' : undefined}
       onChange={handleChange}
@@ -152,7 +157,7 @@ export function MoneyInput({
       onBlur={flushBuffer}
       onKeyDown={handleKeyDown}
       aria-describedby={describedBy}
-      className={`num min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:text-text-muted ${
+      className={`num min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-muted disabled:cursor-not-allowed disabled:text-text-muted aria-disabled:text-text-muted ${
         size === 'base'
           ? 'min-h-11 text-body font-medium'
           : size === 'hero'

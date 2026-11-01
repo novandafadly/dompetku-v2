@@ -21,7 +21,9 @@ import { AppKeypad } from './app-keypad';
 import {
   accountArchivedText,
   beforeOpeningText,
+  categoryArchivedText,
   CATAT_COPY,
+  galatText,
   CatatAlert,
   FieldErrorText,
   NoAccountState,
@@ -30,6 +32,7 @@ import {
   saldoKurangText,
 } from './catat-status';
 import { CategoryChips } from './category-chips';
+import { undoOrNotify } from './saved-toast';
 import type { CatatSource, CatatType, SaveOutcome } from './source';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
@@ -98,6 +101,7 @@ function CatatSession({
   const dateRef = useRef<HTMLSelectElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const alertId = useId();
+  const switchId = useId();
   const saldoId = useId();
   const fieldErrorId = useId();
   const emptyId = useId();
@@ -135,8 +139,12 @@ function CatatSession({
     const was = lastStatus.current;
     lastStatus.current = status;
     if (was !== 'menyimpan' || status === 'menyimpan') return;
-    if (status === 'field') (c.field === 'occurred_on' ? dateRef : accountRef).current?.focus();
-    else if (status !== 'idle') primaryRef.current?.focus();
+    if (status === 'field' && c.field === 'category_id') {
+      // Kategori dilepas: fokus ke chip pertama (titik masuk roving tabindex).
+      chipsRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    } else if (status === 'field') {
+      (c.field === 'occurred_on' ? dateRef : accountRef).current?.focus();
+    } else if (status !== 'idle') primaryRef.current?.focus();
   }, [status, c.field]);
 
   /** Menutup di tengah simpan menghasilkan toast tanpa sheet: Esc dan Tutup ditahan (S6-C1). */
@@ -163,7 +171,7 @@ function CatatSession({
       action: {
         label: 'Urungkan',
         onAction: () => {
-          void source.undo(saved);
+          void undoOrNotify((x: typeof saved) => source.undo(x), saved, toast);
         },
       },
     });
@@ -176,7 +184,8 @@ function CatatSession({
   const missing = isTransfer
     ? draft.counterAccountId === undefined
     : draft.categoryId === undefined;
-  const showHint = hasAmount && missing;
+  // Galat kategori diarsipkan sudah menyebut langkahnya; petunjuk tidak diulang.
+  const showHint = hasAmount && missing && c.fieldCode !== 'category_archived';
 
   if (page === 'kategori') {
     return (
@@ -226,7 +235,7 @@ function CatatSession({
   }
 
   const primaryLabel =
-    status === 'galat'
+    status === 'galat' && c.galatKind !== 'not_found'
       ? CATAT_COPY.cobaLagi
       : status === 'saldo_kurang'
         ? CATAT_COPY.tetapSimpan
@@ -243,7 +252,12 @@ function CatatSession({
         : undefined;
   const saldoShown = status === 'saldo_kurang' && c.selectedAccount !== undefined;
   const describedBy =
-    [alertShown ? alertId : null, saldoShown ? saldoId : null, showHint ? hintId : null]
+    [
+      alertShown ? alertId : null,
+      c.switchFailed === null ? null : switchId,
+      saldoShown ? saldoId : null,
+      showHint ? hintId : null,
+    ]
       .filter((x) => x !== null)
       .join(' ') || undefined;
 
@@ -252,7 +266,7 @@ function CatatSession({
       {keypad === 'app' ? <AppKeypad value={draft.amount} onChange={c.setAmount} /> : null}
       {status === 'galat' ? (
         <CatatAlert id={alertId} tone="danger" compact={compact}>
-          {CATAT_COPY.galat}
+          {galatText(c.galatKind ?? 'network')}
         </CatatAlert>
       ) : null}
       {status === 'idem_mismatch' ? (
@@ -261,7 +275,7 @@ function CatatSession({
         </CatatAlert>
       ) : null}
       {c.switchFailed === null ? null : (
-        <CatatAlert id={alertId} tone="danger" compact={compact}>
+        <CatatAlert id={switchId} tone="danger" compact={compact}>
           {`Belum bisa pindah ke ${ruangLabel[c.switchFailed]}. Periksa koneksi lalu coba lagi.`}
         </CatatAlert>
       )}
@@ -325,8 +339,12 @@ function CatatSession({
       ? [c.selectedAccount]
       : []),
   ];
+  const categoryError =
+    status === 'field' && c.archivedCategory !== undefined
+      ? categoryArchivedText(c.archivedCategory.name)
+      : null;
   const fieldError =
-    status !== 'field' || c.selectedAccount === undefined
+    status !== 'field' || c.selectedAccount === undefined || c.fieldCode === 'category_archived'
       ? null
       : c.fieldCode === 'before_opening'
         ? beforeOpeningText(c.selectedAccount.name, c.selectedAccount.openedOn)
@@ -350,6 +368,7 @@ function CatatSession({
             title={title}
             open={menuOpen}
             describedBy={typeHintId}
+            busy={saving}
             onToggle={() => {
               setMenuOpen((o) => !o);
             }}
@@ -400,6 +419,7 @@ function CatatSession({
             inputRef={amountRef}
             value={draft.amount}
             onChange={c.setAmount}
+            readOnly={saving}
           />
           {isTransfer ? (
             <DestinationChips
@@ -415,11 +435,17 @@ function CatatSession({
                 value={draft.categoryId}
                 onChange={c.setCategory}
                 moreRef={moreRef}
+                busy={saving}
+                invalid={categoryError !== null}
+                describedBy={categoryError === null ? undefined : fieldErrorId}
                 onMore={() => {
                   setPage('kategori');
                 }}
               />
             </div>
+          )}
+          {categoryError === null ? null : (
+            <FieldErrorText id={fieldErrorId}>{categoryError}</FieldErrorText>
           )}
           {showHint ? (
             <p
@@ -440,6 +466,7 @@ function CatatSession({
               onChange={c.setAccount}
               options={accountOptions.map((a) => ({ value: a.id, label: a.name }))}
               selectRef={accountRef}
+              busy={saving}
               invalid={c.field === 'account_id'}
               describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
             />
@@ -451,6 +478,7 @@ function CatatSession({
               onChange={c.setDate}
               options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
               selectRef={dateRef}
+              busy={saving}
               invalid={c.field === 'occurred_on'}
               describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
             />
@@ -481,10 +509,12 @@ function CatatSession({
               autoComplete="off"
               placeholder="Contoh: kopi sore"
               value={draft.description ?? ''}
+              readOnly={saving || undefined}
+              aria-disabled={saving || undefined}
               onChange={(e) => {
                 c.setDescription(e.target.value);
               }}
-              className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus"
+              className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
             />
           </div>
         </form>

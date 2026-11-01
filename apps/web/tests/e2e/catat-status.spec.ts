@@ -87,6 +87,23 @@ test.describe('keadaan simpan 390', () => {
     // aria-disabled, bukan atribut disabled (R8): fokus tetap di tombol.
     await expect(busy).not.toHaveAttribute('disabled');
     await expect(busy).toBeFocused();
+    // Kolom lain terlihat tetapi nonaktif (aria-disabled), bukan disabled: fokus tidak hilang.
+    for (const field of [
+      sheet.getByLabel('Nominal', { exact: true }),
+      sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first(),
+      sheet.getByRole('button', { name: 'Kategori lain…' }),
+      sheet.getByLabel('Dari dompet'),
+      sheet.getByLabel('Tanggal'),
+      sheet.getByRole('button', { name: 'Pengeluaran · Pribadi' }),
+      sheet.getByPlaceholder('Contoh: kopi sore'),
+    ]) {
+      await expect(field).toHaveAttribute('aria-disabled', 'true');
+      await expect(field).not.toHaveAttribute('disabled');
+    }
+    await sheet.getByLabel('Nominal', { exact: true }).focus();
+    await page.keyboard.type('9');
+    await expect(sheet.getByLabel('Nominal', { exact: true })).toHaveValue('35.000');
+    await expect(sheet.getByLabel('Nominal', { exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(sheet).toBeVisible();
   });
@@ -128,5 +145,54 @@ test.describe('keadaan simpan 390', () => {
       'Belum ada dompet di Bersama. Tambah dompet dulu untuk mencatat.',
     );
     await expect(sheet.getByRole('button', { name: 'Tambah dompet' })).toBeFocused();
+  });
+});
+
+test.describe('galat tanpa bingkai sendiri 390', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('kategori diarsipkan: chip dilepas, fokus ke chip, teks galat di bawah kategori', async ({
+    page,
+  }) => {
+    await page.goto('/dev/ui#catat-s6');
+    await page.getByRole('button', { name: 'S6-C5 Kategori diarsipkan' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    const group = sheet.getByRole('radiogroup', { name: 'Kategori' });
+    const first = group.getByRole('radio').first();
+    const name = (await first.innerText()).trim();
+    await first.click();
+    await sheet.getByRole('button', { name: 'Simpan' }).click();
+    await expect(group).toHaveAttribute('aria-invalid', 'true');
+    await expect(group).toHaveAccessibleDescription(
+      `${name} sudah diarsipkan. Pilih kategori lain.`,
+    );
+    await expect(group.getByRole('radio', { name })).toHaveCount(0);
+    await expect(group.getByRole('radio', { checked: true })).toHaveCount(0);
+    await expect(group.getByRole('radio').first()).toBeFocused();
+  });
+
+  test('galat server: salinan server + Coba lagi', async ({ page }) => {
+    await page.goto('/dev/ui#catat-s6');
+    await page.getByRole('button', { name: 'Galat server' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first().click();
+    await sheet.getByRole('button', { name: 'Simpan' }).click();
+    await expect(sheet.getByRole('alert')).toHaveText(
+      'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.',
+    );
+    await expect(sheet.getByRole('button', { name: 'Coba lagi' })).toBeFocused();
+  });
+
+  test('data tidak ada: tanpa Coba lagi', async ({ page }) => {
+    await page.goto('/dev/ui#catat-s6');
+    await page.getByRole('button', { name: 'Data tidak ada' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first().click();
+    await sheet.getByRole('button', { name: 'Simpan' }).click();
+    await expect(sheet.getByRole('alert')).toHaveText(
+      'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.',
+    );
+    await expect(sheet.getByRole('button', { name: 'Coba lagi' })).toHaveCount(0);
+    await expect(sheet.getByRole('button', { name: /^Simpan/ })).toBeDisabled();
   });
 });

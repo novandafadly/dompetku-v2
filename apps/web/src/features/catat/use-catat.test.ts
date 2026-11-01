@@ -438,3 +438,172 @@ describe('useCatat keadaan simpan', () => {
     expect(result.current.draft.amount).toBe(35_000);
   });
 });
+
+describe('useCatat perbaikan review', () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('switchRuang async lalu setType sebelum options tiba → chips mengikuti jenis terbaru', async () => {
+    const pending = deferred<CatatOptions>();
+    const bersama: CatatOptions = {
+      accounts: OPTIONS.bersama.accounts,
+      categories: [cat('b-dapur', 'Dapur'), cat('b-bonus', 'Bonus', 'income')],
+    };
+    const chips = vi.fn((r: Ruang, type: 'income' | 'expense') =>
+      (r === 'bersama' ? bersama : OPTIONS[r]).categories.filter((c) => c.type === type),
+    );
+    const source = fakeSource(() => Promise.resolve(OK), {
+      options: vi.fn((r: Ruang) => (r === 'pribadi' ? OPTIONS.pribadi : pending.promise)),
+      chips,
+    });
+    const { result } = render(source);
+    act(() => {
+      result.current.switchRuang('bersama');
+    });
+    act(() => {
+      result.current.setType('income');
+    });
+    await act(async () => {
+      pending.resolve(bersama);
+      await pending.promise;
+    });
+    expect(chips).toHaveBeenLastCalledWith('bersama', 'income', 12);
+    expect(result.current.chips.map((c) => c.id)).toEqual(['b-bonus']);
+    expect(result.current.draft.type).toBe('income');
+  });
+
+  it('jawaban basi diabaikan: A→B menunggu, B→A, lalu B tiba terlambat', async () => {
+    const pending = deferred<CatatOptions>();
+    const source = fakeSource(() => Promise.resolve(OK), {
+      options: vi.fn((r: Ruang) => (r === 'pribadi' ? OPTIONS.pribadi : pending.promise)),
+    });
+    const { result } = render(source);
+    act(() => {
+      result.current.switchRuang('bersama');
+    });
+    act(() => {
+      result.current.switchRuang('pribadi');
+    });
+    await act(async () => {
+      pending.resolve(OPTIONS.bersama);
+      await pending.promise;
+    });
+    expect(result.current.draft).toMatchObject({ ruang: 'pribadi', accountId: 'p-bca' });
+    expect(result.current.accounts.map((a) => a.id)).toEqual(['p-bca', 'p-tunai']);
+    expect(result.current.chips.every((c) => c.id.startsWith('p-'))).toBe(true);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('pindah ruang gagal: hanya ruang, dompet, clientId yang dipulihkan; suntingan lain tetap', async () => {
+    const pending = deferred<CatatOptions>();
+    const source = fakeSource(() => Promise.resolve(OK), {
+      options: vi.fn((r: Ruang) => (r === 'pribadi' ? OPTIONS.pribadi : pending.promise)),
+    });
+    const { result } = render(source);
+    act(() => {
+      result.current.setAccount('p-tunai');
+    });
+    const before = result.current.draft;
+    act(() => {
+      result.current.switchRuang('bersama');
+    });
+    act(() => {
+      result.current.setAmount(77_000);
+      result.current.setDescription('sore');
+    });
+    await act(async () => {
+      pending.reject(new Error('network'));
+      await pending.promise.catch(() => undefined);
+    });
+    const d = result.current.draft;
+    expect(d).toMatchObject({
+      ruang: 'pribadi',
+      accountId: 'p-tunai',
+      clientId: before.clientId,
+      amount: 77_000,
+      description: 'sore',
+    });
+    expect(result.current.switchFailed).toBe('bersama');
+    expect(result.current.loading).toBe(false);
+    expect(result.current.accounts.map((a) => a.id)).toEqual(['p-bca', 'p-tunai']);
+  });
+
+  it('setType menghapus saldo_kurang', async () => {
+    const source = fakeSource(() => Promise.resolve({ ok: false, code: 'saldo_negatif' }));
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.status).toBe('saldo_kurang');
+    act(() => {
+      result.current.setType('income');
+    });
+    expect(result.current.status).toBe('idle');
+  });
+
+  it("category_archived → field 'category_id', kategori dilepas dan hilang dari chip", async () => {
+    const source = fakeSource(() => Promise.resolve({ ok: false, code: 'category_archived' }));
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.status).toBe('field');
+    expect(result.current.field).toBe('category_id');
+    expect(result.current.archivedCategory?.name).toBe('Makan');
+    expect(result.current.draft.categoryId).toBeUndefined();
+    expect(result.current.chips.map((c) => c.id)).not.toContain('p-makan');
+    expect(result.current.allCategories.map((c) => c.id)).not.toContain('p-makan');
+    act(() => {
+      result.current.setCategory('p-kopi');
+    });
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('not_found → galat tanpa Coba lagi', async () => {
+    const source = fakeSource(() => Promise.resolve({ ok: false, code: 'not_found' }));
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.status).toBe('galat');
+    expect(result.current.galatKind).toBe('not_found');
+    expect(result.current.canSave).toBe(false);
+    await act(async () => {
+      expect(await result.current.retry()).toBeNull();
+    });
+    expect(source.save).toHaveBeenCalledTimes(1);
+  });
+
+  for (const code of ['unknown', 'invalid', 'conflict'] as const) {
+    it(`${code} → galat server; Coba lagi memakai clientId sama`, async () => {
+      const source = fakeSource(() => Promise.resolve({ ok: false, code }));
+      const { result } = render(source);
+      const id0 = result.current.draft.clientId;
+      await act(async () => {
+        await result.current.save();
+      });
+      expect(result.current.status).toBe('galat');
+      expect(result.current.galatKind).toBe('server');
+      await act(async () => {
+        await result.current.retry();
+      });
+      expect(source.save.mock.calls[1]?.[0].clientId).toBe(id0);
+    });
+  }
+
+  it('network → galat jaringan', async () => {
+    const source = fakeSource(() => Promise.resolve({ ok: false, code: 'network' }));
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.galatKind).toBe('network');
+  });
+});
