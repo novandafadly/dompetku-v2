@@ -1,0 +1,118 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toLedgerError } from './errors';
+import { SpaceNotFoundError } from './space';
+
+/** Bentuk galat `pg` (DatabaseError): code = SQLSTATE, message, detail opsional. */
+function pgError(code: string, message: string, detail?: string): Error {
+  return Object.assign(new Error(message), { code, detail });
+}
+
+describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['saldo_negatif'],
+    ['before_opening'],
+    ['account_archived'],
+    ['category_archived'],
+    ['restore_window_closed'],
+  ] as const)('DK422 %s = kode sama', (rule) => {
+    expect(toLedgerError({ code: 'DK422', message: rule })).toEqual({ code: rule });
+  });
+
+  it('DK409 = conflict, DK410 = idem_mismatch, DK404 = not_found', () => {
+    expect(toLedgerError(pgError('DK409', 'version_conflict'))).toEqual({ code: 'conflict' });
+    expect(toLedgerError(pgError('DK410', 'idempotency_mismatch'))).toEqual({
+      code: 'idem_mismatch',
+    });
+    expect(toLedgerError(pgError('DK404', 'entry_not_found'))).toEqual({ code: 'not_found' });
+  });
+
+  it('DK400 membawa field dari detail', () => {
+    expect(
+      toLedgerError({ code: 'DK400', message: 'invalid_argument', detail: 'occurred_on' }),
+    ).toEqual({ code: 'invalid', field: 'occurred_on' });
+    expect(toLedgerError(pgError('DK400', 'invalid_argument'))).toEqual({ code: 'invalid' });
+  });
+
+  it('DK400 dengan detail bukan nama field: field dibuang', () => {
+    expect(toLedgerError(pgError('DK400', 'invalid_argument', 'Rp 50.000 makan siang'))).toEqual({
+      code: 'invalid',
+    });
+  });
+
+  it('DK401, DK500, DK422 lain, dan 23505 = unknown, dilog tanpa detail', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const secret = 'Rp 12.345.678 deskripsi rahasia';
+    expect(toLedgerError(pgError('DK401', 'unauthenticated', secret))).toEqual({ code: 'unknown' });
+    expect(toLedgerError(pgError('DK500', 'invariant_broken', secret))).toEqual({
+      code: 'unknown',
+    });
+    expect(toLedgerError(pgError('DK422', 'space_mismatch', secret))).toEqual({ code: 'unknown' });
+    expect(toLedgerError(pgError('23505', 'duplicate key value', `Key (x)=(${secret})`))).toEqual({
+      code: 'unknown',
+    });
+    expect(log).toHaveBeenCalledTimes(4);
+    const logged = JSON.stringify(log.mock.calls);
+    expect(logged).toContain('DK401');
+    expect(logged).toContain('space_mismatch');
+    expect(logged).not.toContain('Rp');
+    expect(logged).not.toContain('rahasia');
+  });
+
+  it('pesan domain yang bukan kode mesin tidak ikut dilog', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK500', 'saldo 50000 untuk makan siang'))).toEqual({
+      code: 'unknown',
+    });
+    const logged = JSON.stringify(log.mock.calls);
+    expect(logged).toContain('DK500');
+    expect(logged).not.toContain('50000');
+    expect(logged).not.toContain('makan');
+  });
+
+  it('SpaceNotFoundError (resolveSpace) = not_found', () => {
+    expect(toLedgerError(new SpaceNotFoundError())).toEqual({ code: 'not_found' });
+  });
+});
+
+describe('toLedgerError: jaringan', () => {
+  it.each(['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET'])('%s = network', (code) => {
+    expect(toLedgerError(Object.assign(new Error(`connect ${code}`), { code }))).toEqual({
+      code: 'network',
+    });
+  });
+
+  it('pool habis / koneksi putus (pesan pg-pool) = network', () => {
+    expect(toLedgerError(new Error('timeout exceeded when trying to connect'))).toEqual({
+      code: 'network',
+    });
+    expect(toLedgerError(new Error('Connection terminated unexpectedly'))).toEqual({
+      code: 'network',
+    });
+    expect(toLedgerError(new Error('Connection terminated due to connection timeout'))).toEqual({
+      code: 'network',
+    });
+  });
+
+  it('SQLSTATE kelas 08 dan server dimatikan (57P01..57P03) = network', () => {
+    expect(toLedgerError(pgError('08006', 'connection failure'))).toEqual({ code: 'network' });
+    expect(toLedgerError(pgError('57P01', 'terminating connection'))).toEqual({ code: 'network' });
+  });
+});
+
+describe('toLedgerError: bukan galat domain = null (pemanggil melempar ulang)', () => {
+  it.each([
+    ['TypeError', new TypeError('x is undefined')],
+    ['izin ditolak 42501', pgError('42501', 'permission denied for table entries')],
+    ['serialisasi habis 40001', pgError('40001', 'could not serialize access')],
+    ['string', 'boom'],
+    ['null', null],
+    ['undefined', undefined],
+    ['objek tanpa code', { message: 'x' }],
+  ])('%s', (_name, e) => {
+    expect(toLedgerError(e)).toBeNull();
+  });
+});
