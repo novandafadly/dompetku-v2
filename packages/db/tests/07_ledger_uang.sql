@@ -10,11 +10,11 @@ select tests.clock_at('2026-03-20 10:00+07');
 select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'personal') as fp,
        tests.space_id(tests.n(), 'shared') as sh \gset
 
--- Kategori dibuat owner (api kategori menyusul di S6).
+-- Kategori dibuat owner; Gaji = kategori awal ruang Pribadi (0106).
 select tests.owner_val(null, format($$insert into app.categories (space_id, type, name, icon)
   values (%L, 'expense', 'Makan', 'ForkKnife') returning id$$, :'np')) as makan \gset
-select tests.owner_val(null, format($$insert into app.categories (space_id, type, name, icon)
-  values (%L, 'income', 'Gaji', 'Money') returning id$$, :'np')) as gaji \gset
+select tests.owner_val(null, format($$select id from app.categories
+  where space_id = %L and type = 'income' and name = 'Gaji'$$, :'np')) as gaji \gset
 select tests.owner_val(null, format($$insert into app.categories (space_id, type, name, icon)
   values (%L, 'expense', 'Belanja', 'Basket') returning id$$, :'sh')) as belanja \gset
 

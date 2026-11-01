@@ -19,6 +19,12 @@ export default async function globalSetup(): Promise<void> {
     delete from app.product_events;
     delete from app.idempotency_keys;
     delete from app.invitations;
+    delete from app.entry_lines;
+    delete from app.entry_history;
+    delete from app.entries;
+    delete from app.entry_tombstones;
+    delete from app.accounts;
+    delete from app.categories;
     delete from app.space_members;
     delete from app.profiles;
     delete from app.spaces;

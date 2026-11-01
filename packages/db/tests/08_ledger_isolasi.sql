@@ -3,7 +3,7 @@
 -- dengan id pasangan = DK404; tanpa konteks = 0 baris / DK401; Bersama tidak pernah membuka data
 -- Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
 begin;
-select plan(143);
+select plan(150);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -134,6 +134,9 @@ from (values
   ('purge_entry', format($q$select api.purge_entry(%L, 2)$q$, :'nv')),
   ('reconcile_balance', format($q$select api.reconcile_balance(gen_random_uuid(), %L, 0)$q$, :'bca')),
   ('archive_account', format($q$select api.archive_account(%L)$q$, :'bca')),
+  ('create_category', format($q$select api.create_category(gen_random_uuid(), %L, 'expense', 'Y', 'X')$q$, :'np')),
+  ('update_category', format($q$select api.update_category(%L, 'Y', 'X', null)$q$, :'ncat')),
+  ('archive_category', format($q$select api.archive_category(%L)$q$, :'ncat')),
   ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'np')),
   ('period_summary', format($q$select api.period_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'np')),
@@ -143,6 +146,8 @@ from (values
 ) v (t, q);
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
+select is(tests.web_val(tests.n(), format($$select count(*) from app.categories where id = %L and name = 'Makan' and archived_at is null$$, :'ncat')), '1',
+  'kategori N tidak tersentuh');
 
 -- Tanpa konteks: fungsi tulis dan baca = DK401.
 select throws_ok(format($$select tests.web_exec(null, %L)$$, q), 'DK401', 'unauthenticated', 'tanpa konteks = DK401: ' || t)
@@ -156,6 +161,9 @@ from (values
   ('purge_entry', format($q$select api.purge_entry(%L, 2)$q$, :'nv')),
   ('reconcile_balance', format($q$select api.reconcile_balance(gen_random_uuid(), %L, 0)$q$, :'kas')),
   ('archive_account', format($q$select api.archive_account(%L)$q$, :'kas')),
+  ('create_category', format($q$select api.create_category(gen_random_uuid(), %L, 'expense', 'Y', 'X')$q$, :'sh')),
+  ('update_category', format($q$select api.update_category(%L, 'Y', 'X', null)$q$, :'ncat')),
+  ('archive_category', format($q$select api.archive_category(%L)$q$, :'ncat')),
   ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'sh')),
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),

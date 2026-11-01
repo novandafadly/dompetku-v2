@@ -1,7 +1,7 @@
 -- Isolasi wajib READ COMMITTED (BSD §3, §13 #23): penjaga batas user dan undangan hanya benar
--- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4 dan S5 harus menolak.
+-- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4, S5, dan S6 harus menolak.
 begin isolation level repeatable read;
-select plan(17);
+select plan(20);
 
 select throws_ok(q, 'DK500', 'isolation_not_read_committed', 'REPEATABLE READ ditolak: ' || t)
 from (values
@@ -21,7 +21,10 @@ from (values
   ('restore_entry', $$select tests.web_exec(tests.n(), $q$select api.restore_entry(gen_random_uuid(), gen_random_uuid(), 1)$q$)$$),
   ('purge_entry', $$select tests.web_exec(tests.n(), $q$select api.purge_entry(gen_random_uuid(), 1)$q$)$$),
   ('reconcile_balance', $$select tests.web_exec(tests.n(), $q$select api.reconcile_balance(gen_random_uuid(), gen_random_uuid(), 0)$q$)$$),
-  ('archive_account', $$select tests.web_exec(tests.n(), $q$select api.archive_account(gen_random_uuid())$q$)$$)
+  ('archive_account', $$select tests.web_exec(tests.n(), $q$select api.archive_account(gen_random_uuid())$q$)$$),
+  ('create_category', $$select tests.web_exec(tests.n(), $q$select api.create_category(gen_random_uuid(), gen_random_uuid(), 'expense', 'X', 'X')$q$)$$),
+  ('update_category', $$select tests.web_exec(tests.n(), $q$select api.update_category(gen_random_uuid(), 'X', 'X', null)$q$)$$),
+  ('archive_category', $$select tests.web_exec(tests.n(), $q$select api.archive_category(gen_random_uuid())$q$)$$)
 ) v (t, q);
 
 select * from finish();
