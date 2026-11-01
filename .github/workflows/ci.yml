@@ -116,8 +116,91 @@ jobs:
           shellcheck --severity=warning "${scripts[@]}"
       - run: bash infra/db-vm/deploy/test/deploy-test.sh
 
-  # TODO(S2): job pgTAP (Postgres 17 service, dbmate up, pg_prove) setelah packages/db punya tes
-  # pgTAP; saat ini packages/db hanya berisi migrasi dan role (TRD §5 butir 1).
+  db:
+    # pgTAP (TRD §5 butir 1, BSD §13): role BSD, dbmate up, pg_prove sebagai dompetku_test (bukan
+    # superuser), lalu semua migrasi selain 0001 di-rollback dan diterapkan ulang: skema harus
+    # identik dan tes tetap hijau. Cluster sekali pakai tanpa port host; semua lewat docker exec.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        # Image dasar yang sama dengan image VM (infra/db-vm/postgres/Dockerfile); digest = indeks
+        # multi-arch, jadi runner amd64 memakai varian amd64 dari rilis 17.11 yang sama.
+        image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+        env:
+          # Tanpa password: cluster CI sekali pakai, tidak dipublikasikan ke host.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # Sama dengan service migrate di infra/db-vm/compose.yml.
+      DBMATE_IMAGE: ghcr.io/amacneil/dbmate:2.36.0@sha256:520c740c6e0ad73fde2cd1ea7e2b779aaf789d22aca8858f87a478e7094535fb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Container Postgres
+        env:
+          PG_ID: ${{ job.services.postgres.id }}
+        run: echo "PG=$PG_ID" >> "$GITHUB_ENV"
+      - name: Pasang pgTAP dan pg_prove (PGDG/Debian, versi dipatok)
+        # pgTAP sama dengan image VM (runbook S2: 1.3.4). PGDG hanya menyimpan versi terbaru:
+        # bila 1.3.4 hilang dari repo, naikkan pin ini bersama image VM.
+        run: |
+          docker exec "$PG" sh -euc '
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends \
+              "postgresql-17-pgtap=1.3.4-*" "libtap-parser-sourcehandler-pgtap-perl=3.36-*" >/dev/null
+            dpkg-query -W postgresql-17-pgtap libtap-parser-sourcehandler-pgtap-perl
+            psql -U postgres -Atc "select version()"'
+      - name: Role BSD dan salin berkas DB
+        run: |
+          docker cp packages/db "$PG:/db"
+          docker exec "$PG" psql -U postgres -v ON_ERROR_STOP=1 -q -d postgres -f /db/roles/00_roles.sql
+      - name: dbmate up
+        run: |
+          docker run --rm --network "container:$PG" -v "$GITHUB_WORKSPACE/packages/db/migrations:/db/migrations:ro" \
+            -e DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable' \
+            -e DBMATE_MIGRATIONS_DIR=/db/migrations -e DBMATE_NO_DUMP_SCHEMA=true \
+            "$DBMATE_IMAGE" --wait up
+      - name: pg_prove
+        run: |
+          docker exec "$PG" psql -U postgres -v ON_ERROR_STOP=1 -q -d dompetku -f /db/tests/support/setup.sql
+          # Dump pembanding diambil sesudah setup.sql agar ekstensi pgtap ada di kedua dump.
+          docker exec "$PG" pg_dump -U postgres -s -N tap -N tests dompetku \
+            | grep -v '^\\\(un\)\?restrict' >"$RUNNER_TEMP/schema-1.sql"
+          docker exec "$PG" sh -c 'pg_prove -U dompetku_test -d dompetku /db/tests/*.sql'
+      - name: dbmate rollback semua lalu up lagi
+        run: |
+          dbmate() {
+            docker run --rm --network "container:$PG" -v "$GITHUB_WORKSPACE/packages/db/migrations:/db/migrations:ro" \
+              -e DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable' \
+              -e DBMATE_MIGRATIONS_DIR=/db/migrations -e DBMATE_NO_DUMP_SCHEMA=true \
+              "$DBMATE_IMAGE" "$@"
+          }
+          setenv() {
+            docker exec "$PG" psql -U postgres -d dompetku -v ON_ERROR_STOP=1 -qc \
+              "update app.settings set value = '$1' where key = 'env'"
+          }
+          # Blok down ditolak selama env = prod (bawaan 0001, nilai di VM).
+          if dbmate rollback; then echo "rollback lolos padahal env = prod"; exit 1; fi
+          # 0001 maju-saja (blok down kosong); semua migrasi sesudahnya wajib bisa di-rollback.
+          setenv dev
+          n=$(($(find packages/db/migrations -name '*.sql' | wc -l) - 1))
+          for _ in $(seq "$n"); do dbmate rollback; done
+          left=$(docker exec "$PG" psql -U postgres -d dompetku -Atc \
+            "select count(*) from pg_class c join pg_namespace s on s.oid = c.relnamespace
+             where s.nspname in ('app','api','private','jobs','audit','auth') and c.relkind in ('r','v','m')")
+          test "$left" = 1 || { echo "sisa relasi setelah rollback: $left (harus hanya app.settings)"; exit 1; }
+          dbmate up
+          setenv prod
+          docker exec "$PG" pg_dump -U postgres -s -N tap -N tests dompetku \
+            | grep -v '^\\\(un\)\?restrict' >"$RUNNER_TEMP/schema-2.sql"
+          diff -u "$RUNNER_TEMP/schema-1.sql" "$RUNNER_TEMP/schema-2.sql"
+          docker exec "$PG" sh -c 'pg_prove -U dompetku_test -d dompetku /db/tests/*.sql'
 
   image:
     # Dockerfile tetap bisa dibangun dan lolos Trivy sebelum merge; tanpa push.

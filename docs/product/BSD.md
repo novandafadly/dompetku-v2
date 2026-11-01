@@ -633,7 +633,7 @@ create table audit.events (
              check (jsonb_typeof(meta) = 'object'
                     and meta - array['count', 'reason', 'method', 'op', 'job', 'status', 'via',
                                      'target', 'amr'] = '{}'::jsonb
-                    and not jsonb_path_exists(meta, '$.* ? (@.type() == "object" || @.type() == "array")')
+                    and not jsonb_path_exists(meta, 'strict $.* ? (@.type() == "object" || @.type() == "array")')
                     and length(meta::text) <= 1024)
 );
 create index on audit.events (user_id, at desc);
@@ -2717,3 +2717,14 @@ Temuan review backend dan security (`docs/product/review/`) diterapkan, kecuali:
 - Backend Minor (akun aset tidak boleh negatif): tidak mengubah perilaku. `tabungan` boleh negatif dengan konfirmasi seperti dompet lain; aturan spec §9.1 dibaca untuk tabel aset M4 (§9.1).
 - Backend Penting (konsumsi undangan lewat trigger `BEFORE INSERT` di `auth."user"`): arah diambil sebagian. Trigger menegakkan pendaftaran tertutup dan batas user, tetapi undangan baru terpakai di `api.accept_invitation` setelah akun diamankan (keputusan pemilik #3). User setengah jadi tidak memakan kuota dan dihapus setelah 72 jam, sehingga kasus salah ketik email tidak lagi mengunci rumah tangga.
 - Batas user paralel: dijaga advisory lock `dompetku.user_cap` di READ COMMITTED (trigger dan provisioning). Uji dua koneksi untuk pendaftaran paralel tidak dijalankan di `bsd-check` karena hanya ada satu undangan terbuka per rumah tangga; masuk tes Vitest dua koneksi M0b.
+
+**Catatan review S4 (2026-11-01):** CHECK `audit.events.meta` (§6) memakai jsonpath `strict`; mode lax membuka array sehingga `{"reason": [1]}` lolos (temuan pgTAP S4, diputuskan atas nama pemilik).
+
+Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-11-01; migrasi `packages/db/migrations` adalah sumbernya):
+
+- §11/§12: `dompetku_auditlog` diberi SELECT/INSERT/UPDATE/DELETE di semua tabel `app`, `audit`, `auth`, plus default privileges owner untuk tabel baru di ketiga skema (termasuk tabel Better Auth).
+- §5/§10: `owner_email` dibandingkan sebagai `lower(btrim(value))` di `tg_user_admission` dan `provision_user`.
+- §10: `audit.log` (plpgsql) menolak event sistem (`space_member_change`, `unfinished_user_purged`, `entry_purged`, `purge_voided`, `db_manual_access`, `deploy`) dengan `DK422 audit_event_reserved` untuk semua pemanggil; event itu hanya ditulis langsung oleh fungsi DEFINER atau owner.
+- §10: `jobs.purge_unfinished_users` memanggil `private.require_read_committed()` sebelum kunci `dompetku.user_cap`.
+- §5: trigger `user_email_immutable` (`BEFORE UPDATE OF email` di `auth."user"`) menolak ganti email (`DK422 email_immutable`); `changeEmail` Better Auth tetap mati.
+- §12: blok `migrate:down` 0002 sampai 0008 ditolak (`DK500 migrate_down_blocked_prod`) selama `app.settings.env = 'prod'`.
