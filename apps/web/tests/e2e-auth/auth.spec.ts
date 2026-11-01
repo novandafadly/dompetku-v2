@@ -213,6 +213,14 @@ test('pasangan: terima, buat akun, amankan dengan TOTP (kode salah lalu benar)',
   await page.getByRole('button', { name: 'Buat akun' }).click();
   await expect(page).toHaveURL(/\/amankan$/);
 
+  // Sesi kata sandi saja: request RSC langsung ke page ruang tetap dialihkan, tanpa isi page.
+  for (const path of ['/pribadi/beranda', '/bersama/transaksi', '/pribadi/dompet']) {
+    const rsc = await page.request.get(path, { headers: { RSC: '1' } });
+    const location = rsc.headers()['location'] ?? '';
+    const body = await rsc.text();
+    expect(location + body).toContain('/amankan');
+  }
+
   await page.getByRole('button', { name: 'Pakai aplikasi autentikator' }).click();
   await page.getByLabel('Kata sandi', { exact: true }).fill('salah-salah-salah');
   await page.getByRole('button', { name: 'Lanjut' }).click();
@@ -270,7 +278,8 @@ test('pemilik: keluar lalu masuk dengan passkey', async () => {
   await page.getByLabel('Email').fill(OWNER);
   await page.getByLabel('Kata sandi', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Masuk', exact: true }).click();
-  await expect(page.getByText('Akun ini sudah memakai passkey.')).toBeVisible();
+  // Respons sama dengan kata sandi salah: tidak mengonfirmasi kata sandi akun berpasskey.
+  await expect(page.getByText('Email atau kata sandi salah.')).toBeVisible();
   await page.getByRole('button', { name: 'Masuk dengan passkey' }).click();
   await expect(page).toHaveURL(/\/pribadi\/beranda$/);
 });
@@ -333,12 +342,14 @@ test('lupa kata sandi: respons seragam, tautan, kata sandi baru', async ({ brows
 });
 
 // Terakhir: jeda berlaku per IP juga, dan semua request tes datang dari IP yang sama.
-test('5 kata sandi salah: jeda dengan waktu tunggu', async ({ browser }) => {
+test('5 kata sandi salah dengan X-Forwarded-For palsu: tetap dijeda', async ({ browser }) => {
   const page = await (await browser.newContext()).newPage();
   await page.goto('/masuk');
   for (let i = 0; i < 5; i++) {
     // Email tak terdaftar: penghitung dan pesannya sama dengan akun yang ada.
     await page.getByLabel('Email').fill('tamu@example.test');
+    // X-Forwarded-For palsu berganti tiap percobaan: jeda per akun tetap berlaku.
+    await page.context().setExtraHTTPHeaders({ 'x-forwarded-for': `203.0.113.${String(i + 1)}` });
     await page.getByLabel('Kata sandi', { exact: true }).fill(`salah-sekali-${String(i)}-xx`);
     await page.getByRole('button', { name: 'Masuk', exact: true }).click();
     if (i < 4) await expect(page.getByText('Email atau kata sandi salah.')).toBeVisible();

@@ -13,7 +13,7 @@ Kode: `apps/web/src/server/auth/` (Better Auth 1.7.12, ADR 0007). Migrasi: `pack
 | `RESEND_API_KEY`     | wajib di produksi; tanpa ini web gagal di request auth pertama                                               |
 | `AUTH_EMAIL_FROM`    | opsional, bawaan `DompetKu <dompet@novandafadly.com>`; domain harus terverifikasi di Resend                  |
 
-Jangan isi `NEXT_PUBLIC_PROTOTYPE`, `AUTH_EMAIL_LOG`, `AUTH_EMAIL_FILE`, atau `AUTH_CHECK_PWNED=0` di produksi. Web butuh egress HTTPS ke `api.resend.com` dan `api.pwnedpasswords.com` (network `app`).
+Jangan isi `NEXT_PUBLIC_PROTOTYPE` atau `AUTH_CHECK_PWNED=0` di produksi. `AUTH_EMAIL_LOG` dan `AUTH_EMAIL_FILE` ditolak saat start bila `BETTER_AUTH_URL` bukan localhost. Web butuh egress HTTPS ke `api.resend.com` dan `api.pwnedpasswords.com` (network `app`).
 
 Validasi terjadi saat request auth pertama, bukan saat start (healthcheck `/api/health` tetap hijau): setelah deploy, buka `/masuk` sekali dan pastikan bukan halaman galat.
 
@@ -33,7 +33,10 @@ Validasi terjadi saat request auth pertama, bukan saat start (healthcheck `/api/
 
 - Tidak ada `/api/auth/*`: semua lewat Server Action. Edge tidak perlu aturan khusus.
 - IP klien = nilai pertama `X-Forwarded-For` (edge menimpanya). Tanpa header itu, jeda hanya per akun.
-- Tautan undangan membawa token di query (`/terima-undangan?t=`). Jangan simpan query string di log akses edge untuk rute ini.
+- Tautan undangan, reset, dan konfirmasi email membawa token di query. Edge memakai `log_format dompetku_tanpa_query` (`infra/app-vm/nginx/dompetku.conf`, `$uri` tanpa query). **Sesi VM:** salin konfigurasi baru ke `/etc/nginx/sites-available/dompetku`, `sudo nginx -t && sudo systemctl reload nginx`. Error log nginx tetap bisa memuat baris request lengkap; jangan teruskan error log ke luar VM tanpa penyaringan.
+- Faktor terikat sesi: passkey yang didaftarkan di `/amankan` hanya menaikkan sesi yang mendaftarkannya; sesi lain user dicabut saat faktor atau kode pemulihan ditambahkan, dan token sesi diganti saat `/amankan` selesai.
+- Batas laju per IP: intip/tolak undangan 20 per 10 menit, opsi passkey masuk 30 per 10 menit, kirim ulang email konfirmasi 5 per jam (per IP dan per user). Penghitung ada di `auth.login_throttle` (kunci hash).
+- Email (reset, konfirmasi, pemberitahuan) dikirim di latar: respons tidak menunggu Resend. Gagal kirim hanya tercatat di log web (`[auth] tugas latar gagal`).
 - Jeda gagal: 5/10/20 gagal = 1 menit/15 menit/1 jam per IP dan per akun, hilang 24 jam setelah gagal terakhir. Membuka paksa: `delete from auth.login_throttle;` sebagai owner (tidak bisa per email karena kunci di-hash).
 - Akun terkunci dari faktor (HP hilang, kode pemulihan hilang): tidak ada jalur di aplikasi. Pemulihan manual = hapus faktor di DB lewat `dompetku-psql` setelah verifikasi langsung, lalu pengguna masuk dengan kata sandi dan mendaftar ulang di `/amankan`.
 - Akun setengah jadi (daftar tanpa selesai /amankan) dihapus `jobs.purge_unfinished_users` setelah 72 jam (worker S5); sampai worker ada, hapus manual bila perlu.
