@@ -18,7 +18,7 @@ Aplikasi keuangan pribadi + bersama untuk Novanda dan Farida. Repo private, juga
 
 - Spec induk (disetujui): `docs/superpowers/specs/2026-10-29-dompetku-v2-design.md` (§9 = keputusan tim, §9.4 milestone).
 - Spec turunan: `docs/spec/{design,ui-ux,frontend}.md` (ui-ux Lampiran A digantikan ADR 0005, lalu ADR 0006).
-- ADR: `docs/adr/` (0001 stack, 0002 budget JS 162 kB, 0003 pratinjau Vercel, 0005 gelap premium (digantikan), 0006 Panel Malam, 0004 hasil penilaian M0a (lulus).
+- ADR: `docs/adr/` (0001 stack, 0002 budget JS 162 kB, 0003 pratinjau Vercel, 0005 gelap premium (digantikan), 0006 Panel Malam, 0004 hasil penilaian M0a (lulus), 0007 Better Auth 1.7.12.
 - Keputusan yang diambil agen atas nama pemilik selama M0a: `docs/m0a-keputusan.md`.
 - Tim produk (riset awal): `docs/team/`.
 

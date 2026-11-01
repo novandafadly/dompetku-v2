@@ -87,6 +87,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m
+    # S4: CA DompetKu untuk DATABASE_URL sslmode=verify-full (docs/ops/auth.md).
+    volumes:
+      - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro
     user: '65532:65532'
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']

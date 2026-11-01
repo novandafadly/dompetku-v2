@@ -14,6 +14,8 @@ Skema Postgres DompetKu: role (`roles/`), migrasi dbmate (`migrations/`), dan te
 | `0006_provisioning_audit_job.sql` | §10: `private.provision_user`, `audit.log`, `jobs.purge_unfinished_users`, `jobs.purge_audit`                                                                           |
 | `0007_api_undangan.sql`           | §9.3: `api.bootstrap_owner`, `create/revoke/resend/decline/accept_invitation`, `invitation_peek`                                                                        |
 | `0008_rls_hak.sql`                | §11: RLS ENABLE + FORCE, policy, hak tabel, EXECUTE                                                                                                                     |
+| `0009_better_auth.sql`            | §5, ADR 0007: kolom `twoFactorEnabled` + CHECK email di `auth."user"`, tabel `session` (`amr`), `account`, `verification`, `twoFactor`, `passkey`, `login_throttle`     |
+| `0010_api_daftar_undangan.sql`    | `api.list_invitations()` untuk layar Undangan tertunda (web tidak bisa membaca `app.invitations`)                                                                       |
 
 Isi fungsi dan tabel disalin persis dari BSD. Tabel ledger (`accounts`, `categories`, `entries`, ...), enum ledger, view laporan, `jobs.job_runs`, dan fungsi ledger menyusul di S5. `idempotency_keys` masuk S4 karena `jobs.purge_unfinished_users` menghapus barisnya.
 
@@ -27,7 +29,7 @@ Aturan file baru (BSD §12):
 
 BSD memasang FK nyata dari tabel domain dan trigger `user_admission` ke `auth."user"`, padahal tabel itu milik Better Auth. Dipilih: **`auth."user"` dibuat di `0002` dengan kolom inti Better Auth** (bentuk stub `bsd-check`, id `uuid`), bukan menunda FK. Alasannya FK dan trigger aktif dan teruji sejak S4 tanpa jendela tanpa pagar.
 
-Akibatnya untuk migrasi Better Auth (S4 sisi server):
+Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0007):
 
 - File hasil generator **tidak boleh** `create table "user"`. Kolom plugin ditambah lewat `alter table auth."user" add column ...` (mis. `"twoFactorEnabled"`).
 - Tabel `session`, `account`, `verification`, `passkey`, `twoFactor` dibuat di skema `auth` dengan id dan FK `uuid` ke `auth."user" (id) on delete cascade` (dibutuhkan `jobs.purge_unfinished_users`). Hak `dompetku_web` ikut otomatis lewat default privileges dari `0003`.
@@ -68,3 +70,15 @@ DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable'
 psql -U postgres -d dompetku -f packages/db/tests/support/setup.sql
 pg_prove -U dompetku_test -d dompetku packages/db/tests/*.sql
 ```
+
+## Tes integrasi auth
+
+`apps/web` punya tes Vitest terhadap Postgres sungguhan (`src/server/auth/__int__/`) dan e2e Playwright mode nyata (`tests/e2e-auth/`). Lokal, setelah `dbmate up` di cluster sekali pakai:
+
+```bash
+TEST_DATABASE_URL='postgres://dompetku_web@127.0.0.1:5432/dompetku' \
+TEST_DATABASE_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku' \
+  pnpm --filter @dompetku/web test:int
+```
+
+Tes mengosongkan data (sebagai superuser) dan memasang `owner_email` sendiri; jangan arahkan ke DB yang dipakai. Langkah operasi: `docs/ops/auth.md`.
