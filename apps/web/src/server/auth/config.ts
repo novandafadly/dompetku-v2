@@ -96,6 +96,8 @@ export function createAuth({ env, pools, mailer, onPasswordReset }: AuthDeps) {
         await mailer.send(mails.verifyEmail(user.email, url));
       },
     },
+    // Email terikat undangan/owner_email dan dikunci trigger user_email_immutable (DK422).
+    user: { changeEmail: { enabled: false } },
     account: { accountLinking: { enabled: false } },
     session: {
       expiresIn: SESSION_IDLE_S,
