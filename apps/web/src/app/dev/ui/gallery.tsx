@@ -16,6 +16,7 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/state';
 import { heroCard } from '@/components/ui/styles';
 import { Toaster, toast } from '@/components/ui/toast';
+import { CatatFrames } from './catat-frames';
 
 const plainSamples = ['1111111', '0000000', '1.250.000', '8888888'];
 
@@ -245,6 +246,10 @@ export function Gallery() {
               </Button>
             }
           />
+        </Section>
+
+        <Section id="catat-s6" title="Catat S6 (bingkai C1–C6)">
+          <CatatFrames />
         </Section>
       </main>
       <Toaster />
