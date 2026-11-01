@@ -35,7 +35,10 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server):
 ## Yang perlu diketahui sebelum diterapkan di VM
 
 - Deployer (`infra/db-vm/deploy/deploy`) menjalankan `dbmate up` dari migrasi di image rilis. Migrasi ini ikut rilis berikutnya setelah merge ke `main`.
-- `app.settings.owner_email` (email pemilik, huruf kecil, dari `AUTH_OWNER_EMAIL`) diisi runbook, bukan migrasi. Tanpa baris itu tidak ada yang bisa mendaftar (`signup_closed`).
+- Runbook VM: pastikan `app.settings.env = 'prod'` (bawaan 0001; jangan diubah) dan isi `app.settings.owner_email` dari `AUTH_OWNER_EMAIL` (dibandingkan tanpa beda huruf besar/spasi). Tanpa `owner_email` tidak ada yang bisa mendaftar (`signup_closed`). Selama `env = 'prod'`, blok `migrate:down` 0002 sampai 0008 menolak berjalan (`migrate_down_blocked_prod`); CI dan lokal mengubah `env` ke `dev` sebelum rollback.
+- Email `auth."user"` tidak bisa diganti (`email_immutable`): fitur `changeEmail` Better Auth tetap mati.
+- `audit.log` menolak event sistem (`audit_event_reserved`). `deploy` dan `db_manual_access` dari skrip host ditulis langsung sebagai owner (`insert into audit.events`).
+- pgaudit: `dompetku_auditlog` sudah punya hak di semua tabel `app`, `audit`, `auth` dan default privileges untuk tabel baru, jadi tabel Better Auth ikut teraudit.
 - Fungsi undangan pra-login (`invitation_peek`, `decline_invitation`) dan `accept_invitation` mengisi GUC `app.invite_token_hash` dengan `set_config(..., true)`: nilainya bertahan sampai akhir transaksi, bukan hanya di dalam fungsi. Panggil di transaksi sendiri, jangan digabung dengan operasi lain dalam satu `withUser`.
 - Pembanding email di trigger memakai `lower(btrim(email))`, tetapi `unique` di `auth."user".email` peka huruf besar. Better Auth harus menormalkan email ke huruf kecil sebelum insert.
 - Role `dompetku_test`, skema `tap`/`tests`, dan ekstensi pgTAP hanya ada di cluster CI/lokal (`tests/support/setup.sql`), tidak pernah di VM.

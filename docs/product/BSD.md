@@ -2719,3 +2719,12 @@ Temuan review backend dan security (`docs/product/review/`) diterapkan, kecuali:
 - Batas user paralel: dijaga advisory lock `dompetku.user_cap` di READ COMMITTED (trigger dan provisioning). Uji dua koneksi untuk pendaftaran paralel tidak dijalankan di `bsd-check` karena hanya ada satu undangan terbuka per rumah tangga; masuk tes Vitest dua koneksi M0b.
 
 **Catatan review S4 (2026-11-01):** CHECK `audit.events.meta` (§6) memakai jsonpath `strict`; mode lax membuka array sehingga `{"reason": [1]}` lolos (temuan pgTAP S4, diputuskan atas nama pemilik).
+
+Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-11-01; migrasi `packages/db/migrations` adalah sumbernya):
+
+- §11/§12: `dompetku_auditlog` diberi SELECT/INSERT/UPDATE/DELETE di semua tabel `app`, `audit`, `auth`, plus default privileges owner untuk tabel baru di ketiga skema (termasuk tabel Better Auth).
+- §5/§10: `owner_email` dibandingkan sebagai `lower(btrim(value))` di `tg_user_admission` dan `provision_user`.
+- §10: `audit.log` (plpgsql) menolak event sistem (`space_member_change`, `unfinished_user_purged`, `entry_purged`, `purge_voided`, `db_manual_access`, `deploy`) dengan `DK422 audit_event_reserved` untuk semua pemanggil; event itu hanya ditulis langsung oleh fungsi DEFINER atau owner.
+- §10: `jobs.purge_unfinished_users` memanggil `private.require_read_committed()` sebelum kunci `dompetku.user_cap`.
+- §5: trigger `user_email_immutable` (`BEFORE UPDATE OF email` di `auth."user"`) menolak ganti email (`DK422 email_immutable`); `changeEmail` Better Auth tetap mati.
+- §12: blok `migrate:down` 0002 sampai 0008 ditolak (`DK500 migrate_down_blocked_prod`) selama `app.settings.env = 'prod'`.
