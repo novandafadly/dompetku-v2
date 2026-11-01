@@ -56,12 +56,21 @@ function CatatSlot(props: CatatSheetSlotProps) {
   );
 }
 
-export function RuangShell({ ruang, children }: { ruang: Ruang; children: ReactNode }) {
+export function RuangShell({
+  ruang,
+  prototype,
+  children,
+}: {
+  ruang: Ruang;
+  /** Dari server: sheet Catat masih berbasis store demo; mode nyata memakainya setelah disambung ke ledger. */
+  prototype: boolean;
+  children: ReactNode;
+}) {
   return (
     <AppShell
       ruang={ruang}
       preloadCatat={preloadCatatSheet}
-      renderCatat={(props) => <CatatSlot {...props} />}
+      renderCatat={(props) => (prototype ? <CatatSlot {...props} /> : null)}
     >
       {children}
     </AppShell>

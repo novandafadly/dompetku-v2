@@ -1,43 +1,20 @@
 'use client';
 
-import { addDays, isoAtWIB, nowIsoWIB, todayWIB } from '@dompetku/domain';
+import { isoAtWIB, nowIsoWIB } from '@dompetku/domain';
 import type { IsoDate } from '@dompetku/domain';
 import { createDemoStore, createSeed } from '@dompetku/demo-data';
 import type { DemoState, DemoStore, Ruang } from '@dompetku/demo-data';
 import type { Route } from 'next';
-import { usePathname, useSearchParams } from 'next/navigation';
-import {
-  createContext,
-  Suspense,
-  useCallback,
-  useContext,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
-import {
-  buildAccountHref,
-  buildAuthHref,
-  buildEntryHref,
-  buildHref,
-  isRuang,
-  keptQuery,
-  tabFromPathname,
-  validMonth,
-  withoutParam,
-  type AuthPage,
-  type Tab,
-} from './hrefs';
+import { useSearchParams } from 'next/navigation';
+import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { buildAuthHref, type AuthPage } from './hrefs';
+import { RencanaContext } from './nav-items';
+import { useNav, type NavValue } from './nav-provider';
 
 interface DemoValue {
   store: DemoStore;
-  ruang: Ruang;
-  today: IsoDate;
   /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
   keypad: 'os' | 'app';
-  query: string;
-  /** Nilai mentah `?bulan=` di alamat saat ini. */
-  bulan: string | null;
   /** Keadaan data demo (`?state=loading|error`) agar B4/B5/T4 bisa ditinjau dan diuji. */
   dataState: DataState;
   retry: () => void;
@@ -46,17 +23,6 @@ interface DemoValue {
 export type DataState = 'ready' | 'loading' | 'error';
 
 const DemoContext = createContext<DemoValue | null>(null);
-
-function validToday(raw: string | null): IsoDate {
-  if (raw === null) return todayWIB();
-  try {
-    addDays(raw, 0);
-    return raw;
-  } catch (e) {
-    if (e instanceof RangeError) return todayWIB();
-    throw e;
-  }
-}
 
 /**
  * Jam toko demo: tanggal mengikuti `today`, jam mengikuti WIB sekarang. Entri baru tidak
@@ -73,97 +39,59 @@ function demoClock(today: IsoDate, store: () => DemoStore): () => string {
   };
 }
 
-function DemoProviderInner({ children }: { children: ReactNode }) {
+/** Dipasang di dalam NavProvider (Suspense-nya sudah menutup pembacaan `useSearchParams`). */
+export function DemoProvider({ children }: { children: ReactNode }) {
   const params = useSearchParams();
-  const pathname = usePathname();
+  const { today, dropParam } = useNav();
   // Query dibaca sekali saat mount; navigasi berikutnya tidak membuat ulang store.
   const [boot] = useState(() => {
-    const today = validToday(params.get('today'));
     const variant = params.get('seed') === 'empty' ? 'empty' : 'full';
     const keypad = params.get('keypad') === 'app' ? 'app' : 'os';
     const store: DemoStore = createDemoStore(createSeed({ today, variant }), {
       clock: demoClock(today, () => store),
     });
-    return { today, keypad, store } as const;
+    // Anggaran dan tagihan tidak berubah selama sesi demo, jadi Rencana cukup dihitung sekali.
+    const { budgets, bills } = store.getState();
+    const has = (r: Ruang) =>
+      budgets.some((b) => b.ruang === r) || bills.some((b) => b.ruang === r);
+    return {
+      keypad,
+      store,
+      rencana: { pribadi: has('pribadi'), bersama: has('bersama') },
+    } as const;
   });
-  const [query, setQuery] = useState(() => keptQuery(params));
   const [dataState, setDataState] = useState<DataState>(() => {
     const raw = params.get('state');
     return raw === 'loading' || raw === 'error' ? raw : 'ready';
   });
-  const retry = useCallback(() => {
+  const retry = () => {
     setDataState('ready');
-    setQuery((q) => withoutParam(q, 'state'));
-  }, []);
-
-  const segment = pathname.split('/')[1];
-  const ruang: Ruang = isRuang(segment) ? segment : 'pribadi';
+    dropParam('state');
+  };
 
   return (
-    <DemoContext.Provider
-      value={{ ...boot, query, ruang, bulan: params.get('bulan'), dataState, retry }}
-    >
-      {children}
+    <DemoContext.Provider value={{ store: boot.store, keypad: boot.keypad, dataState, retry }}>
+      <RencanaContext.Provider value={boot.rencana}>{children}</RencanaContext.Provider>
     </DemoContext.Provider>
   );
 }
 
-export function DemoProvider({ children }: { children: ReactNode }) {
-  return (
-    <Suspense fallback={null}>
-      <DemoProviderInner>{children}</DemoProviderInner>
-    </Suspense>
-  );
-}
+/** Navigasi (lihat NavValue) ditambah store demo; `retry` membuang `?state` dari tautan. */
+export type DemoView = NavValue &
+  DemoValue & {
+    state: DemoState;
+    /** Alamat layar auth tiruan dengan query demo yang dipertahankan. */
+    authHref: (page: AuthPage) => Route;
+  };
 
-export function useDemo(): {
-  state: DemoState;
-  store: DemoStore;
-  ruang: Ruang;
-  today: IsoDate;
-  keypad: 'os' | 'app';
-  dataState: DataState;
-  /** Muat ulang setelah galat: keadaan kembali siap dan `?state` dibuang dari tautan. */
-  retry: () => void;
-  /** Alamat tab di ruang tertentu dengan query demo yang dipertahankan. */
-  href: (ruang: Ruang, tab: Tab) => Route;
-  /** Alamat detail transaksi dengan query demo yang dipertahankan. */
-  entryHref: (ruang: Ruang, id: string) => Route;
-  /** Alamat riwayat dompet dengan query demo yang dipertahankan. */
-  accountHref: (ruang: Ruang, id: string) => Route;
-  /** Alamat layar auth tiruan dengan query demo yang dipertahankan. */
-  authHref: (page: AuthPage) => Route;
-  /** Bulan terpilih di Transaksi ('YYYY-MM'), dari `?bulan=`. */
-  month: string;
-  /** Alamat daftar Transaksi untuk bulan tertentu. */
-  monthHref: (ruang: Ruang, month: string) => Route;
-} {
+export function useDemo(): DemoView {
   const ctx = useContext(DemoContext);
   if (ctx === null) throw new Error('useDemo harus dipakai di dalam <DemoProvider>');
-  const { store, query } = ctx;
-  const pathname = usePathname();
-  const month = validMonth(ctx.bulan, ctx.today);
-  // Bulan hanya dibawa selama masih di dalam Transaksi; tab lain tidak mewarisinya.
-  const inTransaksi = tabFromPathname(pathname) === 'transaksi';
-  const keep = inTransaksi ? { value: month, today: ctx.today } : undefined;
+  const nav = useNav();
   const state = useSyncExternalStore(
-    (fn) => store.subscribe(fn),
-    () => store.getState(),
-    () => store.getState(),
+    (fn) => ctx.store.subscribe(fn),
+    () => ctx.store.getState(),
+    () => ctx.store.getState(),
   );
-  return {
-    state,
-    store,
-    ruang: ctx.ruang,
-    today: ctx.today,
-    keypad: ctx.keypad,
-    dataState: ctx.dataState,
-    retry: ctx.retry,
-    href: (ruang, tab) => buildHref(ruang, tab, query, keep),
-    entryHref: (ruang, id) => buildEntryHref(ruang, id, query, keep),
-    accountHref: (ruang, id) => buildAccountHref(ruang, id, query),
-    authHref: (page) => buildAuthHref(page, query),
-    month,
-    monthHref: (ruang, m) => buildHref(ruang, 'transaksi', query, { value: m, today: ctx.today }),
-  };
+  return { ...nav, ...ctx, state, authHref: (page) => buildAuthHref(page, nav.query) };
 }

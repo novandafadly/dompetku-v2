@@ -3,7 +3,7 @@
 import { FlaskIcon } from '@/components/ui/icons/flask';
 import { ListIcon } from '@/components/ui/icons/list';
 import { IconButton } from '@/components/ui/icon-button';
-import { useDemo } from './demo-provider';
+import { useNav } from './nav-provider';
 import { RUANG_LABEL } from './hrefs';
 import { SpaceSwitcher } from './space-switcher';
 
@@ -19,7 +19,7 @@ export function DemoMark() {
 
 /** Header HP dan tablet (< 1024): nama ruang aktif, pengalih ruang, Menu. */
 export function AppHeader({ onMenu }: { onMenu: () => void }) {
-  const { ruang } = useDemo();
+  const { ruang } = useNav();
   return (
     <header className="sticky top-0 z-20 flex min-h-16.5 items-center gap-2 border-b border-hairline bg-bg py-2 pr-2.5 pl-4 laptop:hidden">
       <div className="flex min-w-0 flex-1 flex-col gap-0.75">

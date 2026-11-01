@@ -3,7 +3,7 @@
 import type { Ruang } from '@dompetku/demo-data';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { shouldOpenCatat } from './catat-shortcut';
-import { useDemo } from './demo-provider';
+import { useNav } from './nav-provider';
 
 export interface OpenCatatOptions {
   /** Ruang tujuan; bawaan ruang di URL. */
@@ -86,7 +86,7 @@ export function CatatProvider({
   preload: () => void;
   children: ReactNode;
 }) {
-  const { ruang } = useDemo();
+  const { ruang } = useNav();
   const [sheet, setSheet] = useState<{
     open: boolean;
     ruang: Ruang;

@@ -5,14 +5,14 @@ import { usePathname } from 'next/navigation';
 import { PlusIcon } from '@/components/ui/icons/plus';
 import { focusRing } from '@/components/ui/styles';
 import { useOpenCatat, usePreloadCatat } from './catat';
-import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
+import { useNav } from './nav-provider';
 
 const slot = `flex min-h-13 min-w-0 flex-1 flex-col items-center justify-center gap-0.75 rounded-lg text-nav ${focusRing}`;
 
 export function TabBar() {
-  const { ruang, href } = useDemo();
+  const { ruang, href } = useNav();
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
   const openCatat = useOpenCatat();

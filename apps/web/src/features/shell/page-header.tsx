@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { SpaceIcon } from '@/components/ui/space-tag';
-import { useDemo } from './demo-provider';
+import { useNav } from './nav-provider';
 import { RUANG_LABEL } from './hrefs';
 
 const EYEBROW = { pribadi: 'text-pribadi', bersama: 'text-bersama' } as const;
@@ -13,7 +13,7 @@ const EYEBROW = { pribadi: 'text-pribadi', bersama: 'text-bersama' } as const;
  * yang perlu tampil di HP dirender halaman di isinya sendiri.
  */
 export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
-  const { ruang } = useDemo();
+  const { ruang } = useNav();
   return (
     <header className="sr-only laptop:not-sr-only laptop:-mx-8 laptop:mb-3 laptop:flex laptop:items-end laptop:justify-between laptop:gap-4 laptop:border-b laptop:border-hairline laptop:px-8 laptop:pt-5.5 laptop:pb-4.5">
       <div className="flex flex-col gap-1.5">

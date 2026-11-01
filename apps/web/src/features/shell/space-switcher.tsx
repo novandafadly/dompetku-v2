@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CheckIcon } from '@/components/ui/icons/check';
 import { focusRing } from '@/components/ui/styles';
-import { useDemo } from './demo-provider';
 import { RUANG_LABEL, tabFromPathname } from './hrefs';
+import { useNav } from './nav-provider';
 
 const RUANGS = ['pribadi', 'bersama'] as const;
 
@@ -16,7 +16,7 @@ const ACTIVE = {
 
 /** Dua tautan dalam pil; ruang aktif = isi warna ruang + ✓ + aria-current, tidak hanya warna. */
 export function SpaceSwitcher({ wide = false }: { wide?: boolean }) {
-  const { ruang, href } = useDemo();
+  const { ruang, href } = useNav();
   const tab = tabFromPathname(usePathname());
   return (
     <nav
