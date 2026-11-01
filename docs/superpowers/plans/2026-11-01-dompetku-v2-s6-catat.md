@@ -809,6 +809,14 @@ Di luar S6 (menurut IPD): transfer antar ruang (`space_transfer`) di Catat, "Pin
 
 Setiap butir punya bawaan agar eksekusi tidak menunggu.
 
+**Keputusan (pemilik, didelegasikan ke agen 2026-11-01):** kelima butir di bawah diputuskan sesuai bawaannya.
+
+1. Sampah = butir Menu + tautan di bawah daftar Transaksi; tidak ada tab baru.
+2. Kategori awal ruang baru = daftar seed demo per ruang, bisa diubah atau diarsipkan di Menu → Kategori.
+3. Transfer lintas ruang di Catat dan "Pindahkan ke ruang lain" ditunda ke S7 (disembunyikan di mode nyata).
+4. Budget JS lewat 162 kB → kurangi kode (muat malas), batas tidak pernah dinaikkan; bila tetap lewat, berhenti dan laporkan.
+5. Beranda nyata sebelum S9 hanya menampilkan kartu `safe_to_spend`; seksi anggaran, tagihan, dan feed disembunyikan.
+
 1. **Letak Sampah di navigasi** (AFD pertanyaan terbuka 2). Bawaan: butir `Sampah` di Menu (kedua mode) ditambah tautan di bawah daftar Transaksi; tidak menambah tab.
 2. **Kategori awal ruang baru.** Bawaan: daftar sama dengan seed demo per ruang (yang sudah dinilai di M0a), bisa diubah atau diarsipkan di Menu → Kategori.
 3. **Transfer lintas ruang di Catat dan "Pindahkan ke ruang lain".** IPD menaruh bingkainya di gerbang S6 tetapi fungsinya (`api.move_entry_to_space`, alur `space_transfer` di sheet) di S7. Bawaan: bingkai dan implementasi keduanya di S7; di mode nyata S6 menu jenis Catat hanya menawarkan transfer dalam satu ruang dan tombol Pindahkan tidak dirender.
