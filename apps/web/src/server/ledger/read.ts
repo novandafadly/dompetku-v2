@@ -98,6 +98,7 @@ interface EntryRow {
   account_id: string;
   account_name: string;
   amount: number;
+  main_in: boolean;
   counter_account_id: string | null;
   counter_account_name: string | null;
   category_id: string | null;
@@ -117,7 +118,7 @@ interface EntryRow {
 const ENTRY_COLUMNS = `
   e.id, e.version, e.kind::text as kind, e.space_kind::text as space_kind, e.occurred_on,
   ${wib('e.created_at')} as created_at, e.created_by, r.display_name as created_by_name,
-  m.account_id, ma.name as account_name, abs(m.amount) as amount,
+  m.account_id, ma.name as account_name, abs(m.amount) as amount, m.amount > 0 as main_in,
   case when e.kind = 'transfer' then c.account_id end as counter_account_id,
   case when e.kind = 'transfer' then ca.name end as counter_account_name,
   e.category_id, cat.name as category_name, cat.icon as category_icon,
@@ -162,6 +163,8 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.description !== null && !privateLeg) vm.description = row.description;
   if (row.voided_at !== null) vm.voidedAt = row.voided_at;
   if (kind === 'space_transfer' && row.direction !== null) vm.direction = row.direction;
+  // Cocokkan saldo: nominal tetap absolut, arah dari tanda baris utama (naik = in, turun = out).
+  if (kind === 'adjustment') vm.direction = row.main_in ? 'in' : 'out';
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
   return vm;
 }
@@ -171,7 +174,10 @@ async function queryEntries(c: pg.PoolClient, sql: string, params: unknown[]): P
   return rows.map(toEntryVM);
 }
 
-/** Entri hidup ruang ini pada satu bulan WIB, terbaru di atas; `accountId` = baris utama/lawan. */
+/**
+ * Entri hidup ruang ini pada satu bulan WIB, terbaru di atas; `accountId` = baris utama/lawan.
+ * Dibatasi 1000 baris sebagai pengaman; paginasi ditunda (belum ada penanda "lainnya").
+ */
 export async function listEntries(
   ctx: LedgerCtx,
   i: { month: string; accountId?: string },
@@ -189,7 +195,8 @@ export async function listEntries(
           and ($3::uuid is null or exists (
                 select 1 from app.entry_lines l
                  where l.space_id = e.space_id and l.entry_id = e.id and l.account_id = $3))
-        ${ENTRY_ORDER}`,
+        ${ENTRY_ORDER}
+        limit 1000`,
       [ctx.spaceId, `${m}-01`, accountId],
     ),
   );
@@ -428,14 +435,17 @@ export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendVM> {
 
 /**
  * Status hari ini (WIB server): ada entri hidup ruang ini dengan `occurred_on = app.today()`
- * (jenis apa pun, sesuai rencana Task 10), dan apakah hari ini ditandai tanpa pengeluaran.
+ * berjenis pemasukan, pengeluaran, transfer, atau antar ruang, dan apakah hari ini ditandai tanpa
+ * pengeluaran. Saldo awal (dompet baru) dan cocokkan saldo bukan "mencatat hari ini".
  */
 export async function todayStatus(ctx: LedgerCtx): Promise<TodayStatusVM> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
     const { rows } = await c.query<{ has_entry: boolean; no_spend: boolean }>(
       `select exists (select 1 from app.entries e
                        where e.space_id = $1 and e.voided_at is null
-                         and e.occurred_on = app.today()) as has_entry,
+                         and e.occurred_on = app.today()
+                         and e.kind in ('income', 'expense', 'transfer', 'space_transfer'))
+                as has_entry,
               exists (select 1 from app.no_spend_days d
                        where d.space_id = $1 and d.on_date = app.today()) as no_spend`,
       [ctx.spaceId],

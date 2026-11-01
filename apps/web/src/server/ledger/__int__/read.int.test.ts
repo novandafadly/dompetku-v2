@@ -136,6 +136,18 @@ async function spaceTransfer(
   });
 }
 
+/** Cocokkan saldo lewat `api.reconcile_balance` (belum ada wrapper S6); id entri adjustment. */
+async function reconcile(userId: string, accountId: string, target: number): Promise<string> {
+  return withUser(h.pools.app, userId, async (c) => {
+    const { rows } = await c.query<{ r: { entry_id: string } }>(
+      `select api.reconcile_balance(
+         p_client_id => $1, p_account_id => $2, p_target_balance => $3::bigint) as r`,
+      [randomUUID(), accountId, target],
+    );
+    return must(rows[0]?.r.entry_id);
+  });
+}
+
 /** Semua loader untuk satu ruang; hasilnya digabung untuk diperiksa kanari. */
 async function readEverything(ctx: LedgerCtx, month: string, foreignIds: string[]) {
   const accounts = await listAccounts(ctx);
@@ -314,11 +326,14 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       const prev = await h.admin.query<{ value: string }>(
         `select value from app.settings where key = 'env'`,
       );
-      await h.admin.query(`update app.settings set value = 'test' where key = 'env'`);
-      const okt = clockPools('2026-10-31T23:30:00+07:00');
-      // 00:05 WIB 1 Nov = 17:05 UTC 31 Okt: zona UTC akan salah menaruhnya di Oktober.
-      const nov = clockPools('2026-11-01T00:05:00+07:00');
+      let okt: Pools | undefined;
+      let nov: Pools | undefined;
+      // Semua persiapan di dalam try: env selalu kembali ke nilai semula walau persiapan gagal.
       try {
+        await h.admin.query(`update app.settings set value = 'test' where key = 'env'`);
+        okt = clockPools('2026-10-31T23:30:00+07:00');
+        // 00:05 WIB 1 Nov = 17:05 UTC 31 Okt: zona UTC akan salah menaruhnya di Oktober.
+        nov = clockPools('2026-11-01T00:05:00+07:00');
         const at = (pools: Pools) => ({ ...nPribadi, pools });
         const today = (pools: Pools) =>
           withUser(pools.app, ps.n.id, async (c) => {
@@ -346,7 +361,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         await h.admin.query(`update app.settings set value = $1 where key = 'env'`, [
           prev.rows[0]?.value ?? 'prod',
         ]);
-        await Promise.all([okt.app.end(), okt.auth.end(), nov.app.end(), nov.auth.end()]);
+        await Promise.all([okt, nov].flatMap((p) => (p ? [p.app.end(), p.auth.end()] : [])));
       }
     });
   });
@@ -475,6 +490,30 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       expect(await listEntries(nPribadi, { month: '2000-01' })).toEqual([]);
     });
 
+    it('adjustment: nominal absolut, arah dari tanda (turun = out, naik = in)', async () => {
+      const a = await wallet(nPribadi, 100_000, 'BCA');
+      const turun = await reconcile(ps.n.id, a, 80_000);
+      const naik = await reconcile(ps.n.id, a, 95_000);
+      expect(await balance(a)).toBe(95_000);
+
+      const list = await listEntries(nPribadi, { month: await currentMonth() });
+      expect(must(list.find((e) => e.id === turun))).toMatchObject({
+        kind: 'adjustment',
+        amount: 20_000,
+        direction: 'out',
+      });
+      expect(must(list.find((e) => e.id === naik))).toMatchObject({
+        kind: 'adjustment',
+        amount: 15_000,
+        direction: 'in',
+      });
+      expect(must(await getEntry(nPribadi, turun)).entry.direction).toBe('out');
+      // Jenis lain di luar space_transfer/adjustment tidak membawa arah.
+      for (const e of list.filter((x) => x.kind !== 'adjustment')) {
+        expect(e).not.toHaveProperty('direction');
+      }
+    });
+
     it('getEntry entri batal tetap terbaca dengan voidedAt', async () => {
       const kas = await wallet(nBersama, 200_000, 'Kas Rumah');
       const id = await expense(fBersama, kas, 45_000, { description: 'Gas' });
@@ -540,8 +579,18 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       // Ruang lain tidak ikut tertandai.
       expect(await todayStatus(nPribadi)).toEqual({ hasEntry: false, noSpendMarked: false });
 
-      // Saldo awal hari ini = entri hidup hari ini.
-      await wallet(nBersama, 100_000, 'Kas Rumah');
+      // Saldo awal dan cocokkan saldo bukan "mencatat hari ini".
+      const kas = await wallet(nBersama, 100_000, 'Kas Rumah');
+      await reconcile(ps.n.id, kas, 90_000);
+      expect(await todayStatus(nBersama)).toEqual({ hasEntry: false, noSpendMarked: true });
+
+      await createEntry(nBersama, {
+        clientId: randomUUID(),
+        accountId: kas,
+        kind: 'income',
+        amount: 50_000,
+        categoryId: await categoryOf(nBersama.spaceId, 'income'),
+      });
       expect(await todayStatus(nBersama)).toEqual({ hasEntry: true, noSpendMarked: true });
     });
 
