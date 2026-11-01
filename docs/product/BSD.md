@@ -1619,12 +1619,17 @@ begin
     return v_r;
   end if;
   perform private.check_amount(p_amount, 'amount');
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
 
   select * into v_e from app.entries where id = p_entry_id for update;
   if v_e.id is null then
     raise exception using errcode = 'DK404', message = 'entry_not_found';
   end if;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if v_e.voided_at is not null then
@@ -1732,7 +1737,9 @@ begin
   end if;
   perform 1 from app.entries where id = any (v_ids) order by id for update;
   select * into v_e from app.entries where id = p_entry_id;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if (v_e.voided_at is not null) = p_void then
@@ -1826,7 +1833,9 @@ begin
   end if;
   perform 1 from app.entries where id = any (v_ids) order by id for update;
   select * into v_e from app.entries where id = p_entry_id;
-  if v_e.version <> p_expected_version then
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
     raise exception using errcode = 'DK409', message = 'version_conflict';
   end if;
   if v_e.voided_at is null then
@@ -2281,11 +2290,17 @@ language plpgsql security definer set search_path = '' as $$
 declare v_n int;
 begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
-  insert into app.entry_tombstones (entry_id, link_id, space_id, kind, occurred_on, voided_at, voided_by)
-  select e.id, e.link_id, e.space_id, e.kind, e.occurred_on, e.voided_at, e.voided_by
-    from app.entries e where e.id = any (p_ids) and e.voided_at is not null;
-  delete from app.entries e where e.id = any (p_ids) and e.voided_at is not null;
-  get diagnostics v_n = row_count;
+  -- Tombstone dari baris yang benar-benar terhapus (DELETE memeriksa ulang voided_at sesudah
+  -- menunggu lock), jadi entri yang dipulihkan paralel tidak mendapat tombstone (review S5).
+  with d as (
+    delete from app.entries e where e.id = any (p_ids) and e.voided_at is not null
+    returning e.id, e.link_id, e.space_id, e.kind, e.occurred_on, e.voided_at, e.voided_by
+  ), t as (
+    insert into app.entry_tombstones (entry_id, link_id, space_id, kind, occurred_on, voided_at, voided_by)
+    select * from d
+    on conflict (entry_id) do nothing
+  )
+  select count(*) into v_n from d;
   perform pg_catalog.set_config('dompetku.purge', 'off', true);
   if v_n > 0 then
     insert into audit.events (user_id, event, meta)
@@ -2329,14 +2344,21 @@ create function jobs.purge_voided() returns int
 language plpgsql security definer set search_path = '' as $$
 declare v_ids uuid[];
 begin
-  select coalesce(array_agg(e.id), '{}') into v_ids
-  from app.entries e
-  where e.voided_at < app.now() - interval '90 days'
-    and not exists (select 1 from app.entries r where r.reimburses_entry_id = e.id)
-    and (e.link_id is null or not exists (
-          select 1 from app.entries p
-          where p.link_id = e.link_id
-            and (p.voided_at is null or p.voided_at >= app.now() - interval '90 days')));
+  -- Kunci urut id (sama dengan void/restore); baris yang dipulihkan paralel diperiksa ulang
+  -- sesudah lock (READ COMMITTED) dan tidak ikut (review S5).
+  select coalesce(array_agg(x.id), '{}') into v_ids
+  from (
+    select e.id
+    from app.entries e
+    where e.voided_at < app.now() - interval '90 days'
+      and not exists (select 1 from app.entries r where r.reimburses_entry_id = e.id)
+      and (e.link_id is null or not exists (
+            select 1 from app.entries p
+            where p.link_id = e.link_id
+              and (p.voided_at is null or p.voided_at >= app.now() - interval '90 days')))
+    order by e.id
+    for update of e
+  ) x;
   return private.purge_entries(v_ids, 'purge_voided');
 end $$;
 
@@ -2728,3 +2750,17 @@ Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-
 - §10: `jobs.purge_unfinished_users` memanggil `private.require_read_committed()` sebelum kunci `dompetku.user_cap`.
 - §5: trigger `user_email_immutable` (`BEFORE UPDATE OF email` di `auth."user"`) menolak ganti email (`DK422 email_immutable`); `changeEmail` Better Auth tetap mati.
 - §12: blok `migrate:down` 0002 sampai 0008 ditolak (`DK500 migrate_down_blocked_prod`) selama `app.settings.env = 'prod'`.
+
+**Catatan S5 (2026-11-01, branch `claude/m1-s5-ledger`):** ledger di migrasi `0100` sampai `0105` (nomor 0009 sampai 0099 dicadangkan untuk migrasi Better Auth). SQL disalin persis dari §6 sampai §11, kecuali:
+
+- §6/§11: hanya tabel S5 (`accounts`, `categories`, `entries`, `entry_lines`, `entry_history`, `entry_tombstones`, `jobs.job_runs`). `bills`, `bill_occurrences`, `budgets`, `no_spend_days`, view `bill_schedule`, `budget_progress`, `materialize_bills`, dan fungsi api kategori, anggaran, tagihan, profil menyusul di sprint fiturnya. `categories` ikut S5 karena FK komposit `entries`.
+- §7: `tg_category_depth` tanpa cabang `category_in_obligation` (tabel tagihan/anggaran belum ada); versi lengkap dipasang dengan `create or replace` di migrasi tagihan/anggaran.
+- §8: `api.safe_to_spend` S5 memakai tanda tangan dan kolom yang sama, tetapi `bills_until_eom` dan `budget_wajib_remaining` selalu 0; badan lengkap (lalu periode gajian §8.2a) menyusul di S9.
+- §11: `dompetku_auditor` diberi SELECT tabel/view S5 secara eksplisit (grant `all tables` di 0008 tidak berlaku untuk tabel baru).
+- §13: konkurensi ledger (pengeluaran paralel, klik ganda paralel, transfer berlawanan, arsip paralel catat) diuji di pgTAP lewat dblink (`tests/99_konkurensi.sql`), bukan menunggu Vitest.
+- Temuan: sesudah fungsi `api.*` menutup dengan `set constraints all immediate`, mode itu berlaku sampai akhir transaksi. Fungsi `api.*` berikutnya aman (dibuka `deferred`), tetapi DML mentah owner di transaksi yang sama harus membuka `set constraints all deferred` sendiri.
+
+**Catatan review S5 (2026-11-01):**
+
+- §9: `update_entry`, `set_void_state`, dan `purge_entry` menolak `p_expected_version` NULL (`DK400 expected_version`); sebelumnya `version <> NULL` bernilai NULL sehingga DK409 terlewati. `update_entry` menolak `p_account_id` NULL dengan `DK400 account_id` (bukan DK404).
+- §10: `private.purge_entries` menulis tombstone dari baris yang terhapus (`with d as (delete ... returning) insert ... on conflict do nothing`), dan `jobs.purge_voided` mengunci kandidat urut id (`for update`). Restore paralel tidak lagi menghasilkan tombstone untuk entri hidup, dan tombstone ganda tidak menggagalkan purge berikutnya.
