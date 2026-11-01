@@ -25,8 +25,19 @@ export interface Pools {
   app: pg.Pool;
 }
 
+/**
+ * `connectionTimeoutMillis`: pool habis atau DB tak terjangkau gagal sesudah 5 detik
+ * (`timeout exceeded when trying to connect`, dipetakan `toLedgerError` ke `network`), bukan
+ * menunggu tanpa batas.
+ */
 export function createPools(databaseUrl: string): Pools {
-  const base = { connectionString: databaseUrl, max: 5, idleTimeoutMillis: 30_000, types };
+  const base = {
+    connectionString: databaseUrl,
+    max: 5,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    types,
+  };
   return {
     auth: new pg.Pool({ ...base, options: '-c search_path=auth' }),
     app: new pg.Pool(base),
