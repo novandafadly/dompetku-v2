@@ -1,3 +1,4 @@
+import 'server-only';
 import type pg from 'pg';
 import { z } from 'zod';
 import type { Rupiah } from '@dompetku/domain';

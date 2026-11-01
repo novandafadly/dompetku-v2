@@ -1,3 +1,4 @@
+import 'server-only';
 import type pg from 'pg';
 import { withUser, type Pools } from '../db';
 

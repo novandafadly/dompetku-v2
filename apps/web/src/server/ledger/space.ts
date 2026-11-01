@@ -1,3 +1,4 @@
+import 'server-only';
 import type { Ruang } from '@/features/ledger/types';
 import { withUser, type Pools } from '../db';
 

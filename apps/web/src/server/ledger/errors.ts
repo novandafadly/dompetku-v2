@@ -1,3 +1,4 @@
+import 'server-only';
 import type { LedgerErrorCode } from '@/features/ledger/types';
 import { domainError } from '../db';
 

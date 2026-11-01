@@ -10,6 +10,8 @@ export default defineConfig({
       '@': path.join(dir, 'src'),
       '@dompetku/domain': path.join(dir, '../../packages/domain/src/index.ts'),
       '@dompetku/demo-data': path.join(dir, '../../packages/demo-data/src/index.ts'),
+      // `server-only` melempar di luar kondisi `react-server` Next; di Vitest jadi modul kosong.
+      'server-only': path.join(dir, 'src/test/server-only.ts'),
     },
   },
   test: {
