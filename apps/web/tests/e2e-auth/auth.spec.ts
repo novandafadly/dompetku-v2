@@ -93,6 +93,12 @@ test('halaman data tanpa sesi dialihkan ke /masuk', async () => {
   await expect(ownerPage).toHaveURL(/\/masuk$/);
   await expect(ownerPage.getByText('Prototipe: belum aktif')).toHaveCount(0);
   await checkScreen(ownerPage);
+  // Tema terang (Menu → Tampilan) juga lolos axe di layar auth.
+  for (const path of ['/masuk?theme=light', '/buat-akun?theme=light', '/lupa-sandi?theme=light']) {
+    await ownerPage.goto(path);
+    await expect(ownerPage.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expectNoSeriousViolations(ownerPage, { tags: WCAG_TAGS });
+  }
 });
 
 test('JS muat dingin rute auth ≤ 162 kB', async ({ browser }) => {
