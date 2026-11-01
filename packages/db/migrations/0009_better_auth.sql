@@ -10,7 +10,9 @@
 --     search_path=auth, jadi nama tidak berskema di query-nya jatuh ke skema ini.
 -- Hak dompetku_web datang dari default privileges 0003; tidak ada grant untuk role lain.
 
+-- generateId 'uuid' di Postgres = id diisi default kolom (gen_random_uuid), bukan oleh Better Auth.
 alter table auth."user"
+  alter column id set default gen_random_uuid(),
   add column "twoFactorEnabled" boolean not null default false,
   -- Better Auth sudah menormalkan email ke huruf kecil; CHECK menjaga unique dan trigger
   -- user_admission tetap sepakat bila ada jalur tulis lain.
@@ -105,4 +107,5 @@ drop table auth.account;
 drop table auth.session;
 alter table auth."user"
   drop constraint user_email_normalized,
-  drop column "twoFactorEnabled";
+  drop column "twoFactorEnabled",
+  alter column id drop default;
