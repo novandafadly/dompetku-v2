@@ -111,7 +111,12 @@ describe('_real tanpa data demo saat runtime', () => {
   it('semua modul yang dicapai dari _real/* tidak mengimpor @dompetku/demo-data', () => {
     const entries = realEntries();
     expect(entries.map((f) => path.basename(f))).toEqual(
-      expect.arrayContaining(['beranda.tsx', 'ruang-shell-real.tsx', 'catat-source-real.ts']),
+      expect.arrayContaining([
+        'beranda.tsx',
+        'ruang-shell-real.tsx',
+        'catat-source-real.ts',
+        'transaksi.tsx',
+      ]),
     );
     const { seen, offenders, gated } = scan(entries);
     expect(gated).toEqual([GATED]);
@@ -122,6 +127,10 @@ describe('_real tanpa data demo saat runtime', () => {
         'features/catat/catat-sheet.tsx',
         'features/beranda/safe-to-spend-view.tsx',
         'features/ledger/present.ts',
+        'features/transaksi/entry-row-view.tsx',
+        'features/transaksi/summary-view-vm.tsx',
+        'features/transaksi/transaksi-layout.tsx',
+        'features/ledger/group-by-day.ts',
       ]),
     );
     expect(offenders).toEqual([]);

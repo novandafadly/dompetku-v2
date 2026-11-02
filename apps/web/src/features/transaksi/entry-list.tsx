@@ -1,10 +1,10 @@
 'use client';
 
-import { groupByDay } from '@dompetku/demo-data';
+import { budgetProgress, groupByDay, monthSummary } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { addMonths, monthName, monthYearLabel } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
-import { useId, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { ArrowDownIcon } from '@/components/ui/icons/arrow-down';
@@ -13,13 +13,12 @@ import { CaretRightIcon } from '@/components/ui/icons/caret-right';
 import { FunnelXIcon } from '@/components/ui/icons/funnel-x';
 import { ListBulletsIcon } from '@/components/ui/icons/list-bullets';
 import { XIcon } from '@/components/ui/icons/x';
-import { MoneyText } from '@/components/ui/money-text';
-import { Tabs } from '@/components/ui/segmented-control';
-import { useMedia } from '@/components/ui/use-media';
 import { EmptyState, Skeleton } from '@/components/ui/state';
 import { card } from '@/components/ui/styles';
+import type { DayGroupVM } from '@/features/ledger/group-by-day';
 import { RUANG_NAME, type TransaksiContext } from './context';
-import { EntryRow } from './entry-row';
+import { entryToVM } from './demo-vm';
+import { EntryListView, SampahLink } from './entry-list-view';
 import {
   FilterChips,
   filterLabel,
@@ -29,9 +28,16 @@ import {
   SearchField,
   type FilterId,
 } from './filters';
-import { SummaryView } from './summary-view';
+import { TransaksiLayout } from './transaksi-layout';
 
 const PAGE = 50;
+
+/**
+ * Ringkasan demo dimuat malas: di HP hanya tampil setelah segmen Ringkasan diketuk, di laptop
+ * menyusul sesudah hidrasi (tata letak laptop memang baru dipilih sesudah hidrasi). Batas JS
+ * muat dingin rute prototipe (ADR 0002, 162 kB).
+ */
+const SummaryView = lazy(() => import('./summary-view').then((m) => ({ default: m.SummaryView })));
 
 function earliestMonth(state: DemoState, ruang: TransaksiContext['ruang'], fallback: string) {
   let min = fallback;
@@ -119,46 +125,34 @@ function DayGroups({
 }) {
   const baseId = useId();
   let left = limit;
-  const groups = [];
+  const groups: DayGroupVM[] = [];
   for (const g of groupByDay(entries, ctx.today)) {
     if (left <= 0) break;
-    groups.push({ ...g, shown: g.items.slice(0, left) });
+    groups.push({
+      date: g.date,
+      label: g.label,
+      total: g.net,
+      entries: g.items.slice(0, left).map((e) => entryToVM(ctx.state, e)),
+    });
     left -= g.items.length;
   }
+  const reimbursable = new Set(
+    entries.filter((e) => e.kind === 'expense' && e.reimbursable === true).map((e) => e.id),
+  );
   return (
-    <>
-      {groups.map((g) => (
-        <section
-          key={g.date}
-          aria-labelledby={`${baseId}-${g.date}`}
-          className="flex flex-col gap-2"
-        >
-          <h3
-            id={`${baseId}-${g.date}`}
-            className="flex items-baseline justify-between gap-3 px-1 text-meta font-bold text-text-soft"
-          >
-            <span>{g.label}</span>
-            <MoneyText value={g.net} size="inherit" />
-          </h3>
-          <ul aria-label={`Transaksi ${g.label}`} className={`px-4 ${card}`}>
-            {g.shown.map((e) => (
-              <EntryRow key={e.id} state={ctx.state} entry={e} href={ctx.entryHref(e.id)} />
-            ))}
-          </ul>
-        </section>
-      ))}
-    </>
+    <EntryListView
+      groups={groups}
+      idBase={baseId}
+      hrefFor={ctx.entryHref}
+      reimburse={(id) => reimbursable.has(id)}
+    />
   );
 }
 
 export function EntryList({ header, ...ctx }: TransaksiContext & { header: ReactNode }) {
   const { state, ruang, today } = ctx;
   const currentMonth = today.slice(0, 7);
-  const [view, setView] = useState<'daftar' | 'ringkasan'>('daftar');
   const router = useRouter();
-  const tabsId = useId();
-  // Laptop: daftar + kolom ringkasan berdampingan, tanpa segmen. Hanya satu yang dirender.
-  const laptop = useMedia('(min-width: 1024px)');
   const { month } = ctx;
   const [chosen, setFilter] = useState<FilterId>('semua');
   // Filter yang tidak ada di ruang ini (mis. Kantor setelah pindah ke Bersama) kembali ke Semua.
@@ -220,7 +214,6 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
       />
     ) : (
       <>
-        <h2 className="sr-only">Daftar transaksi</h2>
         <DayGroups ctx={ctx} entries={matched} limit={limit} />
         {matched.length > limit ? (
           <Button
@@ -245,7 +238,6 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
       onShift={shift}
     />
   );
-  const summary = <SummaryView state={state} ruang={ruang} month={month} />;
 
   const listBlock = (
     <div className="flex flex-col gap-3 tablet:gap-4">
@@ -270,54 +262,24 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
         }}
       />
       {list}
+      {ctx.sampahHref === undefined ? null : <SampahLink href={ctx.sampahHref} />}
     </div>
   );
 
-  if (laptop) {
-    return (
-      <>
-        {header}
-        <div className="grid max-w-250 grid-cols-transaksi items-start gap-5">
-          <div className="min-w-0">{listBlock}</div>
-          <aside aria-label="Ringkasan bulan">{summary}</aside>
-        </div>
-      </>
-    );
-  }
-
-  // HP/tablet: segmen Daftar | Ringkasan.
   return (
-    <>
-      {header}
-      <div className="flex flex-col gap-3 tablet:gap-4">
-        <Tabs
-          label="Tampilan"
-          idBase={tabsId}
-          items={[
-            { value: 'daftar', label: 'Daftar' },
-            { value: 'ringkasan', label: 'Ringkasan' },
-          ]}
-          value={view}
-          onChange={(v) => {
-            setView(v === 'ringkasan' ? 'ringkasan' : 'daftar');
-          }}
-        />
-        <div
-          id={`${tabsId}-panel`}
-          role="tabpanel"
-          aria-labelledby={`${tabsId}-tab-${view}`}
-          className="flex flex-col gap-3 tablet:gap-4"
-        >
-          {view === 'ringkasan' ? (
-            <>
-              {nav}
-              {summary}
-            </>
-          ) : (
-            listBlock
-          )}
-        </div>
-      </div>
-    </>
+    <TransaksiLayout
+      header={header}
+      nav={nav}
+      list={listBlock}
+      summary={
+        <Suspense fallback={<Skeleton className="h-60" />}>
+          <SummaryView
+            month={month}
+            summary={monthSummary(state, ruang, month)}
+            budgets={budgetProgress(state, ruang, `${month}-01`)}
+          />
+        </Suspense>
+      }
+    />
   );
 }
