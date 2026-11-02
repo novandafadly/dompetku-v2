@@ -86,6 +86,7 @@ export function TransaksiFrames() {
                 transfer: 500_000,
               },
               hasAny: true,
+              firstMonth: '2026-09',
             }}
           />
         </Frame>
@@ -96,7 +97,7 @@ export function TransaksiFrames() {
             month="2026-10"
             minMonth="2026-10"
             query=""
-            data={{ entries: [], summary: ZERO, hasAny: false }}
+            data={{ entries: [], summary: ZERO, hasAny: false, firstMonth: null }}
           />
         </Frame>
         <Frame id="t-kosong-bulan" title="Kosong karena bulan (September)">
@@ -106,7 +107,7 @@ export function TransaksiFrames() {
             month="2026-09"
             minMonth="2026-08"
             query=""
-            data={{ entries: [], summary: ZERO, hasAny: true }}
+            data={{ entries: [], summary: ZERO, hasAny: true, firstMonth: '2026-08' }}
           />
         </Frame>
         <Frame id="t-gagal" title="Gagal muat">

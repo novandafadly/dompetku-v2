@@ -3,7 +3,7 @@ import { unstable_rethrow } from 'next/navigation';
 import { keptQuery, REAL_KEPT_PARAMS, validMonth } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { errorTag, loadTransaksi } from '@/server/ledger/transaksi';
-import { ruangAccounts, ruangContext } from '../_real/context';
+import { ruangContext } from '../_real/context';
 import { TransaksiFailed, TransaksiReal } from '../_real/transaksi';
 import { TransaksiPage } from './view';
 
@@ -32,19 +32,18 @@ export default async function Page({
   for (const [k, v] of Object.entries(raw)) if (typeof v === 'string') sp.set(k, v);
 
   let data;
-  let accounts;
   try {
-    [data, accounts] = await Promise.all([loadTransaksi(ctx, month), ruangAccounts(ctx)]);
+    data = await loadTransaksi(ctx, month);
   } catch (e) {
     unstable_rethrow(e);
     console.error('[transaksi] gagal memuat', errorTag(e));
     return <TransaksiFailed />;
   }
-  // Entri tidak bisa sebelum dompet dibuka: bulan paling awal = dompet pertama.
-  let minMonth = today.slice(0, 7);
-  for (const a of accounts) {
-    if (a.openedOn.slice(0, 7) < minMonth) minMonth = a.openedOn.slice(0, 7);
-  }
+  // Entri tidak bisa sebelum dompet dibuka: bulan paling awal = dompet pertama (termasuk
+  // terarsip); tanpa dompet = bulan berjalan.
+  const current = today.slice(0, 7);
+  const minMonth =
+    data.firstMonth !== null && data.firstMonth < current ? data.firstMonth : current;
 
   return (
     <TransaksiReal

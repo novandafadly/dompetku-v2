@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { addMonths } from '@dompetku/domain';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { listAccounts } from '../read';
 import { resolveSpace } from '../space';
 import { loadTransaksi } from '../transaksi';
 import { createAccount, createEntry, voidEntry, type LedgerCtx } from '../write';
@@ -73,6 +74,7 @@ describe('loadTransaksi (persona N, F bergabung)', () => {
         entries: [],
         summary: { pemasukan: 0, pengeluaran: 0, selisih: 0, transfer: 0 },
         hasAny: false,
+        firstMonth: null,
       });
     }
   });
@@ -142,6 +144,24 @@ describe('loadTransaksi (persona N, F bergabung)', () => {
     ]) {
       expect(blob).not.toContain(kanari);
     }
+  });
+
+  it('batas bawah bulan = dompet paling awal, termasuk dompet terarsip', async () => {
+    const month = (await today()).slice(0, 7);
+    const pribadi = await ctxOf(n, 'pribadi');
+    const old = await wallet(pribadi, 'Dompet lama', 0);
+    expect((await loadTransaksi(pribadi, month)).firstMonth).toBe(month);
+    // Dompet lama dibuka Mei 2026 lalu diarsipkan: listAccounts menyembunyikannya, batas tetap.
+    await h.admin.query(
+      `update app.accounts set opened_on = '2026-05-03', archived_at = now() where id = $1`,
+      [old],
+    );
+    await wallet(pribadi, 'Dompet baru', 10_000);
+    const p = await loadTransaksi(pribadi, month);
+    expect(p.firstMonth).toBe('2026-05');
+    expect((await listAccounts(pribadi)).map((a) => a.name)).toEqual(['Dompet baru']);
+    // Ruang lain tidak ikut: Bersama tanpa dompet tetap null.
+    expect((await loadTransaksi(await ctxOf(n, 'bersama'), month)).firstMonth).toBeNull();
   });
 
   it('bulan tidak sah ditolak loader (page memvalidasi lebih dulu)', async () => {

@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { addMonths, todayWIB } from '@dompetku/domain';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import pg from 'pg';
 import { MAIL_FILE } from '../../playwright.auth.config';
@@ -425,12 +426,7 @@ test('pemilik: Transaksi nyata: entri dan ringkasan Pribadi, tidak terbawa ke Be
   // Dompet pertama dibuka bulan ini: tidak ada bulan sebelumnya yang bisa dituju.
   await expect(main.getByRole('button', { name: 'Bulan sebelumnya' })).toBeDisabled();
   await expect(main.getByRole('button', { name: 'Bulan berikutnya' })).toBeDisabled();
-  const wib = new Date(Date.now() + 7 * 3600_000);
-  const m = wib.getUTCMonth();
-  const prev =
-    m === 0
-      ? `${String(wib.getUTCFullYear() - 1)}-12`
-      : `${String(wib.getUTCFullYear())}-${String(m).padStart(2, '0')}`;
+  const prev = addMonths(todayWIB().slice(0, 7), -1);
   await page.goto(`/pribadi/transaksi?bulan=${prev}`);
   await expect(main.getByText(/^Belum ada transaksi di \p{L}+\.$/u)).toBeVisible();
   await expect(main.getByRole('button', { name: 'Catat' })).toHaveCount(0);

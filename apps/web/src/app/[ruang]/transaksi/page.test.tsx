@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { isValidElement, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TransaksiFailed, TransaksiReal } from '../_real/transaksi';
@@ -11,17 +12,15 @@ import Page from './page';
 const h = vi.hoisted(() => ({
   prototype: false,
   load: vi.fn(),
-  accounts: vi.fn(),
   ctx: vi.fn(),
 }));
 
 vi.mock('@/server/env', () => ({ isPrototype: () => h.prototype }));
-vi.mock('../_real/context', () => ({ ruangContext: h.ctx, ruangAccounts: h.accounts }));
+vi.mock('../_real/context', () => ({ ruangContext: h.ctx }));
 vi.mock('@/server/ledger/transaksi', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/transaksi')>()),
   loadTransaksi: h.load,
 }));
-vi.mock('next/navigation', () => ({ unstable_rethrow: () => undefined }));
 vi.mock('./view', () => ({ TransaksiPage: () => null }));
 vi.mock('../_real/transaksi', () => ({
   TransaksiReal: () => null,
@@ -32,7 +31,8 @@ const CTX = { pools: {}, userId: 'u', spaceId: 's', ruang: 'pribadi', kind: 'per
 const DATA = {
   entries: [],
   summary: { pemasukan: 0, pengeluaran: 0, selisih: 0, transfer: 0 },
-  hasAny: false,
+  hasAny: true,
+  firstMonth: '2026-08',
 };
 
 async function run(sp: Record<string, string | string[] | undefined>): Promise<ReactElement> {
@@ -51,7 +51,6 @@ beforeEach(() => {
   vi.useFakeTimers({ now: new Date('2026-10-31T16:30:00Z'), toFake: ['Date'] });
   h.prototype = false;
   h.ctx.mockResolvedValue(CTX);
-  h.accounts.mockResolvedValue([{ openedOn: '2026-08-20' }, { openedOn: '2026-09-02' }]);
   h.load.mockResolvedValue(DATA);
 });
 
@@ -88,6 +87,26 @@ describe('page Transaksi (nyata)', () => {
       expect(h.load).toHaveBeenCalledWith(CTX, '2026-10');
     });
   }
+
+  it('batas bawah bulan = dompet paling awal (termasuk terarsip) dari loader', async () => {
+    h.load.mockResolvedValue({ ...DATA, firstMonth: '2025-12' });
+    expect(props(await run({}))).toMatchObject({ minMonth: '2025-12' });
+  });
+
+  it('tanpa dompet → batas bawah = bulan berjalan', async () => {
+    h.load.mockResolvedValue({ ...DATA, hasAny: false, firstMonth: null });
+    expect(props(await run({}))).toMatchObject({ minMonth: '2026-10' });
+  });
+
+  it('notFound() dari loader dilempar ulang (unstable_rethrow asli), bukan gagal muat', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    h.load.mockImplementation(() => {
+      notFound();
+    });
+    await expect(run({})).rejects.toThrow();
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
 
   it('?bulan= ganda → bulan bawaan', async () => {
     await run({ bulan: ['2026-09', '2026-08'] });

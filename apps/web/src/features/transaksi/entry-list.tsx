@@ -4,7 +4,7 @@ import { budgetProgress, groupByDay, monthSummary } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { addMonths, monthName, monthYearLabel } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
-import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { ArrowDownIcon } from '@/components/ui/icons/arrow-down';
@@ -38,6 +38,23 @@ const PAGE = 50;
  * muat dingin rute prototipe (ADR 0002, 162 kB).
  */
 const SummaryView = lazy(() => import('./summary-view').then((m) => ({ default: m.SummaryView })));
+
+/** Chunk ringkasan gagal dimuat (mis. koneksi putus): pesan singkat, daftar tetap berfungsi. */
+export class SummaryBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  override render() {
+    return this.state.failed ? (
+      <p role="alert" className="px-1 text-label font-medium text-text-soft">
+        Ringkasan belum bisa dimuat. Muat ulang halaman untuk mencoba lagi.
+      </p>
+    ) : (
+      this.props.children
+    );
+  }
+}
 
 function earliestMonth(state: DemoState, ruang: TransaksiContext['ruang'], fallback: string) {
   let min = fallback;
@@ -272,13 +289,24 @@ export function EntryList({ header, ...ctx }: TransaksiContext & { header: React
       nav={nav}
       list={listBlock}
       summary={
-        <Suspense fallback={<Skeleton className="h-60" />}>
-          <SummaryView
-            month={month}
-            summary={monthSummary(state, ruang, month)}
-            budgets={budgetProgress(state, ruang, `${month}-01`)}
-          />
-        </Suspense>
+        <SummaryBoundary>
+          <Suspense
+            fallback={
+              <div className="flex flex-col gap-3">
+                <p role="status" className="px-1 text-label font-semibold text-text-muted">
+                  Memuat ringkasan…
+                </p>
+                <Skeleton className="h-60" />
+              </div>
+            }
+          >
+            <SummaryView
+              month={month}
+              summary={monthSummary(state, ruang, month)}
+              budgets={budgetProgress(state, ruang, `${month}-01`)}
+            />
+          </Suspense>
+        </SummaryBoundary>
       }
     />
   );

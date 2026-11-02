@@ -49,6 +49,7 @@ describe('TransaksiReal', () => {
           ],
           summary: { pemasukan: 100_000, pengeluaran: 25_000, selisih: 75_000, transfer: 0 },
           hasAny: true,
+          firstMonth: '2026-10',
         }}
       />,
     );
@@ -80,6 +81,7 @@ describe('TransaksiReal', () => {
           entries: [entry('e1')],
           summary: { pemasukan: 100_000, pengeluaran: 25_000, selisih: 75_000, transfer: 40_000 },
           hasAny: true,
+          firstMonth: '2026-10',
         }}
       />,
     );
@@ -98,7 +100,7 @@ describe('TransaksiReal', () => {
       <TransaksiReal
         {...base}
         ruang="bersama"
-        data={{ entries: [], summary: ZERO, hasAny: false }}
+        data={{ entries: [], summary: ZERO, hasAny: false, firstMonth: null }}
       />,
     );
     expect(screen.getByText('Belum ada transaksi di Bersama.')).toBeVisible();
@@ -111,7 +113,7 @@ describe('TransaksiReal', () => {
       <TransaksiReal
         {...base}
         month="2026-10"
-        data={{ entries: [], summary: ZERO, hasAny: true }}
+        data={{ entries: [], summary: ZERO, hasAny: true, firstMonth: '2026-10' }}
       />,
     );
     expect(screen.getByText('Belum ada transaksi di Oktober.')).toBeVisible();
@@ -129,7 +131,7 @@ describe('TransaksiReal', () => {
       <TransaksiReal
         {...base}
         query="?theme=light"
-        data={{ entries: [entry('e1')], summary: ZERO, hasAny: true }}
+        data={{ entries: [entry('e1')], summary: ZERO, hasAny: true, firstMonth: '2026-10' }}
       />,
     );
     expect(screen.getByRole('link', { name: /Makan/ })).toHaveAttribute(
