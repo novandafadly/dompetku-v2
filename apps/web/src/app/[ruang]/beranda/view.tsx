@@ -22,7 +22,7 @@ const BerandaLoading = lazy(() => loadStates().then((m) => ({ default: m.Beranda
 const BerandaError = lazy(() => loadStates().then((m) => ({ default: m.BerandaError })));
 
 const AddAccountSheet = lazy(() =>
-  import('@/features/dompet/add-account-sheet').then((m) => ({ default: m.AddAccountSheet })),
+  import('@/features/dompet/add-account-sheet').then((m) => ({ default: m.DemoAddAccountSheet })),
 );
 
 export function BerandaPage() {

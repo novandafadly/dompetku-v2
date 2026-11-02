@@ -88,6 +88,8 @@ export type LedgerErrorCode =
   | 'before_opening'
   | 'account_archived'
   | 'category_archived'
+  | 'category_depth'
+  | 'name_taken'
   | 'restore_window_closed'
   | 'not_found'
   | 'invalid'

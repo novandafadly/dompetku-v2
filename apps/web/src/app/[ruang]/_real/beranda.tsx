@@ -10,7 +10,12 @@ import { RecentEntriesView, type RecentRow } from '@/features/beranda/recent-ent
 import { SafeToSpendCard, SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
 import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
 import type { Ruang } from '@/features/ledger/types';
-import { buildAuthHref, buildEntryHref, buildHref } from '@/features/shell/hrefs';
+import {
+  buildAddWalletHref,
+  buildAuthHref,
+  buildEntryHref,
+  buildHref,
+} from '@/features/shell/hrefs';
 import { PageHeader } from '@/features/shell/page-header';
 import type { BerandaData } from '@/server/ledger/beranda';
 import { markNoSpendDayAction } from '../_actions/beranda';
@@ -35,8 +40,8 @@ export function BerandaReal({
   query: string;
   data: BerandaData;
 }) {
-  // Sheet Tambah dompet nyata menyusul di Dompet (Task 18); sementara tautan ke Dompet.
-  const dompetHref = buildHref(ruang, 'dompet', query);
+  // Tambah dompet = Dompet ruang ini dengan sheet Tambah dompet terbuka (`?tambah=1`).
+  const dompetHref = buildAddWalletHref(ruang, query);
 
   const toStep = (s: BerandaStepState): ChecklistStep => {
     switch (s.key) {

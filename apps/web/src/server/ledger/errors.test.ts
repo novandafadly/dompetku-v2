@@ -62,6 +62,23 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(logged).not.toContain('rahasia');
   });
 
+  it('category_depth (DK422) = category_depth; nama kategori ganda (indeks unik) = name_taken', () => {
+    expect(toLedgerError(pgError('DK422', 'category_depth'))).toEqual({ code: 'category_depth' });
+    const dup = Object.assign(pgError('23505', 'duplicate key value'), {
+      constraint: 'categories_name_unique',
+    });
+    expect(toLedgerError(dup)).toEqual({ code: 'name_taken' });
+  });
+
+  it('23505 dari indeks lain tetap unknown', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const other = Object.assign(pgError('23505', 'duplicate key value'), {
+      constraint: 'entries_pkey',
+    });
+    expect(toLedgerError(other)).toEqual({ code: 'unknown' });
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
   it('pesan domain yang bukan kode mesin tidak ikut dilog', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(toLedgerError(pgError('DK500', 'saldo 50000 untuk makan siang'))).toEqual({

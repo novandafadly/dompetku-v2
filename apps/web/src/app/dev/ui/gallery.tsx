@@ -19,6 +19,7 @@ import { Toaster, toast } from '@/components/ui/toast';
 import { BerandaFrames } from './beranda-frames';
 import { CatatFrames } from './catat-frames';
 import { DetailFrames } from './detail-frames';
+import { KategoriFrames } from './kategori-frames';
 import { SampahFrames } from './sampah-frames';
 import { TransaksiFrames } from './transaksi-frames';
 
@@ -270,6 +271,10 @@ export function Gallery() {
 
         <Section id="sampah-s6" title="Sampah (bingkai S6-S1)">
           <SampahFrames />
+        </Section>
+
+        <Section id="kategori-s6" title="Kategori (bingkai S6-K1/K2) dan Dompet nyata">
+          <KategoriFrames />
         </Section>
       </main>
       <Toaster />

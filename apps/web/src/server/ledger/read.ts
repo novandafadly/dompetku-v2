@@ -207,6 +207,50 @@ export async function listEntries(
   );
 }
 
+/** Batas atas jumlah entri riwayat satu dompet per halaman (`?tampil=`). */
+export const ACCOUNT_HISTORY_MAX = 1000;
+const historyLimit = z.number().int().min(1).max(ACCOUNT_HISTORY_MAX);
+
+/**
+ * Riwayat satu dompet (semua bulan): entri hidup yang menyentuh dompet ini sebagai baris utama atau
+ * lawan, terbaru di atas, dibatasi `n` (`hasMore` bila masih ada yang lebih lama). Entri pembuka
+ * (Saldo awal) dikembalikan terpisah dan tidak ikut hitungan `n`, supaya tidak terpotong.
+ */
+export async function accountEntries(
+  ctx: LedgerCtx,
+  accountId: string,
+  n: number,
+): Promise<{ entries: EntryVM[]; opening: EntryVM[]; hasMore: boolean }> {
+  const id = uuid.parse(accountId);
+  const l = historyLimit.parse(n);
+  const touches = `exists (
+            select 1 from app.entry_lines l
+             where l.space_id = e.space_id and l.entry_id = e.id and l.account_id = $2)`;
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const rows = await queryEntries(
+      c,
+      `select ${ENTRY_COLUMNS}
+         from app.entries e ${ENTRY_JOINS}
+        where e.space_id = $1 and e.voided_at is null and e.kind <> 'opening_balance'
+          and ${touches}
+        ${ENTRY_ORDER}
+        limit $3`,
+      [ctx.spaceId, id, l + 1],
+    );
+    const opening = await queryEntries(
+      c,
+      `select ${ENTRY_COLUMNS}
+         from app.entries e ${ENTRY_JOINS}
+        where e.space_id = $1 and e.voided_at is null and e.kind = 'opening_balance'
+          and ${touches}
+        ${ENTRY_ORDER}
+        limit 10`,
+      [ctx.spaceId, id],
+    );
+    return { entries: rows.slice(0, l), opening, hasMore: rows.length > l };
+  });
+}
+
 /** `limit` entri hidup terbaru ruang ini (1–100). */
 export async function recentEntries(ctx: LedgerCtx, n: number): Promise<EntryVM[]> {
   const l = limit.parse(n);

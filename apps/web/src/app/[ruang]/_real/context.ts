@@ -2,10 +2,10 @@ import 'server-only';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { cache } from 'react';
-import type { AccountVM, Ruang } from '@/features/ledger/types';
+import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import { isRuang } from '@/features/shell/hrefs';
 import { authService, requireDataUser } from '@/server/auth/next';
-import { listAccounts } from '@/server/ledger/read';
+import { listAccounts, listCategories } from '@/server/ledger/read';
 import { resolveSpace, SpaceNotFoundError } from '@/server/ledger/space';
 import type { LedgerCtx } from '@/server/ledger/write';
 
@@ -46,4 +46,14 @@ const accountsOnce = cache(
 
 export function ruangAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
   return accountsOnce(ctx.pools, ctx.userId, ctx.spaceId);
+}
+
+/** Kategori aktif ruang ini, sekali per request: layout (opsi Catat) dan layar Kategori memakai hasil yang sama. */
+const categoriesOnce = cache(
+  (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<CategoryVM[]> =>
+    listCategories({ pools, userId, spaceId }),
+);
+
+export function ruangCategories(ctx: LedgerCtx): Promise<CategoryVM[]> {
+  return categoriesOnce(ctx.pools, ctx.userId, ctx.spaceId);
 }

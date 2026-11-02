@@ -20,6 +20,7 @@ for (const path of [
   '/pribadi/transaksi',
   `/pribadi/transaksi/${detailId}`,
   '/pribadi/sampah',
+  '/pribadi/dompet',
 ]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.

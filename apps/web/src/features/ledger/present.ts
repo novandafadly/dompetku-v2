@@ -53,3 +53,27 @@ export function signedAmountVM(e: EntryVM): {
       return { value: e.amount, kind: 'neutral' };
   }
 }
+
+/**
+ * Efek entri pada satu dompet (riwayat dompet): pengeluaran mengurangi, pemasukan menambah;
+ * transfer mengurangi dompet sumber (baris utama) dan menambah dompet lawan; antar ruang dan
+ * cocokkan saldo mengikuti `direction`. Entri pembuka (Saldo awal) ditampilkan terpisah.
+ */
+export function effectOnAccountVM(
+  e: EntryVM,
+  accountId: string,
+): { value: Rupiah; kind: 'income' | 'expense' | 'neutral' } {
+  switch (e.kind) {
+    case 'income':
+      return { value: e.amount, kind: 'income' };
+    case 'expense':
+      return { value: -e.amount, kind: 'expense' };
+    case 'transfer':
+      return { value: e.accountId === accountId ? -e.amount : e.amount, kind: 'neutral' };
+    case 'space_transfer':
+    case 'adjustment':
+      return { value: e.direction === 'out' ? -e.amount : e.amount, kind: 'neutral' };
+    default:
+      return { value: e.amount, kind: 'neutral' };
+  }
+}

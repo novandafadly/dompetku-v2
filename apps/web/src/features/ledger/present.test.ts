@@ -1,7 +1,7 @@
 import { createSeed, entryKindLabel, entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { describe, expect, it } from 'vitest';
-import { entryKindLabelVM, entryTitleVM, signedAmountVM } from './present';
+import { effectOnAccountVM, entryKindLabelVM, entryTitleVM, signedAmountVM } from './present';
 import type { EntryVM } from './types';
 
 const state: DemoState = createSeed({ today: '2026-10-17', variant: 'full' });
@@ -60,5 +60,45 @@ describe('presenter setara selector demo', () => {
     expect(entryTitleVM(vm)).toBe('Cocokkan saldo');
     expect(entryKindLabelVM(vm)).toBe('Cocokkan saldo');
     expect(signedAmountVM(vm)).toEqual({ value: 5000, kind: 'neutral' });
+  });
+});
+
+describe('effectOnAccountVM: efek entri pada satu dompet (riwayat dompet)', () => {
+  const base: EntryVM = {
+    id: 'e',
+    version: 1,
+    kind: 'expense',
+    occurredOn: '2026-11-01',
+    createdAt: '2026-11-01T08:00:00+07:00',
+    createdBy: { id: 'u', name: 'N', initial: 'N' },
+    accountId: 'a1',
+    accountName: 'BCA',
+    amount: 25_000,
+  };
+
+  it('pengeluaran mengurangi, pemasukan menambah, keduanya berwarna jenisnya', () => {
+    expect(effectOnAccountVM(base, 'a1')).toEqual({ value: -25_000, kind: 'expense' });
+    expect(effectOnAccountVM({ ...base, kind: 'income' }, 'a1')).toEqual({
+      value: 25_000,
+      kind: 'income',
+    });
+  });
+
+  it('transfer: dompet sumber berkurang, dompet lawan bertambah (netral)', () => {
+    const t: EntryVM = { ...base, kind: 'transfer', counterAccountId: 'a2' };
+    expect(effectOnAccountVM(t, 'a1')).toEqual({ value: -25_000, kind: 'neutral' });
+    expect(effectOnAccountVM(t, 'a2')).toEqual({ value: 25_000, kind: 'neutral' });
+  });
+
+  it('antar ruang dan cocokkan saldo mengikuti arah; tanpa arah dianggap menambah', () => {
+    expect(
+      effectOnAccountVM({ ...base, kind: 'space_transfer', direction: 'out' }, 'a1').value,
+    ).toBe(-25_000);
+    expect(effectOnAccountVM({ ...base, kind: 'adjustment', direction: 'out' }, 'a1').value).toBe(
+      -25_000,
+    );
+    expect(effectOnAccountVM({ ...base, kind: 'adjustment', direction: 'in' }, 'a1').value).toBe(
+      25_000,
+    );
   });
 });

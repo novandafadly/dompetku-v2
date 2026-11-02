@@ -6,7 +6,7 @@ import type { IsoDate } from '@dompetku/domain';
 import { CatatSheet } from '@/features/catat/catat-sheet';
 import type { CatatOptions } from '@/features/catat/source';
 import type { Ruang } from '@/features/ledger/types';
-import { RUANG_LABEL } from '@/features/shell/hrefs';
+import { buildAddWalletHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { useNav } from '@/features/shell/nav-provider';
 import type { LazySheetProps } from '../catat-slot';
 import { realCatatSource } from './catat-source-real';
@@ -57,9 +57,9 @@ export function RealCatatSheet({
       source={source}
       // Varian keypad dalam aplikasi hanya eksperimen prototipe (`?keypad=app`).
       keypad="os"
-      // S6-C6: sheet Tambah dompet nyata menyusul di Dompet (Task 18); sementara ke Dompet.
+      // S6-C6: Catat menutup, lalu Dompet ruang itu terbuka dengan sheet Tambah dompet (`?tambah=1`).
       onAddAccount={(r) => {
-        router.push(nav.href(r, 'dompet'));
+        router.push(buildAddWalletHref(r, nav.query));
       }}
     />
   );

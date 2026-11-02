@@ -1,14 +1,41 @@
+import { unstable_rethrow } from 'next/navigation';
+import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
-import { ruangContext } from '../_real/context';
-import { RealPlaceholder } from '../_real/placeholder';
+import { errorTag } from '@/server/ledger/transaksi';
+import { ruangAccounts, ruangContext } from '../_real/context';
+import { DompetFailed, DompetReal } from '../_real/dompet';
 import { DompetPage } from './view';
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 /**
  * Prototipe: data demo, tanpa auth/DB. Nyata: gerbang di page (`ruangContext` =
- * `requireDataUser()` → `resolveSpace`). Data ledger disambung Task 18; sampai itu pengganti sementara tanpa data.
+ * `requireDataUser()` → `resolveSpace`), lalu dompet ruang ini (saldo `account_balances`) lewat
+ * `withUser`. Galat loader = layar gagal muat (bukan galat rute); redirect/404 dari gerbang tetap
+ * dilempar. `?tambah=1` (dari sheet Catat di ruang tanpa dompet) dibaca pulau klien yang membuka sheet.
  */
-export default async function Page({ params }: { params: Promise<{ ruang: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ruang: string }>;
+  searchParams: SearchParams;
+}) {
   if (isPrototype()) return <DompetPage />;
   const ctx = await ruangContext(params);
-  return <RealPlaceholder ruang={ctx.ruang} title="Dompet" />;
+  const raw = await searchParams;
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(raw)) if (typeof v === 'string') sp.set(k, v);
+
+  let accounts;
+  try {
+    accounts = await ruangAccounts(ctx);
+  } catch (e) {
+    unstable_rethrow(e);
+    console.error('[dompet] gagal memuat', errorTag(e));
+    return <DompetFailed />;
+  }
+  return (
+    <DompetReal ruang={ctx.ruang} query={keptQuery(sp, REAL_KEPT_PARAMS)} accounts={accounts} />
+  );
 }

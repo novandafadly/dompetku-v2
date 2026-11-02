@@ -348,7 +348,21 @@ test('pemilik: Beranda nyata tanpa dompet: tanpa data demo, no-store, checklist,
   await expect(
     page.getByText('Belum ada dompet di Pribadi. Tambah dompet dulu untuk mencatat.'),
   ).toBeVisible();
+  // S6-C6: Tambah dompet menutup Catat dan membuka Dompet dengan sheet Tambah dompet terbuka.
+  await page.getByRole('dialog').getByRole('button', { name: 'Tambah dompet' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/dompet\?tambah=1$/);
+  const tambah = page.getByRole('dialog', { name: /Tambah dompet/ });
+  await expect(tambah.getByRole('textbox', { name: 'Nama' })).toBeFocused();
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Dompet nyata kosong: salinan tetap + Tambah dompet; parameter ?tambah dibuang saat sheet ditutup.
+  await expect(page).toHaveURL(/\/pribadi\/dompet$/);
+  const main = page.getByRole('main');
+  await expect(main.getByText('Belum ada dompet di Pribadi.')).toBeVisible();
+  // Laptop: tombol di header halaman dan di keadaan kosong.
+  await expect(main.getByRole('button', { name: 'Tambah dompet' }).first()).toBeVisible();
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await checkScreen(page);
   // Rencana belum ada di mode nyata: 404.
   // Status stream sudah 200 saat page melempar notFound (Suspense root); isinya halaman 404.
   await page.goto('/pribadi/rencana');
@@ -627,6 +641,220 @@ test('pemilik: Sampah nyata: batalkan, Menu → Sampah, Pulihkan, kembali di Tra
   await main.getByRole('link', { name: 'Transaksi' }).click();
   await expect(page).toHaveURL(/\/pribadi\/transaksi$/);
   await expect(main.getByText(SAMPAH_KANARI)).toBeVisible();
+});
+
+const UI_WALLET = 'Dompet UI E2E';
+
+/** 1146750 → '1.146.750' (pemisah ribuan format Indonesia, tanpa bergantung pada ICU Node). */
+const rupiahDigits = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const UI_KANARI = 'KANARI-RIWAYAT-DOMPET-E2E';
+
+test('pemilik: Dompet nyata: daftar saldo, Tambah dompet dengan saldo awal, riwayat; hanya ruang ini', async () => {
+  const page = ownerPage;
+  const main = page.getByRole('main');
+  const toasts = page.getByRole('region', { name: /Notifikasi/ });
+
+  const res = await page.goto('/pribadi/dompet');
+  expect(res?.headers()['cache-control'] ?? '').toContain('no-store');
+  // Saldo dompet ini sudah berubah oleh tes sebelumnya (pengeluaran); yang diperiksa: daftar = saldo ledger.
+  const saldoAwal = /Rp\s([\d.]+)/.exec(
+    await main.getByRole('link', { name: new RegExp(PRIBADI_WALLET) }).innerText(),
+  )?.[1];
+  const sebelum = Number((saldoAwal ?? '').replaceAll('.', ''));
+  expect(sebelum).toBeGreaterThan(1_000_000);
+  expect(sebelum).toBeLessThanOrEqual(1_250_000);
+  await expect(page.getByTestId('net-worth')).toContainText(rupiahDigits(sebelum));
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  // Cocokkan saldo, ubah saldo awal, dan arsip dompet menyusul di S7.
+  await expect(page.getByText(/Cocokkan saldo|Arsipkan dompet/)).toHaveCount(0);
+  await checkScreen(page);
+  await transaksiShots(page, '/pribadi/dompet', 'dompet-daftar', PRIBADI_WALLET);
+
+  // Tambah dompet dari layar Dompet: saldo hari ini langsung tampil di daftar (tanpa muat ulang).
+  await main.getByRole('button', { name: 'Tambah dompet' }).click();
+  const sheet = page.getByRole('dialog', { name: /Tambah dompet/ });
+  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toBeFocused();
+  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toHaveAttribute('maxlength', '40');
+  await sheet.getByRole('button', { name: 'Simpan dompet' }).click();
+  await expect(sheet.getByText('Nama dompet wajib diisi.')).toBeVisible();
+  await expect(sheet.getByText('Pilih jenis dompet.')).toBeVisible();
+  await sheet.getByRole('textbox', { name: 'Nama' }).fill(PRIBADI_WALLET.toLowerCase());
+  await sheet.getByRole('radio', { name: 'Tabungan' }).click();
+  await sheet.getByRole('button', { name: 'Simpan dompet' }).click();
+  await expect(
+    sheet.getByText(`Dompet bernama ${PRIBADI_WALLET} sudah ada di Pribadi.`),
+  ).toBeVisible();
+  await checkScreen(page);
+  await sheet.getByRole('textbox', { name: 'Nama' }).fill(UI_WALLET);
+  await sheet.getByRole('textbox', { name: 'Saldo hari ini' }).fill('2500000');
+  await sheet.getByRole('button', { name: 'Simpan dompet' }).click();
+  await expect(toasts.getByText(`Dompet ${UI_WALLET} ditambahkan di Pribadi`)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const tabungan = main.getByRole('region', { name: 'Tabungan', exact: true });
+  await expect(tabungan.getByRole('link', { name: new RegExp(UI_WALLET) })).toContainText(
+    '2.500.000',
+  );
+  await expect(page.getByTestId('net-worth')).toContainText(rupiahDigits(sebelum + 2_500_000));
+
+  // Saldo yang sama di Beranda dan di sheet Catat (daftar dompet layout ikut segar).
+  await page.goto('/pribadi/transaksi');
+  const awal = main.getByRole('listitem').filter({ hasText: `Saldo awal · ${UI_WALLET}` });
+  await expect(awal).toContainText('2.500.000');
+
+  // Riwayat dompet: saldo, Saldo awal di bawah, efek entri pada dompet ini.
+  await createExpense(OWNER, 'personal', UI_WALLET, 100_000, UI_KANARI);
+  await page.goto('/pribadi/dompet');
+  await main.getByRole('link', { name: new RegExp(UI_WALLET) }).click();
+  await expect(main.getByRole('heading', { level: 1, name: UI_WALLET })).toBeVisible();
+  const walletPath = new URL(page.url()).pathname;
+  await expect(page.getByTestId('wallet-balance')).toContainText('2.400.000');
+  const row = main.getByRole('listitem').filter({ hasText: UI_KANARI });
+  await expect(row).toContainText('100.000');
+  const opening = main.getByRole('list', { name: 'Riwayat Entri pembuka' });
+  await expect(opening).toContainText('Saldo awal');
+  await expect(opening).toContainText('2.500.000');
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await checkScreen(page);
+  await transaksiShots(page, walletPath, 'dompet-riwayat', UI_KANARI);
+  await main.getByRole('link', { name: 'Dompet', exact: true }).click();
+  await expect(page).toHaveURL(/\/pribadi\/dompet$/);
+
+  // `?tambah=1` (dari Catat / Beranda) membuka sheet; dibuang dari alamat saat ditutup.
+  await page.goto('/pribadi/dompet?tambah=1');
+  await expect(page.getByRole('dialog', { name: /Tambah dompet/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/\/pribadi\/dompet$/);
+
+  // Bersama: tanpa dompet Pribadi di HTML maupun payload RSC; dompet Pribadi tidak terbuka dari Bersama.
+  const html = await (await page.request.get('/bersama/dompet')).text();
+  const rsc = await (await page.request.get('/bersama/dompet', { headers: { RSC: '1' } })).text();
+  expect(html).toContain('Kas Rumah');
+  expect(html + rsc).not.toContain(PRIBADI_WALLET);
+  expect(html + rsc).not.toContain(UI_WALLET);
+  // Status stream sudah 200 saat page melempar notFound (Suspense root); isinya halaman 404, tanpa data dompet.
+  const lintas = await (
+    await page.request.get(walletPath.replace('/pribadi/', '/bersama/'))
+  ).text();
+  expect(lintas).toContain('This page could not be found.');
+  expect(lintas).not.toContain(UI_WALLET);
+  const bukanId = await (await page.request.get('/pribadi/dompet/bukan-uuid')).text();
+  expect(bukanId).toContain('This page could not be found.');
+});
+
+const KATEGORI_BARU = 'Kategori UI E2E';
+
+test('pemilik: Kategori nyata: Menu → Kategori, tambah, ubah, nama ganda, arsip; hanya ruang ini', async () => {
+  const page = ownerPage;
+  const main = page.getByRole('main');
+  const toasts = page.getByRole('region', { name: /Notifikasi/ });
+  await page.goto('/pribadi/transaksi');
+  await page.getByRole('button', { name: 'Menu', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Kategori' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/kategori$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(main.getByRole('heading', { level: 1, name: 'Kategori · Pribadi' })).toBeVisible();
+  // Kategori bukan tab: Transaksi yang tampak aktif; pengalih ruang tetap di Kategori.
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Navigasi utama' })
+      .getByRole('link', { name: 'Transaksi' }),
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('complementary', { name: 'Sidebar' }).getByRole('link', { name: 'Bersama' }),
+  ).toHaveAttribute('href', '/bersama/kategori');
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  const list = main.getByRole('list', { name: 'Kategori pengeluaran' });
+  await expect(list.getByRole('button', { name: /Makan Siang & Minum/ })).toBeVisible();
+  await main.getByRole('tab', { name: 'Pemasukan' }).click();
+  await expect(
+    main.getByRole('list', { name: 'Kategori pemasukan' }).getByRole('button', { name: /Gaji/ }),
+  ).toBeVisible();
+  await main.getByRole('tab', { name: 'Pengeluaran' }).click();
+  await checkScreen(page);
+  await transaksiShots(page, '/pribadi/kategori', 'kategori-daftar', 'Makan Siang & Minum');
+
+  // Tambah: fokus awal di Nama, validasi inline, lalu tersimpan, baris baru terfokus.
+  await main.getByRole('button', { name: 'Tambah kategori' }).click();
+  const sheet = page.getByRole('dialog', { name: /Tambah kategori/ });
+  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toBeFocused();
+  await sheet.getByRole('button', { name: 'Simpan kategori' }).click();
+  await expect(sheet.getByText('Nama kategori wajib diisi.')).toBeVisible();
+  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toBeFocused();
+  await sheet.getByRole('textbox', { name: 'Nama' }).fill(KATEGORI_BARU);
+  await sheet.getByRole('radio', { name: 'Bensin' }).click();
+  await checkScreen(page);
+  await sheet.getByRole('button', { name: 'Simpan kategori' }).click();
+  await expect(toasts.getByText(`Kategori ${KATEGORI_BARU} disimpan di Pribadi`)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const baru = list.getByRole('button', { name: new RegExp(KATEGORI_BARU) });
+  await expect(baru).toBeVisible();
+  await expect(baru).toBeFocused();
+
+  // Nama ganda (beda huruf) ditolak di kolom Nama; tetap di sheet.
+  await main.getByRole('button', { name: 'Tambah kategori' }).click();
+  await sheet.getByRole('textbox', { name: 'Nama' }).fill(KATEGORI_BARU.toLowerCase());
+  await sheet.getByRole('button', { name: 'Simpan kategori' }).click();
+  await expect(sheet.getByText('Nama ini sudah dipakai kategori lain di Pribadi.')).toBeVisible();
+  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toBeFocused();
+  await page.keyboard.press('Escape');
+
+  // Ubah: jadikan subkategori; dua tingkat saja.
+  await baru.click();
+  const ubah = page.getByRole('dialog', { name: /Ubah kategori/ });
+  await expect(ubah.getByRole('textbox', { name: 'Nama' })).toHaveValue(KATEGORI_BARU);
+  await expect(ubah.getByRole('radio', { name: 'Bensin' })).toBeChecked();
+  await ubah.getByRole('combobox', { name: 'Induk' }).selectOption({ label: 'Transportasi' });
+  await ubah.getByRole('button', { name: 'Simpan kategori' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const anak = main
+    .getByRole('list', { name: 'Subkategori Transportasi' })
+    .getByRole('button', { name: new RegExp(KATEGORI_BARU) });
+  await expect(anak).toBeVisible();
+  await expect(anak).toBeFocused();
+  // Kategori yang punya anak tidak bisa jadi anak (Induk nonaktif).
+  await main.getByRole('button', { name: /^Transportasi/ }).click();
+  await expect(
+    page.getByRole('dialog', { name: /Ubah kategori/ }).getByRole('combobox', { name: 'Induk' }),
+  ).toBeDisabled();
+  await page.keyboard.press('Escape');
+
+  // Arsip dengan subkategori: dialog menyebut akibatnya, fokus awal di Kembali, lalu ke judul.
+  await main.getByRole('button', { name: /^Transportasi/ }).click();
+  await page
+    .getByRole('dialog', { name: /Ubah kategori/ })
+    .getByRole('button', { name: 'Arsipkan kategori' })
+    .click();
+  const arsip = page.getByRole('alertdialog', { name: 'Arsipkan Transportasi?' });
+  await expect(arsip).toContainText(
+    'Transportasi tidak ditawarkan lagi di Catat Pribadi. Transaksi lama tetap memakai kategori ini. 1 subkategori ikut diarsipkan.',
+  );
+  await expect(arsip.getByRole('button', { name: 'Kembali' })).toBeFocused();
+  await checkScreen(page);
+  await arsip.getByRole('button', { name: 'Arsipkan' }).click();
+  await expect(toasts.getByText('Transportasi diarsipkan di Pribadi')).toBeVisible();
+  await expect(main.getByRole('button', { name: /Transportasi/ })).toHaveCount(0);
+  await expect(main.getByRole('button', { name: new RegExp(KATEGORI_BARU) })).toHaveCount(0);
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+
+  // Kategori diarsipkan tidak ditawarkan lagi di Catat (opsi layout ikut segar).
+  await page.locator('[data-catat-trigger]:visible').click();
+  const catat = page.getByRole('dialog').first();
+  await expect(catat.getByRole('radio', { name: /Transportasi/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // Bersama: daftar sendiri, tanpa kategori baru Pribadi di HTML maupun payload RSC.
+  const html = await (await page.request.get('/bersama/kategori')).text();
+  const rsc = await (await page.request.get('/bersama/kategori', { headers: { RSC: '1' } })).text();
+  expect(html + rsc).not.toContain(KATEGORI_BARU);
+  await page.goto('/bersama/kategori');
+  await expect(main.getByRole('heading', { level: 1, name: 'Kategori · Bersama' })).toBeVisible();
+  await expect(
+    main
+      .getByRole('list', { name: 'Kategori pengeluaran' })
+      .getByRole('button', { name: /Sewa Rumah/ }),
+  ).toBeVisible();
+  await expect(main.getByText(KATEGORI_BARU)).toHaveCount(0);
+  await checkScreen(page);
 });
 
 test('pemilik: undang pasangan, undangan tertunda', async () => {

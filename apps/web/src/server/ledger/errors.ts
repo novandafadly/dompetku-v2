@@ -19,8 +19,12 @@ const RULES = new Set<LedgerErrorCode>([
   'before_opening',
   'account_archived',
   'category_archived',
+  'category_depth',
   'restore_window_closed',
 ]);
+
+/** Indeks unik nama kategori aktif (0100): satu-satunya 23505 yang punya teks sendiri di UI. */
+const CATEGORY_NAME_INDEX = 'categories_name_unique';
 
 const MACHINE_CODE = /^[a-z_]{1,64}$/;
 
@@ -75,6 +79,11 @@ export function toLedgerError(e: unknown): LedgerError | null {
           ? { code: 'invalid', field: detail }
           : { code: 'invalid' };
       }
+      case '23505':
+        if ((e as { constraint?: unknown }).constraint === CATEGORY_NAME_INDEX) {
+          return { code: 'name_taken' };
+        }
+        break;
       case 'DK422':
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         break;

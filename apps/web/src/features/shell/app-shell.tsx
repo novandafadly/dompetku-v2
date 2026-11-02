@@ -47,7 +47,7 @@ export function AppShell({
         <TabBar />
         {menuMounted ? (
           <Suspense fallback={null}>
-            <MenuSheet open={menuOpen} onOpenChange={setMenuOpen} />
+            <MenuSheet open={menuOpen} onOpenChange={setMenuOpen} real={!demo} />
           </Suspense>
         ) : null}
         <Toaster />

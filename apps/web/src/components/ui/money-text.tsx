@@ -38,10 +38,13 @@ export function MoneyText({
   const spoken = spokenRupiah(kind === 'neutral' ? value : Math.abs(value), kind);
 
   // Angka sangat panjang memakai skala yang lebih kecil di HP agar tidak keluar dari kartu.
+  const long = text.length > 13;
   const sizeClass =
-    size === 'hero' && text.length > 13
+    size === 'hero' && long
       ? 'text-display-long font-extrabold laptop:text-display-xl'
-      : sizes[size];
+      : size === 'amount' && long
+        ? 'text-display-long font-extrabold'
+        : sizes[size];
   return (
     <span className={`num inline-block max-w-full ${sizeClass} ${tones[kind]} ${className}`}>
       <span aria-hidden="true">{text}</span>

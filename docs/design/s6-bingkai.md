@@ -193,6 +193,24 @@ Diputuskan controller atas nama pemilik (2026-11-01, review Task 12) untuk kode 
 | `unknown`, `invalid`, `conflict`  | kotak `role="alert"` gaya S6-C2 + `Coba lagi` (clientId sama)                               | `Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.` |
 | Urungkan gagal (toast `Urungkan`) | toast pemberitahuan `role="status"`                                                         | `Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.`                 |
 
+### Tambahan salinan Task 18 (Dompet nyata dan Kategori)
+
+Keputusan agen atas nama pemilik untuk keadaan yang tidak punya bingkai sendiri; salinan S6-K1/K2 dan S6-C6 di atas tidak diubah.
+
+| Keadaan                        | Teks                                                                                                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dompet nyata kosong            | `Belum ada dompet di {Ruang}.` + `Tambah dompet` (sama dengan prototipe)                                                                                                              |
+| Dompet gagal muat              | `Dompet belum bisa dimuat.` / `Periksa koneksi lalu coba lagi.` + `Coba lagi`                                                                                                         |
+| Riwayat dompet gagal muat      | `Riwayat dompet belum bisa dimuat.` / `Periksa koneksi lalu coba lagi.` + `Coba lagi`                                                                                                 |
+| Kategori gagal muat            | `Kategori belum bisa dimuat.` / `Periksa koneksi lalu coba lagi.` + `Coba lagi`                                                                                                       |
+| Nama dompet terlalu panjang    | `Nama dompet maksimal 40 karakter.`                                                                                                                                                   |
+| Nama kategori kosong / panjang | `Nama kategori wajib diisi.` / `Nama kategori maksimal 40 karakter.`                                                                                                                  |
+| Induk tak tersedia             | `Punya subkategori, jadi tidak bisa dijadikan subkategori.` (petunjuk di bawah Select Induk)                                                                                          |
+| Galat simpan kategori/dompet   | gaya S6-C2: `Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan menyimpan dua kali.` (kategori) / `…menambah dua kali.` (dompet); server: `Ada kendala di server.` |
+| Kategori sudah tidak ada       | `Kategori ini sudah tidak ada atau sudah diarsipkan. Tutup lalu muat ulang halaman.`                                                                                                  |
+| Toast simpan kategori          | `Kategori {nama} disimpan di {Ruang}`                                                                                                                                                 |
+| Arsip kategori gagal           | `Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.` / `Kategori ini sudah tidak ada.` / `Belum bisa diarsipkan. Ada kendala di server.`                                          |
+
 ## Catatan review
 
 Kursi design reviewer (pass terpisah dari penulisan, 2026-11-01), diperiksa terhadap `docs/design/panel-malam/README.md`, `DESIGN.md`, DBD §3 sampai §7, dan antislop (ui, human, copywriting, layoutmobile). Setiap temuan sudah diterapkan di bingkai di atas.

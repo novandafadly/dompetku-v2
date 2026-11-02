@@ -118,6 +118,9 @@ describe('_real tanpa data demo saat runtime', () => {
         'transaksi.tsx',
         'detail.tsx',
         'sampah.tsx',
+        'dompet.tsx',
+        'dompet-detail.tsx',
+        'kategori.tsx',
       ]),
     );
     const { seen, offenders, gated } = scan(entries);
@@ -143,6 +146,15 @@ describe('_real tanpa data demo saat runtime', () => {
         'features/sampah/trash-list-view.tsx',
         'app/[ruang]/restore-control.tsx',
         'app/[ruang]/sampah/trash-parts.tsx',
+        // Dompet nyata: daftar dan riwayat dari VM, sheet Tambah dompet (dimuat malas).
+        'features/dompet/account-list-view.tsx',
+        'features/dompet/account-history-view.tsx',
+        'features/dompet/add-account-sheet.tsx',
+        'features/dompet/add-wallet-button.tsx',
+        // Kategori nyata: daftar, sheet tambah/ubah, dialog arsip (dimuat malas).
+        'features/kategori/category-list.tsx',
+        'features/kategori/category-form.tsx',
+        'features/kategori/archive-dialog.tsx',
       ]),
     );
     expect(offenders).toEqual([]);

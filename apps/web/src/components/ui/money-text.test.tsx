@@ -30,4 +30,13 @@ describe('MoneyText', () => {
     const { container } = render(<MoneyText value={0} />);
     expect(container.querySelector('.sr-only')?.textContent).toBe('Rp 0');
   });
+
+  it('nominal sangat panjang (> 13 karakter) memakai skala display-long; ukuran amount/hero pendek tidak berubah', () => {
+    const long = render(<MoneyText value={12_345_678_900} size="amount" />);
+    expect(long.container.firstElementChild?.className).toContain('text-display-long');
+    expect(long.container.firstElementChild?.className).not.toContain('text-amount');
+    const short = render(<MoneyText value={1_250_000} size="amount" />);
+    expect(short.container.firstElementChild?.className).toContain('text-amount');
+    expect(short.container.firstElementChild?.className).not.toContain('text-display-long');
+  });
 });

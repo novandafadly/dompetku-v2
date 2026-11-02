@@ -64,6 +64,11 @@ export function buildHref(
   return `/${ruang}/${tab}${q}` as Route;
 }
 
+/** Dompet ruang itu dengan sheet Tambah dompet terbuka (`?tambah=1`), query yang dibawa tetap ada. */
+export function buildAddWalletHref(ruang: Ruang, query: string): Route {
+  return `/${ruang}/dompet${query === '' ? '?' : `${query}&`}tambah=1` as Route;
+}
+
 export function buildEntryHref(
   ruang: Ruang,
   id: string,
@@ -103,11 +108,11 @@ export function sectionFromPathname(pathname: string): Section | null {
 }
 
 /**
- * Tab yang tampak aktif untuk sebuah alamat. Sampah bukan tab: dibuka dari Transaksi, jadi induknya
- * yang tampak aktif (bukan Beranda). Alamat tak dikenal = Beranda.
+ * Tab yang tampak aktif untuk sebuah alamat. Sampah dan Kategori bukan tab: dibuka dari Transaksi
+ * atau Menu, jadi Transaksi yang tampak aktif (bukan Beranda). Alamat tak dikenal = Beranda.
  */
 export function tabFromPathname(pathname: string): Tab {
   const seg = pathname.split('/')[2];
-  if (seg === 'sampah') return 'transaksi';
+  if (seg === 'sampah' || seg === 'kategori') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }
