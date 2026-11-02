@@ -1,11 +1,14 @@
-import { requireDataUser } from '@/server/auth/next';
+import { isPrototype } from '@/server/env';
+import { ruangContext } from '../_real/context';
+import { RealPlaceholder } from '../_real/placeholder';
 import { TransaksiPage } from './view';
 
 /**
- * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
- * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ * Prototipe: data demo, tanpa auth/DB. Nyata: gerbang di page (`ruangContext` =
+ * `requireDataUser()` → `resolveSpace`). Data ledger disambung Task 15; sampai itu pengganti sementara tanpa data.
  */
-export default async function Page() {
-  await requireDataUser();
-  return <TransaksiPage />;
+export default async function Page({ params }: { params: Promise<{ ruang: string }> }) {
+  if (isPrototype()) return <TransaksiPage />;
+  const ctx = await ruangContext(params);
+  return <RealPlaceholder ruang={ctx.ruang} title="Transaksi" />;
 }

@@ -1,75 +1,67 @@
 'use client';
 
-import type { Ruang } from '@dompetku/demo-data';
-import type { Rupiah } from '@dompetku/domain';
-import { lazy, Suspense, useState, type ReactNode } from 'react';
-import { useOpenedOnce } from '@/components/ui/use-opened-once';
-import { CatatPlaceholder } from '@/features/catat/catat-placeholder';
+import type { IsoDate } from '@dompetku/domain';
+import { lazy, useMemo, type ReactNode } from 'react';
+import type { CatatOptions } from '@/features/catat/source';
+import type { Ruang } from '@/features/ledger/types';
 import { AppShell } from '@/features/shell/app-shell';
-import type { CatatSheetSlotProps } from '@/features/shell/catat';
-import { useDemo } from '@/features/shell/demo-provider';
-import { RUANG_LABEL } from '@/features/shell/hrefs';
+import { CatatSlot } from './catat-slot';
 
-// Sheet Catat (dan cmdk di dalamnya) tidak ikut muat awal. Kodenya dimuat saat browser senggang,
-// saat pointer/fokus di tombol Catat, atau paling lambat saat sheet dibuka.
-const loadCatatSheet = () => import('./catat-demo');
-const preloadCatatSheet = () => {
-  void loadCatatSheet();
+/**
+ * Shell ruang untuk kedua mode: satu komponen klien di layout (satu entri klien, JS muat awal
+ * tetap kecil). Sheet Catat (dan cmdk di dalamnya) tidak ikut muat awal; kodenya dimuat saat
+ * browser senggang, saat pointer/fokus di tombol Catat, atau paling lambat saat sheet dibuka.
+ * - Prototipe (`real` kosong): sheet demo di atas store demo (`catat-demo`).
+ * - Nyata (`real` diisi `RuangShellReal`): sheet `realCatatSource` (`_real/catat-real`); chunk
+ *   demo tidak pernah dimuat dan DemoProvider tidak dibaca (tes `ruang-shell.test.tsx`).
+ */
+
+const loadDemo = () => import('./catat-demo');
+const preloadDemo = () => {
+  void loadDemo();
 };
-const CatatSheet = lazy(() => loadCatatSheet().then((m) => ({ default: m.DemoCatatSheet })));
+const DemoSheet = lazy(() => loadDemo().then((m) => ({ default: m.DemoCatatSheet })));
 
-/** Merangkai shell dengan sheet Catat; fitur tidak saling mengimpor, jadi app/ yang menyambung. */
-function CatatSlot(props: CatatSheetSlotProps) {
-  const { state, store, today, keypad } = useDemo();
-  // Nominal yang diketik di placeholder sebelum sheet termuat; dikosongkan tiap kali dibuka.
-  const [early, setEarly] = useState<Rupiah | null>(null);
-  const [wasOpen, setWasOpen] = useState(props.open);
-  if (props.open !== wasOpen) {
-    setWasOpen(props.open);
-    if (props.open) setEarly(null);
-  }
-  if (!useOpenedOnce(props.open)) return null;
-  const placeholder = props.open ? (
-    <CatatPlaceholder
-      title={`Pengeluaran · ${RUANG_LABEL[props.ruang]}`}
-      tint={props.ruang}
-      amount={early}
-      onAmountChange={setEarly}
-      onClose={() => {
-        props.onOpenChange(false);
-        props.returnFocus?.focus();
-      }}
-    />
-  ) : null;
-  return (
-    <Suspense fallback={placeholder}>
-      <CatatSheet
-        {...props}
-        state={state}
-        store={store}
-        today={today}
-        keypad={keypad}
-        initialAmount={early}
-      />
-    </Suspense>
-  );
+const loadReal = () => import('./_real/catat-real');
+const preloadReal = () => {
+  void loadReal();
+};
+const RealSheet = lazy(() => loadReal().then((m) => ({ default: m.RealCatatSheet })));
+
+/** Opsi Catat mode nyata dari layout server: ruang halaman ini saja. */
+export interface RealCatat {
+  options: CatatOptions;
+  /** Hari ini WIB dari server. */
+  today: IsoDate;
 }
+
+const NO_EXTRA = {};
 
 export function RuangShell({
   ruang,
-  prototype,
+  real,
   children,
 }: {
   ruang: Ruang;
-  /** Dari server: sheet Catat masih berbasis store demo; mode nyata memakainya setelah disambung ke ledger. */
-  prototype: boolean;
+  real?: RealCatat | undefined;
   children: ReactNode;
 }) {
+  const extra = useMemo(
+    () => (real === undefined ? undefined : { home: ruang, ...real }),
+    [ruang, real],
+  );
   return (
     <AppShell
       ruang={ruang}
-      preloadCatat={preloadCatatSheet}
-      renderCatat={(props) => (prototype ? <CatatSlot {...props} /> : null)}
+      preloadCatat={extra === undefined ? preloadDemo : preloadReal}
+      demo={extra === undefined}
+      renderCatat={(props) =>
+        extra === undefined ? (
+          <CatatSlot {...props} Sheet={DemoSheet} extra={NO_EXTRA} />
+        ) : (
+          <CatatSlot {...props} Sheet={RealSheet} extra={extra} />
+        )
+      }
     >
       {children}
     </AppShell>

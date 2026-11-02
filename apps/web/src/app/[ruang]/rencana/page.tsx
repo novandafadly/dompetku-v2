@@ -1,11 +1,14 @@
-import { requireDataUser } from '@/server/auth/next';
+import { notFound } from 'next/navigation';
+import { isPrototype } from '@/server/env';
+import { ruangContext } from '../_real/context';
 import { RencanaPage } from './view';
 
 /**
- * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
- * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ * Rencana (anggaran, tagihan) milik milestone berikutnya: hanya prototipe. Mode nyata tetap
+ * lewat gerbang sesi dulu (`ruangContext`), lalu 404.
  */
-export default async function Page() {
-  await requireDataUser();
-  return <RencanaPage />;
+export default async function Page({ params }: { params: Promise<{ ruang: string }> }) {
+  if (isPrototype()) return <RencanaPage />;
+  await ruangContext(params);
+  notFound();
 }

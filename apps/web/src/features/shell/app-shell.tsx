@@ -17,9 +17,12 @@ export function AppShell({
   ruang,
   renderCatat,
   preloadCatat,
+  demo,
   children,
 }: {
   ruang: Ruang;
+  /** Prototipe: penanda "Data demo" di header dan sidebar. Mode nyata: `false`. */
+  demo: boolean;
   renderCatat: (props: CatatSheetSlotProps) => ReactNode;
   preloadCatat: () => void;
   children: ReactNode;
@@ -35,8 +38,8 @@ export function AppShell({
   return (
     <CatatProvider renderSheet={renderCatat} preload={preloadCatat}>
       <div className="min-h-dvh laptop:pl-62">
-        <AppHeader onMenu={openMenu} />
-        <Sidebar onMenu={openMenu} />
+        <AppHeader onMenu={openMenu} demo={demo} />
+        <Sidebar onMenu={openMenu} demo={demo} />
         {/* HP: padding 12, jarak 12. Tablet: isi maks 720, padding 24. Laptop: rata kiri, isi maks 1000. */}
         <main className="pb-tabbar mx-auto flex w-full max-w-180 flex-col gap-3 px-3 pt-3 tablet:gap-4 tablet:px-6 tablet:pt-6 laptop:mx-0 laptop:max-w-none laptop:px-8 laptop:pt-0 laptop:pb-8">
           {children}

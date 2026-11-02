@@ -1,6 +1,8 @@
 import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import pg from 'pg';
 import { MAIL_FILE } from '../../playwright.auth.config';
 import { expectNoSeriousViolations, WCAG_TAGS } from '../e2e/axe';
 import { routeScripts } from '../e2e/route-scripts';
@@ -176,6 +178,131 @@ test('pemilik: masuk, amankan dengan passkey, kode pemulihan, Beranda', async ()
   await page.getByLabel('Saya sudah menyimpan kode ini di tempat yang aman.').check();
   await page.getByRole('button', { name: 'Selesai' }).click();
   await expect(page).toHaveURL(/\/pribadi\/beranda$/);
+});
+
+/** Dompet operasional lewat `api.create_account` sebagai dompetku_web (seperti action Dompet). */
+async function createWallet(
+  email: string,
+  kind: 'personal' | 'shared',
+  name: string,
+  opening: number,
+) {
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  const { rows } = await admin.query<{ uid: string; sid: string }>(
+    `select u.id as uid, s.id as sid from auth."user" u
+       join app.space_members m on m.user_id = u.id
+       join app.spaces s on s.id = m.space_id and s.kind = $2::app.space_kind
+      where u.email = $1`,
+    [email, kind],
+  );
+  await admin.end();
+  const row = rows[0];
+  if (!row) throw new Error('ruang tidak ada');
+  const web = new pg.Client({ connectionString: process.env.AUTH_E2E_DATABASE_URL });
+  await web.connect();
+  await web.query('begin');
+  await web.query("select set_config('app.user_id', $1, true)", [row.uid]);
+  await web.query(
+    `select api.create_account(p_client_id => $1, p_space_id => $2, p_name => $3,
+       p_pocket => 'operasional', p_wallet_type => 'bank', p_opening_balance => $4::bigint)`,
+    [randomUUID(), row.sid, name, opening],
+  );
+  await web.query('commit');
+  await web.end();
+}
+
+/** Tangkapan tinjauan desain (SCREENS_REAL=1): 320/390/1280, terang dan gelap. */
+async function berandaShots(page: Page, path: string, name: string): Promise<void> {
+  if (!process.env.SCREENS_REAL) return;
+  for (const theme of ['dark', 'light']) {
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${path}?theme=${theme}`);
+      await expect(page.getByTestId('balance-card')).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await page.waitForLoadState('networkidle');
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({
+        path: `test-results/screens-real/${name}-${theme}-${String(width)}.png`,
+        fullPage: true,
+        animations: 'disabled',
+      });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+}
+
+const PRIBADI_WALLET = 'KANARI-DOMPET-PRIBADI-E2E';
+
+test('pemilik: Beranda nyata tanpa dompet: tanpa data demo, no-store, checklist, Catat nyata', async () => {
+  const page = ownerPage;
+  const res = await page.goto('/pribadi/beranda');
+  expect(res?.headers()['cache-control'] ?? '').toContain('no-store');
+  await expect(
+    page.getByRole('heading', { name: 'Aman dipakai sampai', exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await expect(page.getByText('Tambahkan dompet operasional')).toBeVisible();
+  const steps = page.getByRole('list', { name: 'Mulai dari sini' });
+  await expect(steps.getByText('Akun aman')).toBeVisible();
+  // Pemilik, Bersama belum berisi dua orang.
+  await expect(steps.getByRole('link', { name: /Undang Farida/ })).toBeVisible();
+  // Tanpa dompet operasional: S6-B1 tidak tampil.
+  await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toHaveCount(0);
+  await checkScreen(page);
+  await berandaShots(page, '/pribadi/beranda', 'beranda-kosong');
+
+  // Sheet Catat nyata (bukan demo): ruang tanpa dompet = S6-C6.
+  await page.locator('[data-catat-trigger]:visible').click();
+  await expect(
+    page.getByText('Belum ada dompet di Pribadi. Tambah dompet dulu untuk mencatat.'),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Halaman yang belum tersambung: pengganti tanpa data demo; Rencana 404.
+  await page.goto('/pribadi/transaksi');
+  await expect(page.getByText('Transaksi Pribadi belum tersedia')).toBeVisible();
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  // Status stream sudah 200 saat page melempar notFound (Suspense root); isinya halaman 404.
+  await page.goto('/pribadi/rencana');
+  await expect(page.getByText('This page could not be found.')).toBeVisible();
+});
+
+test('pemilik: Beranda nyata dengan dompet: kartu, tidak ada pengeluaran hari ini', async () => {
+  const page = ownerPage;
+  await createWallet(OWNER, 'personal', PRIBADI_WALLET, 1_250_000);
+  await createWallet(OWNER, 'shared', 'Kas Rumah', 400_000);
+  await page.goto('/pribadi/beranda');
+  const card = page.getByTestId('balance-card');
+  await expect(card.getByTestId('hero-amount')).toContainText('1.250.000');
+  // Mode nyata S6: tanpa baris tagihan dan anggaran.
+  await expect(card.getByText(/Tagihan s\.d\./)).toHaveCount(0);
+  await expect(page.getByText(PRIBADI_WALLET)).toBeVisible();
+  await checkScreen(page);
+  await berandaShots(page, '/pribadi/beranda', 'beranda-dompet');
+
+  const mark = page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' });
+  await mark.click();
+  const status = page
+    .getByRole('status')
+    .filter({ hasText: 'Hari ini tercatat tanpa pengeluaran.' });
+  await expect(status).toBeVisible();
+  await expect(status).toBeFocused();
+  await page.reload();
+  await expect(page.getByText('Hari ini tercatat tanpa pengeluaran.')).toBeVisible();
+  await expect(mark).toHaveCount(0);
+  await berandaShots(page, '/pribadi/beranda', 'beranda-ditandai');
+
+  // Rute Bersama (HTML + payload RSC) tanpa data Pribadi.
+  const html = await (await page.request.get('/bersama/beranda')).text();
+  const rsc = await (await page.request.get('/bersama/beranda', { headers: { RSC: '1' } })).text();
+  expect(html).toContain('Kas Rumah');
+  expect(html + rsc).not.toContain(PRIBADI_WALLET);
+  await page.goto('/bersama/beranda');
+  await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toBeVisible();
+  await checkScreen(page);
+  await berandaShots(page, '/bersama/beranda', 'beranda-bersama');
 });
 
 test('pemilik: undang pasangan, undangan tertunda', async () => {

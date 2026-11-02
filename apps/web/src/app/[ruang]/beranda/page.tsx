@@ -1,11 +1,36 @@
-import { requireDataUser } from '@/server/auth/next';
+import { todayWIB } from '@dompetku/domain';
+import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
+import { isPrototype } from '@/server/env';
+import { loadBeranda } from '@/server/ledger/beranda';
+import { BerandaReal } from '../_real/beranda';
+import { ruangContext } from '../_real/context';
 import { BerandaPage } from './view';
 
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
 /**
- * Gerbang di page, bukan hanya di layout: request RSC bisa merender segmen page tanpa layout.
- * M1: data ruang hanya diambil sesudah gerbang ini, lewat withUser(state.userId, spaceId).
+ * Prototipe: data demo, tanpa auth/DB. Nyata: gerbang di page, bukan hanya di layout (request RSC
+ * bisa merender segmen page tanpa layout): `ruangContext` = `requireDataUser()` → `resolveSpace`,
+ * lalu loader ruang ini lewat `withUser`.
  */
-export default async function Page() {
-  await requireDataUser();
-  return <BerandaPage />;
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ruang: string }>;
+  searchParams: SearchParams;
+}) {
+  if (isPrototype()) return <BerandaPage />;
+  const ctx = await ruangContext(params);
+  const data = await loadBeranda(ctx);
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) if (typeof v === 'string') sp.set(k, v);
+  return (
+    <BerandaReal
+      ruang={ctx.ruang}
+      today={todayWIB()}
+      query={keptQuery(sp, REAL_KEPT_PARAMS)}
+      data={data}
+    />
+  );
 }

@@ -25,7 +25,7 @@ export function Wordmark({ className = 'text-headline' }: { className?: string }
   );
 }
 
-export function Sidebar({ onMenu }: { onMenu: () => void }) {
+export function Sidebar({ onMenu, demo }: { onMenu: () => void; demo: boolean }) {
   const { ruang, href } = useNav();
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
@@ -38,7 +38,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
     >
       <div className="flex items-center justify-between gap-2 px-1 pt-1">
         <Wordmark />
-        <DemoMark />
+        {demo ? <DemoMark /> : null}
       </div>
       <SpaceSwitcher wide />
       <Button
