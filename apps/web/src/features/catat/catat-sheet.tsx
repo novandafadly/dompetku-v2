@@ -144,8 +144,14 @@ function CatatSession({
       chipsRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
     } else if (status === 'field') {
       (c.field === 'occurred_on' ? dateRef : accountRef).current?.focus();
+    } else if (status === 'galat' && c.galatKind === 'not_found') {
+      // Tidak ada yang bisa dicoba lagi: fokus ke Tutup (tombol utama nonaktif).
+      primaryRef.current
+        ?.closest('[role="dialog"]')
+        ?.querySelector<HTMLElement>('button[aria-label="Tutup"]')
+        ?.focus();
     } else if (status !== 'idle') primaryRef.current?.focus();
-  }, [status, c.field]);
+  }, [status, c.field, c.galatKind]);
 
   /** Menutup di tengah simpan menghasilkan toast tanpa sheet: Esc dan Tutup ditahan (S6-C1). */
   const onSheetOpenChange = (next: boolean) => {
@@ -155,6 +161,8 @@ function CatatSession({
 
   async function submit(e: SyntheticEvent) {
     e.preventDefault();
+    // Tombol utama hanya aria-disabled; Enter/klik saat nonaktif tidak mengirim apa pun.
+    if (saving || !c.canSave) return;
     const run =
       status === 'galat'
         ? c.retry
@@ -300,9 +308,9 @@ function CatatSession({
           type="submit"
           form={formId}
           size={compact ? 'sm' : 'md'}
-          // Menyimpan: aria-disabled (bukan disabled) agar fokus tidak jatuh ke <body> (R8).
-          disabled={!saving && !c.canSave}
-          aria-disabled={saving || undefined}
+          // Tidak pernah `disabled`: tombol yang sedang difokus tidak boleh menjatuhkan fokus ke
+          // <body> (R8). Nonaktif = aria-disabled; submit dijaga `canSave` di hook.
+          aria-disabled={saving || !c.canSave || undefined}
           aria-busy={saving || undefined}
           aria-describedby={describedBy}
           className="flex-1 aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted aria-disabled:hover-pointer:bg-surface-2"

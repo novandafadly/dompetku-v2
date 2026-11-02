@@ -581,6 +581,66 @@ describe('useCatat perbaikan review', () => {
     expect(source.save).toHaveBeenCalledTimes(1);
   });
 
+  it('not_found bertahan sesudah pindah ruang: Simpan tetap nonaktif sampai sheet ditutup', async () => {
+    const source = fakeSource(() => Promise.resolve({ ok: false, code: 'not_found' }));
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    act(() => {
+      result.current.switchRuang('bersama');
+    });
+    act(() => {
+      result.current.setCategory('b-dapur');
+    });
+    expect(result.current.draft.ruang).toBe('bersama');
+    expect(result.current.galatKind).toBe('not_found');
+    expect(result.current.status).toBe('galat');
+    expect(result.current.canSave).toBe(false);
+    await act(async () => {
+      expect(await result.current.save()).toBeNull();
+      expect(await result.current.saveAsNew()).toBeNull();
+    });
+    expect(source.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('pindah ruang gagal memulihkan dompet/kategori tersembunyi ruang lama', async () => {
+    let call = 0;
+    const source = fakeSource(
+      () =>
+        Promise.resolve<SaveOutcome>(
+          ++call === 1
+            ? { ok: false, code: 'account_archived' }
+            : { ok: false, code: 'category_archived' },
+        ),
+      {
+        options: vi.fn((r: Ruang) =>
+          r === 'pribadi' ? OPTIONS.pribadi : Promise.reject(new Error('network')),
+        ),
+      },
+    );
+    const { result } = render(source);
+    await act(async () => {
+      await result.current.save();
+    });
+    act(() => {
+      result.current.setAccount('p-tunai');
+    });
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.accounts.map((a) => a.id)).toEqual(['p-tunai']);
+    expect(result.current.allCategories.map((c) => c.id)).not.toContain('p-makan');
+    await act(async () => {
+      result.current.switchRuang('bersama');
+      await Promise.resolve();
+    });
+    expect(result.current.switchFailed).toBe('bersama');
+    expect(result.current.draft.ruang).toBe('pribadi');
+    expect(result.current.accounts.map((a) => a.id)).toEqual(['p-tunai']);
+    expect(result.current.allCategories.map((c) => c.id)).not.toContain('p-makan');
+  });
+
   for (const code of ['unknown', 'invalid', 'conflict'] as const) {
     it(`${code} → galat server; Coba lagi memakai clientId sama`, async () => {
       const source = fakeSource(() => Promise.resolve({ ok: false, code }));

@@ -193,6 +193,21 @@ test.describe('galat tanpa bingkai sendiri 390', () => {
       'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.',
     );
     await expect(sheet.getByRole('button', { name: 'Coba lagi' })).toHaveCount(0);
-    await expect(sheet.getByRole('button', { name: /^Simpan/ })).toBeDisabled();
+    const simpan = sheet.getByRole('button', { name: /^Simpan/ });
+    await expect(simpan).toHaveAttribute('aria-disabled', 'true');
+    await expect(simpan).not.toHaveAttribute('disabled');
+    // Tidak ada yang bisa dicoba lagi: fokus ke Tutup, bukan jatuh ke <body>.
+    await expect(sheet.getByRole('button', { name: 'Tutup' })).toBeFocused();
+    // Pindah ruang tidak membuka Simpan diam-diam.
+    await sheet.getByRole('button', { name: 'Pindah ke Bersama' }).click();
+    const bersama = page.getByRole('dialog', { name: 'Pengeluaran · Bersama' });
+    await bersama.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio').first().click();
+    await expect(bersama.getByRole('button', { name: /^Simpan/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await expect(bersama.getByRole('alert')).toHaveText(
+      'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.',
+    );
   });
 });

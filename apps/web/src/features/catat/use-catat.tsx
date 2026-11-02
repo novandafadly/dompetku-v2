@@ -244,9 +244,17 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
    */
   const switchRuang = (next: Ruang) => {
     if (busy.current) return;
-    const prev = { ruang: draft.ruang, accountId: draft.accountId, clientId: draft.clientId, opts };
+    const prev = {
+      ruang: draft.ruang,
+      accountId: draft.accountId,
+      clientId: draft.clientId,
+      opts,
+      hidden,
+      hiddenCategories,
+    };
     const seq = ++optsSeq.current;
-    toIdle();
+    // `not_found` bertahan sampai sheet ditutup: pindah ruang tidak membuka Simpan diam-diam.
+    if (galatKind !== 'not_found') toIdle();
     setSwitchFailed(null);
     setHidden(new Set());
     setHiddenCategories(new Set());
@@ -276,6 +284,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
         if (seq !== optsSeq.current) return;
         // Gagal memuat ruang tujuan: kembali ke ruang lama; suntingan lain selama memuat tetap.
         setOpts(prev.opts);
+        setHidden(prev.hidden);
+        setHiddenCategories(prev.hiddenCategories);
         setDraft((d) => ({
           ...d,
           ruang: prev.ruang,
@@ -289,7 +299,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   };
 
   const send = async (clientId: string, negative: boolean): Promise<SaveOutcome | null> => {
-    if (busy.current || !valid) return null;
+    if (busy.current || !valid || galatKind === 'not_found') return null;
     busy.current = true;
     allowNegative.current = negative;
     setStatus('menyimpan');
@@ -342,7 +352,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const saveAnyway = () => send(draft.clientId, true);
   /** "Simpan sebagai catatan baru" (S6-C4): satu-satunya jalan (selain pindah ruang) ke clientId baru. */
   const saveAsNew = () => {
-    if (busy.current) return Promise.resolve(null);
+    if (busy.current || galatKind === 'not_found') return Promise.resolve(null);
     const id = newClientId();
     setDraft((d) => ({ ...d, clientId: id }));
     return send(id, allowNegative.current);
