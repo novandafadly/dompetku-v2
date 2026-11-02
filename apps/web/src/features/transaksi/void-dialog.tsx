@@ -2,9 +2,8 @@
 
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import { formatRupiah } from '@dompetku/domain';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
 import { accountName } from './filters';
+import { VoidDialogView } from './void-dialog-view';
 
 /** Akibat ke saldo bila transaksi dibatalkan, dalam kalimat utuh. */
 export function voidSentence(state: DemoState, e: Entry): string {
@@ -32,6 +31,7 @@ export function voidSentence(state: DemoState, e: Entry): string {
   return `Transaksi ${amt} dibatalkan. ${effect} Bisa dipulihkan 90 hari dari Sampah.`;
 }
 
+/** Pembungkus demo: kalimat dari store demo, dialog `VoidDialogView` (sama dengan mode nyata). */
 export function VoidDialog({
   state,
   entry,
@@ -46,15 +46,11 @@ export function VoidDialog({
   onConfirm: () => void;
 }) {
   return (
-    <ConfirmDialog
+    <VoidDialogView
       open={open}
       onOpenChange={onOpenChange}
-      icon={<ArrowCounterClockwiseIcon size={22} weight="bold" />}
-      title="Batalkan transaksi ini?"
-      description={voidSentence(state, entry)}
-      confirmLabel="Batalkan transaksi"
-      cancelLabel="Kembali"
       onConfirm={onConfirm}
+      description={voidSentence(state, entry)}
     />
   );
 }

@@ -453,6 +453,121 @@ test('pemilik: Transaksi nyata: entri dan ringkasan Pribadi, tidak terbawa ke Be
   await checkScreen(page);
 });
 
+/** Tangkapan tinjauan desain Detail nyata (SCREENS_REAL=1), menunggu teks `ready`. */
+async function detailShots(page: Page, path: string, name: string, ready: string) {
+  if (!process.env.SCREENS_REAL) return;
+  await transaksiShots(page, path, name, ready);
+  // Tangkapan meninggalkan `?theme=` di URL (dibawa tautan kembali); kembali ke alamat polos.
+  await page.goto(path);
+}
+
+test('pemilik: Detail nyata: Ubah, konflik versi dari tab lain, Batalkan + Urungkan, Pulihkan', async ({
+  browser,
+}) => {
+  const page = ownerPage;
+  const main = page.getByRole('main');
+  const toasts = page.getByRole('region', { name: /Notifikasi/ });
+  await page.goto('/pribadi/transaksi');
+  await main.getByRole('link', { name: new RegExp(PRIBADI_KANARI) }).click();
+  await expect(page).toHaveURL(/\/pribadi\/transaksi\/[0-9a-f-]{36}$/);
+  const path = new URL(page.url()).pathname;
+  const id = path.split('/').at(-1) ?? '';
+  const res = await page.request.get(path);
+  expect(res.headers()['cache-control'] ?? '').toContain('no-store');
+  await expect(main.getByRole('heading', { level: 1, name: PRIBADI_KANARI })).toBeVisible();
+  await expect(main.getByRole('definition').filter({ hasText: /^kamu$/ })).toBeVisible();
+  // Mode nyata S6: tanpa Pindahkan ke ruang lain (S7), tanpa data demo.
+  await expect(main.getByRole('button', { name: 'Pindahkan ke ruang lain' })).toHaveCount(0);
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await checkScreen(page);
+  await detailShots(page, path, 'detail-hidup', PRIBADI_KANARI);
+
+  // S6-D1: Ubah nominal, field lain tetap (ganti-penuh), toast menyebut ruang.
+  await main.getByRole('button', { name: 'Ubah' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Ubah transaksi' });
+  const amount = sheet.getByRole('textbox', { name: 'Nominal' });
+  await expect(amount).toHaveValue('37.500');
+  await expect(amount).toBeFocused();
+  await expect(sheet.getByLabel(/Keterangan/)).toHaveValue(PRIBADI_KANARI);
+  await amount.fill('40000');
+  await sheet.getByRole('button', { name: 'Simpan perubahan' }).click();
+  await expect(toasts.getByText('Perubahan tersimpan di Pribadi')).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  await expect(main.getByText(/^−Rp\s40\.000$/)).toBeVisible();
+  await expect(main.getByRole('button', { name: 'Ubah' })).toBeFocused();
+
+  // S6-D2: tab lain (konteks kedua, sesi yang sama) menyimpan lebih dulu; tab ini tidak menimpa diam-diam.
+  await main.getByRole('button', { name: 'Ubah' }).click();
+  await expect(amount).toHaveValue('40.000');
+  const other = await browser.newContext({ storageState: await owner.storageState() });
+  try {
+    const tab = await other.newPage();
+    await tab.goto(path);
+    await tab.getByRole('main').getByRole('button', { name: 'Ubah' }).click();
+    const tabSheet = tab.getByRole('dialog', { name: 'Ubah transaksi' });
+    await tabSheet.getByRole('textbox', { name: 'Nominal' }).fill('45000');
+    await tabSheet.getByRole('button', { name: 'Simpan perubahan' }).click();
+    await expect(tabSheet).toHaveCount(0);
+  } finally {
+    await other.close();
+  }
+  await amount.fill('42000');
+  await sheet.getByRole('button', { name: 'Simpan perubahan' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText(
+    /^Kamu mengubah transaksi ini baru saja \(Rp\s40\.000 → Rp\s45\.000\)\. Muat versi terbaru untuk melanjutkan\.$/,
+  );
+  await expect(sheet.getByRole('group', { name: 'Nilai terbaru' })).toContainText('45.000');
+  await expect(sheet.getByRole('button', { name: 'Muat ulang' })).toBeFocused();
+  await expectNoSeriousViolations(page, { tags: WCAG_TAGS });
+  await sheet.getByRole('button', { name: 'Timpa dengan perubahan saya' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(main.getByText(/^−Rp\s42\.000$/)).toBeVisible();
+
+  // Batalkan: fokus awal Kembali, lalu daftar + toast Urungkan (6 detik) memulihkan entri.
+  await main.getByRole('button', { name: 'Batalkan transaksi' }).click();
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog.getByRole('button', { name: 'Kembali' })).toBeFocused();
+  await expect(dialog).toContainText(
+    `Transaksi Rp 42.000 dibatalkan. Saldo ${PRIBADI_WALLET} bertambah Rp 42.000. Bisa dipulihkan 90 hari dari Sampah.`,
+  );
+  await dialog.getByRole('button', { name: 'Batalkan transaksi' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/transaksi$/);
+  await expect(main.getByText(PRIBADI_KANARI)).toHaveCount(0);
+  await expect(
+    toasts.getByText(`Dibatalkan di Pribadi · Rp 42.000 dari ${PRIBADI_WALLET}`),
+  ).toBeVisible();
+  await toasts.getByRole('button', { name: 'Urungkan' }).click();
+  await expect(main.getByText(PRIBADI_KANARI)).toBeVisible();
+
+  // S6-D3: entri batal tetap terbuka lewat URL (bukan 404): banner, nominal dicoret, Pulihkan.
+  await page.goto(path);
+  await main.getByRole('button', { name: 'Batalkan transaksi' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Batalkan transaksi' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/transaksi$/);
+  await page.goto(path);
+  await expect(main.getByText('Transaksi ini sudah dibatalkan.')).toBeVisible();
+  await expect(main.getByText('dibatalkan', { exact: true })).toHaveCount(1);
+  await expect(main.getByRole('button', { name: 'Ubah' })).toHaveCount(0);
+  await expect(main.getByRole('button', { name: 'Batalkan transaksi' })).toHaveCount(0);
+  await checkScreen(page);
+  await detailShots(page, path, 'detail-batal', 'Transaksi ini sudah dibatalkan.');
+  await main.getByRole('button', { name: 'Pulihkan' }).click();
+  await expect(toasts.getByText('Dipulihkan di Pribadi · Rp 42.000')).toBeVisible();
+  await expect(main.getByText('Transaksi ini sudah dibatalkan.')).toHaveCount(0);
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+  await expect(main.getByRole('button', { name: 'Ubah' })).toBeVisible();
+
+  // Id Pribadi di rute Bersama = 404; id tidak ada / bukan uuid = 404.
+  for (const bad of [
+    `/bersama/transaksi/${id}`,
+    `/pribadi/transaksi/${randomUUID()}`,
+    '/pribadi/transaksi/bukan-uuid',
+  ]) {
+    await page.goto(bad);
+    await expect(page.getByText('This page could not be found.')).toBeVisible();
+  }
+});
+
 test('pemilik: undang pasangan, undangan tertunda', async () => {
   const page = ownerPage;
   await page.goto('/undang');

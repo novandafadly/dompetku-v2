@@ -1,3 +1,4 @@
+import { createSeed } from '@dompetku/demo-data';
 import { expect, test } from '@playwright/test';
 import { routeScripts } from './route-scripts';
 import { TODAY } from './routes';
@@ -8,7 +9,13 @@ import { TODAY } from './routes';
  */
 const BUDGET_KB = 162;
 
-for (const path of ['/pribadi/beranda', '/pribadi/transaksi']) {
+// Detail transaksi (Task 16): pengeluaran Pribadi pertama di seed penuh, sama dengan routes.ts.
+const detailId =
+  createSeed({ today: TODAY, variant: 'full' }).entries.find(
+    (e) => e.ruang === 'pribadi' && e.kind === 'expense' && e.voidedAt === undefined,
+  )?.id ?? '';
+
+for (const path of ['/pribadi/beranda', '/pribadi/transaksi', `/pribadi/transaksi/${detailId}`]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.
     const context = await browser.newContext();

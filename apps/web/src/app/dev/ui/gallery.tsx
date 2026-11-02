@@ -18,6 +18,7 @@ import { heroCard } from '@/components/ui/styles';
 import { Toaster, toast } from '@/components/ui/toast';
 import { BerandaFrames } from './beranda-frames';
 import { CatatFrames } from './catat-frames';
+import { DetailFrames } from './detail-frames';
 import { TransaksiFrames } from './transaksi-frames';
 
 const plainSamples = ['1111111', '0000000', '1.250.000', '8888888'];
@@ -260,6 +261,10 @@ export function Gallery() {
 
         <Section id="transaksi-s6" title="Transaksi nyata (daftar, kosong, gagal muat)">
           <TransaksiFrames />
+        </Section>
+
+        <Section id="detail-s6" title="Detail nyata (bingkai D1–D3, dialog Batalkan)">
+          <DetailFrames />
         </Section>
       </main>
       <Toaster />

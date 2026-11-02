@@ -116,6 +116,7 @@ describe('_real tanpa data demo saat runtime', () => {
         'ruang-shell-real.tsx',
         'catat-source-real.ts',
         'transaksi.tsx',
+        'detail.tsx',
       ]),
     );
     const { seen, offenders, gated } = scan(entries);
@@ -131,6 +132,12 @@ describe('_real tanpa data demo saat runtime', () => {
         'features/transaksi/summary-view-vm.tsx',
         'features/transaksi/transaksi-layout.tsx',
         'features/ledger/group-by-day.ts',
+        // Detail nyata: view VM, banner batal, dialog Batalkan, sheet Ubah (dimuat malas).
+        'features/transaksi/entry-detail-view.tsx',
+        'features/transaksi/voided-banner.tsx',
+        'features/transaksi/void-dialog-view.tsx',
+        'features/catat/edit-sheet.tsx',
+        'features/catat/conflict-notice.tsx',
       ]),
     );
     expect(offenders).toEqual([]);
