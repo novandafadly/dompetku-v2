@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useId, useState } from 'react';
 import type { Icon } from '@/components/ui/icon';
 import { AddressBookIcon } from '@/components/ui/icons/address-book';
@@ -7,11 +8,14 @@ import { AirplaneTiltIcon } from '@/components/ui/icons/airplane-tilt';
 import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
 import { ExportIcon } from '@/components/ui/icons/export';
 import { GearSixIcon } from '@/components/ui/icons/gear-six';
+import { CaretRightIcon } from '@/components/ui/icons/caret-right';
 import { HourglassMediumIcon } from '@/components/ui/icons/hourglass-medium';
 import { TagIcon } from '@/components/ui/icons/tag';
+import { TrashIcon } from '@/components/ui/icons/trash';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
 import { focusRing, rowDivider, tile } from '@/components/ui/styles';
+import { useNav } from './nav-provider';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
 const MENU_ITEMS: { name: string; Icon: Icon }[] = [
@@ -38,9 +42,27 @@ export function MenuSheet({
 }) {
   const [theme, setTheme] = useState<ThemeChoice>(currentTheme);
   const themeLabel = useId();
+  const { ruang, sampahHref } = useNav();
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Menu">
       <ul className="flex flex-col">
+        <li className={rowDivider}>
+          {/* Satu-satunya butir aktif (kedua mode); layarnya menyusul /{ruang}/sampah. */}
+          <Link
+            href={sampahHref(ruang)}
+            prefetch={false}
+            onClick={() => {
+              onOpenChange(false);
+            }}
+            className={`flex min-h-13 w-full items-center gap-3 rounded-lg text-left text-body font-semibold text-text hover-pointer:bg-hover ${focusRing}`}
+          >
+            <span aria-hidden="true" className={`size-9 ${tile}`}>
+              <TrashIcon size={18} />
+            </span>
+            <span className="flex-1">Sampah</span>
+            <CaretRightIcon size={16} weight="bold" className="shrink-0 text-text-muted" />
+          </Link>
+        </li>
         {MENU_ITEMS.map(({ name, Icon }) => (
           <li key={name} className={rowDivider}>
             {/* TODO(M1+): fitur ini di luar M0a; tetap fokusable dan berlabel "Segera". */}

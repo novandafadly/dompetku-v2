@@ -68,6 +68,7 @@ export const ROUTES: AppRoute[] = [
     route(`${r}-beranda-galat`, `/${r}/beranda`, 'full', '&state=error'),
     route(`${r}-transaksi`, `/${r}/transaksi`),
     route(`${r}-transaksi-detail`, `/${r}/transaksi/${entryId(r)}`),
+    route(`${r}-sampah`, `/${r}/sampah`),
     route(`${r}-dompet`, `/${r}/dompet`),
     route(`${r}-dompet-detail`, `/${r}/dompet/${accountId(r)}`),
     route(`${r}-rencana`, `/${r}/rencana`),

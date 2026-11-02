@@ -568,6 +568,67 @@ test('pemilik: Detail nyata: Ubah, konflik versi dari tab lain, Batalkan + Urung
   }
 });
 
+const SAMPAH_KANARI = 'KANARI-SAMPAH-PRIBADI-E2E';
+const SAMPAH_KOSONG =
+  'Sampah kosong. Transaksi yang dibatalkan bisa dipulihkan di sini selama 90 hari.';
+
+test('pemilik: Sampah nyata: batalkan, Menu → Sampah, Pulihkan, kembali di Transaksi; hanya ruang ini', async () => {
+  const page = ownerPage;
+  const main = page.getByRole('main');
+  const toasts = page.getByRole('region', { name: /Notifikasi/ });
+  await createExpense(OWNER, 'personal', PRIBADI_WALLET, 61_250, SAMPAH_KANARI);
+
+  // Kosong: salinan S6-S1, no-store, tanpa data demo (yang dibatalkan di tes Detail sudah dipulihkan).
+  const res = await page.goto('/pribadi/sampah');
+  expect(res?.headers()['cache-control'] ?? '').toContain('no-store');
+  await expect(main.getByRole('heading', { level: 1, name: 'Sampah · Pribadi' })).toBeVisible();
+  await expect(main.getByText(SAMPAH_KOSONG)).toBeVisible();
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await checkScreen(page);
+  await transaksiShots(page, '/pribadi/sampah', 'sampah-kosong', SAMPAH_KOSONG);
+
+  // Batalkan dari Detail, lalu Sampah lewat Menu.
+  await page.goto('/pribadi/transaksi');
+  await main.getByRole('link', { name: new RegExp(SAMPAH_KANARI) }).click();
+  await main.getByRole('button', { name: 'Batalkan transaksi' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Batalkan transaksi' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/transaksi$/);
+  await expect(main.getByText(SAMPAH_KANARI)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Menu', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Sampah' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/sampah$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const row = main.getByRole('listitem').filter({ hasText: SAMPAH_KANARI });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(PRIBADI_WALLET);
+  await expect(row).toContainText('Dibatalkan Hari ini');
+  await expect(row).toContainText(/Terhapus permanen \p{L}{3}, \d{1,2} \p{L}{3} \d{4}/u);
+  await expect(row).toContainText('61.250');
+  await expect(row.getByRole('link')).toHaveCount(0);
+  await expect(page.getByText('Data demo')).toHaveCount(0);
+  await checkScreen(page);
+  await transaksiShots(page, '/pribadi/sampah', 'sampah-daftar', SAMPAH_KANARI);
+
+  // Rute Bersama (HTML + payload RSC): Sampah tanpa data Pribadi.
+  const html = await (await page.request.get('/bersama/sampah')).text();
+  const rsc = await (await page.request.get('/bersama/sampah', { headers: { RSC: '1' } })).text();
+  expect(html + rsc).not.toContain(SAMPAH_KANARI);
+  expect(html + rsc).not.toContain(PRIBADI_WALLET);
+  await page.goto('/bersama/sampah');
+  await expect(main.getByRole('heading', { level: 1, name: 'Sampah · Bersama' })).toBeVisible();
+  await expect(main.getByText(SAMPAH_KOSONG)).toBeVisible();
+
+  // Pulihkan: toast menyebut ruang, baris hilang, fokus ke judul (daftar habis), entri kembali.
+  await page.goto('/pribadi/sampah');
+  await row.getByRole('button', { name: new RegExp(`^Pulihkan ${SAMPAH_KANARI}`) }).click();
+  await expect(toasts.getByText('Dipulihkan di Pribadi · Rp 61.250')).toBeVisible();
+  await expect(main.getByText(SAMPAH_KOSONG)).toBeVisible();
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+  await main.getByRole('link', { name: 'Transaksi' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/transaksi$/);
+  await expect(main.getByText(SAMPAH_KANARI)).toBeVisible();
+});
+
 test('pemilik: undang pasangan, undangan tertunda', async () => {
   const page = ownerPage;
   await page.goto('/undang');

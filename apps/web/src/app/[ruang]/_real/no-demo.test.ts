@@ -117,6 +117,7 @@ describe('_real tanpa data demo saat runtime', () => {
         'catat-source-real.ts',
         'transaksi.tsx',
         'detail.tsx',
+        'sampah.tsx',
       ]),
     );
     const { seen, offenders, gated } = scan(entries);
@@ -138,6 +139,10 @@ describe('_real tanpa data demo saat runtime', () => {
         'features/transaksi/void-dialog-view.tsx',
         'features/catat/edit-sheet.tsx',
         'features/catat/conflict-notice.tsx',
+        // Sampah nyata: daftar dan alur Pulihkan (bersama dengan Detail).
+        'features/sampah/trash-list-view.tsx',
+        'app/[ruang]/restore-control.tsx',
+        'app/[ruang]/sampah/trash-parts.tsx',
       ]),
     );
     expect(offenders).toEqual([]);

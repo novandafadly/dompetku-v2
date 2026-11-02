@@ -1,17 +1,14 @@
 'use client';
 
-import { formatRupiah, type IsoDate } from '@dompetku/domain';
+import type { IsoDate } from '@dompetku/domain';
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
-import { lazy, Suspense, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
 import { PencilSimpleIcon } from '@/components/ui/icons/pencil-simple';
-import { WarningIcon } from '@/components/ui/icons/warning';
-import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
-import { SaldoKurangRow } from '@/features/catat/catat-status';
 import { newClientId } from '@/features/catat/client-id';
 import { undoOrNotify } from '@/features/catat/saved-toast';
 import type {
@@ -23,8 +20,8 @@ import type {
 } from '@/features/ledger/types';
 import { RUANG_LABEL } from '@/features/shell/hrefs';
 import { DETAIL_TITLE_ID } from '@/features/transaksi/entry-detail-view';
-import { VOIDED_COPY } from '@/features/transaksi/voided-banner';
 import { restoreEntryAction, voidEntryAction } from '../_actions/entri';
+import { RestoreControl } from '../restore-control';
 
 /**
  * Aksi Detail nyata (pulau klien, dimuat malas lewat `detail-islands`). Sheet Ubah (`EditSheet` +
@@ -221,119 +218,36 @@ const VoidDialogDescribed = lazy(() =>
   })),
 );
 
-/** Saldo dompet utama sesudah entri batal dipulihkan (baris utama dipasang lagi). */
-function restoredBalance(entry: EntryVM, account: AccountVM): number {
-  const out =
-    entry.kind === 'expense' ||
-    entry.kind === 'transfer' ||
-    ((entry.kind === 'space_transfer' || entry.kind === 'adjustment') && entry.direction === 'out');
-  return account.balance + (out ? -entry.amount : entry.amount);
-}
-
 export interface RestoreActionProps {
   ruang: Ruang;
   entry: EntryVM;
   accounts: AccountVM[];
 }
 
-type RestoreState = 'idle' | 'busy' | 'saldo' | 'closed' | 'galat';
-
 /**
- * `Pulihkan` di banner S6-D3. Satu clientId per sesi pulihkan ("Coba lagi" dan "Tetap pulihkan"
- * memakainya lagi). Sesudah berhasil: toast, Detail dimuat ulang ke keadaan hidup, fokus ke judul.
+ * `Pulihkan` di banner S6-D3: alur bersama dengan Sampah (`RestoreControl`). Sesudah berhasil
+ * Detail dimuat ulang ke keadaan hidup (refresh dari action) dan fokus pindah ke judul.
  */
 export function RestoreAction({ ruang, entry, accounts }: RestoreActionProps) {
   const router = useRouter();
-  const [clientId, setClientId] = useState(newClientId);
-  const [state, setState] = useState<RestoreState>('idle');
-  const [negative, setNegative] = useState(false);
-  const busy = useRef(false);
-  const noteId = useId();
-
-  async function restore(allowNegative: boolean) {
-    if (busy.current) return;
-    busy.current = true;
-    setState('busy');
-    setNegative(allowNegative);
-    let res: Awaited<ReturnType<typeof restoreEntryAction>> | Failure;
-    try {
-      res = await restoreEntryAction(ruang, {
-        clientId,
-        entryId: entry.id,
-        expectedVersion: entry.version,
-        allowNegative,
-      });
-    } catch {
-      res = NETWORK;
-    } finally {
-      busy.current = false;
-    }
-    if (res.ok) {
-      toast({ message: `Dipulihkan di ${RUANG_LABEL[ruang]} · ${formatRupiah(entry.amount)}` });
-      // Banner hilang saat Detail dimuat ulang (refresh dari action): fokus ke judul, bukan <body>.
-      setTimeout(() => {
-        const title = document.getElementById(DETAIL_TITLE_ID);
-        title?.setAttribute('tabindex', '-1');
-        title?.focus();
-      }, 0);
-      return;
-    }
-    const code = res.error.code;
-    if (code === 'saldo_negatif') setState('saldo');
-    else if (code === 'restore_window_closed') setState('closed');
-    else if (code === 'conflict') {
-      // Entri berubah di tab/perangkat lain: muat ulang Detail; percobaan berikutnya sesi baru.
-      setClientId(newClientId());
-      setState('idle');
-      router.refresh();
-    } else setState('galat');
-  }
-
-  if (state === 'closed') {
-    return (
-      <p className="flex items-center gap-1.5 text-meta font-semibold text-warning">
-        <WarningIcon size={16} weight="fill" className="shrink-0" />
-        {VOIDED_COPY.closed}
-      </p>
-    );
-  }
-
   const account = accounts.find((a) => a.id === entry.accountId);
-  const saldoShown = state === 'saldo' || (state === 'busy' && negative);
-  const note =
-    saldoShown && account !== undefined ? (
-      <SaldoKurangRow id={noteId}>
-        {`Saldo ${account.name} tinggal ${formatRupiah(account.balance)}. Kalau dipulihkan, saldonya jadi ${formatRupiah(restoredBalance(entry, account))}.`}
-      </SaldoKurangRow>
-    ) : state === 'galat' ? (
-      <p
-        id={noteId}
-        role="alert"
-        className="flex items-start gap-1.5 text-meta font-semibold text-danger"
-      >
-        <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
-        <span className="min-w-0 text-pretty">
-          Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.
-        </span>
-      </p>
-    ) : null;
-
-  const saving = state === 'busy';
   return (
-    <>
-      <Button
-        variant="secondary"
-        size="sm"
-        aria-busy={saving || undefined}
-        aria-disabled={saving || undefined}
-        aria-describedby={note === null ? undefined : noteId}
-        onClick={() => {
-          if (!saving) void restore(state === 'saldo');
-        }}
-      >
-        {state === 'saldo' ? 'Tetap pulihkan' : VOIDED_COPY.restore}
-      </Button>
-      {note === null ? null : <div className="basis-full">{note}</div>}
-    </>
+    <RestoreControl
+      ruang={ruang}
+      entry={entry}
+      account={account}
+      restore={(req) => restoreEntryAction(ruang, req)}
+      onRestored={() => {
+        // Banner hilang saat Detail dimuat ulang: fokus ke judul, bukan <body>.
+        setTimeout(() => {
+          const title = document.getElementById(DETAIL_TITLE_ID);
+          title?.setAttribute('tabindex', '-1');
+          title?.focus();
+        }, 0);
+      }}
+      onConflict={() => {
+        router.refresh();
+      }}
+    />
   );
 }

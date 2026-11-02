@@ -19,6 +19,7 @@ import { Toaster, toast } from '@/components/ui/toast';
 import { BerandaFrames } from './beranda-frames';
 import { CatatFrames } from './catat-frames';
 import { DetailFrames } from './detail-frames';
+import { SampahFrames } from './sampah-frames';
 import { TransaksiFrames } from './transaksi-frames';
 
 const plainSamples = ['1111111', '0000000', '1.250.000', '8888888'];
@@ -265,6 +266,10 @@ export function Gallery() {
 
         <Section id="detail-s6" title="Detail nyata (bingkai D1–D3, dialog Batalkan)">
           <DetailFrames />
+        </Section>
+
+        <Section id="sampah-s6" title="Sampah (bingkai S6-S1)">
+          <SampahFrames />
         </Section>
       </main>
       <Toaster />

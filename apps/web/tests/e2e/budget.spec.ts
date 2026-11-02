@@ -15,7 +15,12 @@ const detailId =
     (e) => e.ruang === 'pribadi' && e.kind === 'expense' && e.voidedAt === undefined,
   )?.id ?? '';
 
-for (const path of ['/pribadi/beranda', '/pribadi/transaksi', `/pribadi/transaksi/${detailId}`]) {
+for (const path of [
+  '/pribadi/beranda',
+  '/pribadi/transaksi',
+  `/pribadi/transaksi/${detailId}`,
+  '/pribadi/sampah',
+]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.
     const context = await browser.newContext();
