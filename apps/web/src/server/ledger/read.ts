@@ -461,3 +461,19 @@ export async function todayStatus(ctx: LedgerCtx): Promise<TodayStatusVM> {
     return { hasEntry: r?.has_entry === true, noSpendMarked: r?.no_spend === true };
   });
 }
+
+/**
+ * Ada pengeluaran hidup di ruang ini (checklist Beranda "Catat satu pengeluaran"), kapan pun.
+ * Bukan fungsi SQL baru: satu `exists` dengan `space_id` eksplisit.
+ */
+export async function hasExpense(ctx: LedgerCtx): Promise<boolean> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const { rows } = await c.query<{ any: boolean }>(
+      `select exists (select 1 from app.entries e
+                       where e.space_id = $1 and e.voided_at is null and e.kind = 'expense')
+                as any`,
+      [ctx.spaceId],
+    );
+    return rows[0]?.any === true;
+  });
+}
