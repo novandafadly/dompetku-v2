@@ -10,7 +10,7 @@ import { PlusIcon } from '@/components/ui/icons/plus';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { ListCard } from '@/components/ui/list-card';
 import { MoneyText } from '@/components/ui/money-text';
-import { WalletRow } from '@/components/ui/rows';
+import { WalletRow } from '@/components/ui/wallet-row';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { EmptyState } from '@/components/ui/state';
 import { heroCard } from '@/components/ui/styles';

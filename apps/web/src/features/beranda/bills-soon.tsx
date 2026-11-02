@@ -3,7 +3,7 @@
 import { addDays, dayOfMonth, dueLabel, weekdayShort } from '@dompetku/domain';
 import { CalendarDotsIcon } from '@/components/ui/icons/calendar-dots';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
-import { BillRow } from '@/components/ui/rows';
+import { BillRow } from '@/components/ui/bill-row';
 import type { BerandaContext } from './context';
 
 export function BillsSoon({ state, ruang, today }: BerandaContext) {

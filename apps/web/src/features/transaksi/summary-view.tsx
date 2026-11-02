@@ -4,7 +4,7 @@ import type { BudgetProgress, MonthSummary } from '@dompetku/demo-data';
 import { formatRupiah } from '@dompetku/domain';
 import { GaugeIcon } from '@/components/ui/icons/gauge';
 import { ListCard } from '@/components/ui/list-card';
-import { BudgetRow } from '@/components/ui/rows';
+import { BudgetRow } from '@/components/ui/budget-row';
 import { SummaryViewVM } from './summary-view-vm';
 
 /**

@@ -4,7 +4,6 @@ import { fullDateLabel } from '@dompetku/domain';
 import { lazy, Suspense, useState } from 'react';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { ActivityFeed } from '@/features/beranda/activity-feed';
-import { BerandaError, BerandaLoading } from '@/features/beranda/beranda-states';
 import { BillsSoon } from '@/features/beranda/bills-soon';
 import { BudgetsNearLimit } from '@/features/beranda/budgets-near-limit';
 import { OnboardingChecklist } from '@/features/beranda/onboarding-checklist';
@@ -13,6 +12,14 @@ import { SafeToSpend, SafeToSpendEmpty } from '@/features/beranda/safe-to-spend'
 import { useOpenCatat, usePreloadCatat } from '@/features/shell/catat';
 import { useDemo } from '@/features/shell/demo-provider';
 import { PageHeader } from '@/features/shell/page-header';
+
+/**
+ * Keadaan tinjauan `?state=loading|error` dimuat malas (pola Sampah): SSR tetap merender isinya
+ * penuh, tetapi kerangka, ErrorState, dan ikonnya tidak ikut JS muat dingin Beranda (ADR 0002).
+ */
+const loadStates = () => import('@/features/beranda/beranda-states');
+const BerandaLoading = lazy(() => loadStates().then((m) => ({ default: m.BerandaLoading })));
+const BerandaError = lazy(() => loadStates().then((m) => ({ default: m.BerandaError })));
 
 const AddAccountSheet = lazy(() =>
   import('@/features/dompet/add-account-sheet').then((m) => ({ default: m.AddAccountSheet })),
@@ -39,16 +46,18 @@ export function BerandaPage() {
     return (
       <>
         {header}
-        {dataState === 'loading' ? (
-          <BerandaLoading />
-        ) : (
-          <BerandaError
-            onRetry={retry}
-            onCatat={() => {
-              openCatat();
-            }}
-          />
-        )}
+        <Suspense fallback={null}>
+          {dataState === 'loading' ? (
+            <BerandaLoading />
+          ) : (
+            <BerandaError
+              onRetry={retry}
+              onCatat={() => {
+                openCatat();
+              }}
+            />
+          )}
+        </Suspense>
       </>
     );
   }
