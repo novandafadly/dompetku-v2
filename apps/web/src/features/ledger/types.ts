@@ -43,6 +43,8 @@ export interface EntryVM {
   voidedAt?: string;
   direction?: 'out' | 'in';
   sharedNote?: string;
+  /** Hanya pengeluaran Pribadi yang ditalangi (S7); `true` bila ya, tidak ada bila tidak. */
+  reimbursable?: true;
 }
 
 export interface HistoryVM {
@@ -50,6 +52,8 @@ export interface HistoryVM {
   op: 'create' | 'update' | 'void' | 'restore';
   at: string;
   by: { name: string; initial: string };
+  /** Id user yang mengubah (layar konflik: "Kamu" bila pengguna sendiri, mis. tab lain). */
+  changedBy: string;
   amount?: Rupiah;
 }
 

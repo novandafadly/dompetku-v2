@@ -110,6 +110,7 @@ interface EntryRow {
   voided_at: string | null;
   direction: 'out' | 'in' | null;
   shared_note: string | null;
+  reimbursable: boolean;
 }
 
 /**
@@ -125,7 +126,7 @@ const ENTRY_COLUMNS = `
   case when e.kind = 'transfer' then ca.name end as counter_account_name,
   e.category_id, cat.name as category_name, cat.icon as category_icon,
   e.description, ${wib('e.voided_at')} as voided_at, e.direction::text as direction,
-  e.shared_note`;
+  e.shared_note, e.reimbursable`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -168,6 +169,8 @@ function toEntryVM(row: EntryRow): EntryVM {
   // Cocokkan saldo: nominal tetap absolut, arah dari tanda baris utama (naik = in, turun = out).
   if (kind === 'adjustment') vm.direction = row.main_in ? 'in' : 'out';
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
+  // Ubah = ganti-penuh: nilai talangan sekarang harus ikut terkirim apa adanya.
+  if (row.reimbursable) vm.reimbursable = true;
   return vm;
 }
 
@@ -267,6 +270,7 @@ export async function getEntry(
         op: row.op,
         at: row.at,
         by: { name: by.name, initial: initialOf(by.name) },
+        changedBy: row.changed_by,
       };
       if (row.amount !== null) vm.amount = row.amount;
       return vm;
