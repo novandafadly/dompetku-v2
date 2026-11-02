@@ -6,7 +6,7 @@ import { isPrototype } from '@/server/env';
 import { loadDompetRiwayat } from '@/server/ledger/dompet';
 import { ACCOUNT_HISTORY_MAX } from '@/server/ledger/read';
 import { errorTag } from '@/server/ledger/transaksi';
-import { ruangContext } from '../../_real/context';
+import { ruangAccounts, ruangContext } from '../../_real/context';
 import { DompetDetailFailed, DompetDetailReal, HISTORY_PAGE } from '../../_real/dompet-detail';
 import { DompetRiwayatPage } from './view';
 
@@ -43,7 +43,7 @@ export default async function Page({
 
   let data;
   try {
-    data = await loadDompetRiwayat(ctx, id, shown);
+    data = await loadDompetRiwayat(ctx, id, shown, await ruangAccounts(ctx));
   } catch (e) {
     unstable_rethrow(e);
     console.error('[dompet] riwayat gagal memuat', errorTag(e));

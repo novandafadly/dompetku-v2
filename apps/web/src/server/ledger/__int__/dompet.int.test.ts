@@ -46,6 +46,11 @@ async function wallet(ctx: LedgerCtx, name: string, openingBalance: number): Pro
   return accountId;
 }
 
+/** Seperti page: dompet ruang ini dimuat dulu (di app dari cache layout), lalu diberikan ke loader. */
+async function muatRiwayat(ctx: LedgerCtx, accountId: string, shown: number) {
+  return loadDompetRiwayat(ctx, accountId, shown, await listAccounts(ctx));
+}
+
 async function firstExpenseCategory(ctx: LedgerCtx): Promise<string> {
   const c = (await listCategories(ctx)).find((x) => x.type === 'expense' && x.parentId === null);
   if (!c) throw new Error('kategori awal tidak ada');
@@ -78,10 +83,10 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     const list = await listAccounts(ctx);
     expect(list.find((a) => a.id === bca)).toMatchObject({ name: 'BCA', balance: 1_250_000 });
     expect(list.find((a) => a.id === tunai)).toMatchObject({ name: 'Tunai', balance: 0 });
-    const riwayat = await loadDompetRiwayat(ctx, bca, 50);
+    const riwayat = await muatRiwayat(ctx, bca, 50);
     expect(riwayat?.opening).toHaveLength(1);
     expect(riwayat?.opening[0]).toMatchObject({ kind: 'opening_balance', amount: 1_250_000 });
-    expect((await loadDompetRiwayat(ctx, tunai, 50))?.opening).toEqual([]);
+    expect((await muatRiwayat(ctx, tunai, 50))?.opening).toEqual([]);
   });
 
   it('riwayat: terbaru dulu, batas halaman + hasMore, transfer terlihat di kedua dompet, batal hilang', async () => {
@@ -99,7 +104,7 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     });
     await voidEntry(ctx, { clientId: randomUUID(), entryId: e1.entryId, expectedVersion: 1 });
 
-    const all = await loadDompetRiwayat(ctx, a, 50);
+    const all = await muatRiwayat(ctx, a, 50);
     expect(all?.account).toMatchObject({
       name: KANARI_DOMPET,
       balance: 10_000_000 - 5_000 - 500_000,
@@ -108,14 +113,14 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     expect(all?.entries.some((e) => e.id === e1.entryId)).toBe(false);
     expect(all?.hasMore).toBe(false);
 
-    const page = await loadDompetRiwayat(ctx, a, 2);
+    const page = await muatRiwayat(ctx, a, 2);
     expect(page?.entries).toHaveLength(2);
     expect(page?.hasMore).toBe(true);
     // Saldo awal tidak ikut hitungan halaman.
     expect(page?.opening).toHaveLength(1);
 
     // Dompet lawan transfer melihat entrinya juga (sebagai lawan).
-    const lawan = await loadDompetRiwayat(ctx, b, 50);
+    const lawan = await muatRiwayat(ctx, b, 50);
     expect(lawan?.entries.map((e) => e.kind)).toEqual(['transfer']);
   });
 
@@ -123,10 +128,10 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     const pribadi = await ctxOf(n, 'pribadi');
     const bersama = await ctxOf(n, 'bersama');
     const a = await wallet(pribadi, KANARI_DOMPET, 1_000);
-    expect(await loadDompetRiwayat(pribadi, 'bukan-uuid', 50)).toBeNull();
-    expect(await loadDompetRiwayat(pribadi, randomUUID(), 50)).toBeNull();
-    expect(await loadDompetRiwayat(bersama, a, 50)).toBeNull();
-    expect(await loadDompetRiwayat(pribadi, a, 50)).not.toBeNull();
+    expect(await muatRiwayat(pribadi, 'bukan-uuid', 50)).toBeNull();
+    expect(await muatRiwayat(pribadi, randomUUID(), 50)).toBeNull();
+    expect(await muatRiwayat(bersama, a, 50)).toBeNull();
+    expect(await muatRiwayat(pribadi, a, 50)).not.toBeNull();
   });
 });
 

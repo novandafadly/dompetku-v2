@@ -124,7 +124,11 @@ export function KategoriManager({ ruang, categories }: KategoriManagerProps) {
           icon: v.icon,
           ...(v.parentId === null ? {} : { parentId: v.parentId }),
         });
-        if (!res.ok) return { ok: false, code: res.error.code };
+        if (!res.ok) {
+          // Kunci sama, isi beda: percobaan sebelumnya mungkin sudah tersimpan; muat ulang daftar.
+          if (res.error.code === 'idem_mismatch') router.refresh();
+          return { ok: false, code: res.error.code };
+        }
         setFocus({ row: res.value.categoryId });
       } else {
         const res = await updateCategoryAction(ruang, {

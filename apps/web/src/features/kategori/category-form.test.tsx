@@ -195,7 +195,7 @@ describe('CategoryForm (S6-K1)', () => {
     expect(select).toHaveFocus();
   });
 
-  it('galat jaringan: peringatan dengan Coba lagi memakai clientId yang sama; ganti isian = clientId baru', async () => {
+  it('galat jaringan: peringatan dengan Coba lagi; clientId tetap sama walau isian diubah', async () => {
     const user = userEvent.setup();
     const onSubmit = vi
       .fn<CategoryFormProps['onSubmit']>()
@@ -210,14 +210,25 @@ describe('CategoryForm (S6-K1)', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledTimes(2);
     });
-    const [first, second] = onSubmit.mock.calls.map((c: [CategorySubmit]) => c[0]);
-    expect(second?.clientId).toBe(first?.clientId);
+    // Server bisa saja sudah menyimpan sebelum koneksi putus: kunci tidak diganti walau isian berubah.
     await user.type(screen.getByRole('textbox', { name: 'Nama' }), 's');
     await user.click(save());
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledTimes(3);
     });
-    expect(onSubmit.mock.calls[2]?.[0].clientId).not.toBe(first?.clientId);
+    const ids = onSubmit.mock.calls.map((c: [CategorySubmit]) => c[0].clientId);
+    expect(new Set(ids).size).toBe(1);
+  });
+
+  it('idem_mismatch: pesan "mungkin sudah tersimpan", tanpa Coba lagi', async () => {
+    const user = userEvent.setup();
+    setup({ onSubmit: () => Promise.resolve({ ok: false, code: 'idem_mismatch' }) });
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Parkir');
+    await user.click(save());
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Kategori ini mungkin sudah tersimpan. Tutup lalu periksa daftar kategori.',
+    );
+    expect(screen.queryByRole('button', { name: 'Coba lagi' })).toBeNull();
   });
 
   it('sibuk menyimpan: tombol nonaktif bertuliskan Menyimpan… dan aria-busy; klik ganda = satu kiriman', async () => {

@@ -1,4 +1,4 @@
-import { formatRupiah, type Rupiah } from '@dompetku/domain';
+import type { Rupiah } from '@dompetku/domain';
 import type { Route } from 'next';
 import { useId, type ReactNode } from 'react';
 import { BackLink } from '@/components/ui/back-link';
@@ -99,16 +99,7 @@ export function AccountHistoryView({
         <div className="flex flex-col gap-1">
           <p className="text-label font-medium text-text-soft">Saldo</p>
           <p data-testid="wallet-balance">
-            <MoneyText
-              value={account.balance}
-              size="inherit"
-              // Saldo sangat panjang (> 13 karakter) memakai skala display-long agar muat di 320 px.
-              className={
-                formatRupiah(account.balance).length > 13
-                  ? 'text-display-long font-extrabold'
-                  : 'text-amount-sm font-extrabold'
-              }
-            />
+            <MoneyText value={account.balance} size="amount-sm" />
           </p>
         </div>
       </section>

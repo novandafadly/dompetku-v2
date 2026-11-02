@@ -30,6 +30,7 @@ export const KATEGORI_COPY = {
   network:
     'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan menyimpan dua kali.',
   server: 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan menyimpan dua kali.',
+  idem: 'Kategori ini mungkin sudah tersimpan. Tutup lalu periksa daftar kategori.',
   gone: 'Kategori ini sudah tidak ada atau sudah diarsipkan. Tutup lalu muat ulang halaman.',
 } as const;
 
@@ -58,7 +59,7 @@ export interface CategoryFormProps {
   onArchive?: (() => void) | undefined;
 }
 
-type Galat = 'network' | 'server' | 'gone';
+type Galat = 'network' | 'server' | 'gone' | 'idem';
 
 function Alert({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
@@ -147,7 +148,8 @@ function Body({
   const [galat, setGalat] = useState<Galat | null>(null);
   const busy = useRef(false);
   // clientId satu percobaan: dipakai ulang hanya untuk isian yang sama persis ("Coba lagi").
-  const attempt = useRef<{ key: string; clientId: string } | null>(null);
+  // Satu clientId per sesi sheet, tidak pernah diganti (server bisa sudah menyimpan sebelum koneksi putus).
+  const [clientId] = useState(newClientId);
   const parentRef = useRef<HTMLSelectElement>(null);
   const iconLabel = useId();
   const parentLabel = useId();
@@ -167,13 +169,11 @@ function Body({
     setParentError(undefined);
     setGalat(null);
     const pid = parentId === '' ? null : parentId;
-    const key = JSON.stringify([trimmed, icon, pid]);
-    if (attempt.current?.key !== key) attempt.current = { key, clientId: newClientId() };
     busy.current = true;
     let res: CategorySubmitResult;
     try {
       res = await onSubmit({
-        clientId: attempt.current.clientId,
+        clientId,
         name: trimmed,
         icon,
         parentId: pid,
@@ -198,6 +198,9 @@ function Body({
         break;
       case 'network':
         setGalat('network');
+        break;
+      case 'idem_mismatch':
+        setGalat('idem');
         break;
       case 'not_found':
       case 'category_archived':
@@ -274,7 +277,7 @@ function Body({
       {galat === null ? null : (
         <Alert
           action={
-            galat === 'gone' ? undefined : (
+            galat === 'gone' || galat === 'idem' ? undefined : (
               <Button
                 variant="secondary"
                 size="sm"
@@ -291,7 +294,9 @@ function Body({
             ? KATEGORI_COPY.network
             : galat === 'gone'
               ? KATEGORI_COPY.gone
-              : KATEGORI_COPY.server}
+              : galat === 'idem'
+                ? KATEGORI_COPY.idem
+                : KATEGORI_COPY.server}
         </Alert>
       )}
     </form>

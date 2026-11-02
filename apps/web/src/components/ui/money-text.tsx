@@ -8,8 +8,16 @@ const sizes = {
   row: 'text-label font-medium',
   hero: 'text-display font-extrabold laptop:text-display-xl',
   amount: 'text-amount font-extrabold',
+  'amount-sm': 'text-amount-sm font-extrabold',
   inherit: '',
 } as const;
+
+/** Skala nominal sangat panjang (> 13 karakter) di HP; satu aturan untuk semua ukuran besar. */
+const longSizes: Partial<Record<keyof typeof sizes, string>> = {
+  hero: 'text-display-long font-extrabold laptop:text-display-xl',
+  amount: 'text-display-long font-extrabold',
+  'amount-sm': 'text-display-long font-extrabold',
+};
 
 const tones: Record<MoneyKind, string> = {
   income: 'text-income',
@@ -38,13 +46,7 @@ export function MoneyText({
   const spoken = spokenRupiah(kind === 'neutral' ? value : Math.abs(value), kind);
 
   // Angka sangat panjang memakai skala yang lebih kecil di HP agar tidak keluar dari kartu.
-  const long = text.length > 13;
-  const sizeClass =
-    size === 'hero' && long
-      ? 'text-display-long font-extrabold laptop:text-display-xl'
-      : size === 'amount' && long
-        ? 'text-display-long font-extrabold'
-        : sizes[size];
+  const sizeClass = (text.length > 13 ? longSizes[size] : undefined) ?? sizes[size];
   return (
     <span className={`num inline-block max-w-full ${sizeClass} ${tones[kind]} ${className}`}>
       <span aria-hidden="true">{text}</span>

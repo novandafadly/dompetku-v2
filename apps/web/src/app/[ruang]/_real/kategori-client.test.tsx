@@ -130,6 +130,17 @@ describe('KategoriManager', () => {
     expect(actions.toast).not.toHaveBeenCalled();
   });
 
+  it('idem_mismatch saat tambah: daftar dimuat ulang (percobaan sebelumnya mungkin sudah tersimpan)', async () => {
+    const user = userEvent.setup();
+    actions.create.mockResolvedValue({ ok: false, error: { code: 'idem_mismatch' } });
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Tambah kategori' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Bonus');
+    await user.click(screen.getByRole('button', { name: 'Simpan kategori' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('mungkin sudah tersimpan');
+    expect(actions.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('arsip: dialog menyebut subkategori, fokus awal Kembali; konfirmasi memanggil action, toast, fokus ke judul', async () => {
     const user = userEvent.setup();
     actions.archive.mockResolvedValue({ ok: true, value: { affected: 2 } });

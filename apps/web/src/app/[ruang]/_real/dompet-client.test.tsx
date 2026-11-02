@@ -6,12 +6,14 @@ import { AddWalletHost, AddWalletTrigger } from './dompet-client';
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   params: { value: '' },
+  refresh: vi.fn(),
   toast: vi.fn(),
 }));
 
 vi.mock('../_actions/dompet', () => ({ createAccountAction: mocks.create }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.params.value),
+  useRouter: () => ({ refresh: mocks.refresh }),
 }));
 vi.mock('@/components/ui/toast', () => ({ toast: mocks.toast }));
 
@@ -118,6 +120,46 @@ describe('AddWalletHost (Dompet nyata)', () => {
       [string, { clientId: string }],
     ];
     expect(second[1].clientId).toBe(first[1].clientId);
+  });
+
+  it('koneksi putus sesudah server menyimpan: mengubah saldo lalu simpan tetap memakai clientId yang sama', async () => {
+    const user = userEvent.setup();
+    mocks.create
+      .mockRejectedValueOnce(new Error('putus'))
+      .mockResolvedValue({ ok: true, value: { accountId: 'a-1' } });
+    render(host());
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Koneksi terputus saat mengirim');
+    const amount = screen.getByRole('textbox', { name: /Saldo hari ini/ });
+    await user.clear(amount);
+    await user.type(amount, '90000');
+    await user.click(screen.getByRole('radio', { name: 'Bank' }));
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledTimes(2);
+    });
+    const [first, second] = mocks.create.mock.calls as [
+      [string, { clientId: string; openingBalance: number }],
+      [string, { clientId: string; openingBalance: number }],
+    ];
+    expect(second[1].openingBalance).toBe(90_000);
+    expect(second[1].clientId).toBe(first[1].clientId);
+  });
+
+  it('idem_mismatch (kunci sama, isi beda): pesan "mungkin sudah tersimpan", tanpa Coba lagi, daftar dimuat ulang', async () => {
+    const user = userEvent.setup();
+    mocks.create.mockResolvedValue({ ok: false, error: { code: 'idem_mismatch' } });
+    render(host());
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Dompet ini mungkin sudah tersimpan. Tutup lalu periksa daftar dompet.',
+    );
+    expect(screen.queryByRole('button', { name: 'Coba lagi' })).toBeNull();
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('?tambah=1 membuka sheet sejak awal; menutup membuang parameter dari alamat', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   createContext,
   lazy,
@@ -34,10 +34,17 @@ const preloadSheet = () => {
 const OpenAdd = createContext<(() => void) | null>(null);
 
 /** Galat jaringan Server Action (fetch gagal) = `network`: "Coba lagi" memakai clientId yang sama. */
-async function createAccount(ruang: Ruang, input: AccountSubmit): Promise<AccountSubmitResult> {
+async function createAccount(
+  ruang: Ruang,
+  input: AccountSubmit,
+  onIdemMismatch: () => void,
+): Promise<AccountSubmitResult> {
   try {
     const res = await createAccountAction(ruang, input);
-    return res.ok ? { ok: true } : { ok: false, code: res.error.code };
+    if (res.ok) return { ok: true };
+    // Kunci sama, isi beda: percobaan sebelumnya mungkin sudah tersimpan; muat ulang daftar.
+    if (res.error.code === 'idem_mismatch') onIdemMismatch();
+    return { ok: false, code: res.error.code };
   } catch {
     return { ok: false, code: 'network' };
   }
@@ -60,6 +67,7 @@ export function AddWalletHost({
   existingNames: string[];
   children: ReactNode;
 }) {
+  const router = useRouter();
   const wantsAdd = useSearchParams().get('tambah') === '1';
   const [open, setOpen] = useState(wantsAdd);
   // Alamat berganti ke ?tambah=1 selagi halaman ini sudah terbuka: sheet ikut terbuka.
@@ -86,7 +94,11 @@ export function AddWalletHost({
             }}
             ruang={ruang}
             existingNames={existingNames}
-            onSubmit={(input) => createAccount(ruang, input)}
+            onSubmit={(input) =>
+              createAccount(ruang, input, () => {
+                router.refresh();
+              })
+            }
           />
         </Suspense>
       ) : null}

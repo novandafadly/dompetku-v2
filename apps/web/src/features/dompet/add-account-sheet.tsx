@@ -40,12 +40,14 @@ interface Errors {
   pocket?: string;
 }
 
-type Galat = 'network' | 'server';
+type Galat = 'network' | 'server' | 'idem';
 
 const GALAT_TEXT: Record<Galat, string> = {
   network:
     'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan menambah dua kali.',
   server: 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan menambah dua kali.',
+  // Kunci sama, isi beda: percobaan sebelumnya mungkin sudah tersimpan di server.
+  idem: 'Dompet ini mungkin sudah tersimpan. Tutup lalu periksa daftar dompet.',
 };
 
 function Form({
@@ -69,7 +71,10 @@ function Form({
   const [errors, setErrors] = useState<Errors>({});
   const [galat, setGalat] = useState<Galat | null>(null);
   const busy = useRef(false);
-  const attempt = useRef<{ key: string; clientId: string } | null>(null);
+  // Satu clientId per sesi sheet (lahir saat sheet dibuka), tidak pernah diganti: server bisa saja
+  // sudah menyimpan sebelum koneksi putus, dan mengubah isian lalu mengirim ulang dengan kunci baru
+  // membuat dompet kembar dengan Saldo awal kedua.
+  const [clientId] = useState(newClientId);
   const pocketLabel = useId();
   const pocketError = useId();
   const typeLabel = useId();
@@ -103,13 +108,11 @@ function Form({
       return;
     }
     const openingBalance = opening ?? 0;
-    const key = JSON.stringify([trimmed, pocket, walletType, openingBalance]);
-    if (attempt.current?.key !== key) attempt.current = { key, clientId: newClientId() };
     busy.current = true;
     let res: AccountSubmitResult;
     try {
       res = await onSubmit({
-        clientId: attempt.current.clientId,
+        clientId,
         name: trimmed,
         pocket,
         walletType,
@@ -124,7 +127,7 @@ function Form({
       onDone(trimmed);
       return;
     }
-    setGalat(res.code === 'network' ? 'network' : 'server');
+    setGalat(res.code === 'network' ? 'network' : res.code === 'idem_mismatch' ? 'idem' : 'server');
   }
 
   return (
@@ -196,15 +199,17 @@ function Form({
             <WarningCircleIcon size={18} weight="fill" className="mt-px shrink-0" />
             <span className="text-pretty">{GALAT_TEXT[galat]}</span>
           </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              void submit();
-            }}
-          >
-            Coba lagi
-          </Button>
+          {galat === 'idem' ? null : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void submit();
+              }}
+            >
+              Coba lagi
+            </Button>
+          )}
         </div>
       )}
     </>
