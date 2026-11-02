@@ -24,6 +24,21 @@ export interface RealCatatSourceArgs {
   ruangLabel: Record<Ruang, string>;
 }
 
+/**
+ * Janji yang baru berjalan saat pertama kali ditunggu (`then`/`catch`/`finally`); sesudahnya
+ * semua penunggu berbagi satu hasil.
+ */
+function deferred<T>(start: () => Promise<T>): Promise<T> {
+  let started: Promise<T> | undefined;
+  const run = () => (started ??= start());
+  return {
+    then: (onFulfilled, onRejected) => run().then(onFulfilled, onRejected),
+    catch: (onRejected) => run().catch(onRejected),
+    finally: (onFinally) => run().finally(onFinally),
+    [Symbol.toStringTag]: 'Promise',
+  };
+}
+
 export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceArgs): CatatSource {
   const loaded = new Map<Ruang, CatatOptions>([[ruang, options]]);
   const frozen = new Map<string, Promise<CategoryVM[]>>();
@@ -69,12 +84,17 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
       const key = `${r}:${type}`;
       let got = frozen.get(key);
       if (got === undefined) {
-        got = fetchChips(r, type, hour);
+        // Ditunda sampai ada yang menunggu hasilnya: `useCatat` memanggil `chips` saat render
+        // pertama, dan render yang belum di-commit bisa diulang React. Permintaan jaringan di sana
+        // membuat setiap jawaban memicu render ulang yang meminta lagi (banjir `suggestFor`).
+        got = deferred(() =>
+          fetchChips(r, type, hour).catch((e: unknown) => {
+            // Opsi ruang gagal dimuat: jangan bekukan penolakan, permintaan berikutnya mencoba lagi.
+            frozen.delete(key);
+            throw e;
+          }),
+        );
         frozen.set(key, got);
-        // Opsi ruang gagal dimuat: jangan bekukan penolakan, permintaan berikutnya mencoba lagi.
-        got.catch(() => {
-          frozen.delete(key);
-        });
       }
       return got;
     },

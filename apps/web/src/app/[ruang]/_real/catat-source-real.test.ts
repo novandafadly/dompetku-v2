@@ -110,6 +110,21 @@ describe('realCatatSource', () => {
     expect(m.suggestFor).toHaveBeenCalledTimes(1);
   });
 
+  it('chips tidak memanggil suggestFor sampai ditunggu (render yang diulang React tidak membanjiri server)', async () => {
+    m.suggestFor.mockResolvedValue({ ok: true, value: ['k2'] });
+    const s = source();
+    // `useCatat` memanggil chips() saat render pertama; hanya membuat janji, tanpa permintaan.
+    const pending = s.chips('pribadi', 'expense', 9);
+    void s.chips('pribadi', 'expense', 9);
+    await Promise.resolve();
+    expect(m.suggestFor).not.toHaveBeenCalled();
+    // Satu permintaan walau banyak penunggu.
+    const [a, b] = await Promise.all([pending, s.chips('pribadi', 'expense', 9)]);
+    expect(a.map((c) => c.id)).toEqual(['k2']);
+    expect(b.map((c) => c.id)).toEqual(['k2']);
+    expect(m.suggestFor).toHaveBeenCalledTimes(1);
+  });
+
   it('chips: suggestFor gagal → 6 kategori aktif pertama jenis itu', async () => {
     m.suggestFor.mockResolvedValue({ ok: false, error: { code: 'network' } });
     const chips = await source().chips('pribadi', 'expense', 9);
