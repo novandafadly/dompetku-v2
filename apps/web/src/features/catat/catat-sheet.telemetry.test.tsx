@@ -13,6 +13,8 @@ function setup(opts: {
   via?: 'pointer' | 'shortcut';
   keypad?: 'os' | 'app';
   save?: (src: CatatSource['save']) => CatatSource['save'];
+  /** `track` mencatat lalu melempar: Catat tidak boleh terganggu. */
+  throwing?: boolean;
 }) {
   const store = createDemoStore(createSeed({ today: TODAY, variant: 'full' }), {
     clock: () => '2026-10-17T12:00:00+07:00',
@@ -25,6 +27,7 @@ function setup(opts: {
     save: opts.save?.(baseSave) ?? baseSave,
     track: (e) => {
       events.push(e);
+      if (opts.throwing === true) throw new Error('telemetri putus');
     },
   };
   function Host() {
@@ -69,17 +72,33 @@ async function typeAmount(user: ReturnType<typeof userEvent.setup>, digits: stri
 }
 
 describe('CatatSheet telemetri', () => {
-  it('Catat, chip, Simpan = 3 ketukan; event dibuka lalu disimpan tanpa data pengguna', async () => {
+  it('Catat, chip, Simpan = 3 ketukan; hanya dibuka lalu disimpan, tanpa data pengguna', async () => {
     const user = userEvent.setup();
     const { events } = setup({ via: 'pointer' });
     await typeAmount(user, '25000');
-    await user.click(await firstChip());
+    await user.type(screen.getByLabelText(/Keterangan/), 'kopi sore rahasia');
+    const chip = await firstChip();
+    const kategori = chip.textContent;
+    await user.click(chip);
     await user.click(screen.getByRole('button', { name: /^Simpan/ }));
     await waitFor(() => {
-      expect(events.map((e) => e.event)).toEqual(['catat_dibuka', 'catat_disimpan']);
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
+    // Beri kesempatan efek penutupan berjalan: tidak boleh ada catat_batal sesudah disimpan.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(events.map((e) => e.event)).toEqual(['catat_dibuka', 'catat_disimpan']);
     expect(events[1]).toMatchObject({ event: 'catat_disimpan', ruang: 'pribadi', taps: 3 });
-    expect(JSON.stringify(events)).not.toContain('25');
+    // Bentuk persis: kunci tetap, tanpa nominal, keterangan, nama kategori, atau id.
+    expect(events.map((e) => Object.keys(e).sort())).toEqual([
+      ['event', 'flowId', 'ruang'],
+      ['durationMs', 'event', 'flowId', 'ruang', 'taps'],
+    ]);
+    expect(events[0]?.flowId).toBe(events[1]?.flowId);
+    const json = JSON.stringify(events);
+    expect(json).not.toContain('25000');
+    expect(json).not.toContain('rahasia');
+    expect(kategori).toBeTruthy();
+    expect(json).not.toContain(kategori);
   });
 
   it('via pintasan c = 2 ketukan', async () => {
@@ -154,7 +173,20 @@ describe('CatatSheet telemetri', () => {
     expect(events[1]).toMatchObject({ taps: 4 });
   });
 
-  it('dilepas dari pohon sebelum simpan = catat_batal; track yang melempar tidak merusak', async () => {
+  it('track yang melempar tidak merusak simpan: sheet tertutup dan satu catat_disimpan', async () => {
+    const user = userEvent.setup();
+    const { events } = setup({ throwing: true });
+    await typeAmount(user, '25000');
+    await user.click(await firstChip());
+    await user.click(screen.getByRole('button', { name: /^Simpan/ }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(events.map((e) => e.event)).toEqual(['catat_dibuka', 'catat_disimpan']);
+  });
+
+  it('dilepas dari pohon sebelum simpan = catat_batal', async () => {
     const { events } = setup({});
     expect(events.map((e) => e.event)).toEqual(['catat_dibuka']);
     cleanup();
