@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadBeranda } from '../beranda';
+import { listAccounts } from '../read';
 import { resolveSpace } from '../space';
 import { createAccount, createEntry, type LedgerCtx } from '../write';
 import { createLedgerHarness, resetLedger, seedPersonas, type Persona } from './harness';
@@ -20,9 +21,11 @@ const KANARI_DESC = 'KANARI-BERANDA-PRIBADI-91c2';
 const KANARI_DOMPET = 'KANARI-DOMPET-BERANDA';
 const KANARI_RP = 6_543_217;
 
-async function ctxOf(p: Persona, ruang: 'pribadi' | 'bersama'): Promise<LedgerCtx> {
-  const { spaceId } = await resolveSpace(h.pools, p.id, ruang);
-  return { pools: h.pools, userId: p.id, spaceId };
+type BerandaCtx = LedgerCtx & { kind: 'personal' | 'shared' };
+
+async function ctxOf(p: Persona, ruang: 'pribadi' | 'bersama'): Promise<BerandaCtx> {
+  const { spaceId, kind } = await resolveSpace(h.pools, p.id, ruang);
+  return { pools: h.pools, userId: p.id, spaceId, kind };
 }
 
 async function firstExpenseCategory(ctx: LedgerCtx): Promise<string> {
@@ -37,11 +40,16 @@ async function firstExpenseCategory(ctx: LedgerCtx): Promise<string> {
   return id;
 }
 
-async function wallet(ctx: LedgerCtx, name: string, openingBalance: number): Promise<string> {
+async function wallet(
+  ctx: LedgerCtx,
+  name: string,
+  openingBalance: number,
+  pocket: 'operasional' | 'tabungan' = 'operasional',
+): Promise<string> {
   const { accountId } = await createAccount(ctx, {
     clientId: randomUUID(),
     name,
-    pocket: 'operasional',
+    pocket,
     walletType: 'bank',
     openingBalance,
   });
@@ -49,7 +57,7 @@ async function wallet(ctx: LedgerCtx, name: string, openingBalance: number): Pro
 }
 
 describe('loadBeranda (persona N)', () => {
-  it('N baru, Farida belum bergabung: VM kosong, Undang Farida tampil', async () => {
+  it('N baru, Farida belum bergabung: VM kosong, Undang Farida hanya di Pribadi', async () => {
     await resetLedger(h);
     const { n } = await seedPersonas(h, { farida: 'diundang' });
     for (const ruang of ['pribadi', 'bersama'] as const) {
@@ -57,13 +65,22 @@ describe('loadBeranda (persona N)', () => {
       expect(data).toEqual({
         safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0 },
         today: { hasEntry: false, noSpendMarked: false },
-        hasAccount: false,
         hasOperasional: false,
         hasExpense: false,
         recent: [],
-        invite: true,
+        invite: ruang === 'pribadi',
       });
     }
+    // Dompet tabungan saja bukan dompet operasional (checklist dan kartu B3 tetap).
+    const pribadi = await ctxOf(n, 'pribadi');
+    await wallet(pribadi, 'Tabungan', 500_000, 'tabungan');
+    expect((await loadBeranda(pribadi)).hasOperasional).toBe(false);
+    // Dompet yang sudah dimuat untuk request yang sama dipakai ulang (layout + page).
+    const loaded = await listAccounts(pribadi);
+    const given = await loadBeranda(pribadi, {
+      accounts: Promise.resolve(loaded.map((x) => ({ ...x, pocket: 'operasional' as const }))),
+    });
+    expect(given.hasOperasional).toBe(true);
   });
 
   describe('N dan F bergabung', () => {
@@ -93,7 +110,6 @@ describe('loadBeranda (persona N)', () => {
       await wallet(bersama, 'Kas Rumah', 1_000_000);
 
       const p = await loadBeranda(pribadi);
-      expect(p.hasAccount).toBe(true);
       expect(p.hasOperasional).toBe(true);
       expect(p.hasExpense).toBe(true);
       expect(p.today).toEqual({ hasEntry: true, noSpendMarked: false });
@@ -111,7 +127,6 @@ describe('loadBeranda (persona N)', () => {
 
       const b = await loadBeranda(bersama);
       expect(b).toMatchObject({
-        hasAccount: true,
         hasOperasional: true,
         hasExpense: false,
         today: { hasEntry: false, noSpendMarked: false },

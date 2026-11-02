@@ -16,7 +16,7 @@ export function RealPlaceholder({ ruang, title }: { ruang: Ruang; title: string 
           {`${title} ${RUANG_LABEL[ruang]} belum tersedia`}
         </h2>
         <p className="text-label font-medium text-text-soft">
-          Halaman ini sedang disambungkan ke data. Catat tetap bisa dipakai dari tombol Catat.
+          Halaman ini sedang disiapkan. Untuk sementara, catat transaksi lewat tombol Catat.
         </p>
       </section>
     </>

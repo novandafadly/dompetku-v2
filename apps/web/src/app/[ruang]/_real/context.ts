@@ -1,9 +1,11 @@
 import 'server-only';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import type { Ruang } from '@/features/ledger/types';
+import { cache } from 'react';
+import type { AccountVM, Ruang } from '@/features/ledger/types';
 import { isRuang } from '@/features/shell/hrefs';
 import { authService, requireDataUser } from '@/server/auth/next';
+import { listAccounts } from '@/server/ledger/read';
 import { resolveSpace, SpaceNotFoundError } from '@/server/ledger/space';
 import type { LedgerCtx } from '@/server/ledger/write';
 
@@ -31,4 +33,17 @@ export async function ruangContext(
     if (e instanceof SpaceNotFoundError) notFound();
     throw e;
   }
+}
+
+/**
+ * Dompet ruang ini, sekali per request: layout (opsi Catat) dan page Beranda memakai hasil yang
+ * sama. `React.cache` = memo render server satu request saja, bukan cache data Next.
+ */
+const accountsOnce = cache(
+  (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<AccountVM[]> =>
+    listAccounts({ pools, userId, spaceId }),
+);
+
+export function ruangAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
+  return accountsOnce(ctx.pools, ctx.userId, ctx.spaceId);
 }

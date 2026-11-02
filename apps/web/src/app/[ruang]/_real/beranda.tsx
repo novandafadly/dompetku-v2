@@ -67,7 +67,7 @@ export function BerandaReal({
   };
   const steps = berandaSteps({
     ruang,
-    hasAccount: data.hasAccount,
+    hasOperasional: data.hasOperasional,
     hasExpense: data.hasExpense,
     invite: data.invite,
   });

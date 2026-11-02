@@ -3,7 +3,7 @@ import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadBeranda } from '@/server/ledger/beranda';
 import { BerandaReal } from '../_real/beranda';
-import { ruangContext } from '../_real/context';
+import { ruangAccounts, ruangContext } from '../_real/context';
 import { BerandaPage } from './view';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -22,7 +22,7 @@ export default async function Page({
 }) {
   if (isPrototype()) return <BerandaPage />;
   const ctx = await ruangContext(params);
-  const data = await loadBeranda(ctx);
+  const data = await loadBeranda(ctx, { accounts: ruangAccounts(ctx) });
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(await searchParams)) if (typeof v === 'string') sp.set(k, v);
   return (

@@ -79,7 +79,7 @@ describe('RuangShell', () => {
   it('prototipe: sheet demo, penanda "Data demo" tampil, chunk nyata tidak dimuat', async () => {
     render(
       <NavProvider today="2026-10-31" prototype>
-        <RuangShell ruang="bersama">
+        <RuangShell ruang="pribadi">
           <p>isi</p>
         </RuangShell>
       </NavProvider>,

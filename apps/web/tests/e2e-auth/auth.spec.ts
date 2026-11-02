@@ -188,28 +188,35 @@ async function createWallet(
   opening: number,
 ) {
   const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
-  await admin.connect();
-  const { rows } = await admin.query<{ uid: string; sid: string }>(
-    `select u.id as uid, s.id as sid from auth."user" u
-       join app.space_members m on m.user_id = u.id
-       join app.spaces s on s.id = m.space_id and s.kind = $2::app.space_kind
-      where u.email = $1`,
-    [email, kind],
-  );
-  await admin.end();
-  const row = rows[0];
+  let row: { uid: string; sid: string } | undefined;
+  try {
+    await admin.connect();
+    const { rows } = await admin.query<{ uid: string; sid: string }>(
+      `select u.id as uid, s.id as sid from auth."user" u
+         join app.space_members m on m.user_id = u.id
+         join app.spaces s on s.id = m.space_id and s.kind = $2::app.space_kind
+        where u.email = $1`,
+      [email, kind],
+    );
+    row = rows[0];
+  } finally {
+    await admin.end();
+  }
   if (!row) throw new Error('ruang tidak ada');
   const web = new pg.Client({ connectionString: process.env.AUTH_E2E_DATABASE_URL });
-  await web.connect();
-  await web.query('begin');
-  await web.query("select set_config('app.user_id', $1, true)", [row.uid]);
-  await web.query(
-    `select api.create_account(p_client_id => $1, p_space_id => $2, p_name => $3,
-       p_pocket => 'operasional', p_wallet_type => 'bank', p_opening_balance => $4::bigint)`,
-    [randomUUID(), row.sid, name, opening],
-  );
-  await web.query('commit');
-  await web.end();
+  try {
+    await web.connect();
+    await web.query('begin');
+    await web.query("select set_config('app.user_id', $1, true)", [row.uid]);
+    await web.query(
+      `select api.create_account(p_client_id => $1, p_space_id => $2, p_name => $3,
+         p_pocket => 'operasional', p_wallet_type => 'bank', p_opening_balance => $4::bigint)`,
+      [randomUUID(), row.sid, name, opening],
+    );
+    await web.query('commit');
+  } finally {
+    await web.end();
+  }
 }
 
 /** Tangkapan tinjauan desain (SCREENS_REAL=1): 320/390/1280, terang dan gelap. */
@@ -300,6 +307,8 @@ test('pemilik: Beranda nyata dengan dompet: kartu, tidak ada pengeluaran hari in
   expect(html).toContain('Kas Rumah');
   expect(html + rsc).not.toContain(PRIBADI_WALLET);
   await page.goto('/bersama/beranda');
+  // Undang Farida hanya di Pribadi.
+  await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toBeVisible();
   await checkScreen(page);
   await berandaShots(page, '/bersama/beranda', 'beranda-bersama');

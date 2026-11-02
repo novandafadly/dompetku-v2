@@ -1,5 +1,5 @@
 import 'server-only';
-import type { EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
+import type { AccountVM, EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
 import { withUser } from '../db';
 import { hasExpense, listAccounts, recentEntries, safeToSpend, todayStatus } from './read';
 import type { LedgerCtx } from './write';
@@ -13,15 +13,19 @@ import type { LedgerCtx } from './write';
 export interface BerandaData {
   safe: SafeToSpendVM;
   today: TodayStatusVM;
-  /** Ada dompet (apa pun kantongnya): checklist "Tambah dompet". */
-  hasAccount: boolean;
-  /** Ada dompet operasional: tanpa itu kartu utama tidak menampilkan angka (B3). */
+  /**
+   * Ada dompet operasional aktif: tanpa itu kartu utama tidak menampilkan angka (B3), dan
+   * checklist "Tambah dompet" belum selesai (setara prototipe).
+   */
   hasOperasional: boolean;
   /** Ada pengeluaran hidup: checklist "Catat satu pengeluaran". */
   hasExpense: boolean;
   /** 5 entri hidup terbaru ruang ini. */
   recent: EntryVM[];
-  /** User pemilik Bersama dan Bersama belum berisi dua orang: checklist "Undang Farida". */
+  /**
+   * Hanya ruang Pribadi: user pemilik Bersama dan Bersama belum berisi dua orang (checklist
+   * "Undang Farida"). Rute Bersama selalu `false` (tidak dikueri).
+   */
   invite: boolean;
 }
 
@@ -38,26 +42,33 @@ async function inviteOpen(ctx: LedgerCtx): Promise<boolean> {
               (select count(*) from app.space_roster(s.id))::int as members
          from app.spaces s
          join app.space_members m on m.space_id = s.id and m.user_id = app.current_user_id()
-        where s.kind = 'shared'`,
+        where s.kind = 'shared'
+        limit 1`,
     );
     const r = rows[0];
     return r?.role === 'owner' && r.members < 2;
   });
 }
 
-export async function loadBeranda(ctx: LedgerCtx): Promise<BerandaData> {
+/**
+ * `accounts`: dompet ruang ini yang sudah dimuat untuk request yang sama (layout memakai
+ * `listAccounts` yang di-`cache` per request); bila kosong dimuat di sini.
+ */
+export async function loadBeranda(
+  ctx: LedgerCtx & { kind: 'personal' | 'shared' },
+  opts: { accounts?: Promise<AccountVM[]> } = {},
+): Promise<BerandaData> {
   const [safe, today, accounts, expense, recent, invite] = await Promise.all([
     safeToSpend(ctx),
     todayStatus(ctx),
-    listAccounts(ctx),
+    opts.accounts ?? listAccounts(ctx),
     hasExpense(ctx),
     recentEntries(ctx, RECENT),
-    inviteOpen(ctx),
+    ctx.kind === 'personal' ? inviteOpen(ctx) : false,
   ]);
   return {
     safe,
     today,
-    hasAccount: accounts.length > 0,
     hasOperasional: accounts.some((a) => a.pocket === 'operasional' && !a.archived),
     hasExpense: expense,
     recent,
