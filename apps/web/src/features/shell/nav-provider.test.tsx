@@ -110,6 +110,12 @@ describe('NavProvider, alamat', () => {
     expect(capture(false).href('pribadi', 'transaksi')).toBe('/pribadi/transaksi');
   });
 
+  it('Sampah menandai Transaksi tetapi tidak membawa bulan', () => {
+    search = '?bulan=2026-09';
+    pathname = '/pribadi/sampah';
+    expect(capture(false).href('pribadi', 'transaksi')).toBe('/pribadi/transaksi');
+  });
+
   it('bulan tidak valid atau di masa depan jatuh ke bulan ini', () => {
     search = '?bulan=2027-01';
     expect(capture(false).month).toBe('2026-10');

@@ -14,7 +14,6 @@ import {
   KEPT_PARAMS,
   keptQuery,
   REAL_KEPT_PARAMS,
-  tabFromPathname,
   validMonth,
   withoutParam,
   type Tab,
@@ -79,7 +78,8 @@ function NavProviderInner({
   const bulan = params.get('bulan');
   const segment = pathname.split('/')[1];
   const ruang: Ruang = isRuang(segment) ? segment : 'pribadi';
-  const inTransaksi = tabFromPathname(pathname) === 'transaksi';
+  // Segmen sungguhan, bukan tab yang tampak aktif: Sampah menandai Transaksi tetapi tidak membawa bulan.
+  const inTransaksi = pathname.split('/')[2] === 'transaksi';
 
   const month = validMonth(bulan, today);
   // Bulan hanya dibawa selama masih di dalam Transaksi; tab lain tidak mewarisinya.

@@ -94,7 +94,20 @@ export function buildAuthHref(page: AuthPage, query: string): Route {
   return `/${page}${query}` as Route;
 }
 
+export type Section = 'sampah' | 'kategori';
+
+/** Layar di luar tab (`/{ruang}/sampah`, `/{ruang}/kategori`); `null` untuk tab dan rute lain. */
+export function sectionFromPathname(pathname: string): Section | null {
+  const seg = pathname.split('/')[2];
+  return seg === 'sampah' || seg === 'kategori' ? seg : null;
+}
+
+/**
+ * Tab yang tampak aktif untuk sebuah alamat. Sampah bukan tab: dibuka dari Transaksi, jadi induknya
+ * yang tampak aktif (bukan Beranda). Alamat tak dikenal = Beranda.
+ */
 export function tabFromPathname(pathname: string): Tab {
   const seg = pathname.split('/')[2];
+  if (seg === 'sampah') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }

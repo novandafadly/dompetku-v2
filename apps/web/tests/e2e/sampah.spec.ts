@@ -104,11 +104,8 @@ test.describe('Sampah prototipe', () => {
   test('Sampah satu ruang: Bersama tidak melihat entri batal Pribadi', async ({ page }) => {
     await voidThenOpenSampah(page);
     await expect(page.getByRole('main').getByRole('listitem')).toHaveCount(1);
-    // Pindah ruang (navigasi klien, store demo tetap hidup) lalu Menu → Sampah Bersama.
+    // Pindah ruang (navigasi klien, store demo tetap hidup): pengalih tetap di Sampah Bersama.
     await page.getByRole('banner').getByRole('link', { name: 'Bersama' }).click();
-    await expect(page).toHaveURL(new RegExp(`/bersama/beranda\\?${q}$`));
-    await page.getByRole('banner').getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Sampah' }).click();
     await expect(page).toHaveURL(new RegExp(`/bersama/sampah\\?${q}$`));
     await expect(page.getByRole('main').getByText(EMPTY)).toBeVisible();
     await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(
