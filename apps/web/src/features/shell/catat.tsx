@@ -8,7 +8,11 @@ import { useNav } from './nav-provider';
 export interface OpenCatatOptions {
   /** Ruang tujuan; bawaan ruang di URL. */
   ruang?: Ruang;
+  /** Cara membuka, untuk telemetri: tombol Catat (pointer, bawaan) atau pintasan `c`. */
+  via?: CatatVia;
 }
+
+export type CatatVia = 'pointer' | 'shortcut';
 
 /** Props untuk sheet Catat yang dipasang app/ (shell tidak mengimpor fitur lain). */
 export interface CatatSheetSlotProps {
@@ -17,6 +21,7 @@ export interface CatatSheetSlotProps {
   ruang: Ruang;
   /** Ke mana fokus kembali saat sheet ditutup: pemicu, atau tombol Catat yang terlihat. */
   returnFocus: HTMLElement | null;
+  via: CatatVia;
 }
 
 function focusTarget(): HTMLElement | null {
@@ -91,16 +96,22 @@ export function CatatProvider({
     open: boolean;
     ruang: Ruang;
     returnFocus: HTMLElement | null;
-  }>({ open: false, ruang, returnFocus: null });
+    via: CatatVia;
+  }>({ open: false, ruang, returnFocus: null, via: 'pointer' });
   const openCatat = useCallback<OpenCatat>(
     (opts) => {
-      setSheet({ open: true, ruang: opts?.ruang ?? ruang, returnFocus: focusTarget() });
+      setSheet({
+        open: true,
+        ruang: opts?.ruang ?? ruang,
+        returnFocus: focusTarget(),
+        via: opts?.via ?? 'pointer',
+      });
     },
     [ruang],
   );
   useIdlePreload(preload);
   const shortcut = useCallback(() => {
-    openCatat();
+    openCatat({ via: 'shortcut' });
   }, [openCatat]);
   useCatatShortcut(shortcut);
   const onOpenChange = useCallback((open: boolean) => {
@@ -115,6 +126,7 @@ export function CatatProvider({
           onOpenChange,
           ruang: sheet.ruang,
           returnFocus: sheet.returnFocus,
+          via: sheet.via,
         })}
       </PreloadContext.Provider>
     </CatatContext.Provider>

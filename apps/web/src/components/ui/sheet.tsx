@@ -1,7 +1,14 @@
 'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEventHandler,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { IconButton } from './icon-button';
 import { XIcon } from './icons/x';
 import { SHEET_HANDLE, SHEET_PANEL } from './styles';
@@ -40,6 +47,7 @@ export function Sheet({
   fill = false,
   compact = false,
   describedBy,
+  onClickCapture,
   children,
 }: {
   open: boolean;
@@ -68,6 +76,8 @@ export function Sheet({
   compact?: boolean;
   /** Id teks yang menjadi deskripsi dialog (mis. keadaan kosong). */
   describedBy?: string | undefined;
+  /** Klik di dalam sheet (fase capture), mis. untuk telemetri; tidak mengubah perilaku sheet. */
+  onClickCapture?: MouseEventHandler<HTMLDivElement> | undefined;
   children: ReactNode;
 }) {
   const vvHeight = useVisualViewportHeight(open);
@@ -81,6 +91,7 @@ export function Sheet({
           aria-describedby={describedBy}
           data-ruang={tint}
           data-compact={compact ? '' : undefined}
+          onClickCapture={onClickCapture}
           onOpenAutoFocus={(e) => {
             returnFocusTo.current =
               returnFocus ??

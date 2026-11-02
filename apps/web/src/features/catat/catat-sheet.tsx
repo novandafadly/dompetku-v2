@@ -1,7 +1,7 @@
 'use client';
 
 import { addDays, dayLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
-import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
+import { useEffect, useId, useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Combobox } from '@/components/ui/combobox';
@@ -34,6 +34,7 @@ import {
 import { CategoryChips } from './category-chips';
 import { undoOrNotify } from './saved-toast';
 import type { CatatSource, CatatType, SaveOutcome } from './source';
+import { createCatatFlow } from './telemetry';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
 import { useKeyboardMode } from './use-keyboard-mode';
@@ -56,6 +57,8 @@ export interface CatatSheetProps {
   onAddAccount?: (ruang: Ruang) => void;
   /** Jam WIB untuk saran kategori (galeri/tes); bawaan jam sekarang. */
   hourWIB?: number;
+  /** Cara sheet dibuka (telemetri ketukan): tombol Catat (bawaan) atau pintasan `c`. */
+  via?: 'pointer' | 'shortcut';
 }
 
 /** Hari ini dan 13 hari ke belakang; mencatat ke masa depan tidak ditawarkan. */
@@ -85,6 +88,7 @@ function CatatSession({
   initialAmount,
   onAddAccount,
   hourWIB,
+  via = 'pointer',
 }: CatatSheetProps) {
   const c = useCatat({
     source,
@@ -95,6 +99,45 @@ function CatatSession({
   });
   const { draft, status } = c;
   const { ruangLabel } = source;
+
+  // Telemetri: satu alur per sheet dibuka. Sesi yang lahir tertutup (sebelum dibuka pertama kali)
+  // tidak pernah menjadi alur. Event lewat `source.track` (kirim-dan-lupakan).
+  const [live] = useState(open);
+  const [flow] = useState(() =>
+    createCatatFlow({
+      via,
+      ruang,
+      // `track` dari sumber saat dibuka: sumber nyata tidak menyimpan keadaan di dalamnya.
+      track: (e) => {
+        source.track?.(e);
+      },
+    }),
+  );
+  useEffect(() => {
+    if (live) flow.open();
+  }, [live, flow]);
+  useEffect(() => {
+    flow.setRuang(draft.ruang);
+  }, [flow, draft.ruang]);
+  // Ditutup tanpa simpan (Esc, Tutup, overlay, Tambah dompet): batal; sesudah simpan tidak.
+  useEffect(() => {
+    if (live && !open) flow.cancel();
+  }, [live, open, flow]);
+  // Dilepas dari pohon (pindah rute): batal. Ditunda satu tick agar pasang ulang mode ketat
+  // React (dev) tidak dihitung sebagai batal.
+  const unmountTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    clearTimeout(unmountTimer.current);
+    if (!live) return;
+    return () => {
+      unmountTimer.current = setTimeout(() => {
+        flow.cancel();
+      }, 0);
+    };
+  }, [live, flow]);
+  const countTap = (e: MouseEvent) => {
+    if (e.target instanceof Element) flow.tap({ detail: e.detail, target: e.target });
+  };
   const saving = status === 'menyimpan';
   const primaryRef = useRef<HTMLButtonElement>(null);
   const accountRef = useRef<HTMLSelectElement>(null);
@@ -173,6 +216,7 @@ function CatatSession({
             : c.save;
     const out: SaveOutcome | null = await run();
     if (out?.ok !== true) return;
+    flow.saved();
     const saved = { entryId: out.entryId, version: out.version, ruang: draft.ruang };
     toast({
       message: out.toast,
@@ -217,6 +261,7 @@ function CatatSession({
           </>
         }
         returnFocus={returnFocus}
+        onClickCapture={countTap}
         fill
       >
         <Combobox
@@ -407,6 +452,7 @@ function CatatSession({
       footer={footer}
       initialFocus={hasAccounts ? amountRef : addRef}
       returnFocus={returnFocus}
+      onClickCapture={countTap}
       fill
       compact={compact}
       describedBy={hasAccounts ? undefined : emptyId}

@@ -5,7 +5,7 @@ import { savedToast } from '@/features/catat/saved-toast';
 import type { CatatOptions, CatatSource, SaveOutcome } from '@/features/catat/source';
 import type { CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SaveCatatInput } from '../_actions/inputs';
-import { catatOptions, saveCatat, suggestFor } from '../_actions/catat';
+import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
 import { voidEntryAction } from '../_actions/entri';
 
 /**
@@ -120,6 +120,14 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
       } catch {
         // Fetch Server Action putus (offline, server mati): "Coba lagi" dengan clientId yang sama.
         return { ok: false, code: 'network' };
+      }
+    },
+    track({ ruang: r, ...e }) {
+      // Kirim-dan-lupakan: tidak ditunggu, tidak pernah melempar ke UI (nilai kembali void).
+      try {
+        logCatatEvent(r, e).catch(() => undefined);
+      } catch {
+        // Referensi action gagal dipanggil (mis. fetch tidak tersedia): telemetri diam.
       }
     },
     async undo({ entryId, version, ruang: r }) {
