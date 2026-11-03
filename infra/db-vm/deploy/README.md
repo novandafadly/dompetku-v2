@@ -31,20 +31,22 @@ Image hanya ditarik dari GHCR (`docker pull`); VM tidak perlu BuildKit.
 
 Worker ada di image yang sama (`/app/worker/worker.mjs`, layanan compose `worker` dengan image `dompetku-web:current`), jadi satu digest = satu versi web + worker dan rollback mengembalikan keduanya. Pemasangan dan rahasia: `docs/ops/runbook-s7-worker.md`.
 
-1. Web diganti dan dicek lebih dulu (alur di atas). Web gagal = worker tidak disentuh.
-2. Sesudah web sehat: `docker compose up -d --no-deps worker`. Sehat = container `running` dari image di balik `dompetku-web:current` dan `RestartCount` tidak naik selama 20 detik (`WORKER_STABLE_CHECKS` x `WORKER_INTERVAL`). Worker tidak punya HTTP; `HEALTHCHECK` image dimatikan untuk layanan ini.
-3. Worker gagal = digest masuk `failed`, web dikembalikan ke digest lama, worker dikembalikan ke digest lama bila sebelumnya berjalan atau dihentikan bila belum (rilis pertama yang memuat worker), kode 3, audit `rolled_back` dengan detail `health worker ...`.
-4. Worker dilewati (kode 0, web tetap terpasang), alasan di `detail` audit `ok`: `worker_env_missing` (`env/worker.env` belum ada) atau `worker_service_missing` (`compose.yml` di VM belum memuat `worker`). Deploy pertama sebelum pemilik mengisi env tidak gagal.
+1. Preflight (bila worker akan dipasang): `docker run --rm --network none --read-only --cap-drop ALL --user 65532:65532 --env-file env/worker.env <image rilis> worker/worker.mjs --check-config`. Tidak valid = kode 2, audit `rejected` dengan detail `worker_config_invalid <NAMA_VARIABEL,...>` (tanpa nilai), sebelum migrasi dan sebelum web diganti; tidak dicatat `failed`, timer mencoba lagi.
+2. Web diganti dan dicek lebih dulu (alur di atas). Web gagal = worker tidak disentuh.
+3. Sesudah web sehat: `docker compose up -d --no-deps worker`. Sehat = container `running`, label `org.opencontainers.image.revision` container (diwarisi dari image) sama dengan SHA rilis, dan `RestartCount` tidak naik selama 20 detik (`WORKER_STABLE_CHECKS` x `WORKER_INTERVAL`). Worker tidak punya HTTP; `HEALTHCHECK` image dimatikan untuk layanan ini.
+4. Worker gagal = digest masuk `failed`, web dikembalikan ke digest lama, worker dikembalikan ke digest lama bila sebelumnya berjalan atau dihentikan bila belum (rilis pertama yang memuat worker), kode 3, audit `rolled_back` dengan detail `health worker ...`.
+5. Worker dilewati (kode 0, web tetap terpasang), alasan di `detail` audit `ok`: `worker_env_missing` (`env/worker.env` tidak ada; worker lama yang masih berjalan dihentikan dan dihapus, detail `worker_env_missing worker_stopped`) atau `worker_service_missing` (`compose.yml` di VM belum memuat `worker`; worker lama tidak disentuh). Deploy pertama sebelum pemilik mengisi env tidak gagal.
+6. Rollback manual `--allow-older` ke digest pra-S7 (tanpa `worker.mjs`): pindahkan `env/worker.env` dulu, kalau tidak ditolak di langkah 1.
 
 ## Kode keluar dan perilaku
 
-| Kode | Arti                                                                                        |
-| ---- | ------------------------------------------------------------------------------------------- |
-| 0    | Selesai, tidak ada rilis baru, deploy lain sedang berjalan, atau digest pernah gagal        |
-| 2    | Ditolak: tanda tangan/SBOM tidak valid, commit lebih tua, digest pernah berjalan, preflight |
-| 3    | Rilis gagal health (web atau worker), sudah kembali ke digest sebelumnya                    |
-| 4    | Rilis gagal dan rollback juga gagal (tindakan manual)                                       |
-| 1    | Galat lain (GHCR tidak terbaca, migrasi gagal, konfigurasi)                                 |
+| Kode | Arti                                                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Selesai, tidak ada rilis baru, deploy lain sedang berjalan, atau digest pernah gagal                                          |
+| 2    | Ditolak: tanda tangan/SBOM tidak valid, commit lebih tua, digest pernah berjalan, preflight (termasuk env worker tidak valid) |
+| 3    | Rilis gagal health (web atau worker), sudah kembali ke digest sebelumnya                                                      |
+| 4    | Rilis gagal dan rollback juga gagal (tindakan manual)                                                                         |
+| 1    | Galat lain (GHCR tidak terbaca, migrasi gagal, konfigurasi)                                                                   |
 
 - "Lebih tua" = label `org.opencontainers.image.created` (waktu commit UTC, diisi workflow `release`) lebih kecil dari yang berjalan, atau digest yang pernah berjalan lalu digantikan.
 - Digest yang gagal health, gagal migrasi, atau ditolak karena lebih tua dicatat di `failed` dan tidak dicoba ulang oleh timer; rilis baru di `main` atau `deploy --digest` manual yang melanjutkan.

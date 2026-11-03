@@ -15,6 +15,10 @@ D4=sha256:$(printf '4%.0s' {1..64})
 D5=sha256:$(printf '5%.0s' {1..64})
 D6=sha256:$(printf '6%.0s' {1..64})
 D7=sha256:$(printf '7%.0s' {1..64})
+D8=sha256:$(printf '8%.0s' {1..64})
+D9=sha256:$(printf '9%.0s' {1..64})
+DA=sha256:$(printf 'a%.0s' {1..64})
+DB=sha256:$(printf 'b%.0s' {1..64})
 SHA1=$(printf 'a%.0s' {1..40})
 SHA2=$(printf 'b%.0s' {1..40})
 SHA3=$(printf 'c%.0s' {1..40})
@@ -22,6 +26,10 @@ SHA4=$(printf 'd%.0s' {1..40})
 SHA5=$(printf 'e%.0s' {1..40})
 SHA6=$(printf 'f%.0s' {1..40})
 SHA7=$(printf '7%.0s' {1..40})
+SHA8=$(printf '8%.0s' {1..40})
+SHA9=$(printf '9%.0s' {1..40})
+SHAA=$(printf '0%.0s' {1..40})
+SHAB=$(printf '1%.0s' {1..40})
 
 mkdir -p "$W/bin" "$W/root/env" "$W/root/bin" "$W/root/keys" "$W/sim"
 touch "$W/root/compose.yml" "$W/root/compose.web.yml"
@@ -41,7 +49,8 @@ CFG
 # unhealthy (digest yang tidak pernah sehat), local (digest di balik dompetku-web:current),
 # worker (digest container worker yang berjalan; tidak ada = worker tidak berjalan), crashloop
 # (digest yang worker-nya restart berulang), noworkersvc (compose.yml belum punya layanan worker),
-# workerupfail (compose up worker gagal sekali; container lama tetap berjalan).
+# workerupfail (compose up worker gagal sekali; container lama tetap berjalan), badworkerenv
+# (worker.mjs --check-config menolak worker.env).
 cat >"$W/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -82,6 +91,13 @@ case $1 in
   create) echo ctr ;;
   cp) mkdir -p "${3%/}" && touch "${3%/}/0001_x.sql" ;;
   rm) ;;
+  run)
+    echo "run $*" >>"$SIM/calls"
+    if [[ -e $SIM/badworkerenv ]]; then
+      echo '{"t":"x","event":"config_invalid","fields":["DATABASE_URL","HC_DQ_URL"]}'
+      exit 1
+    fi
+    echo '{"t":"x","event":"config_ok"}' ;;
   compose)
     shift
     while [[ $1 == --project-directory || $1 == -f || $1 == --profile ]]; do shift 2; done
@@ -102,6 +118,10 @@ case $1 in
         [[ -e $SIM/noworkersvc ]] || echo worker ;;
       exec) if [[ $* == *pg_stat_archiver* ]]; then echo t; fi ;;
       run) echo "migrate $(cat "$SIM/remote")" >>"$SIM/calls"; [[ ! -e $SIM/migratefail ]] ;;
+      rm)
+        echo "rm ${*:2}" >>"$SIM/calls"
+        [[ $* == *worker* ]] && rm -f "$SIM/worker"
+        true ;;
       stop)
         echo "stop ${*:2}" >>"$SIM/calls"
         [[ $* == *worker* ]] && rm -f "$SIM/worker"
@@ -136,6 +156,10 @@ $D4 $SHA4 2026-11-03T10:00:00Z
 $D5 $SHA5 2026-11-04T10:00:00Z
 $D6 $SHA6 2026-11-05T10:00:00Z
 $D7 $SHA7 2026-11-06T10:00:00Z
+$D8 $SHA8 2026-11-07T10:00:00Z
+$D9 $SHA9 2026-11-08T10:00:00Z
+$DA $SHAA 2026-11-09T10:00:00Z
+$DB $SHAB 2026-11-10T10:00:00Z
 META
 : >"$SIM/unhealthy"
 : >"$SIM/crashloop"
@@ -258,6 +282,53 @@ echo "$D7" >"$SIM/remote"
 check 'worker tidak terganti = rollback keduanya' 3 "$D6"
 [[ $(cat "$SIM/local") == "$D6" ]] || { echo 'GAGAL: web tidak kembali ke D6'; exit 1; }
 worker_is 'worker tetap di digest lama' "$D6"
+
+# worker.env tidak valid untuk rilis baru: ditolak di preflight (check-config dengan image rilis,
+# tanpa jaringan), sebelum migrasi dan sebelum web diganti; isi env tidak tercatat.
+echo "$D8" >"$SIM/remote"
+touch "$SIM/badworkerenv"
+check 'worker.env tidak valid = rilis ditolak sebelum web diganti' 2 "$D6"
+[[ $(cat "$SIM/local") == "$D6" ]] || { echo 'GAGAL: web diganti walau env worker tidak valid'; exit 1; }
+worker_is 'worker tidak disentuh saat env tidak valid' "$D6"
+grep -q "^migrate $D8\$" "$SIM/calls" && { echo 'GAGAL: migrasi jalan walau env worker tidak valid'; exit 1; }
+grep -q "^run .*--network none.*--env-file $W/root/env/worker.env .*@$D8 worker/worker.mjs --check-config\$" "$SIM/calls" ||
+  { echo 'GAGAL: check-config tidak dijalankan dengan image rilis'; exit 1; }
+tail -n 1 "$W/log/deploy.log" | grep -q '"result":"rejected".*worker_config_invalid.*DATABASE_URL,HC_DQ_URL' ||
+  { echo 'GAGAL: audit worker_config_invalid'; exit 1; }
+grep -q 'postgres://uji' "$W/log/deploy.log" "$W/stderr" && { echo 'GAGAL: isi worker.env bocor ke log'; exit 1; }
+rm "$SIM/badworkerenv"
+check 'env worker diperbaiki = rilis terpasang' 0 "$D8"
+worker_is 'worker ikut rilis setelah env diperbaiki' "$D8"
+
+# worker.env dihapus saat worker berjalan: rilis berikutnya menghentikan worker lama (tidak dibiarkan
+# basi di belakang web baru).
+mv "$W/root/env/worker.env" "$W/root/env/worker.env.off"
+echo "$D9" >"$SIM/remote"
+check 'worker.env dihapus = worker lama dihentikan' 0 "$D9"
+worker_is 'worker basi dihentikan' none
+grep -q '^rm -sf worker$' "$SIM/calls" || { echo 'GAGAL: worker tidak dihapus'; exit 1; }
+tail -n 1 "$W/log/deploy.log" | grep -q '"result":"ok".*"detail":"worker_env_missing worker_stopped"' ||
+  { echo 'GAGAL: audit worker_stopped'; exit 1; }
+mv "$W/root/env/worker.env.off" "$W/root/env/worker.env"
+
+# Tanpa digest sebelumnya: pesan menyebut hanya layanan yang disentuh.
+mv "$W/state" "$W/state.keep"
+cp "$SIM/local" "$SIM/worker"
+echo "$DA" >"$SIM/remote"
+echo "$DA" >"$SIM/crashloop"
+check 'worker gagal tanpa digest sebelumnya' 3 none
+worker_is 'worker dihentikan tanpa digest sebelumnya' none
+tail -n 1 "$W/log/deploy.log" | grep -q '"result":"failed_no_previous".*health worker gagal.*web dan worker dihentikan' ||
+  { echo 'GAGAL: audit failed_no_previous worker'; exit 1; }
+: >"$SIM/crashloop"
+echo "$DB" >"$SIM/remote"
+echo "$DB" >"$SIM/unhealthy"
+check 'web gagal tanpa digest sebelumnya' 3 none
+tail -n 1 "$W/log/deploy.log" | grep -q '"result":"failed_no_previous".*health web gagal.*; web dihentikan"' ||
+  { echo 'GAGAL: audit failed_no_previous web menyebut worker'; exit 1; }
+: >"$SIM/unhealthy"
+rm -rf "$W/state"
+mv "$W/state.keep" "$W/state"
 
 grep -q '"result":"rolled_back"' "$W/log/deploy.log" || { echo 'GAGAL: audit rollback'; exit 1; }
 echo "$pass skenario lulus"

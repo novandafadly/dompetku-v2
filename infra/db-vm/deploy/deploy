@@ -6,8 +6,9 @@
 # tanda tangan cosign + attestation SBOM (kunci publik pemilik) -> tarik -> tolak bila lebih tua ->
 # preflight -> restore point + migrasi dbmate (berkas migrasi diambil dari image rilis) -> ganti web
 # -> health -> ganti worker (image sama, S7) -> stabil -> selesai, atau rollback keduanya ke digest
-# sebelumnya. Worker dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada.
-# Setiap hasil = satu baris audit JSON.
+# sebelumnya. Env worker divalidasi dengan image rilis di preflight (tidak valid = ditolak). Worker
+# dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada; tanpa env, worker lama
+# yang masih berjalan dihentikan. Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -224,6 +225,17 @@ worker_skip_reason() {
   fi
 }
 
+# worker.mjs --check-config dengan image rilis dan env_file yang sama, tanpa jaringan dan tanpa DB.
+# Hanya nama variabel yang salah yang disimpan (WORKER_BAD_FIELDS); isi env dan keluaran lain tidak.
+worker_config_ok() {
+  local out
+  out=$(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --user 65532:65532 --env-file "$WORKER_ENV" "$IMAGE@$TO_DIGEST" worker/worker.mjs --check-config 2>&1) &&
+    return 0
+  WORKER_BAD_FIELDS=$(printf '%s\n' "$out" | sed -n 's/.*"fields":\[\([^]]*\)\].*/\1/p' | head -n 1 | tr -cd 'A-Z_,')
+  return 1
+}
+
 worker_was_running() {
   local cid
   cid=$(running_cid "$WORKER_SERVICE")
@@ -329,8 +341,14 @@ free_mb=$(df -Pm /var/lib/docker 2>/dev/null | awk 'NR == 2 { print $4 }')
 compose config --services | grep -qx "$SERVICE" || fail 2 rejected "layanan $SERVICE tidak ada di $ROOT/compose.yml"
 db_preflight || fail 2 rejected 'postgres tidak sehat atau pengarsipan WAL gagal'
 WORKER_SKIP=$(worker_skip_reason)
+WORKER_RUNNING=0
+if worker_was_running; then WORKER_RUNNING=1; fi
 WORKER_BEFORE=0
-if [[ -z $WORKER_SKIP ]] && worker_was_running; then WORKER_BEFORE=1; fi
+if [[ -z $WORKER_SKIP ]] && ((WORKER_RUNNING)); then WORKER_BEFORE=1; fi
+WORKER_BAD_FIELDS=''
+if [[ -z $WORKER_SKIP ]] && ! worker_config_ok; then
+  fail 2 rejected "worker_config_invalid ${WORKER_BAD_FIELDS:-?}: env/worker.env ditolak worker.mjs --check-config rilis ini; web tidak diganti"
+fi
 
 # --- 5. Migrasi (expand/contract; tidak ada down-migration saat rollback) ---------------------
 extract_migrations || fail 1 migrate_failed 'gagal menyalin migrasi dari image; web tidak diganti'
@@ -354,6 +372,14 @@ switch_to "$TO_DIGEST" || log 'compose up rilis baru gagal'
 if wait_healthy "$TO_SHA"; then
   if [[ -n $WORKER_SKIP ]]; then
     log "worker dilewati: $WORKER_SKIP"
+    # Tanpa env/worker.env worker dimatikan pemilik: jangan biarkan worker lama basi di belakang web baru.
+    if [[ $WORKER_SKIP == worker_env_missing ]] && ((WORKER_RUNNING)); then
+      if compose rm -sf "$WORKER_SERVICE" >/dev/null; then
+        WORKER_SKIP+=' worker_stopped'
+      else
+        log 'gagal menghentikan worker lama'
+      fi
+    fi
     succeed
   fi
   switch_worker || log 'compose up worker rilis baru gagal'
@@ -363,9 +389,13 @@ fi
 
 echo "$TO_DIGEST" >>"$STATE_DIR/failed"
 if [[ -z $FROM_DIGEST ]]; then
-  [[ $BROKEN == worker ]] && { compose stop "$WORKER_SERVICE" || true; }
+  stopped=web
+  if [[ $BROKEN == worker ]]; then
+    compose stop "$WORKER_SERVICE" || true
+    stopped='web dan worker'
+  fi
   compose stop "$SERVICE" || true
-  fail 3 failed_no_previous "health $BROKEN gagal, tidak ada digest sebelumnya; web dan worker dihentikan"
+  fail 3 failed_no_previous "health $BROKEN gagal, tidak ada digest sebelumnya; $stopped dihentikan"
 fi
 log "health $BROKEN gagal, rollback ke $FROM_DIGEST"
 FROM_SHA=$(label "$IMAGE@$FROM_DIGEST" org.opencontainers.image.revision)

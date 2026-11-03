@@ -122,7 +122,8 @@ services:
     env_file:
       - path: ./env/worker.env
         required: false
-    # internal: ke postgres (pg_hba subnet internal). worker_egress: hanya ping Healthchecks.
+    # internal: ke postgres (pg_hba subnet internal). worker_egress: egress untuk Healthchecks
+    # (tidak difilter; worker tidak berbagi network dengan gw/web).
     networks: [internal, worker_egress]
     read_only: true
     tmpfs:
@@ -154,7 +155,8 @@ networks:
         - subnet: 172.24.0.0/16
   # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
   egress: {}
-  # Hanya worker: keluar ke Healthchecks.io. Terpisah dari app (gw/web) dan egress (postgres).
+  # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
+  # egress (postgres).
   worker_egress: {}
 
 volumes:
