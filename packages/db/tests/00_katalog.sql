@@ -55,15 +55,16 @@ select set_eq($$
         'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
-        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6, invitation_peek, list_invitations)');
+        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day',
+        'create_reimbursement'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
-        'trash_list', 'suggest_categories'],
-  'daftar fungsi baca api INVOKER (S5, S6)');
+        'trash_list', 'suggest_categories', 'open_reimbursables'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
@@ -247,11 +248,12 @@ select set_eq($$
                                    'create_transfer', 'update_entry', 'void_entry',
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account', 'create_category', 'update_category',
-                                   'archive_category', 'mark_no_spend_day']) f
+                                   'archive_category', 'mark_no_spend_day',
+                                   'create_reimbursement']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
-                      'suggest_categories']) f
+                      'suggest_categories', 'open_reimbursables']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',

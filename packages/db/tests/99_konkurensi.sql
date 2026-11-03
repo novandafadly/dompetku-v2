@@ -2,11 +2,12 @@
 -- dua pengeluaran paralel tidak bisa membuat saldo negatif, klik ganda paralel = 1 entri,
 -- transfer A->B paralel B->A tanpa deadlock, arsip paralel catat melihat data ter-commit,
 -- re-parent kategori paralel (silang A/B, atau rantai C di bawah A saat A pindah ke bawah B)
--- ditolak category_depth, arsip induk paralel ubah anak tanpa deadlock (0109).
+-- ditolak category_depth, arsip induk paralel ubah anak tanpa deadlock (0109), reimburse paralel
+-- dan ubah talangan paralel reimburse tanpa deadlock (0110).
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 begin;
-select plan(29);
+select plan(36);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -176,6 +177,41 @@ select tests.peer_exec('b', 'rollback');
 select is(tests.owner_val(null, format($$select name || ' ' || (archived_at is not null) || ' ' || (parent_id = %L)
   from app.categories where id = %L$$, :'cat_induk', :'cat_anak')), 'Arsip Anak true true',
   'anak terarsip di bawah induk, nama tidak berubah');
+
+-- ===== Talangan (S7, 0110): reimburse paralel dan urutan kunci entri -> akun =====
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 10, null, null, null, true)$$,
+  :'np', :'acc_b'))::jsonb) ->> 'entry_id' as tal \gset
+-- Dua reimburse 6 paralel atas talangan 10: yang kedua menunggu kunci talangan lalu membaca Σ baru.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.create_reimbursement(gen_random_uuid(), %L, %L, 6)$$, :'tal', :'acc_b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_reimbursement(gen_random_uuid(), %L, %L, 6)$$, :'tal', :'acc_b'));
+select ok(tests.peer_blocked('b'), 'reimburse kedua menunggu kunci talangan');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*reimbursement_exceeds', 'reimburse paralel kedua = reimbursement_exceeds');
+select tests.peer_exec('b', 'rollback');
+-- Ubah talangan (kunci talangan lalu dompet) paralel reimburse ke dompet yang sama. adm memegang
+-- talangan; ubah (a) mengantre lebih dulu, lalu reimburse (b). Bila reimburse mengunci dompet
+-- sebelum talangan, b memegang dompet dan a (sesudah mendapat talangan) menunggu dompet = 40P01.
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', format($$select id from app.entries where id = %L for update$$, :'tal'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_send('a', format($$select api.update_entry(gen_random_uuid(), %L, 1, %L, 10, null, null, 'konkuren', true) ->> 'version'$$,
+  :'tal', :'acc_b'));
+select ok(tests.peer_blocked('a'), 'ubah talangan menunggu kunci talangan');
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_reimbursement(gen_random_uuid(), %L, %L, 4) ->> 'remaining'$$, :'tal', :'acc_b'));
+select ok(tests.peer_blocked('b'), 'reimburse menunggu kunci talangan');
+select tests.peer_exec('adm', 'commit');
+select tests.peer_result('a') as ubah_tal \gset
+select is(:'ubah_tal'::text, '2', 'ubah talangan selesai tanpa deadlock');
+select tests.peer_exec('a', 'commit');
+select tests.peer_result('b') as reimb_tal \gset
+select is(:'reimb_tal'::text, '0', 'reimburse sesudahnya selesai tanpa deadlock, sisa 0');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select count(*) || ' ' || sum(l.amount) from app.entries r
+  join app.entry_lines l on l.entry_id = r.id where r.reimburses_entry_id = %L and r.voided_at is null$$, :'tal')),
+  '2 10', 'Σ reimburse hidup = nominal talangan, tidak lebih');
 
 select tests.peer_close('a');
 select tests.peer_close('b');
