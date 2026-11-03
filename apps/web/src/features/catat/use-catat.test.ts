@@ -206,6 +206,7 @@ function fakeSource(save: CatatSource['save'], over: Partial<Omit<CatatSource, '
     chips: vi.fn((r: Ruang, type: 'income' | 'expense') =>
       OPTIONS[r].categories.filter((c) => c.type === type),
     ),
+    spaceTransferTargets: vi.fn(() => []),
     save: vi.fn(save),
     undo: vi.fn(() => Promise.resolve(true)),
     ...over,

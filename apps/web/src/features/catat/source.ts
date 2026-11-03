@@ -14,8 +14,17 @@ export interface CatatDraft {
   amount: Rupiah | null;
   categoryId?: string;
   accountId: string;
-  /** Hanya transfer: dompet tujuan di ruang yang sama. */
+  /** Hanya transfer: dompet tujuan (ruang yang sama, atau `toRuang` bila antar ruang). */
   counterAccountId?: string;
+  /** Transfer antar ruang (S7-C1): ruang dompet tujuan; tidak ada = transfer satu ruang. */
+  toRuang?: Ruang;
+  /**
+   * Transfer antar ruang: catatan yang sengaja dibagikan ke kaki Bersama. Keterangan (`description`)
+   * tetap hanya di kaki Pribadi.
+   */
+  sharedNote?: string;
+  /** Talangan kantor (S7-C2): hanya pengeluaran Pribadi dari dompet bukan Kantor. */
+  reimbursable?: boolean;
   date: IsoDate;
   /**
    * Tanggal dipilih pengguna. Bila tidak, sumber nyata tidak mengirim `occurredOn` sehingga server
@@ -65,6 +74,16 @@ export interface CatatSource {
     type: 'income' | 'expense',
     hour: number,
   ): CategoryVM[] | Promise<CategoryVM[]>;
+  /**
+   * Dompet tujuan transfer antar ruang (S7-C1): dompet aktif bukan Kantor di `toRuang`, tanpa saldo
+   * yang ditampilkan. Mode nyata: dimuat saat halaman "Ruang lain…" dibuka, tidak lewat props.
+   */
+  spaceTransferTargets(toRuang: Ruang): AccountVM[] | Promise<AccountVM[]>;
+  /**
+   * Nama anggota lain Bersama untuk placeholder `Catatan untuk Bersama`; tidak ada = teks umum
+   * `Terlihat oleh anggota Bersama`.
+   */
+  sharedAudience?(): string | undefined;
   save(draft: CatatDraft & { allowNegative: boolean }): Promise<SaveOutcome>;
   undo(saved: { entryId: string; version: number; ruang: Ruang }): Promise<boolean>;
   /** Event produk; kirim-dan-lupakan, tidak pernah melempar. Prototipe tidak menulis apa pun. */

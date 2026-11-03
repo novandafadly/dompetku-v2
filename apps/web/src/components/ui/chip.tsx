@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { CheckIcon } from './icons/check';
 import { handleRadioArrowKeys } from './radio-keys';
 
@@ -62,6 +62,7 @@ export function Chip({
   focusable = false,
   variant = 'filter',
   icon,
+  buttonRef,
   children,
 }: {
   selected: boolean;
@@ -74,11 +75,14 @@ export function Chip({
   variant?: ChipVariant;
   /** Ikon di kiri (kategori di dialog laptop); diganti ✓ saat terpilih. Pemanggil mengatur tampil/warnanya. */
   icon?: ReactNode;
+  /** Ref ke tombol (mis. untuk mengembalikan fokus sesudah halaman dalam sheet ditutup). */
+  buttonRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
 }) {
   const v = variants[variant];
   return (
     <button
+      ref={buttonRef}
       type="button"
       role="radio"
       aria-checked={selected}

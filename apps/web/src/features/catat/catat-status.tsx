@@ -20,7 +20,15 @@ export const CATAT_COPY = {
 } as const;
 
 /** Salinan galat simpan per jenis (s6-bingkai.md, "Tambahan salinan (keputusan controller)"). */
-export function galatText(kind: 'network' | 'server' | 'not_found'): string {
+export function galatText(
+  kind: 'network' | 'server' | 'not_found' | 'cross_space_not_allowed' | 'cross_space_kantor',
+): string {
+  if (kind === 'cross_space_not_allowed') {
+    return 'Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.';
+  }
+  if (kind === 'cross_space_kantor') {
+    return 'Dompet Kantor tidak bisa ikut transfer antar ruang. Pilih dompet lain.';
+  }
   if (kind === 'network') return CATAT_COPY.galat;
   if (kind === 'not_found') return 'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.';
   return 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.';

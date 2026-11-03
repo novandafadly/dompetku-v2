@@ -94,6 +94,7 @@ function fakeSource(frame: FrameId): CatatSource {
     ruangLabel: { pribadi: 'Pribadi', bersama: 'Bersama' },
     options: () => (frame === 'c6' ? { accounts: [], categories: CATEGORIES } : OPTIONS),
     chips: (_r, type) => CATEGORIES.filter((c) => c.type === type).slice(0, 6),
+    spaceTransferTargets: () => [],
     save: () => {
       // C1: jawaban server tidak pernah datang, agar keadaan menyimpan bisa ditinjau.
       if (frame === 'c1') return new Promise<SaveOutcome>(() => undefined);

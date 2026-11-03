@@ -28,10 +28,14 @@ export function TypeMenuButton({
   describedBy,
   onToggle,
   busy = false,
+  toSpace,
 }: {
   ref: RefObject<HTMLButtonElement | null>;
   space: Ruang;
+  /** Teks judul (`Jenis · Ruang`); bila `toSpace` ada, ` → {Ruang tujuan}` ditulis sesudahnya. */
   title: string;
+  /** Transfer antar ruang: ruang tujuan, ditulis dan diberi warna ruangnya (S7-C1). */
+  toSpace?: { space: Ruang; label: string; head: string; from: string } | undefined;
   open: boolean;
   describedBy: string;
   onToggle: () => void;
@@ -53,10 +57,23 @@ export function TypeMenuButton({
           onToggle();
         }
       }}
-      className={`flex h-11 min-w-0 items-center gap-2 rounded-lg border-1.5 border-ruang bg-ruang-tint px-3 text-body/none font-extrabold text-ruang aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted ${focusRing}`}
+      className={`flex h-11 min-w-0 items-center gap-2 max-tablet:gap-1.5 rounded-lg border-1.5 border-ruang bg-ruang-tint px-3 text-body/none font-extrabold text-ruang aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted ${focusRing}`}
     >
       <SpaceIcon space={space} size={16} />
-      <span className="truncate">{title}</span>
+      {toSpace === undefined ? (
+        <span className="truncate">{title}</span>
+      ) : (
+        <>
+          {/* HP: jenis hanya untuk pembaca layar; kedua ruang tertulis utuh (tidak boleh terpotong). */}
+          <span className="max-tablet:sr-only">{toSpace.head}</span>
+          <span className="shrink-0">{toSpace.from}</span>
+          <span className="shrink-0">→</span>
+          <span data-ruang={toSpace.space} className="flex shrink-0 items-center gap-1 text-ruang">
+            <SpaceIcon space={toSpace.space} size={16} />
+            {toSpace.label}
+          </span>
+        </>
+      )}
       <CaretDownIcon size={14} weight="bold" className="shrink-0" />
     </button>
   );
