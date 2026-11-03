@@ -459,13 +459,32 @@ test('konflik versi', async ({ page, browser, ownerState }) => {
   }
 });
 
-/** Teks semua respons GET rute Bersama selama `act` (dokumen dan payload RSC). */
-async function bersamaResponses(page: Page, act: () => Promise<unknown>): Promise<string[]> {
-  const bodies: Promise<string>[] = [];
+/**
+ * Teks semua respons GET rute Bersama selama `act` (dokumen dan payload RSC). Respons yang gagal
+ * dibaca di browser (prefetch RSC yang dibatalkan saat halaman pindah) tidak lolos sebagai teks
+ * kosong: URL itu diminta ulang dengan header permintaan aslinya (cookie sesi sama) dan badannya
+ * diperiksa juga; yang tetap gagal masuk `unread` dan pemanggil mewajibkan 0. Pengalihan (3xx)
+ * tidak punya badan dan tidak dihitung.
+ */
+async function bersamaResponses(
+  page: Page,
+  act: () => Promise<unknown>,
+): Promise<{ bodies: string[]; unread: string[] }> {
+  const reads: Promise<{ url: string; body: string | null }>[] = [];
   const onResponse = (r: Response) => {
     const url = new URL(r.url());
     if (r.request().method() !== 'GET' || !url.pathname.startsWith('/bersama')) return;
-    bodies.push(r.text().catch(() => ''));
+    if (r.status() >= 300 && r.status() < 400) return;
+    const headers = r.request().headers();
+    reads.push(
+      r.text().then(
+        (body) => ({ url: r.url(), body }),
+        async () => {
+          const again = await page.request.get(r.url(), { headers, maxRedirects: 0 });
+          return { url: r.url(), body: again.ok() ? await again.text() : null };
+        },
+      ),
+    );
   };
   page.on('response', onResponse);
   try {
@@ -474,7 +493,22 @@ async function bersamaResponses(page: Page, act: () => Promise<unknown>): Promis
   } finally {
     page.off('response', onResponse);
   }
-  return Promise.all(bodies);
+  const all = await Promise.all(reads);
+  return {
+    bodies: all.flatMap((x) => (x.body === null ? [] : [x.body])),
+    unread: all.flatMap((x) => (x.body === null ? [x.url] : [])),
+  };
+}
+
+/** Respons Bersama terbaca semua, ada isinya, dan tanpa kanari Pribadi (nama dompet dan keterangan). */
+function expectNoPribadi({ bodies, unread }: { bodies: string[]; unread: string[] }) {
+  expect(unread).toEqual([]);
+  expect(bodies.length).toBeGreaterThan(0);
+  expect(bodies.some((b) => b.includes('Bersama'))).toBe(true);
+  for (const body of bodies) {
+    expect(body).not.toContain(PRIBADI_KANARI);
+    expect(body).not.toContain(PRIBADI_WALLET);
+  }
 }
 
 test('payload rute Bersama tanpa kanari Pribadi', async ({ page }) => {
@@ -506,12 +540,7 @@ test('payload rute Bersama tanpa kanari Pribadi', async ({ page }) => {
 
   // Navigasi browser: dokumen awal dan semua payload RSC rute Bersama (termasuk navigasi klien).
   for (const r of routes) {
-    const bodies = await bersamaResponses(page, () => page.goto(`/bersama/${r}`));
-    expect(bodies.length).toBeGreaterThan(0);
-    for (const body of bodies) {
-      expect(body).not.toContain(PRIBADI_KANARI);
-      expect(body).not.toContain(PRIBADI_WALLET);
-    }
+    expectNoPribadi(await bersamaResponses(page, () => page.goto(`/bersama/${r}`)));
   }
   const nav = await bersamaResponses(page, async () => {
     await page
@@ -520,7 +549,7 @@ test('payload rute Bersama tanpa kanari Pribadi', async ({ page }) => {
       .click();
     await expect(page).toHaveURL(/\/bersama\/transaksi$/);
   });
-  for (const body of nav) expect(body).not.toContain(PRIBADI_WALLET);
+  expectNoPribadi(nav);
 
   // Sheet Catat di Bersama, pindah ke Pribadi: dompet Pribadi diambil lewat action saat itu.
   await page.goto('/bersama/beranda');
@@ -532,8 +561,7 @@ test('payload rute Bersama tanpa kanari Pribadi', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   // HTML awal rute Bersama tetap bersih sesudahnya.
-  const reload = await bersamaResponses(page, () => page.reload());
-  for (const body of reload) expect(body).not.toContain(PRIBADI_WALLET);
+  expectNoPribadi(await bersamaResponses(page, () => page.reload()));
   await expectClean();
 });
 
