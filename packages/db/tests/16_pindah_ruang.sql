@@ -1,11 +1,12 @@
 -- Pindahkan ke ruang lain (S7, 0111; AFD §8, bingkai S7-D2): api.move_entry_to_space membatalkan
--- entri asal dan membuat ulang di ruang tujuan dalam satu transaksi (moved_to_entry_id di asal),
+-- entri asal dan membuat ulang di ruang tujuan dalam satu transaksi (moved_at di asal; tidak ada
+-- id entri ruang lain di baris maupun riwayat mana pun), dompet kantor ditolak cross_space_kantor,
 -- deskripsi ke Bersama hanya bila p_keep_description, hanya pencatat, validasi dompet/kategori
 -- ruang tujuan, saldo kedua dompet, talangan (reimbursable dilepas / reimbursement_exists),
 -- api.restore_entry menolak entry_moved, api.trash_list menyembunyikan asal, purge 90 hari normal,
 -- idempotensi, isolasi. Semua lewat api.* sebagai role web; jam dipatok 2026-03-20 WIB.
 begin;
-select plan(72);
+select plan(78);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -14,6 +15,7 @@ select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'p
 
 select tests.account(tests.n(), :'np', 'BCA', 'operasional', 1000000, '2026-01-01') as bca,
        tests.account(tests.n(), :'np', 'Dana', 'operasional', 0, '2026-01-01') as dana,
+       tests.account(tests.n(), :'np', 'Kas Kantor', 'kantor', 100000, '2026-01-01') as kan,
        tests.account(tests.n(), :'sh', 'Kas Rumah', 'operasional', 300000, '2026-01-01') as kas,
        tests.account(tests.n(), :'sh', 'Kosong', 'operasional', 0, '2026-01-01') as kosong,
        tests.account(tests.n(), :'sh', 'Baru', 'operasional', 0, '2026-03-19') as baru,
@@ -52,7 +54,8 @@ language sql as $$
   select tests.owner_val(null, format(
     $q$select e.space_kind || ' ' || e.kind || ' ' || e.occurred_on || ' ' || coalesce(e.description, '-') || ' '
          || coalesce(e.category_id::text, '-') || ' ' || e.reimbursable || ' v' || e.version || ' '
-         || (e.voided_at is null) || ' ' || coalesce(e.moved_to_entry_id::text, '-')
+         || (e.voided_at is null) || ' '
+         || case when e.moved_at is null then '-' when e.moved_at = e.voided_at then 'moved' else 'moved?' end
        from app.entries e where e.id = %L$q$, p_entry))
 $$;
 create function pg_temp.lines(p_entry uuid) returns text
@@ -76,8 +79,8 @@ select pg_temp.move(tests.n(), :'e1', 1, :'sh', :'kas', :'cat_sh') as m1 \gset
 select is((:'m1'::jsonb) - 'entry_id', jsonb_build_object('moved_from_entry_id', :'e1', 'version', 1,
   'replayed', false, 'warnings', '[]'::jsonb), 'hasil: moved_from_entry_id = asal, version 1, replayed false');
 select isnt((:'m1'::jsonb) ->> 'entry_id', :'e1', 'entry_id = entri baru');
-select is(pg_temp.row(:'e1'), 'personal expense 2026-03-15 makan rahasia N - false v2 false ' || ((:'m1'::jsonb) ->> 'entry_id'),
-  'asal: dibatalkan, versi naik, moved_to_entry_id = entri baru');
+select is(pg_temp.row(:'e1'), 'personal expense 2026-03-15 makan rahasia N - false v2 false moved',
+  'asal: dibatalkan, versi naik, moved_at = voided_at');
 select is(tests.owner_val(null, format($$select (voided_at = app.now() and voided_by = %L)::text from app.entries where id = %L$$,
   tests.n(), :'e1')), 'true', 'asal: voided_at = app.now(), voided_by = pemindah');
 select is(pg_temp.row(((:'m1'::jsonb) ->> 'entry_id')::uuid), 'shared expense 2026-03-15 - ' || :'cat_sh' || ' false v1 true -',
@@ -85,9 +88,20 @@ select is(pg_temp.row(((:'m1'::jsonb) ->> 'entry_id')::uuid), 'shared expense 20
 select is(pg_temp.lines(((:'m1'::jsonb) ->> 'entry_id')::uuid), 'main=-100000@' || :'kas', 'baru: satu line main nominal sama di dompet tujuan');
 select is(pg_temp.lines(:'e1'), 'main=-100000@' || :'bca', 'asal: line tetap (jejak), tidak ikut saldo karena batal');
 select is(tests.balance(:'bca') || ' ' || tests.balance(:'kas'), '1000000 200000', 'saldo: BCA kembali, Kas Rumah berkurang');
-select is(tests.owner_val(null, format($$select string_agg(op || ':' || version || ':' || coalesce(snapshot ->> 'moved_to_entry_id', '-'), ','
+select is(tests.owner_val(null, format($$select string_agg(op || ':' || version || ':' || case when snapshot ->> 'moved_at' is null then '-' else 'moved' end, ','
   order by version) from app.entry_history where entry_id = %L$$, :'e1')),
-  'create:1:-,void:2:' || ((:'m1'::jsonb) ->> 'entry_id'), 'riwayat asal: create lalu void (snapshot memuat moved_to_entry_id)');
+  'create:1:-,void:2:moved', 'riwayat asal: create lalu void (snapshot memuat moved_at)');
+-- R16: tidak ada id entri ruang lain di baris maupun riwayat, ke arah mana pun (dibaca owner).
+select is(tests.owner_val(null, format($$select count(*) from (
+    select e::text as x from app.entries e where e.id = %1$L
+    union all select h::text from app.entry_history h where h.entry_id = %1$L
+  ) s where x like %2$L$$, (:'m1'::jsonb) ->> 'entry_id', '%' || :'e1' || '%')), '0',
+  'Pribadi -> Bersama: entri baru dan riwayatnya tanpa uuid entri Pribadi asal');
+select is(tests.owner_val(null, format($$select count(*) from (
+    select e::text as x from app.entries e where e.id = %1$L
+    union all select h::text from app.entry_history h where h.entry_id = %1$L
+  ) s where x like %2$L$$, :'e1', '%' || ((:'m1'::jsonb) ->> 'entry_id') || '%')), '0',
+  'Pribadi -> Bersama: entri asal dan riwayatnya tanpa uuid entri Bersama baru');
 select is(tests.owner_val(null, format($$select string_agg(op || ':' || version || ':' || space_id, ',') from app.entry_history where entry_id = %L$$,
   (:'m1'::jsonb) ->> 'entry_id')), 'create:1:' || :'sh', 'riwayat baru: create di Bersama');
 select is(tests.owner_val(null, format($$select created_by || ' ' || updated_by from app.entries where id = %L$$, (:'m1'::jsonb) ->> 'entry_id')),
@@ -132,7 +146,20 @@ select pg_temp.move(tests.n(), :'e3', 1, :'np', :'bca', :'cat_np_in') ->> 'entry
 select is(pg_temp.row(:'n3'), 'personal income 2026-03-17 arisan ' || :'cat_np_in' || ' false v1 true -',
   'pemasukan Bersama -> Pribadi: deskripsi selalu ikut');
 select is(pg_temp.lines(:'n3'), 'main=70000@' || :'bca', 'pemasukan pindah: line +nominal di dompet Pribadi');
-select is(pg_temp.row(:'e3'), 'shared income 2026-03-17 arisan - false v2 false ' || :'n3', 'asal Bersama dibatalkan dan menunjuk entri baru');
+select is(pg_temp.row(:'e3'), 'shared income 2026-03-17 arisan - false v2 false moved', 'asal Bersama dibatalkan dan bertanda dipindah');
+select is(tests.web_val(tests.f(), format($$select count(*) from (
+    select e::text as x from app.entries e where e.id = %1$L
+    union all select h::text from app.entry_history h where h.entry_id = %1$L
+  ) s where x like %2$L$$, :'e3', '%' || :'n3' || '%')), '0',
+  'Bersama -> Pribadi: F membaca entri asal dan riwayatnya tanpa uuid entri Pribadi baru');
+select is(tests.web_val(tests.f(), format($$select count(*) from (
+    select e::text as x from app.entries e
+    union all select h::text from app.entry_history h
+    union all select l::text from app.entry_lines l
+    union all select t::text from api.trash_list(%1$L) t
+    union all select a::text from api.activity_feed(%1$L, 100) a
+  ) s where x like %2$L$$, :'sh', '%' || :'n3' || '%')), '0',
+  'Bersama -> Pribadi: uuid entri Pribadi baru tidak ada di semua yang terlihat F');
 select is(tests.balance(:'bca') || ' ' || tests.balance(:'kas'), '1070000 150000',
   'saldo sesudah tiga pindah (BCA kembali + pemasukan 70000; Kas 300000 - 100000 - 50000)');
 
@@ -140,8 +167,8 @@ select is(tests.balance(:'bca') || ' ' || tests.balance(:'kas'), '1070000 150000
 select pg_temp.move(tests.n(), :'n2'::uuid, 1, :'np', :'bca', null) ->> 'entry_id' as n2b \gset
 select is(pg_temp.row(:'n2b'), 'personal expense 2026-03-16 belanja bulanan - false v1 true -',
   'pindah balik ke Pribadi tanpa kategori: deskripsi Bersama ikut');
-select is(pg_temp.row(:'n2'), 'shared expense 2026-03-16 belanja bulanan ' || :'cat_sh' || ' false v2 false ' || :'n2b',
-  'rantai: entri hasil pindah ikut ditandai moved_to_entry_id');
+select is(pg_temp.row(:'n2'), 'shared expense 2026-03-16 belanja bulanan ' || :'cat_sh' || ' false v2 false moved',
+  'rantai: entri hasil pindah ikut ditandai moved_at');
 
 -- ===== Hanya pencatat; ruang lain milik orang lain = DK404 =====
 select pg_temp.entry(tests.n(), :'kas', 'expense', 1000, '2026-03-18', 'galon') as e4 \gset
@@ -208,6 +235,11 @@ select pg_temp.call(tests.n(), format($$select api.create_category(gen_random_uu
 select pg_temp.call(tests.n(), format($$select api.archive_category(%L)$$, :'cat_arsip'));
 select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'e5', :'sh', :'kas', :'cat_arsip'),
   'DK404', 'category_not_found', 'kategori terarsip = DK404 (pola create_entry)');
+select pg_temp.entry(tests.n(), :'kan', 'expense', 5000, '2026-03-18', 'makan dinas') as ek \gset
+select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'ek', :'sh', :'kas', :'cat_sh'),
+  'DK422', 'cross_space_kantor', 'entri dari dompet kantor = cross_space_kantor');
+select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'e4', :'np', :'kan', :'cat_np'),
+  'DK422', 'cross_space_kantor', 'tujuan dompet kantor = cross_space_kantor');
 select is(pg_temp.row(:'e5'), 'personal expense 2026-03-18 rahasia lain - false v1 true -', 'semua penolakan tanpa efek pada asal');
 
 -- ===== Saldo negatif (kedua sisi), p_allow_negative =====

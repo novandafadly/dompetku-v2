@@ -172,7 +172,7 @@ from (values
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
 select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' '
-  || (select count(*) from app.entries where moved_to_entry_id is not null) from app.entries where id = %L$$, :'fe')),
+  || (select count(*) from app.entries where moved_at is not null) from app.entries where id = %L$$, :'fe')),
   '1 true 0', 'percobaan pindah lintas ruang tanpa efek (entri F hidup, tidak ada entri dipindah)');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.categories where id = %L and name = 'Makan' and archived_at is null$$, :'ncat')), '1',
   'kategori N tidak tersentuh');

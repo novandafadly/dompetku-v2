@@ -2,12 +2,16 @@
 -- S7 (AFD §8, bingkai S7-D2): "Pindahkan ke ruang lain". BSD §9 menandai api.move_entry_to_space
 -- "belum ditulis"; mengikuti pola create_entry/update_entry (dicatat di BSD §16 "Catatan S7").
 -- Expand-only: satu kolom nullable baru, fungsi baru, dua fungsi diganti utuh.
--- - app.entries.moved_to_entry_id: di entri ASAL, menunjuk entri baru di ruang tujuan. Tanpa FK
---   (lintas ruang, dan entri baru boleh kelak dipurge; DQ12 memeriksa rujukannya). Entri baru
---   tidak membawa id asal, jadi pindah Pribadi -> Bersama tidak menaruh id entri Pribadi di Bersama.
+-- - app.entries.moved_at: di entri ASAL, waktu dipindah (= voided_at). Sengaja tanpa penunjuk ke
+--   entri baru dan entri baru tanpa penunjuk ke asal: tidak ada id entri ruang lain di baris maupun
+--   snapshot entry_history (to_jsonb baris) ke arah mana pun, jadi anggota Bersama tidak pernah
+--   menerima id entri Pribadi (Global Constraint S7). Id entri baru hanya dikembalikan ke pemanggil
+--   (pencatat, anggota kedua ruang).
 -- - api.move_entry_to_space: dalam satu transaksi membatalkan entri asal (versi diperiksa,
---   moved_to_entry_id diisi) dan membuat ulang entri income/expense di ruang tujuan dengan nominal
+--   moved_at diisi) dan membuat ulang entri income/expense di ruang tujuan dengan nominal
 --   dan tanggal yang sama, dompet dan kategori ruang tujuan. Hanya pencatat entri (not_creator).
+--   Dompet asal atau tujuan ber-pocket kantor ditolak cross_space_kantor (sama dengan transfer
+--   antar ruang); talangan dari dompet operasional tetap boleh.
 --   Deskripsi: tujuan Pribadi selalu ikut; tujuan Bersama hanya bila p_keep_description (bawaan
 --   tidak ikut, keputusan pemilik #9). shared_note tidak dipakai income/expense (CHECK 0100).
 --   Talangan: reimburse hidup = reimbursement_exists; tanpa reimburse hidup, reimbursable dilepas
@@ -19,16 +23,16 @@
 --   tests/99_konkurensi.sql (pindah paralel ubah entri yang sama, pindah paralel reimburse).
 --   p_allow_negative tidak masuk hash, sama dengan create_entry/update_entry/create_transfer:
 --   kirim ulang sesudah konfirmasi saldo = replay, bukan DK410.
--- - private.set_void_state (diganti utuh dari 0110): pulihkan entri ber-moved_to_entry_id ditolak
+-- - private.set_void_state (diganti utuh dari 0110): pulihkan entri ber-moved_at ditolak
 --   DK422 entry_moved (sesudah kunci entri, sebelum jendela 90 hari). Dicek di sini, bukan di
 --   pembungkus api.restore_entry, agar pemeriksaan terjadi sesudah FOR UPDATE: pulihkan yang
 --   mengantre di belakang pindah membaca baris yang sudah dipindah.
 -- - api.trash_list (diganti utuh dari 0102): entri yang dipindah tidak tampil di Sampah. Purge
 --   90 hari tetap normal (jobs.purge_voided tidak berubah).
 
-alter table app.entries add column moved_to_entry_id uuid;
+alter table app.entries add column moved_at timestamptz;
 alter table app.entries add constraint entries_moved_check
-  check (moved_to_entry_id is null or (voided_at is not null and kind in ('income', 'expense')));
+  check (moved_at is null or (voided_at is not null and kind in ('income', 'expense')));
 
 -- ===== Pindahkan ke ruang lain =====
 create function api.move_entry_to_space(
@@ -103,6 +107,10 @@ begin
   if v_acc.space_id <> p_to_space_id then
     raise exception using errcode = 'DK422', message = 'space_mismatch';
   end if;
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.pocket = 'kantor') then
+    raise exception using errcode = 'DK422', message = 'cross_space_kantor';
+  end if;
   -- Dompet terarsip bersaldo 0 dan harus tetap 0 (keputusan pemilik #8), termasuk dompet asal.
   if exists (select 1 from app.accounts a
              where a.id in (v_old.account_id, p_account_id) and a.archived_at is not null) then
@@ -131,7 +139,7 @@ begin
   update app.entries
      set voided_at         = app.now(),
          voided_by         = v_uid,
-         moved_to_entry_id = v_entry,
+         moved_at          = app.now(),
          version           = version + 1,
          updated_by        = v_uid,
          updated_at        = app.now()
@@ -193,7 +201,7 @@ begin
       message = case when p_void then 'already_voided' else 'not_voided' end;
   end if;
   -- 0111: entri yang sudah dipindah ke ruang lain tidak bisa dipulihkan (dibaca sesudah kunci).
-  if not p_void and v_e.moved_to_entry_id is not null then
+  if not p_void and v_e.moved_at is not null then
     raise exception using errcode = 'DK422', message = 'entry_moved';
   end if;
   if p_void and v_e.kind = 'opening_balance' then
@@ -272,7 +280,7 @@ begin
   from app.entries e
   where e.space_id = p_space_id and e.voided_at is not null
     and e.voided_at >= app.now() - interval '90 days'
-    and e.moved_to_entry_id is null
+    and e.moved_at is null
   order by e.voided_at desc, e.id desc
   limit p_limit;
 end $$;
@@ -414,4 +422,4 @@ end $$;
 
 drop function api.move_entry_to_space(uuid, uuid, int, uuid, uuid, uuid, boolean, boolean);
 alter table app.entries drop constraint entries_moved_check;
-alter table app.entries drop column moved_to_entry_id;
+alter table app.entries drop column moved_at;

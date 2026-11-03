@@ -238,7 +238,7 @@ select is(:'ubah_mv'::text, '2', 'ubah entri selesai tanpa deadlock');
 select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '^ERROR: .*version_conflict', 'pindah dengan versi sebelum ubah = DK409 (bukan deadlock)');
 select tests.peer_exec('b', 'rollback');
-select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' ' || coalesce(moved_to_entry_id::text, '-')
+select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' ' || coalesce(moved_at::text, '-')
   from app.entries where id = %L$$, :'mv1')), '2 true -', 'entri tetap hidup di ruang asal dengan versi ubah');
 
 -- Reimburse (a) lalu pindah (b) atas talangan yang sama: pindah menunggu kunci talangan lalu melihat
@@ -264,7 +264,7 @@ select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '^ERROR: .*not_reimbursable', 'reimburse sesudah talangan dipindah = not_reimbursable');
 select tests.peer_exec('b', 'rollback');
 select is(tests.owner_val(null, format($$select (select count(*) from app.entries where reimburses_entry_id = %1$L) || ' '
-  || (select (moved_to_entry_id is not null and voided_at is not null)::text from app.entries where id = %1$L) || ' '
+  || (select (moved_at is not null and voided_at is not null)::text from app.entries where id = %1$L) || ' '
   || (select count(*) from app.entries where reimburses_entry_id = %2$L and voided_at is null)$$, :'tal3', :'tal2')),
   '0 true 1', 'talangan dipindah tanpa reimburse; talangan lain tetap dengan reimburse-nya');
 
