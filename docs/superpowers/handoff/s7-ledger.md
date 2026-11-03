@@ -77,3 +77,6 @@ Task 7: implementasi selesai (commit 64619af..b2a5ead; test:int 129, e2e:ledger 
 Task 7: review (sesi baru) → Approved, 0 Critical/Important.
 Task 7: minor (deferred): loadTransaksi memvalidasi month sesudah meminjam koneksi (page sudah validMonth); bentuk `Tx` percaya ctx = ctx withLedger pemanggil (tulis aturannya di komentar); tes pool belum menutup hold-and-wait (pool max 1) dan peak 0 untuk loadDetail non-uuid; page Dompet/Kategori tanpa layout satu kueri ekstra.
 Task 7: complete (commits 64619af..b2a5ead, review clean)
+Ruling R24: hasil aksi tidak pernah memuat linkedEntryId/linkId; moveEntryAction ke Pribadi tidak mengembalikan id entri baru → Task 11 menavigasi ke `/pribadi/transaksi` (bukan Detail entri baru seperti S7-D2) — biaya: satu ketukan ekstra untuk membuka entri yang dipindah.
+Ruling R25: Batalkan/pulihkan space_transfer oleh bukan pencatat = DK404 not_found (keputusan DB 0103); Task 11 menyembunyikan Batalkan untuk bukan pencatat — biaya: tidak ada.
+Ruling R26: label feed Bersama untuk entri yang dipindah = "{Nama} memindahkan transaksi ke ruang lain" (event void dengan moved_at), dikerjakan saat feed nyata dirender (S8/S9) — biaya: tidak ada di S7.
