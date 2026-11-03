@@ -33,6 +33,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Bundel worker berdiri sendiri: validasi env contoh tanpa koneksi DB.
+      - name: Worker --check-config
+        env:
+          DATABASE_URL: postgres://dompetku_worker@db:5432/dompetku?sslmode=verify-full
+        run: node apps/worker/dist/worker.mjs --check-config
 
   e2e:
     runs-on: ubuntu-latest
@@ -205,7 +210,7 @@ jobs:
           docker exec "$PG" sh -c 'pg_prove -U dompetku_test -d dompetku /db/tests/*.sql'
 
   auth:
-    # Tes integrasi auth (Vitest, Better Auth + Postgres sungguhan) dan e2e alur auth mode nyata
+    # Tes integrasi worker dan auth (Vitest, Better Auth + Postgres sungguhan) dan e2e alur auth mode nyata
     # (Playwright, autentikator passkey virtual). Cluster sekali pakai dengan image dan migrasi
     # yang sama dengan job db; port hanya untuk runner ini.
     runs-on: ubuntu-latest
@@ -244,6 +249,13 @@ jobs:
             -e DATABASE_URL='postgres://dompetku_owner@127.0.0.1:5432/dompetku?sslmode=disable' \
             -e DBMATE_MIGRATIONS_DIR=/db/migrations -e DBMATE_NO_DUMP_SCHEMA=true \
             "$DBMATE_IMAGE" --wait up
+      # Worker (apps/worker) sebelum tes web supaya DB masih bersih: runJob terhadap jobs.* sebagai
+      # dompetku_worker, pg-boss di skema pgboss (createSchema: false), stub Healthchecks lokal.
+      - name: Tes integrasi worker
+        env:
+          TEST_WORKER_DATABASE_URL: postgres://dompetku_worker@127.0.0.1:5432/dompetku
+          TEST_DATABASE_ADMIN_URL: postgres://postgres@127.0.0.1:5432/dompetku
+        run: pnpm --filter @dompetku/worker test:int
       - name: Tes integrasi auth
         env:
           TEST_DATABASE_URL: postgres://dompetku_web@127.0.0.1:5432/dompetku
