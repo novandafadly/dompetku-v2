@@ -19,6 +19,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.next/**',
       '**/playwright-report/**',
+      '**/playwright-report-ledger/**',
       '**/test-results/**',
       '**/next-env.d.ts',
       'docs/**',

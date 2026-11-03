@@ -22,7 +22,10 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // Laporan HTML terpisah dari e2e:auth (job CI yang sama) agar tidak saling menimpa.
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-ledger' }]]
+    : 'list',
   use: { baseURL: `http://localhost:${String(port)}`, trace: 'retain-on-failure' },
   projects: [
     {

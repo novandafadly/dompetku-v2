@@ -2,6 +2,7 @@ pnpm-lock.yaml
 .next
 node_modules
 playwright-report
+playwright-report-ledger
 test-results
 docs/spec
 docs/team
