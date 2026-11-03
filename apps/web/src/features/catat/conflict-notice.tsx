@@ -52,11 +52,11 @@ function Row({ term, children }: { term: string; children: ReactNode }) {
 }
 
 /**
- * S6-D2 di dalam sheet Ubah (hanya pemasukan, pengeluaran, dan saldo awal yang bisa diubah; label
- * kategori ditulis di sini, bukan lewat `features/ledger/present`, agar modul itu tetap disatukan ke
- * chunk page Transaksi prototipe: importir kedua menambah JS muat awalnya, ADR 0002)., di atas kaki: kotak `warning-tint` dengan pesan (`role="alert"`) dan
+ * S6-D2 di dalam sheet Ubah, di atas kaki: kotak `warning-tint` dengan pesan (`role="alert"`) dan
  * daftar ringkas nilai terbaru (`<dl>`). Tombol `Muat ulang` dan `Timpa dengan perubahan saya` ada
- * di kaki sheet.
+ * di kaki sheet. Hanya pemasukan, pengeluaran, dan saldo awal yang bisa diubah. Label kategori
+ * ditulis di sini, bukan lewat `features/ledger/present`, agar modul itu tetap disatukan ke chunk
+ * page Transaksi prototipe (importir kedua menambah JS muat awalnya, ADR 0002).
  */
 export function ConflictNotice({
   id,
