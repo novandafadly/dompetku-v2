@@ -92,6 +92,28 @@ describe('ConflictNotice (S6-D2)', () => {
     expect(second?.clientId).not.toBe(first?.clientId);
   });
 
+  it('Timpa saat draf tidak valid (nominal kosong): tidak mengirim, layar konflik tetap bisa dipakai', async () => {
+    const user = userEvent.setup();
+    const { update } = renderEdit({ update: conflictOnce() });
+    await setAmount(user, '60000');
+    await user.click(screen.getByRole('button', { name: /Simpan perubahan/ }));
+    await screen.findByRole('alert');
+    await user.clear(screen.getByRole('textbox', { name: 'Nominal' }));
+    const timpa = screen.getByRole('button', { name: 'Timpa dengan perubahan saya' });
+    expect(timpa).toHaveAttribute('aria-disabled', 'true');
+    await user.click(timpa);
+    expect(update).toHaveBeenCalledTimes(1);
+    // Layar konflik tetap: pesan dan kedua tombol masih ada, sheet tidak macet.
+    expect(screen.getByRole('alert').textContent).toContain('mengubah transaksi ini');
+    await setAmount(user, '61000');
+    expect(timpa).not.toHaveAttribute('aria-disabled');
+    await user.click(screen.getByRole('button', { name: 'Timpa dengan perubahan saya' }));
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledTimes(2);
+    });
+    expect(update.mock.calls[1]?.[0]).toMatchObject({ expectedVersion: 3, amount: 61_000 });
+  });
+
   it('salinan: nominal sama tanpa kurung; pengguna sendiri = Kamu; waktu relatif', () => {
     expect(
       flat(

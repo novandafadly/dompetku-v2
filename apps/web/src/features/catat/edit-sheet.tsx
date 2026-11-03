@@ -179,13 +179,17 @@ function EditSession({
     const run = status === 'galat' ? e.retry : status === 'saldo_kurang' ? e.saveAnyway : e.save;
     setClock(now());
     const out = await run();
-    if (out?.ok === true) finish(out.version);
+    if (out?.ok !== true) return;
+    // Tanpa perubahan: tutup saja; tidak ada yang tersimpan, jadi tanpa toast.
+    if ('unchanged' in out) onOpenChange(false);
+    else finish(out.version);
   }
 
   async function overwrite() {
+    if (!e.canOverwrite) return;
     setClock(now());
     const out = await e.overwrite();
-    if (out?.ok === true) finish(out.version);
+    if (out?.ok === true && 'version' in out) finish(out.version);
   }
 
   if (page === 'kategori') {
@@ -281,7 +285,8 @@ function EditSession({
           </Button>
           <Button
             variant="secondary"
-            className="flex-1 whitespace-normal"
+            className={`${primaryClass} whitespace-normal`}
+            aria-disabled={!e.canOverwrite || undefined}
             onClick={() => {
               void overwrite();
             }}

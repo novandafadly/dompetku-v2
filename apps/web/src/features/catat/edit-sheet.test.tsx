@@ -1,10 +1,16 @@
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EntryVM } from '@/features/ledger/types';
 import { ENTRY, renderEdit, UUID_V4 } from '@/test/edit-kit';
 
-afterEach(cleanup);
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toast', () => ({ toast }));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 async function setAmount(user: ReturnType<typeof userEvent.setup>, digits: string) {
   const input = screen.getByRole('textbox', { name: 'Nominal' });
@@ -151,11 +157,24 @@ describe('EditSheet (S6-D1)', () => {
 
   it('tanpa perubahan: Simpan perubahan menutup sheet tanpa memanggil server', async () => {
     const user = userEvent.setup();
-    const { update } = renderEdit();
+    const { update, onSaved } = renderEdit();
     await user.click(save());
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(update).not.toHaveBeenCalled();
+    // Tidak ada yang tersimpan: tanpa toast "Perubahan tersimpan" dan tanpa onSaved.
+    expect(toast).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('berhasil menyimpan: toast Perubahan tersimpan di {Ruang}', async () => {
+    const user = userEvent.setup();
+    renderEdit();
+    await setAmount(user, '60000');
+    await user.click(save());
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith({ message: 'Perubahan tersimpan di Pribadi' });
+    });
   });
 });

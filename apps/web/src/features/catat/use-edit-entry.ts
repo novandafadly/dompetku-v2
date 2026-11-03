@@ -126,7 +126,9 @@ function balanceAfter(base: EntryVM, d: EditDraft, account: AccountVM): Rupiah {
   return after;
 }
 
-export type SaveResult = { ok: true; version: number } | { ok: false } | null;
+/** `unchanged`: draf sama dengan entri, tidak ada yang dikirim (tanpa toast, tanpa `onSaved`). */
+export type SaveResult =
+  { ok: true; version: number } | { ok: true; unchanged: true } | { ok: false } | null;
 
 export function useEditEntry({
   entry,
@@ -306,7 +308,7 @@ export function useEditEntry({
   /** Simpan perubahan; tanpa perubahan = selesai tanpa ke server (versi tidak naik sia-sia). */
   const save = (): Promise<SaveResult> => {
     if (busy.current || !valid) return Promise.resolve(null);
-    if (!changed(base, draft)) return Promise.resolve({ ok: true, version: base.version });
+    if (!changed(base, draft)) return Promise.resolve({ ok: true, unchanged: true });
     return send({ clientId, base, negative: false });
   };
   /** "Coba lagi": clientId dan versi yang sama. */
@@ -316,10 +318,11 @@ export function useEditEntry({
 
   /**
    * "Timpa dengan perubahan saya": isian pengguna dengan versi terbaru. Isinya berbeda dari kiriman
-   * pertama, jadi clientId baru (sesi ubah baru di atas versi terbaru).
+   * pertama, jadi clientId baru (sesi ubah baru di atas versi terbaru). Draf tidak valid = tidak ada
+   * yang berubah (layar konflik tetap), agar sheet tidak tertinggal tanpa konflik dan tanpa kiriman.
    */
   const overwrite = (): Promise<SaveResult> => {
-    if (conflict === null || busy.current) return Promise.resolve(null);
+    if (conflict === null || busy.current || !valid) return Promise.resolve(null);
     const id = newClientId();
     const latest = conflict.latest;
     setBase(latest);
@@ -359,6 +362,8 @@ export function useEditEntry({
     selectedAccount,
     saldo,
     canSave,
+    /** "Timpa dengan perubahan saya" hanya dengan draf yang valid. */
+    canOverwrite: valid,
     saving,
     setAmount: (amount: Rupiah | null) => {
       update({ amount }, 'saldo');
