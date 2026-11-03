@@ -211,6 +211,19 @@ Keputusan agen atas nama pemilik untuk keadaan yang tidak punya bingkai sendiri;
 | Toast simpan kategori          | `Kategori {nama} disimpan di {Ruang}`                                                                                                                                                 |
 | Arsip kategori gagal           | `Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.` / `Kategori ini sudah tidak ada.` / `Belum bisa diarsipkan. Ada kendala di server.`                                          |
 
+### Tambahan salinan gelombang perbaikan S6 (2026-11-03)
+
+Keputusan controller atas nama pemilik (fix-wave A1, A4); gaya mengikuti galat Batalkan (`Belum bisa dibatalkan. …`).
+
+| Keadaan                                               | Tampilan                                      | Teks                                                             |
+| ----------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
+| Urungkan sesudah Batalkan gagal (Detail)              | toast pemberitahuan `role="status"`           | `Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.` |
+| Pulihkan gagal, `network`                             | pesan `role="alert"` di bawah tombol Pulihkan | `Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.`         |
+| Pulihkan gagal, `account_archived`                    | sama                                          | `Belum bisa dipulihkan. Dompetnya sudah diarsipkan.`             |
+| Pulihkan gagal, `idem_mismatch`, `not_found`, lainnya | sama                                          | `Belum bisa dipulihkan. Ada kendala di server.`                  |
+
+Perilaku terkait: Simpan perubahan tanpa perubahan menutup sheet Ubah tanpa toast; `Timpa dengan perubahan saya` nonaktif (`aria-disabled`) selama draf tidak valid; `restore_window_closed` memindahkan fokus ke teks lewat 90 hari.
+
 ## Keputusan penutup S6 (Task 20, 2026-11-03)
 
 Keputusan agen atas nama pemilik selama implementasi; bingkai di atas tetap berlaku kecuali disebut di sini.
@@ -226,7 +239,7 @@ Keputusan agen atas nama pemilik selama implementasi; bingkai di atas tetap berl
 - **Enter pada tombol Catat = 1 ketukan**; hanya pintasan `c` yang tidak dihitung. `catat_batal` tidak terkirim saat tab ditutup atau dimuat ulang.
 - **Tombol Tanpa pengeluaran** muncul bila hari ini belum ada pemasukan, pengeluaran, atau transfer (saldo awal dan cocokkan saldo tidak dihitung); status per ruang. "Undang Farida" hanya di Pribadi.
 - **Peringatan saldo kurang** muncul sesudah server menolak (`saldo_negatif`), tetap inline.
-- **Salinan baru yang disetujui atas nama pemilik:** `Belum bisa pindah ke {Ruang}. Periksa koneksi lalu coba lagi.`; `Belum bisa ditandai. Periksa koneksi lalu coba lagi.`; `Saldo operasional sudah minus.`; urungkan gagal (Catat) `Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.`; urungkan batal gagal (Detail) `Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.` (perbaikan menyusul, lihat Tertunda di CLAUDE.md); toast pulihkan `Dipulihkan di {Ruang} · {Rp}`; lencana "Data demo" disembunyikan di mode nyata.
+- **Salinan baru yang disetujui atas nama pemilik:** `Belum bisa pindah ke {Ruang}. Periksa koneksi lalu coba lagi.`; `Belum bisa ditandai. Periksa koneksi lalu coba lagi.`; `Saldo operasional sudah minus.`; urungkan gagal (Catat) `Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.`; urungkan batal gagal (Detail) `Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.` (terpasang di gelombang perbaikan); toast pulihkan `Dipulihkan di {Ruang} · {Rp}`; lencana "Data demo" disembunyikan di mode nyata.
 
 ## Design critique dan Delivery Gate (Task 20)
 
