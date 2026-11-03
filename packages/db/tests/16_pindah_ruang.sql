@@ -6,7 +6,7 @@
 -- api.restore_entry menolak entry_moved, api.trash_list menyembunyikan asal, purge 90 hari normal,
 -- idempotensi, isolasi. Semua lewat api.* sebagai role web; jam dipatok 2026-03-20 WIB.
 begin;
-select plan(78);
+select plan(79);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -205,7 +205,8 @@ select throws_ok(format($$select pg_temp.move(tests.n(), %L, 2, %L, %L, %L)$$, :
 select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 1000)$$,
   :'np', :'bca', :'dana')) ->> 'entry_id' as tr \gset
 select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 1000)$$,
-  :'np', :'bca', :'kas')) ->> 'entry_id' as st \gset
+  :'np', :'bca', :'kas')) as st_json \gset
+select (:'st_json'::jsonb) ->> 'entry_id' as st, (:'st_json'::jsonb) ->> 'linked_entry_id' as st_in \gset
 select tests.owner_val(null, format($$select e.id from app.entries e join app.entry_lines l on l.entry_id = e.id
   where l.account_id = %L and e.kind = 'opening_balance'$$, :'bca')) as ob \gset
 select pg_temp.call(tests.n(), format($$select api.reconcile_balance(gen_random_uuid(), %L, 5)$$, :'dana')) ->> 'entry_id' as adj \gset
@@ -216,6 +217,9 @@ select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, i
   'DK422', 'kind_not_movable', 'jenis ' || k || ' = kind_not_movable')
 from (values ('transfer', :'tr'::uuid), ('space_transfer', :'st'::uuid), ('opening_balance', :'ob'::uuid),
              ('adjustment', :'adj'::uuid), ('reimbursement', :'reimb'::uuid)) v (k, id);
+-- Jenis dicek sebelum pencatat: kaki Bersama transfer antar ruang catatan N, dicoba F.
+select throws_ok(format($$select pg_temp.move(tests.f(), %L, 1, %L, %L, %L)$$, :'st_in', :'fp', :'fbca', :'cat_fp'),
+  'DK422', 'kind_not_movable', 'F memindahkan kaki Bersama space_transfer N = kind_not_movable (bukan not_creator)');
 
 -- ===== Dompet dan kategori ruang tujuan =====
 select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'e5', :'sh', :'dana', :'cat_sh'),
@@ -234,7 +238,7 @@ select pg_temp.call(tests.n(), format($$select api.create_category(gen_random_uu
   :'sh')) ->> 'category_id' as cat_arsip \gset
 select pg_temp.call(tests.n(), format($$select api.archive_category(%L)$$, :'cat_arsip'));
 select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'e5', :'sh', :'kas', :'cat_arsip'),
-  'DK404', 'category_not_found', 'kategori terarsip = DK404 (pola create_entry)');
+  'DK422', 'category_archived', 'kategori terarsip = DK422 category_archived (pola create_entry 0106)');
 select pg_temp.entry(tests.n(), :'kan', 'expense', 5000, '2026-03-18', 'makan dinas') as ek \gset
 select throws_ok(format($$select pg_temp.move(tests.n(), %L, 1, %L, %L, %L)$$, :'ek', :'sh', :'kas', :'cat_sh'),
   'DK422', 'cross_space_kantor', 'entri dari dompet kantor = cross_space_kantor');

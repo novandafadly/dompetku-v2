@@ -75,6 +75,10 @@ begin
   if v_e.id is null then
     raise exception using errcode = 'DK404', message = 'entry_not_found';
   end if;
+  -- Jenis sebelum pencatat: kaki space_transfer Bersama catatan orang lain = kind_not_movable.
+  if v_e.kind not in ('income', 'expense') then
+    raise exception using errcode = 'DK422', message = 'kind_not_movable';
+  end if;
   if v_e.created_by <> v_uid then
     raise exception using errcode = 'DK422', message = 'not_creator';
   end if;
@@ -85,9 +89,6 @@ begin
   end if;
   if v_e.voided_at is not null then
     raise exception using errcode = 'DK422', message = 'entry_voided';
-  end if;
-  if v_e.kind not in ('income', 'expense') then
-    raise exception using errcode = 'DK422', message = 'kind_not_movable';
   end if;
   if p_to_space_id = v_e.space_id then
     raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'to_space_id';
@@ -122,8 +123,13 @@ begin
   if p_category_id is not null and not exists (
        select 1 from app.categories c
        where c.id = p_category_id and c.space_id = v_acc.space_id
-         and c.type::text = v_e.kind::text and c.archived_at is null) then
+         and c.type::text = v_e.kind::text) then
     raise exception using errcode = 'DK404', message = 'category_not_found';
+  end if;
+  -- Pola create_entry 0106: terarsip dibedakan dari tidak ada / ruang lain / jenis salah.
+  if p_category_id is not null and exists (
+       select 1 from app.categories c where c.id = p_category_id and c.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'category_archived';
   end if;
 
   insert into app.entries (space_id, space_kind, kind, occurred_on, description, category_id,
