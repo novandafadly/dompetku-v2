@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { redirect } from 'next/navigation';
@@ -259,9 +260,7 @@ describe('gerbang (Review Focus 5)', () => {
 
   it('pemindaian sumber: setiap export async function memanggil actionContext( di baris pertama', () => {
     const dir = path.dirname(fileURLToPath(import.meta.url));
-    const files = readdirSync(dir).filter(
-      (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'context.ts',
-    );
+    const files = actionFiles(dir);
     const seen: string[] = [];
     for (const file of files) {
       const { names, violations } = scanActionFile(
@@ -310,8 +309,37 @@ describe('gerbang (Review Focus 5)', () => {
     ).toEqual([]);
     // Action tanpa 'use server' = bukan endpoint, berarti salah taruh.
     expect(scanActionFile('x.ts', ok.slice(head.length)).violations).toHaveLength(1);
+    // Komentar di atas direktif tetap berkas 'use server' (ekspor nilai tetap ditolak).
+    const commented = `/** Action contoh. */\n// baris\n"use server"\n\nexport const b = 1;\n`;
+    expect(scanActionFile('x.ts', commented).violations).toHaveLength(1);
+    expect(scanActionFile('x.ts', `/* a */\n${ok}`).violations).toEqual([]);
+  });
+
+  it('pemindaian rekursif ke subdirektori (tes dan context.ts dilewati)', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'actions-'));
+    try {
+      mkdirSync(path.join(dir, 'sub', 'dalam'), { recursive: true });
+      for (const f of ['a.ts', 'context.ts', 'a.test.ts', 'sub/b.ts', 'sub/dalam/c.ts', 'sub/x.md'])
+        writeFileSync(path.join(dir, f), '');
+      expect(actionFiles(dir).sort()).toEqual(['a.ts', 'sub/b.ts', 'sub/dalam/c.ts']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
+
+/** Berkas action (relatif, rekursif): `.ts` selain tes dan `context.ts` di akar. */
+function actionFiles(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .map((f) => f.split(path.sep).join('/'))
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'context.ts');
+}
+
+/** Direktif `'use server'` sesudah komentar dan spasi di awal berkas (kutip tunggal/ganda). */
+function hasUseServer(src: string): boolean {
+  const rest = src.replace(/^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*/, '');
+  return /^(['"])use server\1;?/.test(rest);
+}
 
 const HELPERS = '(mutate|query|quietly)';
 
@@ -326,7 +354,7 @@ const HELPERS = '(mutate|query|quietly)';
  */
 function scanActionFile(file: string, src: string): { names: string[]; violations: string[] } {
   const violations: string[] = [];
-  const useServer = src.startsWith("'use server';");
+  const useServer = hasUseServer(src);
   const fns = exportedAsyncFunctions(src);
   if (useServer) {
     for (const line of src.split('\n')) {
