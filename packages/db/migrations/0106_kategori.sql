@@ -104,6 +104,9 @@ end $$;
 -- ===== Kategori: ubah (ganti penuh; idempoten secara alami) =====
 -- Jenis dan ruang tidak bisa diubah. Nama ganda di induk yang sama = 23505 (indeks unik parsial,
 -- sama dengan create_category); kedalaman > 2 = DK422 category_depth (trigger 0101).
+-- Kategori dan induk barunya dikunci (for update) dalam urutan id, sebelum dibaca ulang dan sebelum
+-- trigger kedalaman: dua re-parent konkuren (A di bawah B, B di bawah A) saling menunggu, sehingga
+-- yang kedua melihat hasil yang pertama di READ COMMITTED dan ditolak category_depth.
 create function api.update_category(p_category_id uuid, p_name text, p_icon text, p_parent_id uuid)
 returns jsonb
 language plpgsql security definer set search_path = '' as $$
@@ -113,10 +116,16 @@ declare
   v_c    app.categories%rowtype;
   v_p    app.categories%rowtype;
 begin
-  select * into v_c from app.categories where id = p_category_id for update;
+  select * into v_c from app.categories where id = p_category_id;
   if v_c.id is null or not (v_c.space_id = any (app.my_space_ids())) then
     raise exception using errcode = 'DK404', message = 'category_not_found';
   end if;
+  -- Hanya baris ruang yang sama: induk ruang lain tidak pernah dikunci (ditolak DK404 di bawah).
+  perform 1 from app.categories
+    where space_id = v_c.space_id and id in (p_category_id, p_parent_id)
+    order by id
+    for update;
+  select * into v_c from app.categories where id = p_category_id;
   if v_c.archived_at is not null then
     raise exception using errcode = 'DK422', message = 'category_archived';
   end if;
