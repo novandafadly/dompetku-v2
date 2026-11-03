@@ -331,6 +331,8 @@ for (const size of [
       await expectFullyVisible(sheet.getByLabel('Nominal', { exact: true }), 'nominal');
       await expectFullyVisible(sheet.getByRole('heading', { name: ruang }), 'label ruang');
       const chips = sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio');
+      // Sheet dimuat malas: tunggu chip (bukan placeholder) sebelum menghitung.
+      await expect(chips.first()).toBeVisible();
       expect(await chips.count()).toBeGreaterThanOrEqual(4);
       for (let i = 0; i < 4; i++) await expectFullyVisible(chips.nth(i), `chip ${String(i)}`);
       await expectFullyVisible(sheet.getByLabel('Dari dompet'), 'dompet');
