@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(36);
+select plan(39);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -279,6 +279,24 @@ select ok((select bool_and('default_transaction_isolation=read committed' = any 
           and (select count(*) from pg_db_role_setting s join pg_roles r on r.oid = s.setrole
                where r.rolname in ('dompetku_web', 'dompetku_worker')) = 2,
           'default READ COMMITTED di role web dan worker');
+
+-- Skema pgboss (S7, 0112): milik owner, hanya worker yang punya USAGE + CREATE (tabel pg-boss
+-- milik worker); tidak ada role aplikasi dengan CREATE/TEMPORARY di database.
+select is((select nspowner::regrole::text from pg_namespace where nspname = 'pgboss'), 'dompetku_owner',
+  'skema pgboss milik dompetku_owner');
+select set_eq($$
+  select r.rolname::text, p.priv from pg_roles r
+  cross join (values ('USAGE'), ('CREATE')) p (priv)
+  where r.rolname like 'dompetku\_%' and r.rolname not in ('dompetku_owner', 'dompetku_test')
+    and has_schema_privilege(r.oid, 'pgboss', p.priv) $$,
+  $$ values ('dompetku_worker', 'USAGE'), ('dompetku_worker', 'CREATE') $$,
+  'hak skema pgboss hanya untuk worker');
+select is_empty($$
+  select r.rolname || ' ' || p.priv from pg_roles r
+  cross join (values ('CREATE'), ('TEMPORARY')) p (priv)
+  where r.rolname like 'dompetku\_%' and r.rolname not in ('dompetku_owner', 'dompetku_test')
+    and has_database_privilege(r.oid, current_database(), p.priv) $$,
+  'role aplikasi tanpa CREATE/TEMPORARY di database');
 
 -- #7 Setiap FK punya indeks non-parsial dengan kolom terdepan = kolom FK (sebagai himpunan).
 select is_empty($$

@@ -312,8 +312,10 @@ select throws_ok(format($$select pg_temp.call(tests.n(), %L)$$, format(
   'DK404', 'entry_not_found', 'pulihkan asal yang sudah dipurge = DK404');
 
 -- ===== Cek kualitas data: nol temuan sesudah semua pindah =====
+-- DQ07 (warn) = 1: dompet "Dana" sengaja dibuat negatif dengan p_allow_negative di atas dan masih
+-- negatif lebih dari 3 hari WIB. Cek error tetap nol.
 select is(tests.worker_val(null, $$select string_agg(check_id || '=' || violations, ',' order by check_id) from jobs.dq_reconcile()$$),
-  'DQ01=0,DQ04=0,DQ04b=0,DQ06=0,DQ09=0,DQ10=0', 'dq_reconcile: nol temuan');
+  'DQ01=0,DQ03=0,DQ04=0,DQ04b=0,DQ06=0,DQ07=1,DQ09=0,DQ10=0,DQ11=0,DQ12=0', 'dq_reconcile: nol temuan error, DQ07 warn untuk dompet negatif');
 
 select * from finish();
 rollback;
