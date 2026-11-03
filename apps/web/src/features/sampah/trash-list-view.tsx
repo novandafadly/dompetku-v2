@@ -11,6 +11,7 @@ import { card, rowDivider, tile } from '@/components/ui/styles';
 import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
 import type { EntryVM, TrashVM } from '@/features/ledger/types';
 import { SAMPAH_TITLE_ID, TRASH_COPY } from './trash-states';
+import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /** `YYYY-MM-DD` dari stempel ISO WIB (`2026-11-02T09:00:00+07:00`). */
 const dateOf = (iso: string): IsoDate => iso.slice(0, 10);
@@ -129,7 +130,7 @@ export function TrashListView({
   return (
     <div ref={root} className="flex flex-col gap-3">
       <p className="text-meta font-medium text-text-muted">
-        Transaksi yang dibatalkan tersimpan 90 hari. Pulihkan sebelum terhapus permanen.
+        {`Transaksi yang dibatalkan tersimpan ${String(SAMPAH_HARI)} hari. Pulihkan sebelum terhapus permanen.`}
       </p>
       <ul aria-label="Transaksi dibatalkan" className={`px-4 ${card}`}>
         {items.map((item, i) => (

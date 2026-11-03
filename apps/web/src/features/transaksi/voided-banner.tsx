@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
+import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /** Salinan tetap S6-D3 dan S6-S1 (lewat 90 hari). */
 export const VOIDED_COPY = {
   text: 'Transaksi ini sudah dibatalkan.',
   restore: 'Pulihkan',
-  closed: 'Lewat 90 hari, transaksi ini tidak bisa dipulihkan lagi.',
+  closed: `Lewat ${String(SAMPAH_HARI)} hari, transaksi ini tidak bisa dipulihkan lagi.`,
 } as const;
 
 /**

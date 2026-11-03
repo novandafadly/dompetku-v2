@@ -2,9 +2,10 @@ import type { DemoState, Ruang } from '@dompetku/demo-data';
 import { addDays, type IsoDate } from '@dompetku/domain';
 import { entryToVM } from '@/features/transaksi/demo-vm';
 import type { TrashVM } from '@/features/ledger/types';
+import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /** Jendela pulihkan (BSD §9.1): sama dengan `api.trash_list` dan `api.restore_entry`. */
-const WINDOW_DAYS = 90;
+const WINDOW_DAYS = SAMPAH_HARI;
 /** Sama dengan `api.trash_list(p_limit => 100)` di mode nyata. */
 const LIMIT = 100;
 

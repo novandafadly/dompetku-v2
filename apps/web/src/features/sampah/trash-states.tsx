@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { ErrorState, LoadingRegion, Skeleton } from '@/components/ui/state';
 import { card } from '@/components/ui/styles';
+import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /** Id judul Sampah: sesudah daftar habis dipulihkan, fokus pindah ke judul (S6-S1). */
 export const SAMPAH_TITLE_ID = 'sampah-judul';
 
 /** Salinan tetap S6-S1. */
 export const TRASH_COPY = {
-  empty: 'Sampah kosong. Transaksi yang dibatalkan bisa dipulihkan di sini selama 90 hari.',
+  empty: `Sampah kosong. Transaksi yang dibatalkan bisa dipulihkan di sini selama ${String(SAMPAH_HARI)} hari.`,
   loading: 'Memuat Sampah…',
   failedTitle: 'Sampah belum bisa dimuat.',
   failedHint: 'Periksa koneksi lalu coba lagi.',

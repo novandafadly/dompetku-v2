@@ -4,6 +4,7 @@ import { formatRupiah } from '@dompetku/domain';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
 import type { EntryVM } from '@/features/ledger/types';
+import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /**
  * Akibat ke saldo bila transaksi dibatalkan (`EntryVM`, mode nyata). Kalimat sama dengan versi demo
@@ -29,7 +30,7 @@ export function voidSentenceVM(e: EntryVM): string {
     default:
       effect = `Saldo ${own} berkurang ${amt}.`;
   }
-  return `Transaksi ${amt} dibatalkan. ${effect} Bisa dipulihkan 90 hari dari Sampah.`;
+  return `Transaksi ${amt} dibatalkan. ${effect} Bisa dipulihkan ${String(SAMPAH_HARI)} hari dari Sampah.`;
 }
 
 /** Toast sesudah batal (pola toast Catat): "Dibatalkan di Pribadi · Rp 35.000 dari BCA". */
