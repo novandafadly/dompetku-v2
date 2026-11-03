@@ -1,14 +1,14 @@
 'use client';
 
 import { formatRupiah, type Rupiah } from '@dompetku/domain';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { WarningIcon } from '@/components/ui/icons/warning';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { toast } from '@/components/ui/toast';
 import { SaldoKurangRow } from '@/features/catat/catat-status';
 import { newClientId } from '@/features/catat/client-id';
-import type { ActionResult, EntryVM, Ruang } from '@/features/ledger/types';
+import type { ActionResult, EntryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { RUANG_LABEL } from '@/features/shell/hrefs';
 import { VOIDED_COPY } from '@/features/transaksi/voided-banner';
 
@@ -17,7 +17,8 @@ import { VOIDED_COPY } from '@/features/transaksi/voided-banner';
  * alur, satu salinan. Satu clientId per sesi pulihkan ("Coba lagi" dan "Tetap pulihkan" memakainya
  * lagi); klik ganda = satu permintaan; `saldo_negatif` → peringatan S6-C3 + `Tetap pulihkan`;
  * `restore_window_closed` → teks lewat 90 hari di tempat tombol; konflik versi → `onConflict`
- * (pemanggil memuat ulang) dan sesi baru. Jaringan putus dan galat lain → pesan `role="alert"`.
+ * (pemanggil memuat ulang) dan sesi baru. Jaringan putus dan galat lain → pesan `role="alert"`
+ * sesuai penyebab (hanya `network` yang menyebut koneksi).
  */
 
 export interface RestoreRequest {
@@ -48,6 +49,13 @@ function restoredBalance(entry: EntryVM, account: RestoreAccount): number {
 
 type RestoreState = 'idle' | 'busy' | 'saldo' | 'closed' | 'galat';
 
+/** Galat pulihkan selain saldo, lewat 90 hari, dan konflik (salinan S6, gaya galat Batalkan). */
+export function restoreFailedText(code: LedgerErrorCode): string {
+  if (code === 'network') return 'Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.';
+  if (code === 'account_archived') return 'Belum bisa dipulihkan. Dompetnya sudah diarsipkan.';
+  return 'Belum bisa dipulihkan. Ada kendala di server.';
+}
+
 export function RestoreControl({
   ruang,
   entry,
@@ -72,8 +80,15 @@ export function RestoreControl({
   const [clientId, setClientId] = useState(newClientId);
   const [state, setState] = useState<RestoreState>('idle');
   const [negative, setNegative] = useState(false);
+  const [galat, setGalat] = useState<LedgerErrorCode>('network');
   const busy = useRef(false);
+  const closedRef = useRef<HTMLParagraphElement>(null);
   const noteId = useId();
+
+  // Tombol diganti teks lewat 90 hari: fokus pindah ke teks itu, tidak jatuh ke <body>.
+  useEffect(() => {
+    if (state === 'closed') closedRef.current?.focus();
+  }, [state]);
 
   async function run(allowNegative: boolean) {
     if (busy.current) return;
@@ -95,6 +110,9 @@ export function RestoreControl({
     }
     if (res.ok) {
       toast({ message: `Dipulihkan di ${RUANG_LABEL[ruang]} · ${formatRupiah(entry.amount)}` });
+      // Sibuk selalu dilepas: bila muat ulang daftar/Detail gagal, tombol tidak tertahan. Klik lagi
+      // memakai clientId yang sama (server mengembalikan hasil yang sama, tanpa entri ganda).
+      setState('idle');
       onRestored?.();
       return;
     }
@@ -106,12 +124,19 @@ export function RestoreControl({
       setClientId(newClientId());
       setState('idle');
       onConflict?.();
-    } else setState('galat');
+    } else {
+      setGalat(code);
+      setState('galat');
+    }
   }
 
   if (state === 'closed') {
     return (
-      <p className="flex items-center gap-1.5 text-meta font-semibold text-warning">
+      <p
+        ref={closedRef}
+        tabIndex={-1}
+        className="flex items-center gap-1.5 text-meta font-semibold text-warning outline-none"
+      >
         <WarningIcon size={16} weight="fill" className="shrink-0" />
         {VOIDED_COPY.closed}
       </p>
@@ -131,9 +156,7 @@ export function RestoreControl({
         className="flex items-start gap-1.5 text-meta font-semibold text-danger"
       >
         <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
-        <span className="min-w-0 text-pretty">
-          Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.
-        </span>
+        <span className="min-w-0 text-pretty">{restoreFailedText(galat)}</span>
       </p>
     ) : null;
 

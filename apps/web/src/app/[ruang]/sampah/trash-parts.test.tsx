@@ -1,6 +1,12 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AccountVM, ActionResult, EntryVM, TrashVM } from '@/features/ledger/types';
+import type {
+  AccountVM,
+  ActionResult,
+  EntryVM,
+  LedgerErrorCode,
+  TrashVM,
+} from '@/features/ledger/types';
 import { TrashList } from './trash-parts';
 
 const toast = vi.hoisted(() => vi.fn());
@@ -49,8 +55,7 @@ type Restore = (r: {
 }) => Promise<ActionResult<{ version: number }>>;
 
 const ok: ActionResult<{ version: number }> = { ok: true, value: { version: 4 } };
-const fail = (code: 'saldo_negatif' | 'restore_window_closed' | 'conflict' | 'network') =>
-  ({ ok: false, error: { code } }) as const;
+const fail = (code: LedgerErrorCode) => ({ ok: false, error: { code } }) as const;
 
 function view(items: TrashVM[], restore: Restore, extra: { onConflict?: () => void } = {}) {
   return render(
@@ -158,6 +163,42 @@ describe('TrashList (daftar Sampah + Pulihkan)', () => {
     expect(within(first).queryByRole('button')).toBeNull();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('restore_window_closed: fokus pindah ke teks lewat 90 hari, bukan ke body', async () => {
+    view([item('e1')], vi.fn<Restore>().mockResolvedValue(fail('restore_window_closed')));
+    const btn = screen.getByRole('button', { name: /^Pulihkan/ });
+    btn.focus();
+    fireEvent.click(btn);
+    const text = await screen.findByText(
+      'Lewat 90 hari, transaksi ini tidak bisa dipulihkan lagi.',
+    );
+    await waitFor(() => {
+      expect(text.closest('p')).toHaveFocus();
+    });
+  });
+
+  it.each([
+    ['account_archived', 'Belum bisa dipulihkan. Dompetnya sudah diarsipkan.'],
+    ['idem_mismatch', 'Belum bisa dipulihkan. Ada kendala di server.'],
+    ['not_found', 'Belum bisa dipulihkan. Ada kendala di server.'],
+    ['unknown', 'Belum bisa dipulihkan. Ada kendala di server.'],
+  ] as const)('galat %s: pesan role=alert tidak menyalahkan koneksi', async (code, text) => {
+    view([item('e1')], vi.fn<Restore>().mockResolvedValue(fail(code)));
+    fireEvent.click(screen.getByRole('button', { name: /^Pulihkan/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+  });
+
+  it('berhasil tetapi daftar belum dimuat ulang (refresh gagal): tombol tidak tertahan sibuk', async () => {
+    view([item('e1')], vi.fn<Restore>().mockResolvedValue(ok));
+    fireEvent.click(screen.getByRole('button', { name: /^Pulihkan/ }));
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Pulihkan/ })).not.toHaveAttribute('aria-busy');
+    });
+    expect(screen.getByRole('button', { name: /^Pulihkan/ })).not.toHaveAttribute('aria-disabled');
   });
 
   it('saldo_negatif: peringatan S6-C3 lalu Tetap pulihkan memakai clientId yang sama', async () => {
