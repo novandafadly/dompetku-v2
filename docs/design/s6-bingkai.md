@@ -211,6 +211,38 @@ Keputusan agen atas nama pemilik untuk keadaan yang tidak punya bingkai sendiri;
 | Toast simpan kategori          | `Kategori {nama} disimpan di {Ruang}`                                                                                                                                                 |
 | Arsip kategori gagal           | `Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.` / `Kategori ini sudah tidak ada.` / `Belum bisa diarsipkan. Ada kendala di server.`                                          |
 
+## Keputusan penutup S6 (Task 20, 2026-11-03)
+
+Keputusan agen atas nama pemilik selama implementasi; bingkai di atas tetap berlaku kecuali disebut di sini.
+
+- **Nama dompet maksimal 40 karakter** (DB mengizinkan 60), seragam dengan kategori. Keunikan nama dompet hanya dicek di klien; indeks unik di DB menyusul di S7.
+- **Kode galat baru:** `name_taken` (hanya dari indeks `categories_name_unique`, salinan S6-K1) dan `category_depth` (`Kategori hanya bisa dua tingkat.`). Salinan `idem_mismatch` dipakai juga tambah dompet dan tambah kategori.
+- **`MoneyText` mengecilkan nominal lebih dari 13 karakter di semua layar** (gaya `amount-sm`), bukan hanya Dompet; mencegah gulir horizontal di 320 px untuk `Rp 12.345.678.900`.
+- **`/{ruang}/kategori` menandai tab Transaksi** (sama dengan Sampah: kategori mengklasifikasi transaksi, Menu dibuka dari shell); dikunci di `hrefs.test.ts`.
+- **S6-C6 "Tambah dompet"** pada mode nyata menavigasi ke `/{ruang}/dompet?tambah=1`, yang membuka sheet Tambah dompet (bukan sheet di dalam sheet; menjaga budget Catat).
+- **Enter pada chip kategori Catat hanya memilih.** Jalur keyboard: Tab ke Simpan, lalu Enter (sama dengan `a11y.spec.ts`).
+- **Riwayat per dompet** memakai `accountEntries` (maksimum 1000 baris, `?tampil=` memuat lebih); ringkasan menghitung semua baris.
+- **Seed demo masih ikut JS mode nyata** (tidak dipasang, tidak dirender). Pemangkasan ditunda karena butuh mengubah tes prototipe lama; headroom beranda mode nyata 1,2 kB.
+- **Enter pada tombol Catat = 1 ketukan**; hanya pintasan `c` yang tidak dihitung. `catat_batal` tidak terkirim saat tab ditutup atau dimuat ulang.
+- **Tombol Tanpa pengeluaran** muncul bila hari ini belum ada pemasukan, pengeluaran, atau transfer (saldo awal dan cocokkan saldo tidak dihitung); status per ruang. "Undang Farida" hanya di Pribadi.
+- **Peringatan saldo kurang** muncul sesudah server menolak (`saldo_negatif`), tetap inline.
+- **Salinan baru yang disetujui atas nama pemilik:** `Belum bisa pindah ke {Ruang}. Periksa koneksi lalu coba lagi.`; `Belum bisa ditandai. Periksa koneksi lalu coba lagi.`; `Saldo operasional sudah minus.`; urungkan gagal (Catat) `Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.`; urungkan batal gagal (Detail) `Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.` (perbaikan menyusul, lihat Tertunda di CLAUDE.md); toast pulihkan `Dipulihkan di {Ruang} · {Rp}`; lencana "Data demo" disembunyikan di mode nyata.
+
+## Design critique dan Delivery Gate (Task 20)
+
+Skill `antislop` tidak terpasang di sesi ini. Gerbang dijalankan sebagai daftar periksa tertulis atas DESIGN.md (Panel Malam) dan bingkai ini, memakai `/dev/ui` dan rute prototipe pada build lokal (port 3100; pratinjau Vercel tidak bisa dibuka dari sandbox), terang dan gelap, 320/390/1280. Hasil lengkap: `.superpowers/sdd/2026-11-01-dompetku-v2-s6-catat/task-20-report.md`.
+
+| Pemeriksaan                                                                               | Hasil                                                                                                               |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Kontras token (skrip rumus WCAG atas `tokens.css`, 27 pasangan x 2 tema)                  | 0 pasangan di bawah ambang (teks 4,5:1; batas dan fokus 3:1)                                                        |
+| Gulir horizontal 320/390/1280, terang dan gelap, enam bagian S6 di `/dev/ui`              | tidak ada                                                                                                           |
+| Target sentuh < 44 px pada tombol dan tautan bagian S6                                    | tidak ada                                                                                                           |
+| Kontrol tanpa nama aksesibel                                                              | tidak ada                                                                                                           |
+| Warna mentah, bayangan kartu, `dangerouslySetInnerHTML` pada 118 berkas UI yang diubah S6 | hanya `themeColor` pra-ada, bayangan token `float`/`rail` untuk lapisan mengambang, dan skrip tema bernonce pra-ada |
+| axe serious/critical                                                                      | 0 (`pnpm e2e` 280 lulus, `e2e:ledger` 18 lulus)                                                                     |
+
+Temuan kecil yang ditunda (tidak memblokir): pesan galat S6-C2 mode keyboard terpotong ellipsis (pembaca layar tetap membaca lengkap lewat `role="alert"`); nama dompet panjang di daftar Dompet memakai empat baris saat nominal 12 digit; keterangan baris riwayat dompet terpotong di 390 saat nominal panjang.
+
 ## Catatan review
 
 Kursi design reviewer (pass terpisah dari penulisan, 2026-11-01), diperiksa terhadap `docs/design/panel-malam/README.md`, `DESIGN.md`, DBD §3 sampai §7, dan antislop (ui, human, copywriting, layoutmobile). Setiap temuan sudah diterapkan di bingkai di atas.
