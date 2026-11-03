@@ -80,3 +80,7 @@ Task 7: complete (commits 64619af..b2a5ead, review clean)
 Ruling R24: hasil aksi tidak pernah memuat linkedEntryId/linkId; moveEntryAction ke Pribadi tidak mengembalikan id entri baru → Task 11 menavigasi ke `/pribadi/transaksi` (bukan Detail entri baru seperti S7-D2) — biaya: satu ketukan ekstra untuk membuka entri yang dipindah.
 Ruling R25: Batalkan/pulihkan space_transfer oleh bukan pencatat = DK404 not_found (keputusan DB 0103); Task 11 menyembunyikan Batalkan untuk bukan pencatat — biaya: tidak ada.
 Ruling R26: label feed Bersama untuk entri yang dipindah = "{Nama} memindahkan transaksi ke ruang lain" (event void dengan moved_at), dikerjakan saat feed nyata dirender (S8/S9) — biaya: tidak ada di S7.
+Task 8: review → Approved, 0 Critical/Important. Minor 1 (komentar voidEntryAction not_creator → not_found) diperbaiki controller.
+Ruling R27: respons action atas permintaan pemilik Pribadi dari rute Bersama (moveTargetsAction('bersama','pribadi'), catatOptions('pribadi')) boleh memuat dompet/kategori Pribadi miliknya; Task 10/11 wajib memuatnya malas saat sheet dibuka, tidak di URL/searchParams/cache bersama/props RSC; dicatat di BSD §16 (Task 18) — biaya: tidak ada.
+Task 8: minor (deferred): tes int createReimbursementAction lintas ruang (talangan Pribadi dari /bersama, dompet penerima Bersama → not_found) belum ada — tambah di Task 17; ruang tujuan di-resolve dua kali + 3 transaksi per transfer antar ruang/pindah (aman, berurutan); toSpaceId: undefined lolos skema (tak dipakai).
+Task 8: complete (commits 09ff840..63a518a, review clean)
