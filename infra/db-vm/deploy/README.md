@@ -1,21 +1,22 @@
 # Deployer pull-based (S3)
 
-Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, dan rollback otomatis bila gagal.
+Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, lalu (S7) mengganti `worker` dari image yang sama dan mengecek kestabilannya, dan rollback otomatis keduanya bila gagal.
 
 ## Berkas
 
-| Repo                                           | VM DB                                                            | Mode       |
-| ---------------------------------------------- | ---------------------------------------------------------------- | ---------- |
-| `deploy`                                       | `/opt/dompetku/bin/deploy`                                       | `755 root` |
-| `../compose.yml` (layanan `web`, profil `web`) | `/opt/dompetku/compose.yml`                                      | `644 root` |
-| `deploy.env.example`                           | `/opt/dompetku/env/deploy.env`                                   | `600 root` |
-| `web.env.example`                              | `/opt/dompetku/env/web.env`                                      | `600 root` |
-| (dari pemilik, bagian Tanda tangan image)      | `/opt/dompetku/keys/cosign.pub` (hanya kunci publik)             | `644 root` |
-| `systemd/dompetku-deploy.{service,timer}`      | `/etc/systemd/system/`                                           | `644 root` |
-| `README.md`                                    | `/opt/dompetku/deploy/README.md`                                 | `644 root` |
-| (dibuat deployer)                              | `/var/lib/dompetku/deploy/{current,history.tsv,failed}`          | `700 root` |
-| (dibuat deployer)                              | `/var/log/dompetku/deploy.log` (satu baris JSON per hasil)       | `600 root` |
-| (dibuat deployer)                              | `/opt/dompetku/migrations` (dari image rilis), `migrations.prev` | `755 root` |
+| Repo                                             | VM DB                                                            | Mode       |
+| ------------------------------------------------ | ---------------------------------------------------------------- | ---------- |
+| `deploy`                                         | `/opt/dompetku/bin/deploy`                                       | `755 root` |
+| `../compose.yml` (`web`, `worker`, profil `web`) | `/opt/dompetku/compose.yml`                                      | `644 root` |
+| `deploy.env.example`                             | `/opt/dompetku/env/deploy.env`                                   | `600 root` |
+| `web.env.example`                                | `/opt/dompetku/env/web.env`                                      | `600 root` |
+| `worker.env.example` (S7)                        | `/opt/dompetku/env/worker.env`                                   | `600 root` |
+| (dari pemilik, bagian Tanda tangan image)        | `/opt/dompetku/keys/cosign.pub` (hanya kunci publik)             | `644 root` |
+| `systemd/dompetku-deploy.{service,timer}`        | `/etc/systemd/system/`                                           | `644 root` |
+| `README.md`                                      | `/opt/dompetku/deploy/README.md`                                 | `644 root` |
+| (dibuat deployer)                                | `/var/lib/dompetku/deploy/{current,history.tsv,failed}`          | `700 root` |
+| (dibuat deployer)                                | `/var/log/dompetku/deploy.log` (satu baris JSON per hasil)       | `600 root` |
+| (dibuat deployer)                                | `/opt/dompetku/migrations` (dari image rilis), `migrations.prev` | `755 root` |
 
 Langkah DB yang dijalankan deployer (S2 sudah live; tanpa hook terpisah):
 
@@ -26,13 +27,22 @@ Langkah DB yang dijalankan deployer (S2 sudah live; tanpa hook terpisah):
 
 Image hanya ditarik dari GHCR (`docker pull`); VM tidak perlu BuildKit.
 
+## Worker (S7)
+
+Worker ada di image yang sama (`/app/worker/worker.mjs`, layanan compose `worker` dengan image `dompetku-web:current`), jadi satu digest = satu versi web + worker dan rollback mengembalikan keduanya. Pemasangan dan rahasia: `docs/ops/runbook-s7-worker.md`.
+
+1. Web diganti dan dicek lebih dulu (alur di atas). Web gagal = worker tidak disentuh.
+2. Sesudah web sehat: `docker compose up -d --no-deps worker`. Sehat = container `running` dari image di balik `dompetku-web:current` dan `RestartCount` tidak naik selama 20 detik (`WORKER_STABLE_CHECKS` x `WORKER_INTERVAL`). Worker tidak punya HTTP; `HEALTHCHECK` image dimatikan untuk layanan ini.
+3. Worker gagal = digest masuk `failed`, web dikembalikan ke digest lama, worker dikembalikan ke digest lama bila sebelumnya berjalan atau dihentikan bila belum (rilis pertama yang memuat worker), kode 3, audit `rolled_back` dengan detail `health worker ...`.
+4. Worker dilewati (kode 0, web tetap terpasang), alasan di `detail` audit `ok`: `worker_env_missing` (`env/worker.env` belum ada) atau `worker_service_missing` (`compose.yml` di VM belum memuat `worker`). Deploy pertama sebelum pemilik mengisi env tidak gagal.
+
 ## Kode keluar dan perilaku
 
 | Kode | Arti                                                                                        |
 | ---- | ------------------------------------------------------------------------------------------- |
 | 0    | Selesai, tidak ada rilis baru, deploy lain sedang berjalan, atau digest pernah gagal        |
 | 2    | Ditolak: tanda tangan/SBOM tidak valid, commit lebih tua, digest pernah berjalan, preflight |
-| 3    | Rilis gagal health, sudah kembali ke digest sebelumnya                                      |
+| 3    | Rilis gagal health (web atau worker), sudah kembali ke digest sebelumnya                    |
 | 4    | Rilis gagal dan rollback juga gagal (tindakan manual)                                       |
 | 1    | Galat lain (GHCR tidak terbaca, migrasi gagal, konfigurasi)                                 |
 

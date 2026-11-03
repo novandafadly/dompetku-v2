@@ -1,5 +1,6 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
 # S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools). S3: web (profil web).
+# S7: worker (profil web, image sama dengan web).
 name: dompetku
 
 services:
@@ -108,6 +109,40 @@ services:
       start_period: 30s
       start_interval: 2s
 
+  worker:
+    # S7 (K1). Image yang sama dengan web (tag lokal dari deployer, rollback bersama web); entri
+    # /app/worker/worker.mjs (pg-boss, job terjadwal WIB). Deployer mengganti worker sesudah web sehat
+    # dan melewatinya selama env/worker.env belum ada (docs/ops/runbook-s7-worker.md). required:
+    # false agar berkas yang belum ada tidak menggagalkan compose untuk web dan migrate.
+    image: dompetku-web:current
+    pull_policy: never
+    profiles: [web]
+    restart: unless-stopped
+    command: ['worker/worker.mjs']
+    env_file:
+      - path: ./env/worker.env
+        required: false
+    # internal: ke postgres (pg_hba subnet internal). worker_egress: hanya ping Healthchecks.
+    networks: [internal, worker_egress]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    # CA DompetKu untuk DATABASE_URL sslmode=verify-full (sama dengan web).
+    volumes:
+      - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro
+    user: '65532:65532'
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    # SIGTERM -> pg-boss stop graceful (job aktif diselesaikan) sebelum SIGKILL.
+    stop_grace_period: 30s
+    # Tanpa HTTP: HEALTHCHECK image (milik web, port 3000) dimatikan. Health = deployer
+    # (running + RestartCount stabil 20 detik).
+    healthcheck:
+      disable: true
+
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).
   app: {}
@@ -119,6 +154,8 @@ networks:
         - subnet: 172.24.0.0/16
   # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
   egress: {}
+  # Hanya worker: keluar ke Healthchecks.io. Terpisah dari app (gw/web) dan egress (postgres).
+  worker_egress: {}
 
 volumes:
   pgdata: {}

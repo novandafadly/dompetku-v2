@@ -5,7 +5,9 @@
 # Alur: kunci -> baca digest tag `main` di GHCR -> lewati bila sama/pernah gagal -> verifikasi
 # tanda tangan cosign + attestation SBOM (kunci publik pemilik) -> tarik -> tolak bila lebih tua ->
 # preflight -> restore point + migrasi dbmate (berkas migrasi diambil dari image rilis) -> ganti web
-# -> health -> selesai, atau rollback ke digest sebelumnya. Setiap hasil = satu baris audit JSON.
+# -> health -> ganti worker (image sama, S7) -> stabil -> selesai, atau rollback keduanya ke digest
+# sebelumnya. Worker dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada.
+# Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -14,7 +16,7 @@
 #   deploy --status              cetak digest yang berjalan dan riwayat terakhir
 #
 # Kode keluar: 0 selesai/tidak ada rilis, 1 galat, 2 ditolak (verifikasi/lebih tua/preflight),
-# 3 rilis gagal health dan sudah di-rollback, 4 rollback juga gagal.
+# 3 rilis gagal health (web atau worker) dan sudah di-rollback, 4 rollback juga gagal.
 set -euo pipefail
 umask 077
 
@@ -33,6 +35,10 @@ LOCAL_TAG=dompetku-web:current  # dirujuk layanan web di compose.yml (pull_polic
 SERVICE=web
 HEALTH_RETRIES=30
 HEALTH_INTERVAL=5
+WORKER_SERVICE=worker           # image sama dengan web, entri /app/worker/worker.mjs (S7)
+WORKER_ENV=$ROOT/env/worker.env # belum ada = worker dilewati (diisi pemilik, runbook-s7-worker)
+WORKER_STABLE_CHECKS=5          # worker sehat = running, image baru, RestartCount tetap
+WORKER_INTERVAL=4               # selama 5 x 4 = 20 detik
 MIN_FREE_MB=2048
 HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
 GHCR_USER=''
@@ -161,7 +167,7 @@ label() {
   docker image inspect "$1" --format "{{ index .Config.Labels \"$2\" }}" 2>/dev/null || true
 }
 
-running_cid() { compose ps -q "$SERVICE" 2>/dev/null | head -n 1; }
+running_cid() { compose ps -q "${1:-$SERVICE}" 2>/dev/null | head -n 1; }
 
 # Sehat = HEALTHCHECK image "healthy" dan /api/health melaporkan SHA build yang diharapkan.
 wait_healthy() {
@@ -186,6 +192,42 @@ wait_healthy() {
 switch_to() {
   docker tag "$IMAGE@$1" "$LOCAL_TAG"
   compose up -d --no-deps "$SERVICE"
+}
+
+# Worker tanpa HTTP: sehat = container running dari rilis yang diharapkan (label revision image,
+# diwarisi container) dan RestartCount tidak naik selama WORKER_STABLE_CHECKS x WORKER_INTERVAL detik
+# (env salah/DB tak terjangkau = keluar 1, lalu restart: unless-stopped menaikkan RestartCount).
+wait_worker() {
+  local want_sha=$1 cid state restarts sha first='' i
+  cid=$(running_cid "$WORKER_SERVICE")
+  [[ -n $want_sha && -n $cid ]] || return 1
+  for ((i = 0; i <= WORKER_STABLE_CHECKS; i++)); do
+    ((i == 0)) || sleep "$WORKER_INTERVAL"
+    read -r state restarts sha < <(docker inspect -f \
+      '{{ .State.Status }} {{ .RestartCount }} {{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+      "$cid" 2>/dev/null) || return 1
+    [[ $state == running && $sha == "$want_sha" ]] || return 1
+    first=${first:-$restarts}
+    [[ $restarts == "$first" ]] || return 1
+  done
+}
+
+switch_worker() { compose up -d --no-deps "$WORKER_SERVICE"; }
+
+# Alasan worker dilewati (kosong = worker ikut diganti). Bukan kegagalan: deploy pertama sebelum
+# pemilik mengisi env/worker.env atau menyalin compose.yml S7 tetap memasang web.
+worker_skip_reason() {
+  if [[ ! -f $WORKER_ENV ]]; then
+    echo worker_env_missing
+  elif ! compose config --services 2>/dev/null | grep -qx "$WORKER_SERVICE"; then
+    echo worker_service_missing
+  fi
+}
+
+worker_was_running() {
+  local cid
+  cid=$(running_cid "$WORKER_SERVICE")
+  [[ -n $cid && $(docker inspect -f '{{ .State.Status }}' "$cid" 2>/dev/null) == running ]]
 }
 
 # Simpan image yang berjalan dan sebelumnya (target rollback); sisanya dihapus.
@@ -286,6 +328,9 @@ free_mb=$(df -Pm /var/lib/docker 2>/dev/null | awk 'NR == 2 { print $4 }')
 [[ ${free_mb:-0} -ge $MIN_FREE_MB ]] || fail 2 rejected "disk /var/lib/docker sisa ${free_mb:-?} MB < $MIN_FREE_MB MB"
 compose config --services | grep -qx "$SERVICE" || fail 2 rejected "layanan $SERVICE tidak ada di $ROOT/compose.yml"
 db_preflight || fail 2 rejected 'postgres tidak sehat atau pengarsipan WAL gagal'
+WORKER_SKIP=$(worker_skip_reason)
+WORKER_BEFORE=0
+if [[ -z $WORKER_SKIP ]] && worker_was_running; then WORKER_BEFORE=1; fi
 
 # --- 5. Migrasi (expand/contract; tidak ada down-migration saat rollback) ---------------------
 extract_migrations || fail 1 migrate_failed 'gagal menyalin migrasi dari image; web tidak diganti'
@@ -294,25 +339,50 @@ migrate || {
   fail 1 migrate_failed 'dbmate up gagal; web tidak diganti'
 }
 
-# --- 6. Ganti web, cek health, rollback bila gagal --------------------------------------------
-switch_to "$TO_DIGEST" || log 'compose up rilis baru gagal'
-if wait_healthy "$TO_SHA"; then
+# --- 6. Ganti web, cek health; lalu worker; rollback keduanya bila salah satu gagal -------------
+succeed() {
   printf '%s %s %s\n' "$TO_DIGEST" "$TO_CREATED" "$TO_SHA" >"$STATE_DIR/current.tmp"
   mv "$STATE_DIR/current.tmp" "$STATE_DIR/current"
-  audit ok
+  audit ok "$WORKER_SKIP"
   log "selesai: $TO_SHA"
   prune_images
   exit 0
+}
+
+BROKEN=web
+switch_to "$TO_DIGEST" || log 'compose up rilis baru gagal'
+if wait_healthy "$TO_SHA"; then
+  if [[ -n $WORKER_SKIP ]]; then
+    log "worker dilewati: $WORKER_SKIP"
+    succeed
+  fi
+  switch_worker || log 'compose up worker rilis baru gagal'
+  wait_worker "$TO_SHA" && succeed
+  BROKEN=worker
 fi
 
 echo "$TO_DIGEST" >>"$STATE_DIR/failed"
 if [[ -z $FROM_DIGEST ]]; then
+  [[ $BROKEN == worker ]] && { compose stop "$WORKER_SERVICE" || true; }
   compose stop "$SERVICE" || true
-  fail 3 failed_no_previous 'health gagal, tidak ada digest sebelumnya; web dihentikan'
+  fail 3 failed_no_previous "health $BROKEN gagal, tidak ada digest sebelumnya; web dan worker dihentikan"
 fi
-log "health gagal, rollback ke $FROM_DIGEST"
+log "health $BROKEN gagal, rollback ke $FROM_DIGEST"
 FROM_SHA=$(label "$IMAGE@$FROM_DIGEST" org.opencontainers.image.revision)
-if switch_to "$FROM_DIGEST" && wait_healthy "$FROM_SHA"; then
-  fail 3 rolled_back "health $TO_SHA gagal, kembali ke $FROM_DIGEST"
+
+# Web gagal = worker belum disentuh (masih container image lama). Worker gagal = kembalikan ke
+# image lama bila sebelumnya berjalan; bila tidak (rilis pertama yang memuat worker, image lama
+# tanpa worker.mjs), hentikan.
+restore_worker() {
+  [[ $BROKEN == worker ]] || return 0
+  if ((WORKER_BEFORE)); then
+    switch_worker && wait_worker "$FROM_SHA"
+  else
+    compose stop "$WORKER_SERVICE"
+  fi
+}
+
+if switch_to "$FROM_DIGEST" && wait_healthy "$FROM_SHA" && restore_worker; then
+  fail 3 rolled_back "health $BROKEN $TO_SHA gagal, kembali ke $FROM_DIGEST"
 fi
-fail 4 rollback_failed "health $TO_SHA gagal dan rollback ke $FROM_DIGEST juga gagal"
+fail 4 rollback_failed "health $BROKEN $TO_SHA gagal dan rollback ke $FROM_DIGEST juga gagal"

@@ -1,10 +1,12 @@
-# Image produksi web DompetKu (IPD S3). Konteks build = root repo:
+# Image produksi web + worker DompetKu (IPD S3, S7 K1). Konteks build = root repo:
 #   docker buildx build -f apps/web/Dockerfile --platform linux/arm64 --build-arg BUILD_SHA=$(git rev-parse HEAD) .
 #
 # Tahap build berjalan di platform builder (tanpa emulasi). Hasil standalone Next murni JS:
 # biner native (sharp, tak dipakai karena images.unoptimized) dibuang dan build gagal bila
 # masih ada berkas .node, sehingga image arm64 aman dirakit dari runner amd64.
 # Tahap runtime tanpa RUN: distroless nodejs, user nonroot (65532), tanpa shell dan paket.
+# Worker (apps/worker) = satu bundel ESM murni JS di /app/worker/worker.mjs; layanan compose `worker`
+# menjalankan image yang sama dengan command `worker/worker.mjs`.
 
 FROM --platform=$BUILDPLATFORM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS build
 ENV CI=true \
@@ -15,6 +17,7 @@ WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
 COPY packages/domain/package.json packages/domain/
 COPY packages/demo-data/package.json packages/demo-data/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
@@ -28,6 +31,8 @@ RUN test -z "${NEXT_PUBLIC_PROTOTYPE:-}" \
               apps/web/.next/standalone/node_modules/.pnpm/@img+* \
     && if find apps/web/.next/standalone -name '*.node' | grep .; then \
          echo 'biner native di standalone: image tidak lagi lintas arsitektur' >&2; exit 1; fi
+RUN pnpm --filter @dompetku/worker build \
+    && test -s apps/worker/dist/worker.mjs
 
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
 ARG BUILD_SHA=""
@@ -46,6 +51,8 @@ COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/public ./apps/web/public
 # Migrasi dbmate ikut rilis; deployer menyalinnya ke /opt/dompetku/migrations sebelum dbmate up.
 COPY packages/db/migrations ./db/migrations
+# Worker S7: `node worker/worker.mjs` (WORKDIR /app). Bundel berdiri sendiri, tanpa node_modules.
+COPY --from=build /repo/apps/worker/dist/worker.mjs ./worker/worker.mjs
 USER nonroot
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
