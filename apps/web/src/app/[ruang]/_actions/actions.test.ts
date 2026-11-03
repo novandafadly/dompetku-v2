@@ -44,6 +44,13 @@ const m = vi.hoisted(() => ({
   suggestCategories: vi.fn(),
   getEntry: vi.fn(),
   recordProductEvent: vi.fn(),
+  createSpaceTransfer: vi.fn(),
+  moveEntryToSpace: vi.fn(),
+  reconcileBalance: vi.fn(),
+  archiveAccount: vi.fn(),
+  loadRuangShell: vi.fn(),
+  createReimbursement: vi.fn(),
+  openReimbursables: vi.fn(),
 }));
 
 vi.mock('@/server/auth/next', () => ({
@@ -67,6 +74,15 @@ vi.mock('@/server/ledger/write', async (orig) => ({
   updateCategory: m.updateCategory,
   archiveCategory: m.archiveCategory,
   markNoSpendDay: m.markNoSpendDay,
+  createSpaceTransfer: m.createSpaceTransfer,
+  moveEntryToSpace: m.moveEntryToSpace,
+  reconcileBalance: m.reconcileBalance,
+  archiveAccount: m.archiveAccount,
+}));
+vi.mock('@/server/ledger/reimburse', async (orig) => ({
+  ...(await orig<typeof import('@/server/ledger/reimburse')>()),
+  createReimbursement: m.createReimbursement,
+  openReimbursables: m.openReimbursables,
 }));
 vi.mock('@/server/ledger/read', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/read')>()),
@@ -74,6 +90,7 @@ vi.mock('@/server/ledger/read', async (orig) => ({
   listCategories: m.listCategories,
   suggestCategories: m.suggestCategories,
   getEntry: m.getEntry,
+  loadRuangShell: m.loadRuangShell,
 }));
 vi.mock('@/server/ledger/events', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/events')>()),
@@ -85,6 +102,7 @@ const entri = await import('./entri');
 const kategori = await import('./kategori');
 const dompet = await import('./dompet');
 const beranda = await import('./beranda');
+const reimburse = await import('./reimburse');
 
 type AnyAction = (ruang: unknown, input?: unknown) => Promise<unknown>;
 
@@ -94,6 +112,7 @@ const ACTIONS: Record<string, AnyAction> = {
   ...(kategori as unknown as Record<string, AnyAction>),
   ...(dompet as unknown as Record<string, AnyAction>),
   ...(beranda as unknown as Record<string, AnyAction>),
+  ...(reimburse as unknown as Record<string, AnyAction>),
 };
 
 /** Input sah per action dan wrapper DB pertama yang dipanggilnya. */
@@ -163,6 +182,31 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
     mutation: true,
   },
   markNoSpendDayAction: { wrapper: 'markNoSpendDay', mutation: true },
+  moveEntryAction: {
+    input: {
+      clientId: A,
+      entryId: B,
+      expectedVersion: 1,
+      toRuang: 'bersama',
+      accountId: C,
+      categoryId: D,
+    },
+    wrapper: 'moveEntryToSpace',
+    mutation: true,
+  },
+  moveTargetsAction: { input: 'bersama', wrapper: 'loadRuangShell', mutation: false },
+  reconcileAction: {
+    input: { clientId: A, accountId: B, actualBalance: 125_000 },
+    wrapper: 'reconcileBalance',
+    mutation: true,
+  },
+  archiveAccountAction: { input: B, wrapper: 'archiveAccount', mutation: true },
+  createReimbursementAction: {
+    input: { clientId: A, entryId: B, accountId: C, amount: 300_000 },
+    wrapper: 'createReimbursement',
+    mutation: true,
+  },
+  openReimbursablesAction: { wrapper: 'openReimbursables', mutation: false },
 };
 
 const NAMES = Object.keys(CASES);
@@ -182,6 +226,13 @@ const WRAPPERS = [
   'suggestCategories',
   'getEntry',
   'recordProductEvent',
+  'createSpaceTransfer',
+  'moveEntryToSpace',
+  'reconcileBalance',
+  'archiveAccount',
+  'loadRuangShell',
+  'createReimbursement',
+  'openReimbursables',
 ] as const;
 
 function call(name: string, ruang: unknown = 'pribadi', input?: unknown): Promise<unknown> {
@@ -213,6 +264,19 @@ beforeEach(() => {
   m.suggestCategories.mockResolvedValue([A, B]);
   m.getEntry.mockResolvedValue({ entry: { id: B, version: 2 }, history: [] });
   m.recordProductEvent.mockResolvedValue(undefined);
+  m.createSpaceTransfer.mockResolvedValue({
+    entryId: D,
+    linkedEntryId: C,
+    linkId: B,
+    version: 1,
+    replayed: false,
+  });
+  m.moveEntryToSpace.mockResolvedValue({ entryId: D, version: 1, replayed: false });
+  m.reconcileBalance.mockResolvedValue({ entryId: D, difference: -5_000, replayed: false });
+  m.archiveAccount.mockResolvedValue({ archived: true });
+  m.loadRuangShell.mockResolvedValue({ accounts: [], categories: [] });
+  m.createReimbursement.mockResolvedValue({ entryId: D, remaining: 200_000, replayed: false });
+  m.openReimbursables.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -477,7 +541,7 @@ describe('pemetaan galat', () => {
 
   it('kind tidak dikenal = invalid kind', async () => {
     await expect(
-      call('saveCatat', 'pribadi', { kind: 'space_transfer', clientId: A, amount: 1 }),
+      call('saveCatat', 'pribadi', { kind: 'adjustment', clientId: A, amount: 1 }),
     ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'kind' } });
   });
 
@@ -795,5 +859,325 @@ describe('beranda', () => {
       error: { code: 'network' },
     });
     expect(m.recordProductEvent).not.toHaveBeenCalled();
+  });
+});
+
+/** Pribadi = SPACE_ID, Bersama = OTHER_SPACE (resolve per slug, seperti DB). */
+function twoSpaces(): void {
+  m.resolveSpace.mockImplementation((_pools: unknown, _uid: unknown, ruang: unknown) =>
+    Promise.resolve(
+      ruang === 'bersama'
+        ? { spaceId: OTHER_SPACE, kind: 'shared' }
+        : { spaceId: SPACE_ID, kind: 'personal' },
+    ),
+  );
+}
+
+const SPACE_TRANSFER = {
+  kind: 'space_transfer',
+  clientId: A,
+  fromAccountId: B,
+  toRuang: 'bersama',
+  toAccountId: C,
+  amount: 250_000,
+};
+
+describe('S7: transfer antar ruang lewat saveCatat', () => {
+  beforeEach(twoSpaces);
+
+  it('Pribadi → Bersama: toSpaceId di-resolve server dari slug; hasil tanpa id kaki lain', async () => {
+    const r = await call('saveCatat', 'pribadi', {
+      ...SPACE_TRANSFER,
+      description: 'bayar kos adik',
+      sharedNote: 'Setoran November',
+    });
+    expect(r).toEqual({ ok: true, value: { entryId: D, version: 1, replayed: false } });
+    expect(m.createSpaceTransfer).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: SPACE_ID },
+      {
+        clientId: A,
+        fromAccountId: B,
+        toSpaceId: OTHER_SPACE,
+        toAccountId: C,
+        amount: 250_000,
+        fee: 0,
+        allowNegative: false,
+        description: 'bayar kos adik',
+        sharedNote: 'Setoran November',
+      },
+    );
+    expect(m.resolveSpace).toHaveBeenNthCalledWith(1, POOLS, USER_ID, 'pribadi');
+    expect(m.resolveSpace).toHaveBeenNthCalledWith(2, POOLS, USER_ID, 'bersama');
+    expect(m.createEntry).not.toHaveBeenCalled();
+    expect(m.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('dari /bersama ke Pribadi: hasil tidak memuat id kaki Pribadi (linkedEntryId/linkId)', async () => {
+    const r = await call('saveCatat', 'bersama', {
+      ...SPACE_TRANSFER,
+      toRuang: 'pribadi',
+      fee: 2_500,
+      allowNegative: true,
+    });
+    expect(r).toEqual({ ok: true, value: { entryId: D, version: 1, replayed: false } });
+    expect(JSON.stringify(r)).not.toContain(C);
+    expect(JSON.stringify(r)).not.toContain(B);
+    expect(m.createSpaceTransfer).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: OTHER_SPACE },
+      expect.objectContaining({ toSpaceId: SPACE_ID, fee: 2_500, allowNegative: true }),
+    );
+  });
+
+  it.each([
+    ['ruang sama', { toRuang: 'pribadi' }, 'toRuang'],
+    ['ruang tujuan tidak dikenal', { toRuang: 'kantor' }, 'toRuang'],
+    ['toRuang hilang', { toRuang: undefined }, 'toRuang'],
+    ['uuid ruang mentah dari klien', { toSpaceId: OTHER_SPACE }, 'toSpaceId'],
+    [
+      'uuid ruang mentah menggantikan slug',
+      { toRuang: undefined, toSpaceId: OTHER_SPACE },
+      'toRuang',
+    ],
+    ['biaya negatif', { fee: -1 }, 'fee'],
+  ])('%s = invalid, tanpa wrapper', async (_label, patch, field) => {
+    await expect(call('saveCatat', 'pribadi', { ...SPACE_TRANSFER, ...patch })).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field },
+    });
+    for (const w of WRAPPERS) expect(m[w]).not.toHaveBeenCalled();
+    expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it('kunci asing ditolak (bukan diabaikan) pada transfer antar ruang', async () => {
+    await expect(
+      call('saveCatat', 'pribadi', { ...SPACE_TRANSFER, spaceId: OTHER_SPACE }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid' } });
+    expect(m.createSpaceTransfer).not.toHaveBeenCalled();
+  });
+
+  it('ruang tujuan bukan anggota = not_found', async () => {
+    m.resolveSpace.mockImplementation((_p: unknown, _u: unknown, ruang: unknown) =>
+      ruang === 'bersama'
+        ? Promise.reject(new SpaceNotFoundError())
+        : Promise.resolve({ spaceId: SPACE_ID, kind: 'personal' }),
+    );
+    await expect(call('saveCatat', 'pribadi', SPACE_TRANSFER)).resolves.toEqual({
+      ok: false,
+      error: { code: 'not_found' },
+    });
+    expect(m.createSpaceTransfer).not.toHaveBeenCalled();
+  });
+
+  it('cross_space_kantor dari DB diteruskan', async () => {
+    m.createSpaceTransfer.mockRejectedValue(
+      Object.assign(new Error('cross_space_kantor'), { code: 'DK422' }),
+    );
+    await expect(call('saveCatat', 'pribadi', SPACE_TRANSFER)).resolves.toEqual({
+      ok: false,
+      error: { code: 'cross_space_kantor' },
+    });
+  });
+});
+
+describe('S7: talangan lewat saveCatat', () => {
+  beforeEach(twoSpaces);
+  const expense = { kind: 'expense', clientId: A, accountId: B, amount: 500_000, categoryId: C };
+
+  it('pengeluaran Pribadi reimbursable diteruskan ke createEntry', async () => {
+    await expect(
+      call('saveCatat', 'pribadi', { ...expense, reimbursable: true }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(m.createEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ reimbursable: true }),
+    );
+  });
+
+  it.each([
+    ['Bersama', 'bersama', expense],
+    ['pemasukan', 'pribadi', { ...expense, kind: 'income' }],
+  ])('talangan di %s = invalid reimbursable, tanpa DB', async (_l, ruang, input) => {
+    await expect(call('saveCatat', ruang, { ...input, reimbursable: true })).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field: 'reimbursable' },
+    });
+    expect(m.createEntry).not.toHaveBeenCalled();
+  });
+
+  it('reimbursable false di Bersama tetap boleh', async () => {
+    await expect(
+      call('saveCatat', 'bersama', { ...expense, reimbursable: false }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+});
+
+describe('S7: pindahkan ke ruang lain', () => {
+  beforeEach(twoSpaces);
+  const move = {
+    clientId: A,
+    entryId: B,
+    expectedVersion: 1,
+    toRuang: 'bersama',
+    accountId: C,
+    categoryId: D,
+  };
+
+  it('Pribadi → Bersama: keepDescription diteruskan; hasil id entri Bersama baru', async () => {
+    await expect(
+      call('moveEntryAction', 'pribadi', { ...move, keepDescription: true }),
+    ).resolves.toEqual({ ok: true, value: { toRuang: 'bersama', entryId: D, replayed: false } });
+    expect(m.moveEntryToSpace).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: SPACE_ID },
+      {
+        clientId: A,
+        entryId: B,
+        expectedVersion: 1,
+        toSpaceId: OTHER_SPACE,
+        accountId: C,
+        categoryId: D,
+        keepDescription: true,
+      },
+    );
+  });
+
+  it('dari /bersama ke Pribadi: hasil tanpa id entri Pribadi baru', async () => {
+    const r = await call('moveEntryAction', 'bersama', { ...move, toRuang: 'pribadi' });
+    expect(r).toEqual({ ok: true, value: { toRuang: 'pribadi', replayed: false } });
+    expect(JSON.stringify(r)).not.toContain(D);
+    expect(m.moveEntryToSpace).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: OTHER_SPACE },
+      expect.objectContaining({ toSpaceId: SPACE_ID }),
+    );
+  });
+
+  it.each([
+    ['ruang sama', { toRuang: 'pribadi' }, 'toRuang'],
+    ['ruang tujuan tidak dikenal', { toRuang: 'kantor' }, 'toRuang'],
+    ['uuid ruang mentah', { toSpaceId: OTHER_SPACE }, 'toSpaceId'],
+    ['versi 0', { expectedVersion: 0 }, 'expectedVersion'],
+  ])('%s = invalid', async (_l, patch, field) => {
+    await expect(call('moveEntryAction', 'pribadi', { ...move, ...patch })).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field },
+    });
+    expect(m.moveEntryToSpace).not.toHaveBeenCalled();
+  });
+
+  it.each(['not_creator', 'kind_not_movable', 'entry_moved', 'cross_space_kantor'])(
+    '%s dari DB diteruskan',
+    async (code) => {
+      m.moveEntryToSpace.mockRejectedValue(Object.assign(new Error(code), { code: 'DK422' }));
+      await expect(call('moveEntryAction', 'pribadi', move)).resolves.toEqual({
+        ok: false,
+        error: { code },
+      });
+      expect(m.refresh).not.toHaveBeenCalled();
+    },
+  );
+
+  it('moveTargetsAction: dompet aktif non-kantor + kategori aktif ruang tujuan', async () => {
+    m.loadRuangShell.mockResolvedValue({
+      accounts: [
+        { id: A, pocket: 'operasional', archived: false },
+        { id: B, pocket: 'kantor', archived: false },
+        { id: C, pocket: 'tabungan', archived: true },
+        { id: D, pocket: 'tabungan', archived: false },
+      ],
+      categories: [{ id: A }],
+    });
+    await expect(call('moveTargetsAction', 'pribadi', 'bersama')).resolves.toEqual({
+      ok: true,
+      value: {
+        accounts: [
+          { id: A, pocket: 'operasional', archived: false },
+          { id: D, pocket: 'tabungan', archived: false },
+        ],
+        categories: [{ id: A }],
+      },
+    });
+    expect(m.loadRuangShell).toHaveBeenCalledWith({
+      pools: POOLS,
+      userId: USER_ID,
+      spaceId: OTHER_SPACE,
+    });
+  });
+
+  it.each([['pribadi'], ['kantor'], [OTHER_SPACE]])(
+    'moveTargetsAction tujuan %s dari /pribadi = invalid toRuang',
+    async (toRuang) => {
+      await expect(call('moveTargetsAction', 'pribadi', toRuang)).resolves.toEqual({
+        ok: false,
+        error: { code: 'invalid', field: 'toRuang' },
+      });
+      expect(m.loadRuangShell).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('S7: dompet (cocokkan, arsip)', () => {
+  it('reconcileAction meneruskan saldo nyata; hasil selisih', async () => {
+    await expect(call('reconcileAction')).resolves.toEqual({
+      ok: true,
+      value: { entryId: D, difference: -5_000, replayed: false },
+    });
+    expect(m.reconcileBalance).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: SPACE_ID },
+      { clientId: A, accountId: B, actualBalance: 125_000 },
+    );
+  });
+
+  it('reconcileAction saldo nyata pecahan = invalid actualBalance', async () => {
+    await expect(
+      call('reconcileAction', 'pribadi', { clientId: A, accountId: B, actualBalance: 1.5 }),
+    ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'actualBalance' } });
+  });
+
+  it('archiveAccountAction: id bukan uuid = invalid; saldo ≠ 0 = balance_not_zero', async () => {
+    await expect(call('archiveAccountAction')).resolves.toEqual({
+      ok: true,
+      value: { archived: true },
+    });
+    await expect(call('archiveAccountAction', 'pribadi', 'x')).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field: 'accountId' },
+    });
+    m.archiveAccount.mockRejectedValue(
+      Object.assign(new Error('balance_not_zero'), { code: 'DK422' }),
+    );
+    await expect(call('archiveAccountAction')).resolves.toEqual({
+      ok: false,
+      error: { code: 'balance_not_zero' },
+    });
+  });
+});
+
+describe('S7: reimburse', () => {
+  it('createReimbursementAction: hasil sisa; melebihi = reimbursement_exceeds', async () => {
+    await expect(call('createReimbursementAction')).resolves.toEqual({
+      ok: true,
+      value: { entryId: D, remaining: 200_000, replayed: false },
+    });
+    m.createReimbursement.mockRejectedValue(
+      Object.assign(new Error('reimbursement_exceeds'), { code: 'DK422' }),
+    );
+    await expect(call('createReimbursementAction')).resolves.toEqual({
+      ok: false,
+      error: { code: 'reimbursement_exceeds' },
+    });
+  });
+
+  it('openReimbursablesAction: Pribadi membaca; Bersama = kosong tanpa DB', async () => {
+    twoSpaces();
+    m.openReimbursables.mockResolvedValue([{ entryId: B, remaining: 1 }]);
+    await expect(call('openReimbursablesAction', 'pribadi')).resolves.toEqual({
+      ok: true,
+      value: [{ entryId: B, remaining: 1 }],
+    });
+    m.openReimbursables.mockClear();
+    await expect(call('openReimbursablesAction', 'bersama')).resolves.toEqual({
+      ok: true,
+      value: [],
+    });
+    expect(m.openReimbursables).not.toHaveBeenCalled();
   });
 });
