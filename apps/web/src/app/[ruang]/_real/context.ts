@@ -5,7 +5,7 @@ import { cache } from 'react';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import { isRuang } from '@/features/shell/hrefs';
 import { authService, requireDataUser } from '@/server/auth/next';
-import { listAccounts, listCategories } from '@/server/ledger/read';
+import { loadRuangShell, type RuangShellData } from '@/server/ledger/read';
 import { resolveSpace, SpaceNotFoundError } from '@/server/ledger/space';
 import type { LedgerCtx } from '@/server/ledger/write';
 
@@ -36,24 +36,25 @@ export async function ruangContext(
 }
 
 /**
- * Dompet ruang ini, sekali per request: layout (opsi Catat) dan page Beranda memakai hasil yang
- * sama. `React.cache` = memo render server satu request saja, bukan cache data Next.
+ * Opsi Catat ruang ini (dompet + kategori aktif), SATU transaksi sekali per request: layout dan
+ * page (Beranda, Dompet, riwayat dompet, Kategori) memakai hasil yang sama. `React.cache` = memo
+ * render server satu request saja, bukan cache data Next.
  */
-const accountsOnce = cache(
-  (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<AccountVM[]> =>
-    listAccounts({ pools, userId, spaceId }),
+const shellOnce = cache(
+  (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<RuangShellData> =>
+    loadRuangShell({ pools, userId, spaceId }),
 );
 
-export function ruangAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
-  return accountsOnce(ctx.pools, ctx.userId, ctx.spaceId);
+export function ruangShell(ctx: LedgerCtx): Promise<RuangShellData> {
+  return shellOnce(ctx.pools, ctx.userId, ctx.spaceId);
 }
 
-/** Kategori aktif ruang ini, sekali per request: layout (opsi Catat) dan layar Kategori memakai hasil yang sama. */
-const categoriesOnce = cache(
-  (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<CategoryVM[]> =>
-    listCategories({ pools, userId, spaceId }),
-);
+/** Dompet ruang ini (dari `ruangShell`, sekali per request). */
+export function ruangAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
+  return ruangShell(ctx).then((s) => s.accounts);
+}
 
+/** Kategori aktif ruang ini (dari `ruangShell`, sekali per request). */
 export function ruangCategories(ctx: LedgerCtx): Promise<CategoryVM[]> {
-  return categoriesOnce(ctx.pools, ctx.userId, ctx.spaceId);
+  return ruangShell(ctx).then((s) => s.categories);
 }

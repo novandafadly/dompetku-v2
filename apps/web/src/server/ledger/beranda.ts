@@ -1,7 +1,14 @@
 import 'server-only';
 import type { AccountVM, EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
-import { withUser } from '../db';
-import { hasExpense, listAccounts, recentEntries, safeToSpend, todayStatus } from './read';
+import type pg from 'pg';
+import {
+  hasExpenseTx,
+  listAccountsTx,
+  recentEntriesTx,
+  safeToSpendTx,
+  todayStatusTx,
+} from './read';
+import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
 
 /**
@@ -33,45 +40,54 @@ const RECENT = 5;
 
 /**
  * Pemilik Bersama dan anggota Bersama < 2 (`app.space_roster`, konteks user). Tanpa fungsi SQL
- * baru: kueri sederhana atas ruang `shared` yang user anggotai.
+ * baru: kueri sederhana atas ruang `shared` yang user anggotai (konteks `app.user_id` transaksi
+ * pemanggil; tidak bergantung pada ruang `assert_member`).
  */
-async function inviteOpen(ctx: LedgerCtx): Promise<boolean> {
-  return withUser(ctx.pools.app, ctx.userId, async (c) => {
-    const { rows } = await c.query<{ role: string; members: number }>(
-      `select m.role::text as role,
-              (select count(*) from app.space_roster(s.id))::int as members
-         from app.spaces s
-         join app.space_members m on m.space_id = s.id and m.user_id = app.current_user_id()
-        where s.kind = 'shared'
-        limit 1`,
-    );
-    const r = rows[0];
-    return r?.role === 'owner' && r.members < 2;
-  });
+async function inviteOpenTx(c: pg.PoolClient): Promise<boolean> {
+  const { rows } = await c.query<{ role: string; members: number }>(
+    `select m.role::text as role,
+            (select count(*) from app.space_roster(s.id))::int as members
+       from app.spaces s
+       join app.space_members m on m.space_id = s.id and m.user_id = app.current_user_id()
+      where s.kind = 'shared'
+      limit 1`,
+  );
+  const r = rows[0];
+  return r?.role === 'owner' && r.members < 2;
 }
 
 /**
- * `accounts`: dompet ruang ini yang sudah dimuat untuk request yang sama (layout memakai
- * `listAccounts` yang di-`cache` per request); bila kosong dimuat di sini.
+ * Semua bacaan Beranda BERURUTAN di satu `withLedger` (satu koneksi pool per muat, bukan satu per
+ * kueri; 40001/40P01 mengulang seluruh blok). `accounts`: dompet ruang ini yang sudah dimuat untuk
+ * request yang sama (opsi Catat layout, di-`cache` per request; transaksinya sendiri, jadi satu
+ * muat Beranda = paling banyak 2 koneksi); bila kosong dimuat di transaksi ini. Promise itu
+ * ditunggu DI LUAR transaksi: koneksi tidak pernah ditahan sambil menunggu koneksi lain (pool
+ * habis tidak boleh saling kunci).
  */
 export async function loadBeranda(
   ctx: LedgerCtx & { kind: 'personal' | 'shared' },
   opts: { accounts?: Promise<AccountVM[]> } = {},
 ): Promise<BerandaData> {
-  const [safe, today, accounts, expense, recent, invite] = await Promise.all([
-    safeToSpend(ctx),
-    todayStatus(ctx),
-    opts.accounts ?? listAccounts(ctx),
-    hasExpense(ctx),
-    recentEntries(ctx, RECENT),
-    ctx.kind === 'personal' ? inviteOpen(ctx) : false,
+  const given = opts.accounts;
+  const [read, givenAccounts] = await Promise.all([
+    withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+      const safe = await safeToSpendTx(c, ctx);
+      const today = await todayStatusTx(c, ctx);
+      const accounts = given === undefined ? await listAccountsTx(c, ctx) : null;
+      const expense = await hasExpenseTx(c, ctx);
+      const recent = await recentEntriesTx(c, ctx, RECENT);
+      const invite = ctx.kind === 'personal' ? await inviteOpenTx(c) : false;
+      return { safe, today, accounts, expense, recent, invite };
+    }),
+    given ?? null,
   ]);
+  const accounts = givenAccounts ?? read.accounts ?? [];
   return {
-    safe,
-    today,
+    safe: read.safe,
+    today: read.today,
     hasOperasional: accounts.some((a) => a.pocket === 'operasional' && !a.archived),
-    hasExpense: expense,
-    recent,
-    invite,
+    hasExpense: read.expense,
+    recent: read.recent,
+    invite: read.invite,
   };
 }

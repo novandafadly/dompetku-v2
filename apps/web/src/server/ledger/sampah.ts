@@ -1,6 +1,7 @@
 import 'server-only';
 import type { AccountVM, TrashVM } from '@/features/ledger/types';
-import { listAccounts, trashList } from './read';
+import { listAccountsTx, trashListTx } from './read';
+import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
 
 /**
@@ -14,7 +15,11 @@ export interface SampahData {
   accounts: AccountVM[];
 }
 
+/** Kedua bacaan berurutan di satu `withLedger` (satu koneksi pool per muat). */
 export async function loadSampah(ctx: LedgerCtx): Promise<SampahData> {
-  const [items, accounts] = await Promise.all([trashList(ctx), listAccounts(ctx)]);
-  return { items, accounts };
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const items = await trashListTx(c, ctx);
+    const accounts = await listAccountsTx(c, ctx);
+    return { items, accounts };
+  });
 }

@@ -1,4 +1,5 @@
 import 'server-only';
+import type pg from 'pg';
 import { z } from 'zod';
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { ReimbursableVM } from '@/features/ledger/types';
@@ -82,24 +83,29 @@ interface ReimbursableRow {
 }
 
 /** Talangan hidup ruang ini yang sisanya > 0, urut tanggal lalu id (`api.open_reimbursables`). */
+export async function openReimbursablesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+): Promise<ReimbursableVM[]> {
+  const { rows } = await c.query<ReimbursableRow>(
+    `select o.entry_id, o.occurred_on, o.description, o.account_id, o.amount, o.reimbursed,
+            o.remaining
+       from api.open_reimbursables(p_space_id => $1) with ordinality as o (
+              entry_id, occurred_on, description, account_id, amount, reimbursed, remaining, n)
+      order by o.n`,
+    [ctx.spaceId],
+  );
+  return rows.map((r) => ({
+    entryId: r.entry_id,
+    occurredOn: r.occurred_on,
+    description: r.description,
+    accountId: r.account_id,
+    amount: r.amount,
+    reimbursed: r.reimbursed,
+    remaining: r.remaining,
+  }));
+}
+
 export async function openReimbursables(ctx: LedgerCtx): Promise<ReimbursableVM[]> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<ReimbursableRow>(
-      `select o.entry_id, o.occurred_on, o.description, o.account_id, o.amount, o.reimbursed,
-              o.remaining
-         from api.open_reimbursables(p_space_id => $1) with ordinality as o (
-                entry_id, occurred_on, description, account_id, amount, reimbursed, remaining, n)
-        order by o.n`,
-      [ctx.spaceId],
-    );
-    return rows.map((r) => ({
-      entryId: r.entry_id,
-      occurredOn: r.occurred_on,
-      description: r.description,
-      accountId: r.account_id,
-      amount: r.amount,
-      reimbursed: r.reimbursed,
-      remaining: r.remaining,
-    }));
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => openReimbursablesTx(c, ctx));
 }
