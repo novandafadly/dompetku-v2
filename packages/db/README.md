@@ -111,3 +111,17 @@ TEST_DATABASE_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku' \
 ```
 
 Tes mengosongkan data (sebagai superuser) dan memasang `owner_email` sendiri; jangan arahkan ke DB yang dipakai. Langkah operasi: `docs/ops/auth.md`.
+
+## E2E mode nyata (auth dan ledger)
+
+`e2e:auth` (alur auth) dan `e2e:ledger` (kriteria keluar S6: Catat ≤ 3 ketukan, Batalkan/Sampah/Pulihkan, idempotensi, konflik versi, kanari Bersama, axe, budget JS mode nyata) menjalankan build standalone tanpa `NEXT_PUBLIC_PROTOTYPE` terhadap cluster sekali pakai yang sama (port 3300 dan 3301). Global setup mengosongkan data dan memasang `owner_email`; pemilik didaftarkan lewat alur nyata dengan passkey virtual. Lokal, setelah `dbmate up`:
+
+```bash
+pnpm build
+export AUTH_E2E_DATABASE_URL='postgres://dompetku_web@127.0.0.1:5432/dompetku'
+export AUTH_E2E_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku'
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm --filter @dompetku/web e2e:auth
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm --filter @dompetku/web e2e:ledger
+```
+
+Jalankan berurutan (keduanya menyalin `.next/static` ke folder standalone yang sama dan mengosongkan data). CI menjalankan keduanya di job `auth`.

@@ -1,0 +1,55 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * E2E ledger mode nyata (S6, Task 19): Catat, Transaksi, Detail, Sampah, Dompet, Kategori di atas
+ * ledger Postgres sungguhan, tanpa NEXT_PUBLIC_PROTOTYPE. Lingkungan sama dengan
+ * `playwright.auth.config.ts`: AUTH_E2E_DATABASE_URL (dompetku_web) dan AUTH_E2E_ADMIN_URL
+ * (superuser, reset data dan asersi baris) pada cluster yang sudah `dbmate up`; lalu `pnpm build`
+ * dan `pnpm e2e:ledger`. Pemilik didaftarkan lewat alur nyata + passkey virtual (fixtures.ts).
+ */
+const port = 3301;
+const dir = path.dirname(fileURLToPath(import.meta.url));
+export const LEDGER_MAIL_FILE = path.join(dir, 'test-results', 'ledger-mail.jsonl');
+/** storageState pemilik sesudah daftar + passkey; dihapus global-setup tiap run. */
+export const LEDGER_OWNER_STATE = path.join(dir, 'test-results', 'ledger-owner.json');
+const executablePath = process.env.PW_CHROMIUM_PATH;
+
+export default defineConfig({
+  testDir: './tests/e2e-ledger',
+  globalSetup: './tests/e2e-ledger/global-setup.ts',
+  workers: 1,
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  use: { baseURL: `http://localhost:${String(port)}`, trace: 'retain-on-failure' },
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(executablePath ? { launchOptions: { executablePath } } : {}),
+      },
+    },
+  ],
+  webServer: {
+    command: [
+      'rm -rf .next/standalone/apps/web/.next/static',
+      'cp -r .next/static .next/standalone/apps/web/.next/static',
+      '(test ! -d public || cp -r public .next/standalone/apps/web/public)',
+      `PORT=${String(port)} HOSTNAME=127.0.0.1 node .next/standalone/apps/web/server.js`,
+    ].join(' && '),
+    env: {
+      DATABASE_URL: process.env.AUTH_E2E_DATABASE_URL ?? '',
+      BETTER_AUTH_SECRET: 'e2e-ledger-bukan-rahasia-0123456789abcdefg',
+      BETTER_AUTH_URL: `http://localhost:${String(port)}`,
+      AUTH_EMAIL_FILE: LEDGER_MAIL_FILE,
+      AUTH_CHECK_PWNED: '0',
+    },
+    url: `http://localhost:${String(port)}/api/health`,
+    reuseExistingServer: false,
+    stdout: 'pipe',
+    timeout: 60_000,
+  },
+});

@@ -257,6 +257,12 @@ jobs:
           AUTH_E2E_DATABASE_URL: postgres://dompetku_web@127.0.0.1:5432/dompetku
           AUTH_E2E_ADMIN_URL: postgres://postgres@127.0.0.1:5432/dompetku
         run: pnpm --filter @dompetku/web e2e:auth
+      - name: E2E ledger mode nyata
+        env:
+          CI: 'true'
+          AUTH_E2E_DATABASE_URL: postgres://dompetku_web@127.0.0.1:5432/dompetku
+          AUTH_E2E_ADMIN_URL: postgres://postgres@127.0.0.1:5432/dompetku
+        run: pnpm --filter @dompetku/web e2e:ledger
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
