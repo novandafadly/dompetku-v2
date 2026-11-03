@@ -9,7 +9,7 @@ import { FingerprintIcon } from '@/components/ui/icons/fingerprint';
 import { focusRing } from '@/components/ui/styles';
 import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 
 type Step = 'passkey' | 'totp' | 'pemulihan';
 

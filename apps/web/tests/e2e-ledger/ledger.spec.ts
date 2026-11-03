@@ -601,6 +601,48 @@ test('tidak ada teks "Data demo" di mode nyata', async ({ page }) => {
   await page.keyboard.press('Escape');
 });
 
+/**
+ * Penanda kode seed demo (packages/demo-data/src/seed.ts): deskripsi entri dan id kategori/anggota
+ * yang hanya ada di seed, jadi muncul di chunk JS hanya bila `createSeed` ikut dibundel.
+ */
+const SEED_CODE_MARKERS = [...SEED_MARKERS, 'cp-makan', 'm-novanda'];
+
+test('JS mode nyata tanpa seed demo (K3)', async ({ browser, ownerState }) => {
+  const paths = ['beranda', 'transaksi', 'dompet', 'sampah', 'kategori'].flatMap((r) => [
+    `/pribadi/${r}`,
+    `/bersama/${r}`,
+  ]);
+  expect(detailPath).not.toBe('');
+  for (const path of [...paths, detailPath]) {
+    // Konteks baru per rute: semua JS yang dimuat rute ini (muat awal, prefetch, muat malas
+    // sampai jaringan diam) tidak boleh memuat seed demo.
+    const context = await browser.newContext({ storageState: ownerState });
+    const page = await context.newPage();
+    const scripts: Promise<{ url: string; body: string }>[] = [];
+    page.on('response', (r) => {
+      if (new URL(r.url()).pathname.endsWith('.js'))
+        scripts.push(r.text().then((body) => ({ url: r.url(), body })));
+    });
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(200);
+    const own = routeScripts((await res?.text()) ?? '');
+    await page.waitForLoadState('networkidle');
+    const loaded = await Promise.all(scripts);
+    await context.close();
+    // Setiap skrip rute ikut diperiksa (bukan lolos karena tidak tertangkap).
+    const seen = new Set(loaded.map((s) => new URL(s.url).pathname));
+    expect(
+      [...own].filter((p) => !seen.has(p)),
+      path,
+    ).toEqual([]);
+    for (const { url, body } of loaded)
+      for (const marker of SEED_CODE_MARKERS)
+        expect(body.includes(marker), `${path}: ${new URL(url).pathname} memuat "${marker}"`).toBe(
+          false,
+        );
+  }
+});
+
 test('keyboard saja', async ({ page }) => {
   await page.goto('/pribadi/transaksi');
   await expect(

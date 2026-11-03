@@ -2,7 +2,7 @@
 
 import { notFound, useParams } from 'next/navigation';
 import { AccountHistory } from '@/features/dompet/account-history';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 
 export function DompetRiwayatPage() {
   const { state, ruang, today, href, entryHref } = useDemo();

@@ -8,7 +8,7 @@ import { TextField } from '@/components/ui/text-field';
 import { AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
 import { PasswordField } from '@/features/auth/password-field';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { Wordmark } from '@/features/shell/sidebar';
 
 export function MasukPrototype() {

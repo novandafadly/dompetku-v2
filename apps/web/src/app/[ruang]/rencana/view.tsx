@@ -4,7 +4,7 @@ import { buttonClass } from '@/components/ui/button';
 import { CalendarCheckIcon } from '@/components/ui/icons/calendar-check';
 import { HouseIcon } from '@/components/ui/icons/house';
 import { EmptyState } from '@/components/ui/state';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { PageHeader } from '@/features/shell/page-header';
 import Link from 'next/link';
 

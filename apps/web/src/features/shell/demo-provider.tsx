@@ -3,26 +3,12 @@
 import { isoAtWIB, nowIsoWIB } from '@dompetku/domain';
 import type { IsoDate } from '@dompetku/domain';
 import { createDemoStore, createSeed } from '@dompetku/demo-data';
-import type { DemoState, DemoStore, Ruang } from '@dompetku/demo-data';
-import type { Route } from 'next';
+import type { DemoStore, Ruang } from '@dompetku/demo-data';
 import { useSearchParams } from 'next/navigation';
-import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { buildAuthHref, type AuthPage } from './hrefs';
-import { RencanaContext } from './nav-items';
-import { useNav, type NavValue } from './nav-provider';
-
-interface DemoValue {
-  store: DemoStore;
-  /** Varian keypad Catat: A keyboard OS, B keypad dalam aplikasi (`?keypad=app`). */
-  keypad: 'os' | 'app';
-  /** Keadaan data demo (`?state=loading|error`) agar B4/B5/T4 bisa ditinjau dan diuji. */
-  dataState: DataState;
-  retry: () => void;
-}
-
-export type DataState = 'ready' | 'loading' | 'error';
-
-const DemoContext = createContext<DemoValue | null>(null);
+import { useState, type ReactNode } from 'react';
+import { DemoContext, type DataState } from './demo-context';
+import { RencanaContext } from './rencana-context';
+import { useNav } from './nav-provider';
 
 /**
  * Jam toko demo: tanggal mengikuti `today`, jam mengikuti WIB sekarang. Entri baru tidak
@@ -39,7 +25,11 @@ function demoClock(today: IsoDate, store: () => DemoStore): () => string {
   };
 }
 
-/** Dipasang di dalam NavProvider (Suspense-nya sudah menutup pembacaan `useSearchParams`). */
+/**
+ * Seed + store demo. Dipasang di dalam NavProvider (Suspense-nya sudah menutup pembacaan
+ * `useSearchParams`), hanya lewat `DemoRoot` (muat malas): modul ini membawa seed demo, jadi tidak
+ * boleh diimpor statis dari modul yang ikut mode nyata. Layar membaca store lewat `useDemo`.
+ */
 export function DemoProvider({ children }: { children: ReactNode }) {
   const params = useSearchParams();
   const { today, dropParam } = useNav();
@@ -74,24 +64,4 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       <RencanaContext.Provider value={boot.rencana}>{children}</RencanaContext.Provider>
     </DemoContext.Provider>
   );
-}
-
-/** Navigasi (lihat NavValue) ditambah store demo; `retry` membuang `?state` dari tautan. */
-export type DemoView = NavValue &
-  DemoValue & {
-    state: DemoState;
-    /** Alamat layar auth tiruan dengan query demo yang dipertahankan. */
-    authHref: (page: AuthPage) => Route;
-  };
-
-export function useDemo(): DemoView {
-  const ctx = useContext(DemoContext);
-  if (ctx === null) throw new Error('useDemo harus dipakai di dalam <DemoProvider>');
-  const nav = useNav();
-  const state = useSyncExternalStore(
-    (fn) => ctx.store.subscribe(fn),
-    () => ctx.store.getState(),
-    () => ctx.store.getState(),
-  );
-  return { ...nav, ...ctx, state, authHref: (page) => buildAuthHref(page, nav.query) };
 }

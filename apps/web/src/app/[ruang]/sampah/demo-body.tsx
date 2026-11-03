@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { TrashLoading } from '@/features/sampah/trash-states';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { trashItems } from './demo-items';
 import { TRASH_WIDTH, TrashHeader, TrashList } from './trash-parts';
 
