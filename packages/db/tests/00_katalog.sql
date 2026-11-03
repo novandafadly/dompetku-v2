@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(35);
+select plan(36);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -299,6 +299,12 @@ select set_eq($$
   $$ values ('auth.recovery_codes', 'c'), ('auth.session', 'c'), ('auth.account', 'c'),
             ('auth."twoFactor"', 'c'), ('auth.passkey', 'c') $$,
   'FK ke auth.user restrict, kecuali tabel auth (kode pemulihan, Better Auth) cascade');
+
+-- Indeks unik nama (S7, 0109): nama dompet aktif unik per ruang tanpa beda huruf besar/spasi;
+-- server memetakan 23505 dari indeks ini ke name_taken, jadi nama dan bentuknya dikunci di sini.
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_name_unique'),
+  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
+  'indeks unik nama dompet aktif per ruang');
 
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');
