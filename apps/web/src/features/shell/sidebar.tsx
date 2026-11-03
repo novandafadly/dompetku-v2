@@ -8,9 +8,9 @@ import { PlusIcon } from '@/components/ui/icons/plus';
 import { focusRing } from '@/components/ui/styles';
 import { DemoMark } from './app-header';
 import { useOpenCatat, usePreloadCatat } from './catat';
-import { useDemo } from './demo-provider';
 import { tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
+import { useNav } from './nav-provider';
 import { SpaceSwitcher } from './space-switcher';
 
 const row = `flex h-11 w-full items-center gap-3 rounded-lg px-3 text-label ${focusRing}`;
@@ -25,8 +25,8 @@ export function Wordmark({ className = 'text-headline' }: { className?: string }
   );
 }
 
-export function Sidebar({ onMenu }: { onMenu: () => void }) {
-  const { ruang, href } = useDemo();
+export function Sidebar({ onMenu, demo }: { onMenu: () => void; demo: boolean }) {
+  const { ruang, href } = useNav();
   const active = tabFromPathname(usePathname());
   const items = useNavItems();
   const openCatat = useOpenCatat();
@@ -38,7 +38,7 @@ export function Sidebar({ onMenu }: { onMenu: () => void }) {
     >
       <div className="flex items-center justify-between gap-2 px-1 pt-1">
         <Wordmark />
-        <DemoMark />
+        {demo ? <DemoMark /> : null}
       </div>
       <SpaceSwitcher wide />
       <Button

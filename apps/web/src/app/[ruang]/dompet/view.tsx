@@ -1,15 +1,14 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
-import { AccountList, AddWalletButton } from '@/features/dompet/account-list';
+import { AccountList } from '@/features/dompet/account-list';
+import { AddWalletButton } from '@/features/dompet/add-wallet-button';
 import { useDemo } from '@/features/shell/demo-provider';
 import { PageHeader } from '@/features/shell/page-header';
 
-const AddAccountSheet = dynamic(
-  () => import('@/features/dompet/add-account-sheet').then((m) => m.AddAccountSheet),
-  { ssr: false },
+const AddAccountSheet = lazy(() =>
+  import('@/features/dompet/add-account-sheet').then((m) => ({ default: m.DemoAddAccountSheet })),
 );
 
 export function DompetPage() {
@@ -29,14 +28,16 @@ export function DompetPage() {
         onAdd={add}
       />
       {addMounted ? (
-        <AddAccountSheet
-          open={adding}
-          onOpenChange={setAdding}
-          state={state}
-          store={store}
-          ruang={ruang}
-          today={today}
-        />
+        <Suspense fallback={null}>
+          <AddAccountSheet
+            open={adding}
+            onOpenChange={setAdding}
+            state={state}
+            store={store}
+            ruang={ruang}
+            today={today}
+          />
+        </Suspense>
       ) : null}
     </>
   );

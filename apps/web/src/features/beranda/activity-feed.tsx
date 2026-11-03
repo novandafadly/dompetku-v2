@@ -4,7 +4,7 @@ import { activityFeed } from '@dompetku/demo-data';
 import { dayLabel, timeLabelWIB } from '@dompetku/domain';
 import { UsersThreeIcon } from '@/components/ui/icons/users-three';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
-import { ActivityRow } from '@/components/ui/rows';
+import { ActivityRow } from '@/components/ui/activity-row';
 import type { BerandaContext } from './context';
 
 export function ActivityFeed({ state, today }: BerandaContext) {

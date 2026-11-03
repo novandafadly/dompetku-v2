@@ -4,7 +4,7 @@ import { budgetProgress } from '@dompetku/demo-data';
 import { formatRupiah } from '@dompetku/domain';
 import { GaugeIcon } from '@/components/ui/icons/gauge';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
-import { BudgetRow } from '@/components/ui/rows';
+import { BudgetRow } from '@/components/ui/budget-row';
 import type { BerandaContext } from './context';
 
 export function BudgetsNearLimit({ state, ruang, today }: BerandaContext) {

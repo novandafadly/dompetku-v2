@@ -6,7 +6,7 @@ import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { CheckIcon } from '@/components/ui/icons/check';
 import { SpaceIcon } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
-import type { CatatType } from './use-catat';
+import type { CatatType } from './source';
 
 export const TYPE_TITLE: Record<CatatType, string> = {
   expense: 'Pengeluaran',
@@ -27,6 +27,7 @@ export function TypeMenuButton({
   open,
   describedBy,
   onToggle,
+  busy = false,
 }: {
   ref: RefObject<HTMLButtonElement | null>;
   space: Ruang;
@@ -34,6 +35,8 @@ export function TypeMenuButton({
   open: boolean;
   describedBy: string;
   onToggle: () => void;
+  /** Selama menyimpan: `aria-disabled`, menu tidak dibuka, fokus tetap. */
+  busy?: boolean;
 }) {
   return (
     <button
@@ -42,14 +45,15 @@ export function TypeMenuButton({
       aria-haspopup="menu"
       aria-expanded={open}
       aria-describedby={describedBy}
-      onClick={onToggle}
+      aria-disabled={busy || undefined}
+      onClick={busy ? undefined : onToggle}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowDown' && !open) {
+        if (e.key === 'ArrowDown' && !open && !busy) {
           e.preventDefault();
           onToggle();
         }
       }}
-      className={`flex h-11 min-w-0 items-center gap-2 rounded-lg border-1.5 border-ruang bg-ruang-tint px-3 text-body/none font-extrabold text-ruang ${focusRing}`}
+      className={`flex h-11 min-w-0 items-center gap-2 rounded-lg border-1.5 border-ruang bg-ruang-tint px-3 text-body/none font-extrabold text-ruang aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted ${focusRing}`}
     >
       <SpaceIcon space={space} size={16} />
       <span className="truncate">{title}</span>

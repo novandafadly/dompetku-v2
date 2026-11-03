@@ -14,9 +14,12 @@ export function isRuang(value: string | undefined): value is Ruang {
 /** Query demo yang dipertahankan antar halaman agar tautan dan tes stabil. */
 export const KEPT_PARAMS = ['seed', 'today', 'theme', 'keypad', 'state'] as const;
 
-export function keptQuery(params: URLSearchParams): string {
+/** Mode nyata: hanya tema yang terbawa (`bulan` ditangani terpisah di dalam Transaksi). */
+export const REAL_KEPT_PARAMS = ['theme'] as const;
+
+export function keptQuery(params: URLSearchParams, keys: readonly string[] = KEPT_PARAMS): string {
   const kept = new URLSearchParams();
-  for (const key of KEPT_PARAMS) {
+  for (const key of keys) {
     const v = params.get(key);
     if (v !== null) kept.set(key, v);
   }
@@ -61,6 +64,11 @@ export function buildHref(
   return `/${ruang}/${tab}${q}` as Route;
 }
 
+/** Dompet ruang itu dengan sheet Tambah dompet terbuka (`?tambah=1`), query yang dibawa tetap ada. */
+export function buildAddWalletHref(ruang: Ruang, query: string): Route {
+  return `/${ruang}/dompet${query === '' ? '?' : `${query}&`}tambah=1` as Route;
+}
+
 export function buildEntryHref(
   ruang: Ruang,
   id: string,
@@ -75,6 +83,15 @@ export function buildAccountHref(ruang: Ruang, id: string, query: string): Route
   return `/${ruang}/dompet/${encodeURIComponent(id)}${query}` as Route;
 }
 
+/** Layar ruang di luar tab: `/{ruang}/sampah`, `/{ruang}/kategori` (rutenya menyusul). */
+export function buildSectionHref(
+  ruang: Ruang,
+  section: 'sampah' | 'kategori',
+  query: string,
+): Route {
+  return `/${ruang}/${section}${query}` as Route;
+}
+
 export const AUTH_PAGES = ['masuk', 'amankan', 'undang', 'terima-undangan', 'buat-akun'] as const;
 export type AuthPage = (typeof AUTH_PAGES)[number];
 
@@ -82,7 +99,20 @@ export function buildAuthHref(page: AuthPage, query: string): Route {
   return `/${page}${query}` as Route;
 }
 
+export type Section = 'sampah' | 'kategori';
+
+/** Layar di luar tab (`/{ruang}/sampah`, `/{ruang}/kategori`); `null` untuk tab dan rute lain. */
+export function sectionFromPathname(pathname: string): Section | null {
+  const seg = pathname.split('/')[2];
+  return seg === 'sampah' || seg === 'kategori' ? seg : null;
+}
+
+/**
+ * Tab yang tampak aktif untuk sebuah alamat. Sampah dan Kategori bukan tab: dibuka dari Transaksi
+ * atau Menu, jadi Transaksi yang tampak aktif (bukan Beranda). Alamat tak dikenal = Beranda.
+ */
 export function tabFromPathname(pathname: string): Tab {
   const seg = pathname.split('/')[2];
+  if (seg === 'sampah' || seg === 'kategori') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }

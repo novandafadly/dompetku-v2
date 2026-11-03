@@ -9,12 +9,10 @@ import {
 } from '@dompetku/demo-data';
 import { dayLabel } from '@dompetku/domain';
 import type { Route } from 'next';
-import { CategoryIcon } from '@/components/ui/category-icon';
-import { ClockCounterClockwiseIcon } from '@/components/ui/icons/clock-counter-clockwise';
-import { EmptyLine, ListCard } from '@/components/ui/list-card';
-import { TxRow } from '@/components/ui/rows';
 import type { BerandaContext } from './context';
+import { RecentEntriesView, type RecentRow } from './recent-entries-view';
 
+/** Pembungkus prototipe: 5 entri terbaru dari store demo. */
 export function RecentEntries({
   state,
   ruang,
@@ -23,41 +21,24 @@ export function RecentEntries({
   listHref,
 }: BerandaContext & { entryHref: (id: string) => Route; listHref: Route }) {
   const accounts = new Map(state.accounts.map((a) => [a.id, a.name]));
-  const recent = groupByDay(
+  const rows: RecentRow[] = groupByDay(
     state.entries.filter((e) => e.ruang === ruang),
     today,
   )
     .flatMap((g) => g.items)
-    .slice(0, 5);
-
-  return (
-    <ListCard
-      title="Terakhir"
-      icon={<ClockCounterClockwiseIcon size={18} />}
-      {...(recent.length === 0
-        ? {}
-        : { link: { href: listHref, label: 'Semua', srLabel: 'transaksi' } })}
-    >
-      {recent.length === 0 ? (
-        <EmptyLine>Belum ada transaksi. Catatan pertamamu akan muncul di sini.</EmptyLine>
-      ) : (
-        <ul>
-          {recent.map((e) => {
-            const { value, kind } = signedAmount(e);
-            return (
-              <TxRow
-                key={e.id}
-                href={entryHref(e.id)}
-                icon={<CategoryIcon name={entryCategoryName(state, e)} kind={e.kind} size={20} />}
-                label={entryTitle(state, e)}
-                meta={`${entryKindLabel(state, e)} · ${accounts.get(e.accountId) ?? ''} · ${dayLabel(e.occurredOn, today)}`}
-                value={value}
-                kind={kind}
-              />
-            );
-          })}
-        </ul>
-      )}
-    </ListCard>
-  );
+    .slice(0, 5)
+    .map((e) => {
+      const { value, kind } = signedAmount(e);
+      return {
+        id: e.id,
+        href: entryHref(e.id),
+        iconName: entryCategoryName(state, e),
+        entryKind: e.kind,
+        label: entryTitle(state, e),
+        meta: `${entryKindLabel(state, e)} · ${accounts.get(e.accountId) ?? ''} · ${dayLabel(e.occurredOn, today)}`,
+        value,
+        kind,
+      };
+    });
+  return <RecentEntriesView rows={rows} listHref={listHref} />;
 }

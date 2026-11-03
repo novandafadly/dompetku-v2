@@ -5,7 +5,8 @@ import { useDemo } from '@/features/shell/demo-provider';
 import { PageHeader } from '@/features/shell/page-header';
 
 export function TransaksiPage() {
-  const { state, store, ruang, today, href, entryHref, month, monthHref, dataState } = useDemo();
+  const { state, store, ruang, today, href, entryHref, month, monthHref, sampahHref, dataState } =
+    useDemo();
   return (
     <EntryList
       header={<PageHeader title="Transaksi" />}
@@ -17,6 +18,7 @@ export function TransaksiPage() {
       month={month}
       monthHref={(m) => monthHref(ruang, m)}
       entryHref={(id) => entryHref(ruang, id)}
+      sampahHref={sampahHref(ruang)}
       dataState={dataState}
     />
   );

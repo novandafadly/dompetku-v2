@@ -1,10 +1,10 @@
 'use client';
 
-import type { Category } from '@dompetku/demo-data';
 import type { RefObject } from 'react';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { MagnifyingGlassIcon } from '@/components/ui/icons/magnifying-glass';
+import type { CategoryVM } from '@/features/ledger/types';
 
 /**
  * Chip saran berurutan tetap selama sheet terbuka; tidak ada yang terpilih otomatis.
@@ -18,13 +18,21 @@ export function CategoryChips({
   onChange,
   onMore,
   moreRef,
+  busy = false,
+  invalid = false,
+  describedBy,
 }: {
-  chips: Category[];
-  all: Category[];
+  chips: CategoryVM[];
+  all: CategoryVM[];
   value: string | undefined;
   onChange: (categoryId: string) => void;
   onMore: () => void;
   moreRef: RefObject<HTMLButtonElement | null>;
+  /** Selama menyimpan: chip dan "Kategori lain…" `aria-disabled`, fokus tetap. */
+  busy?: boolean;
+  /** Galat kolom kategori (`category_archived`). */
+  invalid?: boolean;
+  describedBy?: string | undefined;
 }) {
   const extra =
     value !== undefined && !chips.some((c) => c.id === value)
@@ -35,6 +43,8 @@ export function CategoryChips({
   return (
     <ChipGroup
       label="Kategori"
+      invalid={invalid}
+      describedBy={describedBy}
       className="chip-rows -mx-4 gap-2 px-4 py-0.5 tablet:mx-0 tablet:flex tablet:flex-wrap tablet:overflow-visible tablet:px-0"
     >
       {shown.map((c, i) => (
@@ -42,6 +52,7 @@ export function CategoryChips({
           key={c.id}
           variant="category"
           selected={c.id === value}
+          ariaDisabled={busy}
           focusable={value === undefined && i === 0}
           icon={
             <span className="hidden text-text-soft tablet:inline-flex">
@@ -58,8 +69,9 @@ export function CategoryChips({
       <button
         ref={moreRef}
         type="button"
-        onClick={onMore}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-border px-3.5 text-label font-semibold whitespace-nowrap text-text hover-pointer:bg-hover focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus active:bg-surface-2"
+        aria-disabled={busy || undefined}
+        onClick={busy ? undefined : onMore}
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-border px-3.5 text-label font-semibold whitespace-nowrap text-text hover-pointer:bg-hover focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus active:bg-surface-2 aria-disabled:border-hairline aria-disabled:text-text-muted"
       >
         <MagnifyingGlassIcon size={16} className="shrink-0 text-text-soft" />
         Kategori lain…

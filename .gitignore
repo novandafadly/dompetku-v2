@@ -5,6 +5,7 @@ out/
 dist/
 coverage/
 playwright-report/
+playwright-report-ledger/
 test-results/
 *.tsbuildinfo
 next-env.d.ts

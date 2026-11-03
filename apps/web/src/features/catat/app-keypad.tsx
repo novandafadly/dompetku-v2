@@ -20,6 +20,7 @@ function dropDigit(value: Rupiah | null): Rupiah | null {
   return next === 0 ? null : next;
 }
 
+// `data-keypad-digit` (juga di Hapus): mengetik nominal bukan ketukan alur Catat (telemetri).
 // Fokus tetap di field nominal saat keypad ditekan dengan pointer.
 const keepFocus = (e: MouseEvent) => {
   e.preventDefault();
@@ -42,6 +43,7 @@ export function AppKeypad({
         <button
           key={k}
           type="button"
+          data-keypad-digit=""
           onMouseDown={keepFocus}
           onClick={() => {
             onChange(appendDigits(value, k));
@@ -54,6 +56,7 @@ export function AppKeypad({
       <button
         type="button"
         aria-label="Hapus"
+        data-keypad-digit=""
         onMouseDown={keepFocus}
         onClick={() => {
           onChange(dropDigit(value));

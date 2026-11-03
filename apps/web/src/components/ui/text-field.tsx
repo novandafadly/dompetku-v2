@@ -1,7 +1,8 @@
 'use client';
 
 import { useId, type HTMLInputTypeAttribute, type ReactNode, type RefObject } from 'react';
-import { FieldError, FieldHint, FieldLabel, fieldShell } from './field';
+import { FieldLabel, fieldShell } from './field';
+import { FieldError, FieldHint } from './field-messages';
 
 export function TextField({
   label,

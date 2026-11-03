@@ -19,6 +19,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.next/**',
       '**/playwright-report/**',
+      '**/playwright-report-ledger/**',
       '**/test-results/**',
       '**/next-env.d.ts',
       'docs/**',
@@ -47,6 +48,8 @@ export default tseslint.config(
       'import/resolver': { typescript: { project: 'apps/web/tsconfig.json' } },
       'boundaries/elements': [
         { type: 'ui', pattern: 'apps/web/src/components/ui/**' },
+        // View-model ledger (`types.ts`, presenter murni) dipakai bersama semua fitur, bukan fitur.
+        { type: 'ledger-vm', pattern: 'apps/web/src/features/ledger', mode: 'folder' },
         {
           type: 'feature',
           pattern: 'apps/web/src/features/*',

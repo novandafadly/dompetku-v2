@@ -122,6 +122,7 @@ Gerbang awal: bingkai desain Catat (galat, "Menyimpan…", peringatan saldo, tra
 - **Cakupan.** Menyambung UI prototipe ke DB; kategori + `api.suggest_categories` + kamus awal; parser nominal ("35rb/35k/1,5jt"); Catat jalur tercepat ≤ 3 ketukan; edit (konflik versi DK409), void, urungkan; **layar Sampah** (daftar dan pulihkan); "Menyimpan…" dan jalur galat nyata; pindah ruang di sheet; **`product_events`** dengan event `catat_dibuka` dan `catat_disimpan` (`catat_id`, `ketukan`, tanpa nominal) dan **tombol "Tidak ada pengeluaran hari ini"** (`api.mark_no_spend_day`), diukur sejak pemakaian pertama.
 - **Dependensi.** S5; ADR 0004.
 - **Kriteria keluar.** Catat jalur tercepat ≤ 3 ketukan dari Beranda, Transaksi, Dompet di Pribadi dan Bersama; urungkan 6 detik mengembalikan saldo; Sampah memulihkan dalam 90 hari; event tercatat tanpa nominal; keyboard-only lulus; budget JS rute ≤ 162 kB.
+- **Status (2026-11-03).** Selesai di branch `claude/inspiring-hypatia-l7rvfz`, belum di-merge ke `main` (menunggu gelombang perbaikan temuan ditunda, review akhir, dan CI). Task 1 sampai 20 plus 17b; kriteria keluar dibuktikan `e2e:ledger` (Catat 3 ketukan di enam kombinasi ruang dan layar, budget JS mode nyata ≤ 162 kB), `test:int`, dan pgTAP. Catatan teknis: BSD §16 "Catatan S6"; keputusan desain: `docs/design/s6-bingkai.md`.
 - **Risiko / mitigasi.** Budget JS hanya sisa sekitar 1 kB: ukur tiap PR, muat malas, keputusan pemilik bila perlu naik. Salah kategori tersimpan: kategori tidak pernah terpilih otomatis.
 
 ### S7: transfer, talangan, rekonsiliasi

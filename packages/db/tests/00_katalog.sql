@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(33);
+select plan(35);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -54,15 +54,16 @@ select set_eq($$
   array['bootstrap_owner', 'create_invitation', 'revoke_invitation', 'resend_invitation',
         'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
-        'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account'],
-  'daftar fungsi api DEFINER (tulis S4 + S5, invitation_peek, list_invitations)');
+        'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
+        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
-        'trash_list'],
-  'daftar fungsi baca api INVOKER (S5)');
+        'trash_list', 'suggest_categories'],
+  'daftar fungsi baca api INVOKER (S5, S6)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
@@ -78,6 +79,13 @@ select set_eq($$
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth'],
   'DEFINER milik dompetku_owner = daftar tertutup S4 + S5');
+-- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
+select set_eq($$
+  select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where p.prosecdef and p.proowner = 'dompetku_api'::regrole
+    and n.nspname in ('app', 'private', 'jobs', 'audit', 'auth') $$,
+  array['private.seed_categories', 'private.tg_seed_categories'],
+  'DEFINER milik dompetku_api di luar api = daftar tertutup S6 (kategori awal)');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where p.proowner = 'dompetku_auditor'::regrole $$,
@@ -191,6 +199,12 @@ select set_eq($$
     ('dompetku_auditor', 'app.entry_tombstones', 'SELECT'),
     ('dompetku_auditor', 'app.account_balances', 'SELECT'),
     ('dompetku_auditor', 'app.report_lines', 'SELECT'),
+    -- S6: hari tanpa pengeluaran (pola ruang; api tulis lewat mark_no_spend_day).
+    ('dompetku_web', 'app.no_spend_days', 'SELECT'),
+    ('dompetku_api', 'app.no_spend_days', 'SELECT'),
+    ('dompetku_api', 'app.no_spend_days', 'INSERT'),
+    ('dompetku_api', 'app.no_spend_days', 'DELETE'),
+    ('dompetku_auditor', 'app.no_spend_days', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -223,7 +237,7 @@ select set_eq($$
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api', 'dompetku_auditor']) r,
                       unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member',
-                                   'app.report_class']) f
+                                   'app.report_class', 'app.category_keywords']) f
      union all
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
@@ -232,16 +246,19 @@ select set_eq($$
                                    'create_entry',
                                    'create_transfer', 'update_entry', 'void_entry',
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
-                                   'archive_account']) f
+                                   'archive_account', 'create_category', 'update_category',
+                                   'archive_category', 'mark_no_spend_day']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
-                      'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list']) f
+                      'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
+                      'suggest_categories']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
                       'lock_accounts', 'get_account', 'balance', 'assert_balance',
                       'entry_snapshot', 'write_history', 'check_date', 'check_amount',
-                      'clean_text', 'set_void_state', 'purge_entries']) f
+                      'clean_text', 'set_void_state', 'purge_entries', 'seed_categories',
+                      'tg_seed_categories']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -306,6 +323,7 @@ select set_eq($$
   array['entries.entries_shape', 'entry_lines.entry_lines_shape'],
   'cek bentuk entri = constraint trigger deferred');
 select has_trigger('app', 'categories', 'category_depth', 'penjaga kedalaman kategori');
+select has_trigger('app', 'space_members', 'seed_categories', 'kategori awal saat anggota masuk ruang');
 
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
 select is(tests.owner_val(null, $$

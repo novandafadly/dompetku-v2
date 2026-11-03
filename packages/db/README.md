@@ -22,8 +22,11 @@ Skema Postgres DompetKu: role (`roles/`), migrasi dbmate (`migrations/`), dan te
 | `0103_ledger_api.sql`             | §9 (S5): `create_account`, `create_entry`, `create_transfer`, `update_entry`, `void_entry`, `restore_entry`, `purge_entry`, `reconcile_balance`, `archive_account`      |
 | `0104_ledger_job.sql`             | §10 (S5): `jobs.purge_voided`, `jobs.purge_idempotency`, `private.dq_run`, `jobs.dq_reconcile`                                                                          |
 | `0105_ledger_rls_hak.sql`         | §11 (S5): RLS ENABLE + FORCE dan policy ledger, hak tabel, kepemilikan dq, EXECUTE                                                                                      |
+| `0106_kategori.sql`               | §9 (S6): `api.create/update/archive_category`, kategori awal ruang (`private.seed_categories` + trigger), cek `category_archived` di `create_entry`/`update_entry`      |
+| `0107_saran_kategori.sql`         | §9 (S6): `app.category_keywords()` (kamus) dan `api.suggest_categories`                                                                                                 |
+| `0108_tanpa_pengeluaran.sql`      | §6, §9, §11 (S6): `app.no_spend_days` (RLS + FORCE) dan `api.mark_no_spend_day`                                                                                         |
 
-Isi fungsi dan tabel disalin persis dari BSD; penyimpangan S5 dicatat di BSD §16 ("Catatan S5"). Tagihan, anggaran, hari tanpa pengeluaran, `bill_schedule`, `budget_progress`, `materialize_bills`, dan fungsi api kategori/profil menyusul di sprint fiturnya (S6, S9). `idempotency_keys` masuk S4 karena `jobs.purge_unfinished_users` menghapus barisnya.
+Isi fungsi dan tabel disalin persis dari BSD; penyimpangan S5 dan S6 dicatat di BSD §16 ("Catatan S5", "Catatan S6"). Tagihan, anggaran, `bill_schedule`, `budget_progress`, `materialize_bills`, dan fungsi api profil menyusul di sprint fiturnya (S9). Kategori, saran kategori, dan hari tanpa pengeluaran masuk S6 (0106 sampai 0108). `idempotency_keys` masuk S4 karena `jobs.purge_unfinished_users` menghapus barisnya.
 
 **Penomoran.** 0001 sampai 0008 = S4 (skema dasar, ruang, undangan). 0009 sampai 0099 dicadangkan untuk migrasi Better Auth (S4 sisi server, dikerjakan paralel). Ledger mulai 0100 (S5) agar dua branch tidak bertabrakan nomor. `dbmate up` (tanpa `--strict`) menerapkan semua versi yang belum tercatat, jadi 0009..0099 yang menyusul tetap diterapkan walau 0100+ sudah ada; migrasi Better Auth tidak boleh bergantung pada objek 0100+.
 
@@ -73,20 +76,23 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0
 
 `tests/support/setup.sql` (superuser, sekali setelah `dbmate up`) memasang pgTAP di skema `tap`, role `dompetku_test` (login, bukan superuser, tanpa keanggotaan role aplikasi), dan helper `tests.<role>_exec/_val(uid, sql)`: fungsi `SECURITY DEFINER` milik `dompetku_web`, `dompetku_api`, `dompetku_worker`, `dompetku_owner`. Setiap aksi tes berjalan sebagai role aplikasi itu dengan `app.user_id` = `uid`, sehingga RLS, grant, dan trigger diuji seperti di produksi. Jam dimajukan dengan `tests.clock(interval)` (env `test`, di dalam transaksi tes).
 
-| File                      | Cakupan                                                                                                                                                     |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `00_katalog.sql`          | RLS FORCE, tanpa EXECUTE PUBLIC, `search_path`, daftar tertutup DEFINER, matriks hak tabel dan fungsi, BYPASSRLS, FK berindeks, FK restrict ke auth         |
-| `01_pendaftaran.sql`      | pendaftaran tertutup, akun pertama, urutan cek provisioning, akun setengah jadi tidak memakan kuota, user ketiga, penjaga ruang Pribadi                     |
-| `02_undangan.sql`         | buat, intip, tolak, cabut, kirim ulang, kedaluwarsa, terima setelah diamankan, sekali pakai, terikat email                                                  |
-| `03_isolasi.sql`          | dua user × 8 tabel × SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; tanpa konteks = 0 baris                                                            |
-| `04_audit.sql`            | `audit.log` tanpa pemalsuan `user_id`, daftar tertutup event/meta, append-only (juga owner), retensi, `product_events`                                      |
-| `05_read_committed.sql`   | semua jalan tulis S4 menolak REPEATABLE READ                                                                                                                |
-| `06_purge_unfinished.sql` | akun setengah jadi dihapus setelah 72 jam beserta datanya                                                                                                   |
-| `07_ledger_uang.sql`      | saldo awal, transfer Σ = −fee, `space_transfer`, kantor, idempotensi, versi DK409, saldo negatif, saldo awal 7 hari, cocokkan saldo, arsip, angka ringkasan |
-| `08_ledger_isolasi.sql`   | dua user × tabel/view ledger × operasi (web, api, worker), DK404 lintas ruang, DK401, Bersama tanpa data Pribadi                                            |
-| `09_sampah_purge.sql`     | void/restore pasangan, 90 hari, purge_entry, `purge_voided`, `purge_idempotency`, append-only riwayat, `dq_reconcile`                                       |
-| `10_daftar_undangan.sql`  | `api.list_invitations`: status, tanpa undangan yang diganti kirim ulang, tidak terlihat user lain atau tanpa konteks                                        |
-| `99_konkurensi.sql`       | dua koneksi (dblink): pengeluaran paralel, klik ganda paralel, transfer berlawanan, arsip paralel catat; data di-commit lalu dibersihkan                    |
+| File                       | Cakupan                                                                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `00_katalog.sql`           | RLS FORCE, tanpa EXECUTE PUBLIC, `search_path`, daftar tertutup DEFINER, matriks hak tabel dan fungsi, BYPASSRLS, FK berindeks, FK restrict ke auth         |
+| `01_pendaftaran.sql`       | pendaftaran tertutup, akun pertama, urutan cek provisioning, akun setengah jadi tidak memakan kuota, user ketiga, penjaga ruang Pribadi                     |
+| `02_undangan.sql`          | buat, intip, tolak, cabut, kirim ulang, kedaluwarsa, terima setelah diamankan, sekali pakai, terikat email                                                  |
+| `03_isolasi.sql`           | dua user × 8 tabel × SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; tanpa konteks = 0 baris                                                            |
+| `04_audit.sql`             | `audit.log` tanpa pemalsuan `user_id`, daftar tertutup event/meta, append-only (juga owner), retensi, `product_events`                                      |
+| `05_read_committed.sql`    | semua jalan tulis S4 menolak REPEATABLE READ                                                                                                                |
+| `06_purge_unfinished.sql`  | akun setengah jadi dihapus setelah 72 jam beserta datanya                                                                                                   |
+| `07_ledger_uang.sql`       | saldo awal, transfer Σ = −fee, `space_transfer`, kantor, idempotensi, versi DK409, saldo negatif, saldo awal 7 hari, cocokkan saldo, arsip, angka ringkasan |
+| `08_ledger_isolasi.sql`    | dua user × tabel/view ledger × operasi (web, api, worker), DK404 lintas ruang, DK401, Bersama tanpa data Pribadi                                            |
+| `09_sampah_purge.sql`      | void/restore pasangan, 90 hari, purge_entry, `purge_voided`, `purge_idempotency`, append-only riwayat, `dq_reconcile`                                       |
+| `10_daftar_undangan.sql`   | `api.list_invitations`: status, tanpa undangan yang diganti kirim ulang, tidak terlihat user lain atau tanpa konteks                                        |
+| `11_kategori.sql`          | `api.create/update/archive_category`, kategori awal ruang, kategori lintas ruang ditolak (B9), `category_archived` di `create_entry`/`update_entry`         |
+| `12_saran_kategori.sql`    | `api.suggest_categories`: bobot jam dan nominal, kamus kata kunci, hanya ruang aktif, tanpa kategori terarsip                                               |
+| `13_tanpa_pengeluaran.sql` | `api.mark_no_spend_day`: tanggal `app.today()` WIB, tanggal masa depan ditolak, idempoten, isolasi ruang                                                    |
+| `99_konkurensi.sql`        | dua koneksi (dblink): pengeluaran paralel, klik ganda paralel, transfer berlawanan, arsip paralel catat; data di-commit lalu dibersihkan                    |
 
 Konkurensi ledger diuji di pgTAP lewat dblink (`99_konkurensi.sql`, helper `tests.peer_*` milik superuser, hanya cluster tes). Pendaftaran paralel tetap menyusul di Vitest (TRD §4).
 
@@ -111,3 +117,17 @@ TEST_DATABASE_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku' \
 ```
 
 Tes mengosongkan data (sebagai superuser) dan memasang `owner_email` sendiri; jangan arahkan ke DB yang dipakai. Langkah operasi: `docs/ops/auth.md`.
+
+## E2E mode nyata (auth dan ledger)
+
+`e2e:auth` (alur auth) dan `e2e:ledger` (kriteria keluar S6: Catat ≤ 3 ketukan, Batalkan/Sampah/Pulihkan, idempotensi, konflik versi, kanari Bersama, axe, budget JS mode nyata) menjalankan build standalone tanpa `NEXT_PUBLIC_PROTOTYPE` terhadap cluster sekali pakai yang sama (port 3300 dan 3301). Global setup mengosongkan data dan memasang `owner_email`; pemilik didaftarkan lewat alur nyata dengan passkey virtual. Lokal, setelah `dbmate up`:
+
+```bash
+pnpm build
+export AUTH_E2E_DATABASE_URL='postgres://dompetku_web@127.0.0.1:5432/dompetku'
+export AUTH_E2E_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku'
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm --filter @dompetku/web e2e:auth
+PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm --filter @dompetku/web e2e:ledger
+```
+
+Setiap suite membutuhkan DB bersih: jalankan `bash docs/superpowers/handoff/db-reset-lokal.sh` sebelum `e2e:ledger` bila `e2e:auth` baru berjalan. Jalankan berurutan (keduanya menyalin `.next/static` ke folder standalone yang sama dan mengosongkan data). CI menjalankan keduanya di job `auth`.

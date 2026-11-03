@@ -13,6 +13,8 @@ export interface TransaksiContext {
   /** Bulan terpilih ('YYYY-MM') dan alamat daftar untuk bulan lain. */
   month: string;
   monthHref: (month: string) => Route;
+  /** Tautan Sampah di bawah daftar. */
+  sampahHref?: Route;
   /** Keadaan data demo (`?state=loading`): T4. */
   dataState?: 'ready' | 'loading' | 'error';
 }

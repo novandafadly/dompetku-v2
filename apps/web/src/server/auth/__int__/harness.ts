@@ -57,12 +57,24 @@ export function createHarness(extraMailer?: Mailer, overrides: Partial<ServerEnv
 /** Kosongkan data (superuser), lalu pasang owner_email seperti runbook. */
 export async function reset(h: Harness): Promise<void> {
   h.mailer.sent.length = 0;
-  await h.admin.query(`
+  await wipe(h.admin);
+}
+
+/** Hapus semua data domain dan auth (superuser), lalu pasang owner_email. Dipakai ulang harness ledger. */
+export async function wipe(admin: pg.Pool): Promise<void> {
+  await admin.query(`
     begin;
     select set_config('dompetku.purge', 'on', true);
     delete from app.product_events;
     delete from app.idempotency_keys;
     delete from app.invitations;
+    delete from app.entry_lines;
+    delete from app.entry_history;
+    delete from app.entries;
+    delete from app.entry_tombstones;
+    delete from app.accounts;
+    delete from app.categories;
+    delete from app.no_spend_days;
     delete from app.space_members;
     delete from app.profiles;
     delete from app.spaces;

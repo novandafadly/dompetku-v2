@@ -61,3 +61,14 @@ export function WalletTypeIcon({
   if (map === null) return <Blank size={props.size} />;
   return map.renderWalletIcon(type, props);
 }
+
+/** Ikon dari kolom `icon` kategori (daftar Kategori); cadangan: nama kategori, lalu Label. */
+export function CategoryGlyph({
+  icon,
+  name,
+  ...props
+}: IconProps & { icon: string; name?: string | undefined }) {
+  const map = useIconMap();
+  if (map === null) return <Blank size={props.size} />;
+  return map.renderIconByName(icon, name, props);
+}

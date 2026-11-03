@@ -16,6 +16,12 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/state';
 import { heroCard } from '@/components/ui/styles';
 import { Toaster, toast } from '@/components/ui/toast';
+import { BerandaFrames } from './beranda-frames';
+import { CatatFrames } from './catat-frames';
+import { DetailFrames } from './detail-frames';
+import { KategoriFrames } from './kategori-frames';
+import { SampahFrames } from './sampah-frames';
+import { TransaksiFrames } from './transaksi-frames';
 
 const plainSamples = ['1111111', '0000000', '1.250.000', '8888888'];
 
@@ -245,6 +251,30 @@ export function Gallery() {
               </Button>
             }
           />
+        </Section>
+
+        <Section id="catat-s6" title="Catat S6 (bingkai C1–C6)">
+          <CatatFrames />
+        </Section>
+
+        <Section id="beranda-s6" title="Beranda S6 (bingkai B1, kartu nyata)">
+          <BerandaFrames />
+        </Section>
+
+        <Section id="transaksi-s6" title="Transaksi nyata (daftar, kosong, gagal muat)">
+          <TransaksiFrames />
+        </Section>
+
+        <Section id="detail-s6" title="Detail nyata (bingkai D1–D3, dialog Batalkan)">
+          <DetailFrames />
+        </Section>
+
+        <Section id="sampah-s6" title="Sampah (bingkai S6-S1)">
+          <SampahFrames />
+        </Section>
+
+        <Section id="kategori-s6" title="Kategori (bingkai S6-K1/K2) dan Dompet nyata">
+          <KategoriFrames />
         </Section>
       </main>
       <Toaster />

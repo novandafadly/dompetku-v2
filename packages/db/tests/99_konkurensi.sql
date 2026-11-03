@@ -1,10 +1,12 @@
 -- Konkurensi dua koneksi lewat dblink (BSD §3, §13 catatan konkurensi; IPD S5 "tes konkurensi"):
 -- dua pengeluaran paralel tidak bisa membuat saldo negatif, klik ganda paralel = 1 entri,
--- transfer A->B paralel B->A tanpa deadlock, arsip paralel catat melihat data ter-commit.
+-- transfer A->B paralel B->A tanpa deadlock, arsip paralel catat melihat data ter-commit,
+-- re-parent kategori paralel (silang A/B, atau rantai C di bawah A saat A pindah ke bawah B)
+-- ditolak category_depth.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 begin;
-select plan(18);
+select plan(24);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -108,6 +110,41 @@ select is(tests.peer_val('w', 'select jobs.purge_voided()::text'), '0', 'purge b
 select tests.peer_close('w');
 select tests.peer_val('a', $$select set_config('app.now_override', '', false)$$);
 select tests.peer_val('adm', $$update app.settings set value = 'prod' where key = 'env' returning value$$);
+
+-- ===== Re-parent kategori silang paralel: induk baru ikut dikunci, urut id =====
+select (tests.peer_val('a', format($$select api.create_category(gen_random_uuid(), %L, 'expense', 'Konkuren A', 'Car')$$, :'np'))::jsonb)
+  ->> 'category_id' as cat_a \gset
+select (tests.peer_val('a', format($$select api.create_category(gen_random_uuid(), %L, 'expense', 'Konkuren B', 'Car')$$, :'np'))::jsonb)
+  ->> 'category_id' as cat_b \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.update_category(%L, 'Konkuren A', 'Car', %L)$$, :'cat_a', :'cat_b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.update_category(%L, 'Konkuren B', 'Car', %L)$$, :'cat_b', :'cat_a'));
+select ok(tests.peer_blocked('b'), 're-parent silang menunggu kunci induk baru');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*category_depth', 're-parent silang kedua = category_depth');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select coalesce((select parent_id::text from app.categories where id = %1$L), '-') || ' '
+  || coalesce((select parent_id::text from app.categories where id = %2$L), '-')$$, :'cat_a', :'cat_b')),
+  :'cat_b' || ' -', 'A di bawah B, B tetap induk (tanpa siklus)');
+
+-- Rantai: A sedang dipindah ke bawah D, C dipindah ke bawah A. Tanpa kunci induk baru, C membaca A
+-- yang belum commit (masih akar) dan lolos trigger; hasilnya kedalaman 3.
+select (tests.peer_val('a', format($$select api.create_category(gen_random_uuid(), %L, 'expense', 'Konkuren C', 'Car')$$, :'np'))::jsonb)
+  ->> 'category_id' as cat_c \gset
+select (tests.peer_val('a', format($$select api.create_category(gen_random_uuid(), %L, 'expense', 'Konkuren D', 'Car')$$, :'np'))::jsonb)
+  ->> 'category_id' as cat_d \gset
+select tests.peer_val('a', format($$select api.update_category(%L, 'Konkuren A', 'Car', null)$$, :'cat_a'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.update_category(%L, 'Konkuren A', 'Car', %L)$$, :'cat_a', :'cat_d'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.update_category(%L, 'Konkuren C', 'Car', %L)$$, :'cat_c', :'cat_a'));
+select ok(tests.peer_blocked('b'), 're-parent ke induk yang sedang dipindah menunggu kunci');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*category_depth', 'rantai paralel = category_depth (tanpa kedalaman 3)');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select count(*) from app.categories c join app.categories p on p.id = c.parent_id
+  where p.parent_id is not null and c.space_id = %L$$, :'np')), '0', 'tidak ada kategori di kedalaman 3');
 
 select tests.peer_close('a');
 select tests.peer_close('b');

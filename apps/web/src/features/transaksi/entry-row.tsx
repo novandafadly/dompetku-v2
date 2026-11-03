@@ -1,11 +1,9 @@
 'use client';
 
-import { entryCategoryName, entryKindLabel, entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
 import type { Route } from 'next';
-import { CategoryIcon } from '@/components/ui/category-icon';
-import { ClockIcon } from '@/components/ui/icons/clock';
-import { TxRow } from '@/components/ui/rows';
+import { entryToVM } from './demo-vm';
+import { EntryRowView } from './entry-row-view';
 import { accountName } from './filters';
 
 export function entryWallet(state: DemoState, entry: Entry): string {
@@ -14,24 +12,13 @@ export function entryWallet(state: DemoState, entry: Entry): string {
     : accountName(state, entry.accountId);
 }
 
+/** Pembungkus demo: entri demo → `EntryVM` → `EntryRowView` (markup sama dengan mode nyata). */
 export function EntryRow({ state, entry, href }: { state: DemoState; entry: Entry; href: Route }) {
-  const { value, kind } = signedAmount(entry);
   return (
-    <TxRow
+    <EntryRowView
+      entry={entryToVM(state, entry)}
       href={href}
-      icon={<CategoryIcon name={entryCategoryName(state, entry)} kind={entry.kind} size={20} />}
-      label={entryTitle(state, entry)}
-      meta={`${entryKindLabel(state, entry)} · ${entryWallet(state, entry)}`}
-      status={
-        entry.kind === 'expense' && entry.reimbursable === true ? (
-          <span className="flex items-center gap-1 text-meta font-semibold text-warning">
-            <ClockIcon size={14} className="shrink-0" />
-            Menunggu reimburse
-          </span>
-        ) : undefined
-      }
-      value={value}
-      kind={kind}
+      reimburse={entry.kind === 'expense' && entry.reimbursable === true}
     />
   );
 }
