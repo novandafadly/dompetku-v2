@@ -222,7 +222,7 @@ Keputusan controller atas nama pemilik (fix-wave A1, A4); gaya mengikuti galat B
 | Pulihkan gagal, `account_archived`                    | sama                                          | `Belum bisa dipulihkan. Dompetnya sudah diarsipkan.`             |
 | Pulihkan gagal, `idem_mismatch`, `not_found`, lainnya | sama                                          | `Belum bisa dipulihkan. Ada kendala di server.`                  |
 
-Perilaku terkait: Simpan perubahan tanpa perubahan menutup sheet Ubah tanpa toast; `Timpa dengan perubahan saya` nonaktif (`aria-disabled`) selama draf tidak valid; `restore_window_closed` memindahkan fokus ke teks lewat 90 hari.
+Perilaku terkait: Simpan perubahan tanpa perubahan menutup sheet Ubah tanpa toast; `Timpa dengan perubahan saya` nonaktif (`aria-disabled`) selama draf tidak valid, dengan alasan terlihat di atas tombol kaki (ikon `info` 14 + teks 13/500 `text-muted`, gaya `Pilih kategori untuk menyimpan`) yang dirujuk `aria-describedby`: `Isi nominal untuk menimpa` (nominal kosong) atau `Pilih kategori untuk menimpa` (kategori kosong) — salinan baru review akhir S6; `restore_window_closed` memindahkan fokus ke teks lewat 90 hari.
 
 ## Keputusan penutup S6 (Task 20, 2026-11-03)
 

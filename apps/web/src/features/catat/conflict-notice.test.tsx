@@ -114,6 +114,27 @@ describe('ConflictNotice (S6-D2)', () => {
     expect(update.mock.calls[1]?.[0]).toMatchObject({ expectedVersion: 3, amount: 61_000 });
   });
 
+  it('Timpa nonaktif menyebut alasannya lewat teks terlihat (aria-describedby)', async () => {
+    const user = userEvent.setup();
+    renderEdit({ update: conflictOnce() });
+    await setAmount(user, '60000');
+    await user.click(screen.getByRole('button', { name: /Simpan perubahan/ }));
+    await screen.findByRole('alert');
+    const timpa = screen.getByRole('button', { name: 'Timpa dengan perubahan saya' });
+    expect(timpa).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText('Isi nominal untuk menimpa')).toBeNull();
+
+    await user.clear(screen.getByRole('textbox', { name: 'Nominal' }));
+    expect(timpa).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Isi nominal untuk menimpa')).toBeVisible();
+    expect(timpa).toHaveAccessibleDescription('Isi nominal untuk menimpa');
+
+    await setAmount(user, '61000');
+    expect(timpa).not.toHaveAttribute('aria-disabled');
+    expect(timpa).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText('Isi nominal untuk menimpa')).toBeNull();
+  });
+
   it('salinan: nominal sama tanpa kurung; pengguna sendiri = Kamu; waktu relatif', () => {
     expect(
       flat(

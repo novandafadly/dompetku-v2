@@ -27,6 +27,7 @@ import {
   SavingLabel,
   saldoKurangText,
 } from './catat-status';
+import { InfoIcon } from '@/components/ui/icons/info';
 import { CategoryChips } from './category-chips';
 import { ConflictNotice } from './conflict-notice';
 import { amountOnly, useEditEntry, type EditGalat, type EditSource } from './use-edit-entry';
@@ -40,6 +41,9 @@ export const EDIT_COPY = {
   save: 'Simpan perubahan',
   reload: 'Muat ulang',
   overwrite: 'Timpa dengan perubahan saya',
+  /** Alasan Timpa nonaktif (aria-describedby), gaya `Pilih kategori untuk menyimpan`. */
+  overwriteNeedsAmount: 'Isi nominal untuk menimpa',
+  overwriteNeedsCategory: 'Pilih kategori untuk menimpa',
   voided: 'Transaksi ini sudah dibatalkan.',
 } as const;
 
@@ -126,6 +130,7 @@ function EditSession({
   const saldoId = useId();
   const fieldErrorId = useId();
   const noteId = useId();
+  const overwriteHintId = useId();
   const [page, setPage] = useState<'form' | 'kategori'>('form');
   const refocus = useRef<'chosen' | 'more' | 'amount' | null>(null);
   const [clock, setClock] = useState<Date>(now);
@@ -256,6 +261,12 @@ function EditSession({
       .filter((x) => x !== null)
       .join(' ') || undefined;
 
+  const overwriteHint = e.canOverwrite
+    ? null
+    : draft.amount === null || draft.amount <= 0
+      ? EDIT_COPY.overwriteNeedsAmount
+      : EDIT_COPY.overwriteNeedsCategory;
+
   const primaryClass =
     'flex-1 aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted aria-disabled:hover-pointer:bg-surface-2';
 
@@ -269,6 +280,15 @@ function EditSession({
       <p role="status" className="sr-only">
         {saving ? CATAT_COPY.menyimpan : ''}
       </p>
+      {conflict !== null && status === 'konflik' && overwriteHint !== null ? (
+        <p
+          id={overwriteHintId}
+          className="flex items-center gap-1.5 text-caption font-medium text-text-muted"
+        >
+          <InfoIcon size={14} className="shrink-0" />
+          {overwriteHint}
+        </p>
+      ) : null}
       {conflict !== null && status === 'konflik' ? (
         // Ditumpuk di HP: "Timpa dengan perubahan saya" tidak muat setengah lebar 360 (temuan reviewer).
         <div className="flex flex-col gap-2 tablet:flex-row">
@@ -287,6 +307,7 @@ function EditSession({
             variant="secondary"
             className={`${primaryClass} whitespace-normal`}
             aria-disabled={!e.canOverwrite || undefined}
+            aria-describedby={overwriteHint === null ? undefined : overwriteHintId}
             onClick={() => {
               void overwrite();
             }}
