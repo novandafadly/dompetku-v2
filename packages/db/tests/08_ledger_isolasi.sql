@@ -1,9 +1,9 @@
 -- Isolasi ruang tabel ledger (BSD §13 #10 sampai #14; IPD S5: isolasi penuh semua tabel baru):
 -- dua user x tabel/view ledger x SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; fungsi api.*
--- dengan id pasangan = DK404 (termasuk talangan dan reimburse S7); tanpa konteks = 0 baris / DK401;
+-- dengan id pasangan = DK404 (termasuk talangan, reimburse, dan pindah ruang S7); tanpa konteks = 0 baris / DK401;
 -- Bersama tidak pernah membuka data Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
 begin;
-select plan(174);
+select plan(179);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -164,10 +164,16 @@ from (values
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np')),
   ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'fbca')),
   ('create_reimbursement ke', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'ft', :'bca')),
-  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np'))
+  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
+  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas')),
+  ('move_entry_to_space ke', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'np', :'bca')),
+  ('move_entry_to_space dompet', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'sh', :'bca'))
 ) v (t, q);
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
+select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' '
+  || (select count(*) from app.entries where moved_to_entry_id is not null) from app.entries where id = %L$$, :'fe')),
+  '1 true 0', 'percobaan pindah lintas ruang tanpa efek (entri F hidup, tidak ada entri dipindah)');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.categories where id = %L and name = 'Makan' and archived_at is null$$, :'ncat')), '1',
   'kategori N tidak tersentuh');
 select is(tests.owner_val(null, format($$select count(*) from app.entries where reimburses_entry_id in (%L, %L)$$, :'nt', :'ft')), '0',
@@ -195,7 +201,8 @@ from (values
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh')),
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh')),
   ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'bca')),
-  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np'))
+  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
+  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====

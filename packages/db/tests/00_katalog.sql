@@ -56,7 +56,7 @@ select set_eq($$
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
         'create_category', 'update_category', 'archive_category', 'mark_no_spend_day',
-        'create_reimbursement'],
+        'create_reimbursement', 'move_entry_to_space'],
   'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
@@ -249,7 +249,7 @@ select set_eq($$
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account', 'create_category', 'update_category',
                                    'archive_category', 'mark_no_spend_day',
-                                   'create_reimbursement']) f
+                                   'create_reimbursement', 'move_entry_to_space']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',

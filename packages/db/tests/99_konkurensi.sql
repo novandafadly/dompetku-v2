@@ -3,11 +3,12 @@
 -- transfer A->B paralel B->A tanpa deadlock, arsip paralel catat melihat data ter-commit,
 -- re-parent kategori paralel (silang A/B, atau rantai C di bawah A saat A pindah ke bawah B)
 -- ditolak category_depth, arsip induk paralel ubah anak tanpa deadlock (0109), reimburse paralel
--- dan ubah talangan paralel reimburse tanpa deadlock (0110).
+-- dan ubah talangan paralel reimburse tanpa deadlock (0110), pindah ruang paralel ubah entri yang
+-- sama dan paralel reimburse (0111).
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 begin;
-select plan(36);
+select plan(46);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -17,6 +18,8 @@ select tests.peer_val('adm', $$select tests.space_id(tests.n(), 'personal')$$) a
 select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'A', 'operasional', 100)$$, :'np')) as acc_a \gset
 select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'B', 'operasional', 100)$$, :'np')) as acc_b \gset
 select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'C', 'operasional', 0)$$, :'np')) as acc_c \gset
+select tests.peer_val('adm', $$select tests.space_id(tests.n(), 'shared')$$) as sh \gset
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'Kas', 'operasional', 100)$$, :'sh')) as acc_s \gset
 
 select tests.peer_open('a', 'dompetku_web');
 select tests.peer_open('b', 'dompetku_web');
@@ -212,6 +215,58 @@ select tests.peer_exec('b', 'commit');
 select is(tests.owner_val(null, format($$select count(*) || ' ' || sum(l.amount) from app.entries r
   join app.entry_lines l on l.entry_id = r.id where r.reimburses_entry_id = %L and r.voided_at is null$$, :'tal')),
   '2 10', 'Σ reimburse hidup = nominal talangan, tidak lebih');
+
+-- ===== Pindah ruang (S7, 0111): urutan kunci entri -> akun, tanpa deadlock =====
+select tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'income', 100)$$, :'np', :'acc_b'));
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 5)$$, :'np', :'acc_b'))::jsonb)
+  ->> 'entry_id' as mv1 \gset
+-- adm memegang entri; ubah (a, entri -> dompet B) mengantre lebih dulu, lalu pindah (b). Bila pindah
+-- mengunci dompet sebelum entri, b memegang dompet B dan a (sesudah mendapat entri) menunggu = 40P01.
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', format($$select id from app.entries where id = %L for update$$, :'mv1'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_send('a', format($$select api.update_entry(gen_random_uuid(), %L, 1, %L, 6, null, null, null, false) ->> 'version'$$,
+  :'mv1', :'acc_b'));
+select ok(tests.peer_blocked('a'), 'ubah entri menunggu kunci entri');
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null) ->> 'version'$$,
+  :'mv1', :'sh', :'acc_s'));
+select ok(tests.peer_blocked('b'), 'pindah ruang menunggu kunci entri');
+select tests.peer_exec('adm', 'commit');
+select tests.peer_result('a') as ubah_mv \gset
+select is(:'ubah_mv'::text, '2', 'ubah entri selesai tanpa deadlock');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*version_conflict', 'pindah dengan versi sebelum ubah = DK409 (bukan deadlock)');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' ' || coalesce(moved_to_entry_id::text, '-')
+  from app.entries where id = %L$$, :'mv1')), '2 true -', 'entri tetap hidup di ruang asal dengan versi ubah');
+
+-- Reimburse (a) lalu pindah (b) atas talangan yang sama: pindah menunggu kunci talangan lalu melihat
+-- reimburse yang baru commit. Sebaliknya, reimburse sesudah pindah melihat talangan sudah batal.
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 10, null, null, null, true)$$,
+  :'np', :'acc_b'))::jsonb) ->> 'entry_id' as tal2 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.create_reimbursement(gen_random_uuid(), %L, %L, 3)$$, :'tal2', :'acc_b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$$, :'tal2', :'sh', :'acc_s'));
+select ok(tests.peer_blocked('b'), 'pindah talangan menunggu reimburse paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*reimbursement_exists', 'pindah sesudah reimburse commit = reimbursement_exists');
+select tests.peer_exec('b', 'rollback');
+select (tests.peer_val('a', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 10, null, null, null, true)$$,
+  :'np', :'acc_b'))::jsonb) ->> 'entry_id' as tal3 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$$, :'tal3', :'sh', :'acc_s'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_reimbursement(gen_random_uuid(), %L, %L, 3)$$, :'tal3', :'acc_b'));
+select ok(tests.peer_blocked('b'), 'reimburse menunggu pindah talangan paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*not_reimbursable', 'reimburse sesudah talangan dipindah = not_reimbursable');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select (select count(*) from app.entries where reimburses_entry_id = %1$L) || ' '
+  || (select (moved_to_entry_id is not null and voided_at is not null)::text from app.entries where id = %1$L) || ' '
+  || (select count(*) from app.entries where reimburses_entry_id = %2$L and voided_at is null)$$, :'tal3', :'tal2')),
+  '0 true 1', 'talangan dipindah tanpa reimburse; talangan lain tetap dengan reimburse-nya');
 
 select tests.peer_close('a');
 select tests.peer_close('b');
