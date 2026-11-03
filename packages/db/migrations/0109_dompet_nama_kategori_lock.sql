@@ -12,6 +12,10 @@
 -- Data lama dengan nama ganda membuat create unique index gagal dengan 23505 yang memuat nama di
 -- detail. Ditolak lebih dulu dengan DK500 tanpa nama; detail = jumlah grup ganda. Cek sebelum rilis:
 -- docs/superpowers/handoff/cek-duplikat-dompet-0109.sh.
+-- Tabel dikunci SHARE (menolak tulis, baca tetap jalan) sampai akhir transaksi migrasi (dbmate
+-- membungkus berkas ini dalam satu transaksi; tanpa transaction:false), sehingga tidak ada dompet
+-- baru yang lolos di antara cek dan create unique index.
+lock table app.accounts in share mode;
 do $$
 declare v_n int;
 begin
