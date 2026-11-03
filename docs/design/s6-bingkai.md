@@ -130,7 +130,7 @@ Rujukan handoff: D1 (detail), D2 (AlertDialog Batalkan), D3, D4 (toast dibatalka
 ### S6-B1 · Tidak ada pengeluaran hari ini
 
 - **Tujuan:** menandai hari ini sebagai tercatat tanpa pengeluaran (`api.mark_no_spend_day`, tanggal = `app.today()` WIB server).
-- **Tata letak:** tombol sekunder lebar penuh, tinggi 44, ikon `check` bold 18, tepat di bawah kartu utama (AmanCard). Tampil hanya bila hari ini belum ada pengeluaran hidup di ruang ini dan hari belum ditandai. Sesudah ditekan: tombol diganti baris status (tinggi 44, ikon `check-circle` fill `accent-text` 18 + teks 14/600 `text-soft`). Laptop: di kolom kiri di bawah AmanCard. Mode prototipe: tidak tampil di data demo (handoff).
+- **Tata letak:** tombol sekunder lebar penuh, tinggi 44, ikon `check` bold 18, tepat di bawah kartu utama (AmanCard). Tampil hanya bila hari ini belum ada pengeluaran hidup di ruang ini dan hari belum ditandai; hanya `expense` yang dihitung (pemasukan, transfer, saldo awal, cocokkan saldo tidak). Bila ada pengeluaran hari ini, tombol maupun baris status tidak tampil walau hari sudah ditandai (ruling review akhir S6). Sesudah ditekan: tombol diganti baris status (tinggi 44, ikon `check-circle` fill `accent-text` 18 + teks 14/600 `text-soft`). Laptop: di kolom kiri di bawah AmanCard. Mode prototipe: tidak tampil di data demo (handoff).
 - **Komponen:** `Button` sekunder, baris status.
 - **Token:** `border`, `text`, `accent-text`, `text-soft`.
 - **Salinan:** `Tidak ada pengeluaran hari ini`; sesudah: `Hari ini tercatat tanpa pengeluaran.`

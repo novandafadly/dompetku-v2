@@ -40,16 +40,16 @@ export function BerandaFrames() {
           }}
           showObligations={false}
         />
-        <NoSpendButton hasEntry={false} noSpendMarked={false} onMark={ok} />
+        <NoSpendButton hasExpense={false} noSpendMarked={false} onMark={ok} />
       </Frame>
       <Frame id="b1-busy" title="S6-B1 · menunggu server (tekan: tetap aria-busy)">
-        <NoSpendButton hasEntry={false} noSpendMarked={false} onMark={never} />
+        <NoSpendButton hasExpense={false} noSpendMarked={false} onMark={never} />
       </Frame>
       <Frame id="b1-fail" title="S6-B1 · gagal (tekan: galat role=alert)">
-        <NoSpendButton hasEntry={false} noSpendMarked={false} onMark={fail} />
+        <NoSpendButton hasExpense={false} noSpendMarked={false} onMark={fail} />
       </Frame>
       <Frame id="b1-done" title="S6-B1 · sudah ditandai">
-        <NoSpendButton hasEntry={false} noSpendMarked onMark={ok} />
+        <NoSpendButton hasExpense={false} noSpendMarked onMark={ok} />
       </Frame>
       <Frame id="kartu-negatif" title="Kartu nyata · negatif, nominal panjang (Bersama)">
         <SafeToSpendCard

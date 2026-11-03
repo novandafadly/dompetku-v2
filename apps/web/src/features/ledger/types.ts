@@ -77,7 +77,8 @@ export interface SafeToSpendVM {
 }
 
 export interface TodayStatusVM {
-  hasEntry: boolean;
+  /** Ada pengeluaran hidup hari ini (WIB server) di ruang ini; jenis lain tidak dihitung. */
+  hasExpense: boolean;
   noSpendMarked: boolean;
 }
 

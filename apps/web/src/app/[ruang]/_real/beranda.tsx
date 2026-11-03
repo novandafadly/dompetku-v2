@@ -135,7 +135,7 @@ export function BerandaReal({
         <div className="flex flex-col gap-3 tablet:gap-4">
           <SafeToSpendCard ruang={ruang} today={today} vm={data.safe} showObligations={false} />
           <NoSpendIsland
-            hasEntry={data.today.hasEntry}
+            hasExpense={data.today.hasExpense}
             noSpendMarked={data.today.noSpendMarked}
             onMark={markNoSpendDayAction.bind(null, ruang)}
           />

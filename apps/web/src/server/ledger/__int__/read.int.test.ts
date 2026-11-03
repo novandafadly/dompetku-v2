@@ -295,7 +295,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       }
       expect(all.accounts.map((a) => a.id)).toEqual([kas]);
       expect(all.trash.map((t) => t.entry.id)).toEqual([voided]);
-      expect(all.today).toEqual({ hasEntry: true, noSpendMarked: false });
+      expect(all.today).toEqual({ hasExpense: true, noSpendMarked: false });
       expect(all.entries.length).toBeGreaterThanOrEqual(4);
     }
 
@@ -345,7 +345,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
 
         const acc = await wallet(at(okt), 100_000);
         const oktId = await expense(at(okt), acc, 25_000);
-        expect(await todayStatus(at(okt))).toEqual({ hasEntry: true, noSpendMarked: false });
+        expect(await todayStatus(at(okt))).toEqual({ hasExpense: true, noSpendMarked: false });
         const novId = await expense(at(nov), acc, 40_000);
 
         const oktober = await listEntries(nPribadi, { month: '2026-10' });
@@ -571,19 +571,20 @@ describe('loader baca ledger (N dan F bergabung)', () => {
   });
 
   describe('Beranda', () => {
-    it('todayStatus false/false → markNoSpendDay → {hasEntry:false, noSpendMarked:true}', async () => {
-      expect(await todayStatus(nBersama)).toEqual({ hasEntry: false, noSpendMarked: false });
+    it('todayStatus: hanya pengeluaran hidup hari ini yang dihitung; markNoSpendDay per ruang', async () => {
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: false, noSpendMarked: false });
       await markNoSpendDay(nBersama);
-      expect(await todayStatus(nBersama)).toEqual({ hasEntry: false, noSpendMarked: true });
-      expect(await todayStatus(fBersama)).toEqual({ hasEntry: false, noSpendMarked: true });
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: false, noSpendMarked: true });
+      expect(await todayStatus(fBersama)).toEqual({ hasExpense: false, noSpendMarked: true });
       // Ruang lain tidak ikut tertandai.
-      expect(await todayStatus(nPribadi)).toEqual({ hasEntry: false, noSpendMarked: false });
+      expect(await todayStatus(nPribadi)).toEqual({ hasExpense: false, noSpendMarked: false });
 
       // Saldo awal dan cocokkan saldo bukan "mencatat hari ini".
       const kas = await wallet(nBersama, 100_000, 'Kas Rumah');
       await reconcile(ps.n.id, kas, 90_000);
-      expect(await todayStatus(nBersama)).toEqual({ hasEntry: false, noSpendMarked: true });
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: false, noSpendMarked: true });
 
+      // Pemasukan dan transfer bukan pengeluaran: tombol tetap boleh tampil (ruling review akhir).
       await createEntry(nBersama, {
         clientId: randomUUID(),
         accountId: kas,
@@ -591,7 +592,21 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         amount: 50_000,
         categoryId: await categoryOf(nBersama.spaceId, 'income'),
       });
-      expect(await todayStatus(nBersama)).toEqual({ hasEntry: true, noSpendMarked: true });
+      const kas2 = await wallet(nBersama, 0, 'Kas Cadangan');
+      await createTransfer(nBersama, {
+        clientId: randomUUID(),
+        fromAccountId: kas,
+        toAccountId: kas2,
+        amount: 10_000,
+      });
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: false, noSpendMarked: true });
+
+      // Pengeluaran hidup hari ini: hasExpense, walau hari sudah ditandai (baris tidak dihapus).
+      const belanja = await expense(nBersama, kas, 20_000);
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: true, noSpendMarked: true });
+      // Pengeluaran dibatalkan tidak dihitung.
+      await voidEntry(nBersama, { clientId: randomUUID(), entryId: belanja, expectedVersion: 1 });
+      expect(await todayStatus(nBersama)).toEqual({ hasExpense: false, noSpendMarked: true });
     });
 
     it('monthSummary memetakan api.month_summary', async () => {

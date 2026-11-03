@@ -8,7 +8,9 @@ import { focusRing } from '@/components/ui/styles';
 
 /**
  * S6-B1 "Tidak ada pengeluaran hari ini" (docs/design/s6-bingkai.md). Tombol sekunder lebar
- * penuh 44 px, hanya bila hari ini belum ada catatan di ruang ini dan hari belum ditandai.
+ * penuh 44 px, hanya bila hari ini belum ada pengeluaran hidup di ruang ini dan hari belum
+ * ditandai. Ada pengeluaran hari ini = tidak merender apa pun (tombol maupun status tanda), walau
+ * hari sudah ditandai; fase lokal direset agar "done" tidak bertahan melewati refresh.
  * Sesudah sukses tombol diganti baris status (`role="status"`, `tabindex="-1"`) yang menerima
  * fokus agar fokus tidak jatuh ke `<body>`. Selama memanggil server: `aria-busy` +
  * `aria-disabled` (bukan `disabled`, fokus tetap di tombol); klik ulang diabaikan.
@@ -19,11 +21,12 @@ const DONE = 'Hari ini tercatat tanpa pengeluaran.';
 const FAILED = 'Belum bisa ditandai. Periksa koneksi lalu coba lagi.';
 
 export function NoSpendButton({
-  hasEntry,
+  hasExpense,
   noSpendMarked,
   onMark,
 }: {
-  hasEntry: boolean;
+  /** Ada pengeluaran hidup hari ini di ruang ini (server, WIB). */
+  hasExpense: boolean;
   noSpendMarked: boolean;
   /**
    * Tandai hari ini di server (Server Action terikat ruang, boleh dikirim dari page server).
@@ -42,6 +45,10 @@ export function NoSpendButton({
     statusRef.current?.focus();
   }, [phase]);
 
+  // Pengeluaran tercatat sesudah ditandai (refresh mempertahankan state klien): reset fase.
+  if (hasExpense && phase !== 'idle') setPhase('idle');
+
+  if (hasExpense) return null;
   if (phase === 'done' || noSpendMarked) {
     return (
       <p
@@ -55,8 +62,6 @@ export function NoSpendButton({
       </p>
     );
   }
-  if (hasEntry) return null;
-
   const busy = phase === 'busy';
   const mark = async () => {
     if (busy) return;

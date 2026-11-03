@@ -222,6 +222,17 @@ test('Tambah dompet lalu Catat ≤ 3 ketukan dari Beranda, Transaksi, Dompet di 
     { kind: 'personal', n: '3' },
     { kind: 'shared', n: '3' },
   ]);
+  // Pribadi sudah ditandai tanpa pengeluaran (tes sebelumnya) lalu ada pengeluaran hari ini:
+  // tombol dan status tanda tidak tampil; baris no_spend_days tetap ada.
+  await page.goto('/pribadi/beranda');
+  await expect(page.getByTestId('balance-card')).toBeVisible();
+  await expect(page.getByText('Hari ini tercatat tanpa pengeluaran.')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toHaveCount(0);
+  const marked = await adminQuery<{ n: string }>(
+    `select count(*)::text as n from app.no_spend_days where space_id = $1`,
+    [await spaceId('personal')],
+  );
+  expect(marked[0]?.n).toBe('1');
 });
 
 test('event tanpa nominal', async ({ page }) => {

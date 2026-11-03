@@ -64,7 +64,7 @@ describe('loadBeranda (persona N)', () => {
       const data = await loadBeranda(await ctxOf(n, ruang));
       expect(data).toEqual({
         safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0 },
-        today: { hasEntry: false, noSpendMarked: false },
+        today: { hasExpense: false, noSpendMarked: false },
         hasOperasional: false,
         hasExpense: false,
         recent: [],
@@ -112,7 +112,7 @@ describe('loadBeranda (persona N)', () => {
       const p = await loadBeranda(pribadi);
       expect(p.hasOperasional).toBe(true);
       expect(p.hasExpense).toBe(true);
-      expect(p.today).toEqual({ hasEntry: true, noSpendMarked: false });
+      expect(p.today).toEqual({ hasExpense: true, noSpendMarked: false });
       expect(p.safe.operasional).toBe(20_000_000 - KANARI_RP);
       expect(p.safe.aman).toBe(20_000_000 - KANARI_RP);
       expect(p.recent.map((e) => e.id)).toContain(entryId);
@@ -129,7 +129,7 @@ describe('loadBeranda (persona N)', () => {
       expect(b).toMatchObject({
         hasOperasional: true,
         hasExpense: false,
-        today: { hasEntry: false, noSpendMarked: false },
+        today: { hasExpense: false, noSpendMarked: false },
         safe: { operasional: 1_000_000, aman: 1_000_000 },
         invite: false,
       });

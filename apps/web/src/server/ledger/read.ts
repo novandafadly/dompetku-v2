@@ -489,24 +489,26 @@ export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendVM> {
 }
 
 /**
- * Status hari ini (WIB server): ada entri hidup ruang ini dengan `occurred_on = app.today()`
- * berjenis pemasukan, pengeluaran, transfer, atau antar ruang, dan apakah hari ini ditandai tanpa
- * pengeluaran. Saldo awal (dompet baru) dan cocokkan saldo bukan "mencatat hari ini".
+ * Status hari ini (WIB server): ada pengeluaran hidup ruang ini dengan `occurred_on = app.today()`,
+ * dan apakah hari ini ditandai tanpa pengeluaran. Hanya `expense` yang dihitung (ruling review
+ * akhir S6): pemasukan, transfer, antar ruang, saldo awal, dan cocokkan saldo tidak menyembunyikan
+ * tombol "Tidak ada pengeluaran hari ini". Baris `no_spend_days` tidak pernah dihapus; UI yang
+ * menyembunyikan status tanda bila ada pengeluaran.
  */
 export async function todayStatus(ctx: LedgerCtx): Promise<TodayStatusVM> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{ has_entry: boolean; no_spend: boolean }>(
+    const { rows } = await c.query<{ has_expense: boolean; no_spend: boolean }>(
       `select exists (select 1 from app.entries e
                        where e.space_id = $1 and e.voided_at is null
                          and e.occurred_on = app.today()
-                         and e.kind in ('income', 'expense', 'transfer', 'space_transfer'))
-                as has_entry,
+                         and e.kind = 'expense')
+                as has_expense,
               exists (select 1 from app.no_spend_days d
                        where d.space_id = $1 and d.on_date = app.today()) as no_spend`,
       [ctx.spaceId],
     );
     const r = rows[0];
-    return { hasEntry: r?.has_entry === true, noSpendMarked: r?.no_spend === true };
+    return { hasExpense: r?.has_expense === true, noSpendMarked: r?.no_spend === true };
   });
 }
 
