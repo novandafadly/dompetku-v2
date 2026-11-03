@@ -21,6 +21,9 @@ import { withLedger } from './retry';
  * `ctx.spaceId`, termasuk untuk fungsi yang tidak menerima `p_space_id` (ubah/batal/pulihkan
  * entri, ubah/arsip kategori). Bila tidak, `NotInSpaceError` (DK404 → `not_found`): dompet atau
  * entri Pribadi tidak bisa dipakai dari rute Bersama walaupun user anggota kedua ruang.
+ * Fungsi antar ruang (transfer antar ruang, pindah ruang) menerima `toSpaceId` (uuid yang sudah
+ * di-resolve server dari slug ruang, bukan dari klien): baris ruang tujuan wajib berada di
+ * `toSpaceId`, dan `toSpaceId` ≠ `ctx.spaceId` (Zod).
  */
 
 export interface LedgerCtx {
@@ -59,6 +62,8 @@ export const createEntrySchema = z.object({
   categoryId: id,
   occurredOn: isoDate.optional(),
   description: description.optional(),
+  /** Talangan kantor: hanya pengeluaran Pribadi (DB: `reimbursable_personal_expense_only`). */
+  reimbursable: z.boolean().optional(),
   allowNegative: z.boolean().optional(),
 });
 
@@ -86,6 +91,51 @@ export const updateEntrySchema = z.object({
   reimbursable: z.boolean(),
   allowNegative: z.boolean().optional(),
 });
+
+/** Biaya transfer (admin bank), 0 = tanpa biaya; batas sama dengan `p_fee` di DB. */
+const fee = z
+  .number()
+  .int()
+  .min(0)
+  .max(10 ** 13);
+
+/** Transfer antar ruang (S7): ruang tujuan eksplisit dan berbeda dari ruang konteks. */
+export const createSpaceTransferSchema = z.object({
+  clientId: id,
+  fromAccountId: id,
+  toSpaceId: id,
+  toAccountId: id,
+  amount,
+  fee,
+  occurredOn: isoDate.optional(),
+  description: description.optional(),
+  sharedNote: description.optional(),
+  allowNegative: z.boolean(),
+});
+
+export const moveEntrySchema = z.object({
+  clientId: id,
+  entryId: id,
+  expectedVersion: version,
+  toSpaceId: id,
+  accountId: id,
+  categoryId: id,
+  keepDescription: z.boolean().optional(),
+  allowNegative: z.boolean().optional(),
+});
+
+export const reconcileBalanceSchema = z.object({
+  clientId: id,
+  accountId: id,
+  /** Saldo nyata; boleh negatif (batas `p_target_balance` di DB). */
+  actualBalance: z
+    .number()
+    .int()
+    .min(-(10 ** 13))
+    .max(10 ** 13),
+});
+
+export const archiveAccountSchema = z.object({ accountId: id });
 
 export const voidEntrySchema = z.object({ clientId: id, entryId: id, expectedVersion: version });
 
@@ -127,7 +177,14 @@ const entryResult = z.object({
   replayed: z.boolean(),
   warnings: z.array(z.string()),
 });
+const spaceTransferResult = entryResult.extend({
+  linked_entry_id: z.uuid(),
+  link_id: z.uuid(),
+});
+/** Cocokkan saldo: `entry_id` null bila selisih 0 (tanpa entri). */
+const reconcileResult = z.object({ entry_id: z.uuid().nullable(), replayed: z.boolean() });
 const accountResult = z.object({ account_id: z.uuid() });
+const archiveAccountResult = z.object({ account_id: z.uuid(), archived: z.boolean() });
 const categoryResult = z.object({ category_id: z.uuid() });
 const archiveResult = z.object({ category_id: z.uuid(), affected: z.number().int().min(0) });
 
@@ -144,8 +201,11 @@ const IN_SPACE_SQL: Record<Table, string> = {
     'select count(*)::int as n from app.categories where id = any($1::uuid[]) and space_id = $2',
 };
 
-/** Semua `ids` terlihat (RLS member_read) dan berada di ruang konteks; selain itu DK404. */
-async function assertInSpace(
+/**
+ * Semua `ids` terlihat (RLS member_read) dan berada di ruang `spaceId`; selain itu DK404.
+ * Diekspor untuk wrapper lain di `server/ledger` (talangan).
+ */
+export async function assertInSpace(
   c: pg.PoolClient,
   table: Table,
   ids: string[],
@@ -159,8 +219,9 @@ async function assertInSpace(
 /**
  * Satu panggilan `api.*` di satu transaksi ruang. `pre` = pemeriksaan ruang sebelum panggilan.
  * `fn` withLedger bisa berjalan hingga 4 kali: hanya kerja DB di dalamnya.
+ * Diekspor untuk wrapper lain di `server/ledger` (talangan).
  */
-async function callApi<S extends z.ZodType>(
+export async function callApi<S extends z.ZodType>(
   ctx: LedgerCtx,
   pre: ((c: pg.PoolClient) => Promise<void>) | null,
   sql: string,
@@ -183,6 +244,7 @@ export interface CreateEntryInput {
   categoryId: string;
   occurredOn?: IsoDate | undefined;
   description?: string | undefined;
+  reimbursable?: boolean | undefined;
   allowNegative?: boolean | undefined;
 }
 
@@ -197,7 +259,7 @@ export async function createEntry(
     `select api.create_entry(
        p_client_id => $1, p_space_id => $2, p_account_id => $3, p_kind => $4::app.entry_kind,
        p_amount => $5::bigint, p_category_id => $6, p_occurred_on => $7::date,
-       p_description => $8, p_allow_negative => $9) as r`,
+       p_description => $8, p_reimbursable => $9, p_allow_negative => $10) as r`,
     [
       v.clientId,
       ctx.spaceId,
@@ -207,6 +269,7 @@ export async function createEntry(
       v.categoryId,
       v.occurredOn ?? null,
       v.description ?? null,
+      v.reimbursable ?? false,
       v.allowNegative ?? false,
     ],
     entryResult,
@@ -250,6 +313,73 @@ export async function createTransfer(
     entryResult,
   );
   return { entryId: r.entry_id, version: r.version, replayed: r.replayed };
+}
+
+export interface CreateSpaceTransferInput {
+  clientId: string;
+  fromAccountId: string;
+  toSpaceId: string;
+  toAccountId: string;
+  amount: Rupiah;
+  fee: Rupiah;
+  occurredOn?: IsoDate | undefined;
+  description?: string | undefined;
+  sharedNote?: string | undefined;
+  allowNegative: boolean;
+}
+
+/**
+ * Transfer antar ruang (S7, `kind = space_transfer`): `ctx.spaceId` = ruang sumber, dompet
+ * sumber di ruang konteks, dompet tujuan di `toSpaceId` (user wajib anggota keduanya: dompet
+ * ruang yang bukan miliknya tidak terlihat, jadi DK404). DB memisahkan privasi: `description`
+ * hanya di kaki Pribadi, `sharedNote` hanya di kaki Bersama, biaya hanya di kaki sumber.
+ * Hasil membawa id kedua kaki; pemanggil adalah pencatat dan anggota kedua ruang.
+ */
+export async function createSpaceTransfer(
+  ctx: LedgerCtx,
+  i: CreateSpaceTransferInput,
+): Promise<{
+  entryId: string;
+  linkedEntryId: string;
+  linkId: string;
+  version: number;
+  replayed: boolean;
+}> {
+  const v = createSpaceTransferSchema
+    .refine((x) => x.toSpaceId !== ctx.spaceId, { path: ['toSpaceId'] })
+    .parse(i);
+  const r = await callApi(
+    ctx,
+    async (c) => {
+      await c.query('select app.assert_member($1)', [v.toSpaceId]);
+      await assertInSpace(c, 'accounts', [v.fromAccountId], ctx.spaceId);
+      await assertInSpace(c, 'accounts', [v.toAccountId], v.toSpaceId);
+    },
+    `select api.create_transfer(
+       p_client_id => $1, p_space_id => $2, p_from_account => $3, p_to_account => $4,
+       p_amount => $5::bigint, p_fee => $6::bigint, p_occurred_on => $7::date,
+       p_description => $8, p_shared_note => $9, p_allow_negative => $10) as r`,
+    [
+      v.clientId,
+      ctx.spaceId,
+      v.fromAccountId,
+      v.toAccountId,
+      v.amount,
+      v.fee,
+      v.occurredOn ?? null,
+      v.description ?? null,
+      v.sharedNote ?? null,
+      v.allowNegative,
+    ],
+    spaceTransferResult,
+  );
+  return {
+    entryId: r.entry_id,
+    linkedEntryId: r.linked_entry_id,
+    linkId: r.link_id,
+    version: r.version,
+    replayed: r.replayed,
+  };
 }
 
 export interface UpdateEntryInput {
@@ -339,6 +469,58 @@ export async function restoreEntry(
   return { version: r.version };
 }
 
+export interface MoveEntryInput {
+  clientId: string;
+  entryId: string;
+  expectedVersion: number;
+  toSpaceId: string;
+  accountId: string;
+  categoryId: string;
+  /** Tujuan Bersama: deskripsi ikut hanya bila `true` (tujuan Pribadi selalu ikut). */
+  keepDescription?: boolean | undefined;
+  allowNegative?: boolean | undefined;
+}
+
+/**
+ * "Pindahkan ke ruang lain" (S7): entri income/expense di ruang konteks dibatalkan (ditandai
+ * dipindah, tidak bisa dipulihkan: `entry_moved`) dan dibuat ulang di `toSpaceId` dengan dompet
+ * dan kategori ruang tujuan. Hanya pencatat (`not_creator`). Id entri asal yang dikembalikan DB
+ * (`moved_from_entry_id`) dibuang: pemanggil sudah memegangnya.
+ */
+export async function moveEntryToSpace(
+  ctx: LedgerCtx,
+  i: MoveEntryInput,
+): Promise<{ entryId: string; version: number; replayed: boolean }> {
+  const v = moveEntrySchema
+    .refine((x) => x.toSpaceId !== ctx.spaceId, { path: ['toSpaceId'] })
+    .parse(i);
+  const r = await callApi(
+    ctx,
+    async (c) => {
+      await c.query('select app.assert_member($1)', [v.toSpaceId]);
+      await assertInSpace(c, 'entries', [v.entryId], ctx.spaceId);
+      await assertInSpace(c, 'accounts', [v.accountId], v.toSpaceId);
+      await assertInSpace(c, 'categories', [v.categoryId], v.toSpaceId);
+    },
+    `select api.move_entry_to_space(
+       p_client_id => $1, p_entry_id => $2, p_expected_version => $3::int,
+       p_to_space_id => $4, p_account_id => $5, p_category_id => $6,
+       p_keep_description => $7, p_allow_negative => $8) as r`,
+    [
+      v.clientId,
+      v.entryId,
+      v.expectedVersion,
+      v.toSpaceId,
+      v.accountId,
+      v.categoryId,
+      v.keepDescription ?? false,
+      v.allowNegative ?? false,
+    ],
+    entryResult,
+  );
+  return { entryId: r.entry_id, version: r.version, replayed: r.replayed };
+}
+
 // ===== Dompet =====
 export interface CreateAccountInput {
   clientId: string;
@@ -364,6 +546,63 @@ export async function createAccount(
     accountResult,
   );
   return { accountId: r.account_id };
+}
+
+export interface ReconcileBalanceInput {
+  clientId: string;
+  accountId: string;
+  actualBalance: Rupiah;
+}
+
+/**
+ * Cocokkan saldo: DB menghitung selisih saldo nyata − saldo tercatat dan mencatat satu entri
+ * `adjustment` bertanggal `app.today()` (WIB server; DB tidak menerima tanggal lain). Selisih 0 =
+ * tanpa entri (`entryId: null`). `difference` dibaca dari baris utama entri itu di transaksi yang
+ * sama, jadi replay mengembalikan selisih yang sama dengan panggilan pertama.
+ */
+export async function reconcileBalance(
+  ctx: LedgerCtx,
+  i: ReconcileBalanceInput,
+): Promise<{ entryId: string | null; difference: number; replayed: boolean }> {
+  const v = reconcileBalanceSchema.parse(i);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    await assertInSpace(c, 'accounts', [v.accountId], ctx.spaceId);
+    const { rows } = await c.query<{ r: unknown }>(
+      `select api.reconcile_balance(
+         p_client_id => $1, p_account_id => $2, p_target_balance => $3::bigint) as r`,
+      [v.clientId, v.accountId, v.actualBalance],
+    );
+    const r = reconcileResult.parse(rows[0]?.r);
+    if (r.entry_id === null) return { entryId: null, difference: 0, replayed: r.replayed };
+    const line = await c.query<{ amount: number }>(
+      `select l.amount from app.entry_lines l
+        where l.space_id = $1 and l.entry_id = $2 and l.role = 'main'`,
+      [ctx.spaceId, r.entry_id],
+    );
+    const difference = line.rows[0]?.amount;
+    // Entri adjustment sudah dihapus permanen (replay sesudah purge): tidak mengarang selisih.
+    if (difference === undefined) throw new Error('selisih cocokkan saldo tidak terbaca');
+    return { entryId: r.entry_id, difference, replayed: r.replayed };
+  });
+}
+
+/**
+ * Arsip dompet: hanya bila saldo 0 (`balance_not_zero`); idempoten secara alami (dompet yang
+ * sudah terarsip = `archived: true` lagi).
+ */
+export async function archiveAccount(
+  ctx: LedgerCtx,
+  accountId: string,
+): Promise<{ archived: boolean }> {
+  const v = archiveAccountSchema.parse({ accountId });
+  const r = await callApi(
+    ctx,
+    (c) => assertInSpace(c, 'accounts', [v.accountId], ctx.spaceId),
+    'select api.archive_account(p_account_id => $1) as r',
+    [v.accountId],
+    archiveAccountResult,
+  );
+  return { archived: r.archived };
 }
 
 // ===== Kategori =====

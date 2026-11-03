@@ -4,13 +4,18 @@ import { ZodError } from 'zod';
 import { withUser } from '../../db';
 import { toLedgerError } from '../errors';
 import { recordProductEvent } from '../events';
+import { createReimbursement, openReimbursables } from '../reimburse';
 import {
+  archiveAccount,
   archiveCategory,
   createAccount,
   createCategory,
   createEntry,
+  createSpaceTransfer,
   createTransfer,
   markNoSpendDay,
+  moveEntryToSpace,
+  reconcileBalance,
   restoreEntry,
   updateCategory,
   updateEntry,
@@ -88,11 +93,16 @@ async function categoryOf(spaceId: string, type: 'income' | 'expense'): Promise<
   return id;
 }
 
-async function wallet(ctx: LedgerCtx, openingBalance: number, name = 'BCA'): Promise<string> {
+async function wallet(
+  ctx: LedgerCtx,
+  openingBalance: number,
+  name = 'BCA',
+  pocket: 'operasional' | 'tabungan' | 'kantor' = 'operasional',
+): Promise<string> {
   const { accountId } = await createAccount(ctx, {
     clientId: randomUUID(),
     name,
-    pocket: 'operasional',
+    pocket,
     walletType: 'bank',
     openingBalance,
   });
@@ -653,6 +663,728 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
         return r.rowCount;
       });
       expect(n).toBe(0);
+    });
+  });
+});
+
+describe('wrapper S7 (N, F bergabung, Luar)', () => {
+  let ps: Personas;
+  let luar: Persona;
+  let nPribadi: LedgerCtx;
+  let nBersama: LedgerCtx;
+  let fPribadi: LedgerCtx;
+  let fBersama: LedgerCtx;
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    ps = await seedPersonas(h, { farida: 'bergabung', luar: true });
+    const f = must(ps.f);
+    luar = must(ps.luar);
+    const shared = await spaceIdOf(h, ps.n.id, 'shared');
+    nPribadi = {
+      pools: h.pools,
+      userId: ps.n.id,
+      spaceId: await spaceIdOf(h, ps.n.id, 'personal'),
+    };
+    nBersama = { pools: h.pools, userId: ps.n.id, spaceId: shared };
+    fPribadi = { pools: h.pools, userId: f.id, spaceId: await spaceIdOf(h, f.id, 'personal') };
+    fBersama = { pools: h.pools, userId: f.id, spaceId: shared };
+  });
+
+  /** Talangan kantor: pengeluaran Pribadi reimbursable. */
+  async function talangan(ctx: LedgerCtx, accountId: string, amount: number): Promise<string> {
+    const { entryId } = await createEntry(ctx, {
+      clientId: randomUUID(),
+      accountId,
+      kind: 'expense',
+      amount,
+      categoryId: await categoryOf(ctx.spaceId, 'expense'),
+      description: 'hotel dinas',
+      reimbursable: true,
+    });
+    return entryId;
+  }
+
+  describe('createSpaceTransfer', () => {
+    it('setor Pribadi → Bersama dengan biaya: dua kaki bertaut, saldo, replay', async () => {
+      const bca = await wallet(nPribadi, 1_000_000, 'BCA');
+      const kas = await wallet(nBersama, 0, 'Kas Rumah');
+      const input = {
+        clientId: randomUUID(),
+        fromAccountId: bca,
+        toSpaceId: nBersama.spaceId,
+        toAccountId: kas,
+        amount: 400_000,
+        fee: 2_500,
+        description: 'setor gaji',
+        sharedNote: 'Setoran November',
+        allowNegative: false,
+      };
+
+      const first = await createSpaceTransfer(nPribadi, input);
+      expect(first).toEqual({
+        entryId: expect.stringMatching(UUID) as string,
+        linkedEntryId: expect.stringMatching(UUID) as string,
+        linkId: expect.stringMatching(UUID) as string,
+        version: 1,
+        replayed: false,
+      });
+      await expect(createSpaceTransfer(nPribadi, input)).resolves.toEqual({
+        ...first,
+        replayed: true,
+      });
+      expect([await balance(bca), await balance(kas)]).toEqual([597_500, 400_000]);
+
+      const { rows } = await h.admin.query<{
+        id: string;
+        space_id: string;
+        description: string | null;
+        shared_note: string | null;
+        direction: string;
+      }>(
+        `select id, space_id, description, shared_note, direction::text as direction
+           from app.entries where link_id = $1 order by direction`,
+        [first.linkId],
+      );
+      expect(rows).toEqual([
+        {
+          id: first.linkedEntryId,
+          space_id: nBersama.spaceId,
+          description: null,
+          shared_note: 'Setoran November',
+          direction: 'in',
+        },
+        {
+          id: first.entryId,
+          space_id: nPribadi.spaceId,
+          description: 'setor gaji',
+          shared_note: null,
+          direction: 'out',
+        },
+      ]);
+    });
+
+    it('ruang eksplisit: dompet sumber/tujuan di ruang lain, Pribadi pasangan, Luar = not_found', async () => {
+      const bca = await wallet(nPribadi, 1_000_000, 'BCA');
+      const kas = await wallet(nBersama, 1_000_000, 'Kas Rumah');
+      const bca2 = await wallet(nPribadi, 1_000_000, 'Dana');
+      const kas2 = await wallet(nBersama, 1_000_000, 'Tabungan Rumah');
+      const fBca = await wallet(fPribadi, 1_000_000, 'BCA F');
+      const base = {
+        clientId: randomUUID(),
+        fromAccountId: bca,
+        toSpaceId: nBersama.spaceId,
+        toAccountId: kas,
+        amount: 10_000,
+        fee: 0,
+        allowNegative: false,
+      };
+      const before = await count('app.entries');
+      const cases: [LedgerCtx, object][] = [
+        // Dompet sumber bukan di ruang konteks (dompet Bersama lewat konteks Pribadi N).
+        [nPribadi, { fromAccountId: kas2 }],
+        // Dompet sumber Pribadi pasangan.
+        [nPribadi, { fromAccountId: fBca }],
+        // Dompet tujuan bukan di ruang tujuan: tanpa cek wrapper, DB akan mencatat transfer
+        // satu ruang Pribadi walau pemanggil meminta antar ruang.
+        [nPribadi, { toAccountId: bca2 }],
+        // Ruang tujuan = Pribadi pasangan (N bukan anggota).
+        [nBersama, { fromAccountId: kas, toSpaceId: fPribadi.spaceId, toAccountId: fBca }],
+        // Luar: bukan anggota ruang sumber maupun tujuan.
+        [{ ...nPribadi, userId: luar.id }, {}],
+        [
+          { ...nBersama, userId: luar.id },
+          { fromAccountId: kas, toSpaceId: nPribadi.spaceId },
+        ],
+      ];
+      for (const [ctx, patch] of cases) {
+        expect(
+          await ledgerCode(createSpaceTransfer(ctx, { ...base, clientId: randomUUID(), ...patch })),
+        ).toEqual({ code: 'not_found' });
+      }
+      expect(await count('app.entries')).toBe(before);
+      expect(await Promise.all([bca, bca2, kas, kas2, fBca].map((a) => balance(a)))).toEqual([
+        1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000,
+      ]);
+    });
+
+    it('dompet kantor = cross_space_kantor; saldo kurang = saldo_negatif lalu simpan tetap', async () => {
+      const kantor = await wallet(nPribadi, 1_000_000, 'Kartu Kantor', 'kantor');
+      const tipis = await wallet(nPribadi, 5_000, 'Tunai');
+      const kas = await wallet(nBersama, 0, 'Kas Rumah');
+      const base = {
+        toSpaceId: nBersama.spaceId,
+        toAccountId: kas,
+        amount: 10_000,
+        fee: 0,
+        allowNegative: false,
+      };
+      expect(
+        await ledgerCode(
+          createSpaceTransfer(nPribadi, { ...base, clientId: randomUUID(), fromAccountId: kantor }),
+        ),
+      ).toEqual({ code: 'cross_space_kantor' });
+
+      const clientId = randomUUID();
+      expect(
+        await ledgerCode(
+          createSpaceTransfer(nPribadi, { ...base, clientId, fromAccountId: tipis }),
+        ),
+      ).toEqual({ code: 'saldo_negatif' });
+      const saved = await createSpaceTransfer(nPribadi, {
+        ...base,
+        clientId,
+        fromAccountId: tipis,
+        allowNegative: true,
+      });
+      expect(saved.replayed).toBe(false);
+      expect([await balance(tipis), await balance(kas)]).toEqual([-5_000, 10_000]);
+    });
+
+    it('Zod: ruang tujuan = ruang konteks, biaya negatif, catatan > 200 ditolak sebelum DB', async () => {
+      const connect = vi.spyOn(h.pools.app, 'connect');
+      const base = {
+        clientId: randomUUID(),
+        fromAccountId: randomUUID(),
+        toSpaceId: nBersama.spaceId,
+        toAccountId: randomUUID(),
+        amount: 10_000,
+        fee: 0,
+        allowNegative: false,
+      };
+      for (const patch of [
+        { toSpaceId: nPribadi.spaceId },
+        { toSpaceId: 'bukan-uuid' },
+        { fee: -1 },
+        { fee: 0.5 },
+        { sharedNote: 'x'.repeat(201) },
+      ]) {
+        expect(await failure(createSpaceTransfer(nPribadi, { ...base, ...patch }))).toBeInstanceOf(
+          ZodError,
+        );
+      }
+      expect(connect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reconcileBalance', () => {
+    it('selisih 0 = tanpa entri; naik/turun = entri adjustment bertanda; replay', async () => {
+      const bca = await wallet(nPribadi, 100_000, 'BCA');
+
+      const sama = await reconcileBalance(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        actualBalance: 100_000,
+      });
+      expect(sama).toEqual({ entryId: null, difference: 0, replayed: false });
+      expect(await count(`app.entries where kind = 'adjustment'`)).toBe(0);
+
+      const turunInput = { clientId: randomUUID(), accountId: bca, actualBalance: 92_500 };
+      const turun = await reconcileBalance(nPribadi, turunInput);
+      expect(turun).toEqual({
+        entryId: expect.stringMatching(UUID) as string,
+        difference: -7_500,
+        replayed: false,
+      });
+      await expect(reconcileBalance(nPribadi, turunInput)).resolves.toEqual({
+        ...turun,
+        replayed: true,
+      });
+      expect(await balance(bca)).toBe(92_500);
+
+      const naik = await reconcileBalance(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        actualBalance: 100_000,
+      });
+      expect(naik.difference).toBe(7_500);
+      expect(await balance(bca)).toBe(100_000);
+      expect(await count(`app.entries where kind = 'adjustment'`)).toBe(2);
+    });
+
+    it('dompet Pribadi dari konteks Bersama dan Luar = not_found', async () => {
+      const bca = await wallet(nPribadi, 100_000, 'BCA');
+      for (const ctx of [nBersama, fBersama, { ...nPribadi, userId: luar.id }]) {
+        expect(
+          await ledgerCode(
+            reconcileBalance(ctx, { clientId: randomUUID(), accountId: bca, actualBalance: 0 }),
+          ),
+        ).toEqual({ code: 'not_found' });
+      }
+      expect(await balance(bca)).toBe(100_000);
+    });
+  });
+
+  describe('dompet: arsip dan nama unik', () => {
+    it('arsip saldo ≠ 0 = balance_not_zero; saldo 0 = archived, diulang tetap archived', async () => {
+      const isi = await wallet(nPribadi, 10_000, 'BCA');
+      const kosong = await wallet(nPribadi, 0, 'Lama');
+      expect(await ledgerCode(archiveAccount(nPribadi, isi))).toEqual({
+        code: 'balance_not_zero',
+      });
+      await expect(archiveAccount(nPribadi, kosong)).resolves.toEqual({ archived: true });
+      await expect(archiveAccount(nPribadi, kosong)).resolves.toEqual({ archived: true });
+      expect(await count('app.accounts where archived_at is not null')).toBe(1);
+    });
+
+    it('arsip dompet ruang lain atau oleh Luar = not_found', async () => {
+      const kosong = await wallet(nPribadi, 0, 'Lama');
+      for (const ctx of [nBersama, fBersama, fPribadi, { ...nPribadi, userId: luar.id }]) {
+        expect(await ledgerCode(archiveAccount(ctx, kosong))).toEqual({ code: 'not_found' });
+      }
+      expect(await count('app.accounts where archived_at is not null')).toBe(0);
+    });
+
+    it('nama dompet ganda (beda huruf/spasi) = name_taken; sesudah arsip boleh dipakai lagi', async () => {
+      const lama = await wallet(nPribadi, 0, 'BCA');
+      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const err = await failure(wallet(nPribadi, 0, '  bca '));
+      expect(toLedgerError(err)).toEqual({ code: 'name_taken' });
+      expect(log).not.toHaveBeenCalled();
+      // Ruang lain boleh memakai nama yang sama.
+      await wallet(nBersama, 0, 'BCA');
+      await archiveAccount(nPribadi, lama);
+      await expect(wallet(nPribadi, 0, 'BCA')).resolves.toMatch(UUID);
+    });
+  });
+
+  describe('talangan dan reimburse', () => {
+    it('reimburse sebagian lalu lunas; openReimbursables; melebihi = reimbursement_exceeds', async () => {
+      const bca = await wallet(nPribadi, 1_000_000, 'BCA');
+      const t = await talangan(nPribadi, bca, 500_000);
+      expect(await openReimbursables(nPribadi)).toEqual([
+        {
+          entryId: t,
+          occurredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as string,
+          description: 'hotel dinas',
+          accountId: bca,
+          amount: 500_000,
+          reimbursed: 0,
+          remaining: 500_000,
+        },
+      ]);
+
+      const input = { clientId: randomUUID(), entryId: t, accountId: bca, amount: 300_000 };
+      const r1 = await createReimbursement(nPribadi, input);
+      expect(r1).toEqual({
+        entryId: expect.stringMatching(UUID) as string,
+        remaining: 200_000,
+        replayed: false,
+      });
+      expect((await openReimbursables(nPribadi))[0]).toMatchObject({
+        reimbursed: 300_000,
+        remaining: 200_000,
+      });
+
+      const r2 = await createReimbursement(nPribadi, {
+        clientId: randomUUID(),
+        entryId: t,
+        accountId: bca,
+        amount: 200_000,
+        description: 'transfer kantor',
+      });
+      expect(r2.remaining).toBe(0);
+      expect(await openReimbursables(nPribadi)).toEqual([]);
+      // Replay: sisa = nilai saat pertama dicatat (pemanggil membaca ulang openReimbursables).
+      await expect(createReimbursement(nPribadi, input)).resolves.toEqual({
+        ...r1,
+        replayed: true,
+      });
+      expect(
+        await ledgerCode(
+          createReimbursement(nPribadi, {
+            clientId: randomUUID(),
+            entryId: t,
+            accountId: bca,
+            amount: 1,
+          }),
+        ),
+      ).toEqual({ code: 'reimbursement_exceeds' });
+      expect(await balance(bca)).toBe(1_000_000);
+    });
+
+    it('bukan talangan = not_reimbursable; restore reimburse melebihi = reimbursement_exceeds', async () => {
+      const bca = await wallet(nPribadi, 1_000_000, 'BCA');
+      const biasa = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        kind: 'expense',
+        amount: 50_000,
+        categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+      });
+      expect(
+        await ledgerCode(
+          createReimbursement(nPribadi, {
+            clientId: randomUUID(),
+            entryId: biasa.entryId,
+            accountId: bca,
+            amount: 1_000,
+          }),
+        ),
+      ).toEqual({ code: 'not_reimbursable' });
+
+      const t = await talangan(nPribadi, bca, 100_000);
+      const r1 = await createReimbursement(nPribadi, {
+        clientId: randomUUID(),
+        entryId: t,
+        accountId: bca,
+        amount: 100_000,
+      });
+      await voidEntry(nPribadi, {
+        clientId: randomUUID(),
+        entryId: r1.entryId,
+        expectedVersion: 1,
+      });
+      await createReimbursement(nPribadi, {
+        clientId: randomUUID(),
+        entryId: t,
+        accountId: bca,
+        amount: 100_000,
+      });
+      expect(
+        await ledgerCode(
+          restoreEntry(nPribadi, {
+            clientId: randomUUID(),
+            entryId: r1.entryId,
+            expectedVersion: 2,
+          }),
+        ),
+      ).toEqual({ code: 'reimbursement_exceeds' });
+      // Talangan dengan reimburse hidup tidak bisa "Tidak diganti".
+      expect(
+        await ledgerCode(
+          updateEntry(nPribadi, {
+            clientId: randomUUID(),
+            entryId: t,
+            expectedVersion: 1,
+            accountId: bca,
+            amount: 100_000,
+            categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+            occurredOn: null,
+            description: 'hotel dinas',
+            reimbursable: false,
+          }),
+        ),
+      ).toEqual({ code: 'reimbursement_exists' });
+    });
+
+    it('ruang eksplisit: talangan/dompet ruang lain, F, Luar = not_found; openReimbursables per ruang', async () => {
+      const bca = await wallet(nPribadi, 1_000_000, 'BCA');
+      const kas = await wallet(nBersama, 1_000_000, 'Kas Rumah');
+      const t = await talangan(nPribadi, bca, 100_000);
+      const cases: [LedgerCtx, string][] = [
+        [nBersama, kas], // talangan Pribadi dari konteks Bersama
+        [nPribadi, kas], // dompet Bersama untuk talangan Pribadi
+        [fBersama, kas],
+        [fPribadi, bca],
+        [{ ...nPribadi, userId: luar.id }, bca],
+      ];
+      for (const [ctx, accountId] of cases) {
+        expect(
+          await ledgerCode(
+            createReimbursement(ctx, {
+              clientId: randomUUID(),
+              entryId: t,
+              accountId,
+              amount: 1_000,
+            }),
+          ),
+        ).toEqual({ code: 'not_found' });
+      }
+      expect(await count(`app.entries where kind = 'reimbursement'`)).toBe(0);
+      expect(await openReimbursables(nBersama)).toEqual([]);
+      expect(await openReimbursables(fPribadi)).toEqual([]);
+      expect(await ledgerCode(openReimbursables({ ...nPribadi, userId: luar.id }))).toEqual({
+        code: 'not_found',
+      });
+      expect(
+        await ledgerCode(openReimbursables({ ...fPribadi, spaceId: nPribadi.spaceId })),
+      ).toEqual({ code: 'not_found' });
+    });
+  });
+
+  describe('moveEntryToSpace', () => {
+    it('pindah Pribadi → Bersama: entri baru di tujuan, asal batal + entry_moved, deskripsi tidak ikut', async () => {
+      const bca = await wallet(nPribadi, 500_000, 'BCA');
+      const kas = await wallet(nBersama, 500_000, 'Kas Rumah');
+      const { entryId } = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        kind: 'expense',
+        amount: 80_000,
+        categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+        description: 'belanja pribadi',
+      });
+      const input = {
+        clientId: randomUUID(),
+        entryId,
+        expectedVersion: 1,
+        toSpaceId: nBersama.spaceId,
+        accountId: kas,
+        categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+      };
+
+      const moved = await moveEntryToSpace(nPribadi, input);
+      expect(moved).toEqual({
+        entryId: expect.stringMatching(UUID) as string,
+        version: 1,
+        replayed: false,
+      });
+      expect(moved.entryId).not.toBe(entryId);
+      await expect(moveEntryToSpace(nPribadi, input)).resolves.toEqual({
+        ...moved,
+        replayed: true,
+      });
+      expect([await balance(bca), await balance(kas)]).toEqual([500_000, 420_000]);
+      const { rows } = await h.admin.query<{ space_id: string; description: string | null }>(
+        'select space_id, description from app.entries where id = $1',
+        [moved.entryId],
+      );
+      expect(rows[0]).toEqual({ space_id: nBersama.spaceId, description: null });
+
+      expect(
+        await ledgerCode(
+          restoreEntry(nPribadi, { clientId: randomUUID(), entryId, expectedVersion: 2 }),
+        ),
+      ).toEqual({ code: 'entry_moved' });
+    });
+
+    it('keepDescription ikut ke Bersama; allowNegative melewati saldo_negatif', async () => {
+      const bca = await wallet(nPribadi, 500_000, 'BCA');
+      const kas = await wallet(nBersama, 0, 'Kas Rumah');
+      const { entryId } = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        kind: 'expense',
+        amount: 80_000,
+        categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+        description: 'galon',
+      });
+      const input = {
+        clientId: randomUUID(),
+        entryId,
+        expectedVersion: 1,
+        toSpaceId: nBersama.spaceId,
+        accountId: kas,
+        categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+        keepDescription: true,
+      };
+      expect(await ledgerCode(moveEntryToSpace(nPribadi, input))).toEqual({
+        code: 'saldo_negatif',
+      });
+      const moved = await moveEntryToSpace(nPribadi, { ...input, allowNegative: true });
+      const { rows } = await h.admin.query<{ description: string | null }>(
+        'select description from app.entries where id = $1',
+        [moved.entryId],
+      );
+      expect(rows[0]?.description).toBe('galon');
+      expect(await balance(kas)).toBe(-80_000);
+    });
+
+    it('bukan pencatat = not_creator; transfer = kind_not_movable; kantor = cross_space_kantor', async () => {
+      const kas = await wallet(nBersama, 500_000, 'Kas Rumah');
+      const fBca = await wallet(fPribadi, 500_000, 'BCA F');
+      const bca = await wallet(nPribadi, 500_000, 'BCA');
+      const kantor = await wallet(nPribadi, 500_000, 'Kartu Kantor', 'kantor');
+      const shared = await createEntry(fBersama, {
+        clientId: randomUUID(),
+        accountId: kas,
+        kind: 'expense',
+        amount: 10_000,
+        categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+      });
+      const pribadiCat = await categoryOf(nPribadi.spaceId, 'expense');
+      // N memindahkan catatan F di Bersama ke Pribadi N.
+      expect(
+        await ledgerCode(
+          moveEntryToSpace(nBersama, {
+            clientId: randomUUID(),
+            entryId: shared.entryId,
+            expectedVersion: 1,
+            toSpaceId: nPribadi.spaceId,
+            accountId: bca,
+            categoryId: pribadiCat,
+          }),
+        ),
+      ).toEqual({ code: 'not_creator' });
+
+      const tf = await createSpaceTransfer(nPribadi, {
+        clientId: randomUUID(),
+        fromAccountId: bca,
+        toSpaceId: nBersama.spaceId,
+        toAccountId: kas,
+        amount: 10_000,
+        fee: 0,
+        allowNegative: false,
+      });
+      expect(
+        await ledgerCode(
+          moveEntryToSpace(nBersama, {
+            clientId: randomUUID(),
+            entryId: tf.linkedEntryId,
+            expectedVersion: 1,
+            toSpaceId: nPribadi.spaceId,
+            accountId: bca,
+            categoryId: pribadiCat,
+          }),
+        ),
+      ).toEqual({ code: 'kind_not_movable' });
+
+      const dariKantor = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: kantor,
+        kind: 'expense',
+        amount: 10_000,
+        categoryId: pribadiCat,
+      });
+      expect(
+        await ledgerCode(
+          moveEntryToSpace(nPribadi, {
+            clientId: randomUUID(),
+            entryId: dariKantor.entryId,
+            expectedVersion: 1,
+            toSpaceId: nBersama.spaceId,
+            accountId: kas,
+            categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+          }),
+        ),
+      ).toEqual({ code: 'cross_space_kantor' });
+      expect(fBca).toMatch(UUID);
+    });
+
+    it('ruang eksplisit: entri/dompet/kategori di luar ruang, Pribadi pasangan, Luar = not_found', async () => {
+      const bca = await wallet(nPribadi, 500_000, 'BCA');
+      const kas = await wallet(nBersama, 500_000, 'Kas Rumah');
+      const fBca = await wallet(fPribadi, 500_000, 'BCA F');
+      const pribadiCat = await categoryOf(nPribadi.spaceId, 'expense');
+      const bersamaCat = await categoryOf(nBersama.spaceId, 'expense');
+      const fCat = await categoryOf(fPribadi.spaceId, 'expense');
+      const { entryId } = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        kind: 'expense',
+        amount: 10_000,
+        categoryId: pribadiCat,
+      });
+      const base = {
+        entryId,
+        expectedVersion: 1,
+        toSpaceId: nBersama.spaceId,
+        accountId: kas,
+        categoryId: bersamaCat,
+      };
+      const cases: [LedgerCtx, object][] = [
+        [nBersama, { toSpaceId: nPribadi.spaceId, accountId: bca, categoryId: pribadiCat }],
+        [nPribadi, { accountId: bca }],
+        [nPribadi, { categoryId: pribadiCat }],
+        [nPribadi, { toSpaceId: fPribadi.spaceId, accountId: fBca, categoryId: fCat }],
+        [{ ...nPribadi, userId: luar.id }, {}],
+        [fPribadi, { toSpaceId: nBersama.spaceId }],
+      ];
+      for (const [ctx, patch] of cases) {
+        expect(
+          await ledgerCode(moveEntryToSpace(ctx, { ...base, clientId: randomUUID(), ...patch })),
+        ).toEqual({ code: 'not_found' });
+      }
+      const { rows } = await h.admin.query<{ version: number; voided: boolean }>(
+        'select version, voided_at is not null as voided from app.entries where id = $1',
+        [entryId],
+      );
+      expect(rows[0]).toEqual({ version: 1, voided: false });
+      expect([await balance(bca), await balance(kas), await balance(fBca)]).toEqual([
+        490_000, 500_000, 500_000,
+      ]);
+    });
+  });
+
+  describe('utang S6: lintas ruang', () => {
+    it('restoreEntry entri ruang lain dengan ctx ruang sendiri = not_found', async () => {
+      const bca = await wallet(nPribadi, 100_000, 'BCA');
+      const kas = await wallet(nBersama, 100_000, 'Kas Rumah');
+      const pribadi = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: bca,
+        kind: 'expense',
+        amount: 10_000,
+        categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+      });
+      const bersama = await createEntry(fBersama, {
+        clientId: randomUUID(),
+        accountId: kas,
+        kind: 'expense',
+        amount: 10_000,
+        categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+      });
+      await voidEntry(nPribadi, {
+        clientId: randomUUID(),
+        entryId: pribadi.entryId,
+        expectedVersion: 1,
+      });
+      await voidEntry(fBersama, {
+        clientId: randomUUID(),
+        entryId: bersama.entryId,
+        expectedVersion: 1,
+      });
+
+      const cases: [LedgerCtx, string][] = [
+        [nBersama, pribadi.entryId], // N anggota Pribadinya, tetapi konteks Bersama
+        [fPribadi, bersama.entryId], // F anggota Bersama, tetapi konteks Pribadi F
+        [fBersama, pribadi.entryId],
+        [{ ...nPribadi, userId: luar.id }, pribadi.entryId],
+      ];
+      for (const [ctx, entryId] of cases) {
+        expect(
+          await ledgerCode(
+            restoreEntry(ctx, { clientId: randomUUID(), entryId, expectedVersion: 2 }),
+          ),
+        ).toEqual({ code: 'not_found' });
+      }
+      expect(
+        await count('app.entries where id = any($1) and voided_at is not null', [
+          [pribadi.entryId, bersama.entryId],
+        ]),
+      ).toBe(2);
+    });
+
+    it('createCategory/updateCategory dengan parentId kategori ruang asing = not_found', async () => {
+      const pribadiParent = await categoryOf(nPribadi.spaceId, 'expense');
+      const fParent = await categoryOf(fPribadi.spaceId, 'expense');
+      const { categoryId: bersamaChild } = await createCategory(nBersama, {
+        clientId: randomUUID(),
+        type: 'expense',
+        name: 'Galon',
+        icon: 'Coffee',
+      });
+      const before = await count('app.categories');
+      for (const parentId of [pribadiParent, fParent]) {
+        expect(
+          await ledgerCode(
+            createCategory(nBersama, {
+              clientId: randomUUID(),
+              type: 'expense',
+              name: 'Anak asing',
+              icon: 'Coffee',
+              parentId,
+            }),
+          ),
+        ).toEqual({ code: 'not_found' });
+        expect(
+          await ledgerCode(
+            updateCategory(nBersama, {
+              categoryId: bersamaChild,
+              name: 'Galon',
+              icon: 'Coffee',
+              parentId,
+            }),
+          ),
+        ).toEqual({ code: 'not_found' });
+      }
+      expect(await count('app.categories')).toBe(before);
+      const { rows } = await h.admin.query<{ parent_id: string | null }>(
+        'select parent_id from app.categories where id = $1',
+        [bersamaChild],
+      );
+      expect(rows[0]?.parent_id).toBeNull();
     });
   });
 });

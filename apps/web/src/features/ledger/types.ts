@@ -27,7 +27,14 @@ export interface CategoryVM {
 export interface EntryVM {
   id: string;
   version: number;
-  kind: 'income' | 'expense' | 'transfer' | 'opening_balance' | 'space_transfer' | 'adjustment';
+  kind:
+    | 'income'
+    | 'expense'
+    | 'transfer'
+    | 'opening_balance'
+    | 'space_transfer'
+    | 'adjustment'
+    | 'reimbursement';
   occurredOn: IsoDate;
   createdAt: string;
   createdBy: { id: string; name: string; initial: string };
@@ -45,6 +52,17 @@ export interface EntryVM {
   sharedNote?: string;
   /** Hanya pengeluaran Pribadi yang ditalangi (S7); `true` bila ya, tidak ada bila tidak. */
   reimbursable?: true;
+}
+
+/** Talangan hidup dengan sisa > 0 (`api.open_reimbursables`): nominal, Σ reimburse hidup, sisa. */
+export interface ReimbursableVM {
+  entryId: string;
+  occurredOn: IsoDate;
+  description: string | null;
+  accountId: string;
+  amount: Rupiah;
+  reimbursed: Rupiah;
+  remaining: Rupiah;
 }
 
 export interface HistoryVM {
@@ -92,6 +110,15 @@ export type LedgerErrorCode =
   | 'category_depth'
   | 'name_taken'
   | 'restore_window_closed'
+  | 'balance_not_zero'
+  | 'cross_space_not_allowed'
+  | 'cross_space_kantor'
+  | 'not_reimbursable'
+  | 'reimbursement_exceeds'
+  | 'reimbursement_exists'
+  | 'entry_moved'
+  | 'kind_not_movable'
+  | 'not_creator'
   | 'not_found'
   | 'invalid'
   | 'network'

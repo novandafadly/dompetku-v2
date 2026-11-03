@@ -10,6 +10,8 @@ export function entryTitleVM(e: EntryVM): string {
       return 'Cocokkan saldo';
     case 'transfer':
       return e.description ?? 'Pindah dompet';
+    case 'reimbursement':
+      return e.description ?? 'Reimburse talangan';
     case 'space_transfer':
       return (
         e.sharedNote ??
@@ -32,6 +34,8 @@ export function entryKindLabelVM(e: EntryVM): string {
       return 'Pindah dompet';
     case 'space_transfer':
       return 'Antar ruang';
+    case 'reimbursement':
+      return 'Reimburse';
     default:
       return e.categoryName ?? 'Tanpa kategori';
   }

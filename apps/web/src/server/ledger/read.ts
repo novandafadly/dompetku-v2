@@ -79,10 +79,11 @@ const ENTRY_KINDS = new Set<EntryVM['kind']>([
   'opening_balance',
   'space_transfer',
   'adjustment',
+  // S7: reimburse talangan (satu baris utama +nominal, seperti pemasukan).
+  'reimbursement',
 ]);
 
 function entryKind(kind: string): EntryVM['kind'] {
-  // `reimbursement` (talangan) belum punya VM dan belum bisa dibuat di S6.
   if (!ENTRY_KINDS.has(kind as EntryVM['kind'])) throw new Error('jenis entri tidak dikenal');
   return kind as EntryVM['kind'];
 }

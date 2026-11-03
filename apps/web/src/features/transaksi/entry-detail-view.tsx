@@ -15,6 +15,7 @@ const KIND_NAME: Record<EntryVM['kind'], string> = {
   opening_balance: 'Saldo awal',
   space_transfer: 'Antar ruang',
   adjustment: 'Cocokkan saldo',
+  reimbursement: 'Reimburse',
 };
 
 /** Dompet entri: transfer satu ruang = "BCA → Tunai". */
