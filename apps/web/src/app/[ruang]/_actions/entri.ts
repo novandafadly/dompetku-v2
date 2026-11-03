@@ -39,7 +39,7 @@ export async function updateEntryAction(
 
 /**
  * Batalkan entri (masuk Sampah 90 hari); juga dipakai "Urungkan" sesudah simpan. Transfer antar
- * ruang: id kaki di ruang argumen, DB membatalkan pasangannya (hanya pencatat: `not_creator`).
+ * ruang: id kaki di ruang argumen, DB membatalkan pasangannya (bukan pencatat: `not_found`, R25).
  */
 export async function voidEntryAction(
   ruang: unknown,
