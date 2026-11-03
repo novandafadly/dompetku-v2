@@ -51,3 +51,11 @@ Pemeriksaan sendiri terhadap DESIGN.md dan bingkai: token dan radius sama (chip 
 - Petunjuk Talangan terpotong ellipsis di mode keyboard 360 (`Tercatat di Menu…`), sesuai bingkai (teks lengkap di `aria-describedby`); reviewer desain boleh menilai apakah salinan perlu dipendekkan.
 - Tidak ada e2e mode nyata untuk transfer antar ruang/talangan di Catat (milik Task 17); tes nyata hanya tingkat unit sumber dan action yang di-mock.
 - Dua proses `next-server` yatim (PID 7153, 7449) dan shell skrip controller sudah ada sebelum sesi ini; tidak disentuh.
+
+## Putaran perbaikan 1
+1. Petunjuk Talangan mode keyboard: versi pendek utuh `Tidak masuk hitungan pribadi.` (satu baris, `data-testid="talangan-hint"`), teks lengkap sr-only di elemen `aria-describedby`; di luar mode keyboard tetap teks lengkap. Salinan masuk `s7-bingkai.md` (S7-C2). e2e 360x640: `scrollWidth <= clientWidth`, tinggi <= 20 px, tinggi sheet tetap <= 356 dan tidak bertambah.
+2. Tombol footer `Pindah ke {Ruang}` disembunyikan selama `toRuang` terisi (muncul lagi bila tujuan satu ruang dipilih). Tes unit.
+3. `Ruang lain…` aria-label = `Ruang lain…, pilih dompet di ruang lain` (diawali teks terlihat). Tes unit memeriksa awalan.
+4. Judul dua ruang: gap dan spasi ganda dirapatkan (head dan nama ruang asal satu span, spasi hanya satu). Tes unit: tanpa `\s{2,}`.
+5. Tes fokus: sesudah memilih dompet fokus ke chip terpilih; sesudah Kembali tanpa memilih fokus ke `Ruang lain…`.
+Test-first: tes baru ditulis sesudah perbaikan; RED dibuktikan dengan stash 3 berkas sumber (8 gagal, 2 lolos dari 10), lalu hijau.

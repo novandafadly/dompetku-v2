@@ -58,6 +58,8 @@ const SpaceTargetPage = lazy(() => import('./space-target-page'));
 const TALANGAN_COPY = {
   label: 'Talangan kantor',
   hint: 'Tidak masuk hitungan pribadi. Tercatat di Menunggu reimburse.',
+  /** Mode keyboard: satu baris utuh; teks lengkap tetap terbaca lewat `aria-describedby`. */
+  hintShort: 'Tidak masuk hitungan pribadi.',
 } as const;
 
 const NOTE_MAX = 200;
@@ -441,18 +443,21 @@ function CatatSession({
         {saving ? CATAT_COPY.menyimpan : ''}
       </p>
       <div className="flex items-center gap-2">
-        <Button
-          variant="text"
-          size="sm"
-          className="px-2.5"
-          aria-disabled={saving || undefined}
-          onClick={() => {
-            c.switchRuang(target);
-          }}
-        >
-          <ArrowsLeftRightIcon size={18} weight="bold" />
-          <span className={moveLabelClass}>Pindah ke {ruangLabel[target]}</span>
-        </Button>
+        {/* Transfer antar ruang sedang disusun: pindah ruang akan membuang pilihannya, jadi disembunyikan. */}
+        {draft.toRuang === undefined ? (
+          <Button
+            variant="text"
+            size="sm"
+            className="px-2.5"
+            aria-disabled={saving || undefined}
+            onClick={() => {
+              c.switchRuang(target);
+            }}
+          >
+            <ArrowsLeftRightIcon size={18} weight="bold" />
+            <span className={moveLabelClass}>Pindah ke {ruangLabel[target]}</span>
+          </Button>
+        ) : null}
         <Button
           ref={primaryRef}
           type="submit"
@@ -653,9 +658,16 @@ function CatatSession({
             >
               <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
               {/* Mode keyboard: satu baris (tinggi sheet); selain itu teks utuh boleh membungkus. */}
-              <span className={compact ? 'min-w-0 truncate' : 'min-w-0 text-pretty'}>
-                {TALANGAN_COPY.hint}
-              </span>
+              {compact ? (
+                <>
+                  <span aria-hidden="true" data-testid="talangan-hint" className="min-w-0 truncate">
+                    {TALANGAN_COPY.hintShort}
+                  </span>
+                  <span className="sr-only">{TALANGAN_COPY.hint}</span>
+                </>
+              ) : (
+                <span className="min-w-0 text-pretty">{TALANGAN_COPY.hint}</span>
+              )}
             </p>
           ) : null}
           <div className="flex gap-2">

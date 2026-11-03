@@ -65,8 +65,10 @@ export function TypeMenuButton({
       ) : (
         <>
           {/* HP: jenis hanya untuk pembaca layar; kedua ruang tertulis utuh (tidak boleh terpotong). */}
-          <span className="max-tablet:sr-only">{toSpace.head}</span>
-          <span className="shrink-0">{toSpace.from}</span>
+          <span className="shrink-0">
+            <span className="max-tablet:sr-only">{toSpace.head} </span>
+            {toSpace.from}
+          </span>
           <span className="shrink-0">→</span>
           <span data-ruang={toSpace.space} className="flex shrink-0 items-center gap-1 text-ruang">
             <SpaceIcon space={toSpace.space} size={16} />

@@ -49,7 +49,7 @@ describe('CatatSheet · transfer antar ruang (S7-C1)', () => {
     await user.type(screen.getByRole('textbox', { name: 'Nominal' }), '20000');
     // Tanpa tujuan antar ruang tidak ada kolom catatan Bersama.
     expect(screen.queryByLabelText(/Catatan untuk Bersama/)).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     expect(await screen.findByRole('heading', { name: 'Ke dompet di Bersama' })).toBeTruthy();
     const group = await screen.findByRole('radiogroup', { name: 'Dompet di Bersama' });
     const rows = within(group).getAllByRole('radio');
@@ -84,11 +84,48 @@ describe('CatatSheet · transfer antar ruang (S7-C1)', () => {
     expect(inLeg?.description).toBeUndefined();
   });
 
+  it('nama aksesibel Ruang lain… diawali teks terlihat; Pindah ke… disembunyikan selama tujuan antar ruang terisi; fokus kembali ke chip terpilih', async () => {
+    const user = userEvent.setup();
+    setup();
+    await toTransfer(user);
+    const more = screen.getByRole('button', { name: /^Ruang lain…/ });
+    expect(more.textContent).toContain('Ruang lain…');
+    expect(screen.getByRole('button', { name: /Pindah ke Bersama/ })).toBeTruthy();
+    await user.click(more);
+    await user.click(await screen.findByRole('radio', { name: /Kas Rumah/ }));
+    expect(screen.queryByRole('button', { name: /Pindah ke/ })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole('radio', { name: 'Kas Rumah · Bersama' }),
+      );
+    });
+    // Tujuan satu ruang dipilih lagi: tombol muncul kembali.
+    await user.click(screen.getByRole('radio', { name: 'Tunai' }));
+    expect(screen.getByRole('button', { name: /Pindah ke Bersama/ })).toBeTruthy();
+    // Kembali dari halaman tanpa memilih: fokus ke Ruang lain….
+    await user.click(screen.getByRole('button', { name: /^Ruang lain…/ }));
+    await screen.findByRole('radiogroup', { name: 'Dompet di Bersama' });
+    await user.click(screen.getByRole('button', { name: 'Kembali ke Transfer' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Ruang lain…/ }));
+    });
+  });
+
+  it('judul dua ruang tanpa spasi ganda', async () => {
+    const user = userEvent.setup();
+    setup();
+    await toTransfer(user);
+    await user.click(screen.getByRole('button', { name: /^Ruang lain…/ }));
+    await user.click(await screen.findByRole('radio', { name: /Kas Rumah/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Transfer · Pribadi → Bersama' });
+    expect(dialog.querySelector('h2')?.textContent).not.toMatch(/\s{2,}/);
+  });
+
   it('Dari Bersama: halaman menyebut Pribadi; Dompet Kantor tidak ada', async () => {
     const user = userEvent.setup();
     setup('bersama');
     await toTransfer(user, 'Bersama');
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     const group = await screen.findByRole('radiogroup', { name: 'Dompet di Pribadi' });
     expect(within(group).queryByText(/Kantor/)).toBeNull();
     expect(within(group).getAllByRole('radio').length).toBeGreaterThan(0);
@@ -99,11 +136,11 @@ describe('CatatSheet · transfer antar ruang (S7-C1)', () => {
     setup();
     await toTransfer(user);
     await user.selectOptions(screen.getByLabelText('Dari dompet'), 'acc-kantor');
-    expect(screen.queryByRole('button', { name: 'Pilih dompet di ruang lain' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ruang lain/ })).toBeNull();
     expect(screen.getByText('Dompet Kantor tidak bisa ikut transfer antar ruang.')).toBeTruthy();
     // Kembali ke dompet biasa, pilih tujuan antar ruang: Kantor hilang dari pilihan sumber.
     await user.selectOptions(screen.getByLabelText('Dari dompet'), 'acc-bca');
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     await user.click(await screen.findByRole('radio', { name: /Kas Rumah/ }));
     const options = within(screen.getByLabelText('Dari dompet')).getAllByRole('option');
     expect(options.map((o) => o.textContent)).not.toContain('Kantor');
@@ -114,18 +151,18 @@ describe('CatatSheet · transfer antar ruang (S7-C1)', () => {
     const user = userEvent.setup();
     setup();
     await toTransfer(user);
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     await screen.findByRole('radiogroup', { name: 'Dompet di Bersama' });
     await user.keyboard('{Escape}');
     expect(screen.getByRole('dialog', { name: 'Transfer · Pribadi' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ruang lain/ })).toBeTruthy();
   });
 
   it('ruang tujuan tanpa dompet: keadaan kosong + Tambah dompet', async () => {
     const user = userEvent.setup();
     setup('pribadi', (s) => ({ ...s, spaceTransferTargets: () => [] }));
     await toTransfer(user);
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     expect(await screen.findByText('Belum ada dompet di Bersama.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tambah dompet' })).toBeTruthy();
   });
@@ -139,7 +176,7 @@ describe('CatatSheet · transfer antar ruang (S7-C1)', () => {
         fail ? Promise.reject(new Error('net')) : Promise.resolve(s.spaceTransferTargets(r)),
     }));
     await toTransfer(user);
-    await user.click(screen.getByRole('button', { name: 'Pilih dompet di ruang lain' }));
+    await user.click(screen.getByRole('button', { name: /Ruang lain/ }));
     expect(await screen.findByText(/Dompet belum bisa dimuat/)).toBeTruthy();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Coba lagi' }));

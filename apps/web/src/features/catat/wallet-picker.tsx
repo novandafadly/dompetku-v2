@@ -87,7 +87,7 @@ const noop = () => undefined;
 /** Salinan tetap S7-C1. */
 export const CROSS_COPY = {
   more: 'Ruang lain…',
-  moreLabel: 'Pilih dompet di ruang lain',
+  moreLabel: 'Ruang lain…, pilih dompet di ruang lain',
   kantor: 'Dompet Kantor tidak bisa ikut transfer antar ruang.',
   keterangan: 'Keterangan (hanya di Pribadi)',
   catatan: 'Catatan untuk Bersama',

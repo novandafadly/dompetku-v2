@@ -200,6 +200,14 @@ for (const size of [
     expect(sw.height).toBeGreaterThanOrEqual(44);
     expect(dompet.width).toBeGreaterThanOrEqual(88);
     expect(tanggal.width).toBeGreaterThanOrEqual(88);
+    // Petunjuk Talangan di mode keyboard: versi pendek utuh satu baris (tidak terpotong).
+    if (size.keyboard) {
+      const hint = sheet.getByTestId('talangan-hint');
+      await expect(hint).toHaveText('Tidak masuk hitungan pribadi.');
+      const cut = await hint.evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(cut).toBeLessThanOrEqual(0);
+      expect((await hint.boundingBox())?.height ?? 999).toBeLessThanOrEqual(20);
+    }
     // `Hari ini` tidak terpotong: lebar area teks Select tanggal ≥ lebar teksnya (diukur di kanvas).
     const room = await sheet.getByLabel('Tanggal').evaluate((el) => {
       const cs = getComputedStyle(el);
