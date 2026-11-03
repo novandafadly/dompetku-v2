@@ -7,7 +7,7 @@ import { withUser, type Pools } from '../db';
  * (deadlock_detected) diulang maksimal 3 kali (4 percobaan). Yang diulang adalah SELURUH
  * transaksi `withUser` (koneksi + `begin` baru), bukan pernyataan terakhir: transaksi yang gagal
  * sudah di-rollback, dan fungsi tulis `api.*` idempoten lewat `p_client_id`.
- * Isolasi tetap bawaan role (READ COMMITTED); tidak ada `SET TRANSACTION ISOLATION`.
+ * Isolasi tetap bawaan role (READ COMMITTED); tingkat isolasi tidak pernah diatur di sini.
  * Tidak ada log di sini (argumen SQL tidak pernah dilog).
  */
 export const MAX_RETRIES = 3;
