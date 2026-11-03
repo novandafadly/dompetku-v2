@@ -107,6 +107,16 @@ describe('loadSampah (persona N, F bergabung)', () => {
       accountName: KANARI_DOMPET,
     });
     expect(data.items[0]?.purgeAfter).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
+    // Nilainya: waktu batal + 90 hari (detik penuh, jam WIB), untuk kedua baris.
+    const { rows: voidedAt } = await h.admin.query<{ id: string; epoch: string }>(
+      `select id, floor(extract(epoch from voided_at))::bigint::text as epoch
+         from app.entries where id = any($1::uuid[])`,
+      [[baru.entryId, lama.entryId]],
+    );
+    for (const t of data.items) {
+      const epoch = Number(voidedAt.find((r) => r.id === t.entry.id)?.epoch);
+      expect(Date.parse(t.purgeAfter) / 1000).toBe(epoch + 90 * 86_400);
+    }
     // Dompet ruang ini ikut (saldo untuk peringatan pulihkan): saldo awal − pengeluaran hidup.
     expect(data.accounts.map((x) => x.name)).toEqual([KANARI_DOMPET]);
     expect(data.accounts[0]?.balance).toBe(20_000_000 - 4_000);
