@@ -10,7 +10,7 @@ import { PencilSimpleIcon } from '@/components/ui/icons/pencil-simple';
 import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { newClientId } from '@/features/catat/client-id';
-import { undoOrNotify } from '@/features/catat/saved-toast';
+import { undoVoidOnce } from '@/features/catat/saved-toast';
 import type {
   AccountVM,
   CategoryVM,
@@ -110,28 +110,15 @@ export function DetailActions({
     const version = res.value.version;
     const { voidedToastVM } = await loadVoid();
     router.push(listHref);
+    // Satu clientId per toast: klik berulang dan percobaan ulang = permintaan pulihkan yang sama.
+    const undo = undoVoidOnce((req) => restoreEntryAction(ruang, req), entry.id, version, toast);
     toast({
       message: voidedToastVM(label, entry),
       action: {
         label: 'Urungkan',
         onAction: () => {
           // Urungkan = pulihkan versi hasil batal; gagal (konflik, jaringan, lewat 90 hari) = toast.
-          void undoOrNotify(
-            async (v: number) => {
-              try {
-                const r = await restoreEntryAction(ruang, {
-                  clientId: newClientId(),
-                  entryId: entry.id,
-                  expectedVersion: v,
-                });
-                return r.ok;
-              } catch {
-                return false;
-              }
-            },
-            version,
-            toast,
-          );
+          void undo();
         },
       },
     });
