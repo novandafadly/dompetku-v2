@@ -9,3 +9,7 @@ Spec: IPD §5 S8 + PRD/AFD/BSD (lihat header plan). Konteks subagent: docs/super
 
 ## Progress
 Ruling R1: PR #18 (item Keluar di Menu, `features/shell/menu-sheet.tsx`) menambah JS shell; setiap task UI S8 mengukur ulang budget prototipe Beranda dari main sesudah #18 sebelum menambah apa pun — biaya: tidak ada.
+Task 1: implementasi commit 9ced62c (bingkai S8-A1..D1a, 11 konflik + 9 keputusan agen tercatat di bingkai).
+Task 1: review desain + task → Needs fixes (5 Important: tanggal mundur ambigu, baris href null, cabang empty/!hasOperasional dua anggota, fallback per op, budget muat malas harus melapor js-all-kB + selector demo bukan lewat barrel). Minor #6–#15 ikut ronde 1.
+Ruling R2: label Kontribusi tetap `Setor`/`Diambil` sesuai K2 yang disetujui pemilik (usul `Disetor` dicatat untuk critique Task 12) — biaya: tidak paralel secara tata bahasa.
+Ruling R3: konflik bingkai 1–10 diterima sesuai rekomendasi bingkai (reviewer setuju); `Semua` menggantikan `Lihat semua`; S8-B1a menunggu pemilik, bawaan tetap salinan S7 sampai dijawab — biaya: tidak ada.
