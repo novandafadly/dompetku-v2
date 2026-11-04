@@ -93,3 +93,7 @@ Task 10: fix round 1/5 (5 addressed; commits 04c21a1..f765a1b; e2e prototipe 287
 Task 10: minor (deferred): placeholder Catatan untuk Bersama mode nyata generik ("Terlihat oleh anggota Bersama"), nama anggota butuh roster di respons moveTargetsAction (Task 13 atau 11); toggle Talangan hanya ikon saat mati (biaya R12); belum ada tes UI sumber nyata /bersama→save yang memastikan description bukan sharedNote (dijaga s7.int); e2e nyata Catat S7 milik Task 17.
 Task 10: re-review (sesi ccr-8504abb0) → Approved, 0 temuan baru; unit 1798, catat-s7 e2e 7/7, build lulus.
 Task 10: complete (commits 9271354..f765a1b, review clean)
+Task 11: implementasi (sesi ccr-8504abb0) commits b0d2ea0..a619cd0; unit 1833, int 144, e2e 287, e2e:ledger 19; budget prototipe Beranda 161,3 / nyata 157,2. Sheet Pindahkan/reimburse di features/catat (aturan boundaries).
+Task 11: review → Needs fixes (4 Important: banner pindah salah untuk bukan pencatat; "Tidak diganti" dirender saat ada reimburse hidup; salinan saldo_negatif Pindahkan menyalahkan dompet tujuan; baris Biaya kaki Pribadi tidak ada). Minor 1,2,4,5,6,7 ikut ronde 1.
+Ruling R29: catatan talangan bingkai "Batalkan reimburse di bawah dulu" → "di atas" (daftar dirender di atas tombol) — biaya: satu salinan.
+Ruling R30: salinan galat Pindahkan di luar tabel bingkai (saldo_negatif, before_opening, account_archived, conflict) disetujui controller selama netral dan tanpa nominal; saldo_negatif tidak boleh menyalahkan satu dompet — biaya: salinan bisa diubah di critique T18.
