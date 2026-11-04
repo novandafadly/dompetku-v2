@@ -57,3 +57,5 @@ Task 6: fix round 1/5 (8 addressed, 1 open — breakage baru N1: NBSP "Nama · k
 Task 6: minor (deferred): tes Pribadi di view.test menunggu 50 ms tetap (lemah).
 Task 6: fix round 2 dikirim → commit ac0eb24 (NBSP hanya sebelum `·`, spasi biasa sesudahnya; tes penjaga; regex diketatkan). Re-review berjalan.
 Ruling R7: D2 ("Nama ·" menggantung di akhir baris) diterima sebagian: titik tetap lekat ke nama, tetapi kata kerja boleh turun baris — kata kerja utuh lebih penting daripada nama yang kadang berdiri sendiri (aturan bingkai A1) — biaya bila salah: sesekali "Novanda ·" sendirian di ujung baris 320/390 px; bisa ditinjau di critique Task 12.
+Task 6: fix round 2/5 (1 addressed, 0 open — N1 kata kerja tidak terpotong; commits 8e245d0..ac0eb24). Re-review bersih; screenshot 320/390 terang+gelap tanpa potongan tengah kata.
+Task 6: complete (commits 7c1f2fc..ac0eb24, review clean). Catatan: e2e:ledger/e2e:bersama tidak diulang sesudah ronde 1–2 (hanya kelas/teks Server Component) → diulang di gerbang Task 12.
