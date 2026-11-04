@@ -100,3 +100,6 @@ Ruling R30: salinan galat Pindahkan di luar tabel bingkai (saldo_negatif, before
 Task 11: fix round 1/5 (4 Important + 6 minor addressed, 0 open; commit 0fb8f19; unit 1839, int 144, e2e 287, e2e:ledger 19; budget tidak berubah).
 Task 11: minor (deferred): Urungkan reimburse memakai expectedVersion 1 (aksi sebaiknya mengembalikan version); fokus ke judul sesudah navigasi pindah ke /{tujuan}/transaksi (cek e2e T17); subkueri fee per baris ENTRY_COLUMNS (hanya kaki Pribadi antar ruang); kanari '6543' substring; galeri /dev/ui tidak mengikuti prefers-color-scheme; sheet Pindahkan/reimburse belum punya frame galeri.
 Task 11: complete (commits b0d2ea0..0fb8f19, review clean)
+Task 12: implementasi commits 7d9bbf5..d7cfd9d; unit 1886, int 148, e2e 287, e2e:ledger 19; budget prototipe Beranda 161,4 / nyata 157,3. Urungkan Cocokkan saldo ada (void adjustment versi 1 diizinkan DB); "Lihat semua" tidak dibangun (filter talangan nyata belum ada).
+Task 12: review → Needs fixes (1 Important: label Menunggu reimburse "Talangan kantor" bukan kategori). Minor 1–6 ikut ronde 1.
+Task 12: minor (deferred): tes int voidEntryAction atas adjustment (Task 17); rute dompet/[id] masuk loop budget (Task 17).
