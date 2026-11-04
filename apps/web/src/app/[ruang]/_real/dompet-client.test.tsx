@@ -101,6 +101,31 @@ describe('AddWalletHost (Dompet nyata)', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
+  it('name_taken dari server (S7): galat kolom di bawah Nama, bukan kotak peringatan; fokus ke Nama', async () => {
+    const user = userEvent.setup();
+    mocks.create.mockResolvedValue({ ok: false, error: { code: 'name_taken' } });
+    render(host());
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    const name = screen.getByRole('textbox', { name: 'Nama' });
+    expect(await screen.findByText('Nama ini sudah dipakai dompet lain di Bersama.')).toBeTruthy();
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Coba lagi' })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(name);
+    });
+    // Mengganti nama lalu menyimpan lagi mengirim ulang (clientId yang sama aman: simpan pertama ditolak).
+    mocks.create.mockResolvedValue({ ok: true, value: { accountId: 'a-1' } });
+    await user.clear(name);
+    await user.type(name, 'Tunai 2');
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('galat jaringan: peringatan + Coba lagi memakai clientId yang sama (tidak membuat dua dompet)', async () => {
     const user = userEvent.setup();
     mocks.create

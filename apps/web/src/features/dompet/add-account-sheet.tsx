@@ -127,6 +127,13 @@ function Form({
       onDone(trimmed);
       return;
     }
+    if (res.code === 'name_taken') {
+      // Nama ganda yang lolos cek klien (dompet lain menambah di waktu sama, atau huruf berbeda
+      // yang dilipat server): galat kolom, bukan kotak peringatan.
+      setErrors({ name: `Nama ini sudah dipakai dompet lain di ${RUANG_NAME[ruang]}.` });
+      nameRef.current?.focus();
+      return;
+    }
     setGalat(res.code === 'network' ? 'network' : res.code === 'idem_mismatch' ? 'idem' : 'server');
   }
 

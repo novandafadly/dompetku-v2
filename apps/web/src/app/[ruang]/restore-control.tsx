@@ -50,9 +50,19 @@ function restoredBalance(entry: EntryVM, account: RestoreAccount): number {
 type RestoreState = 'idle' | 'busy' | 'saldo' | 'closed' | 'galat';
 
 /** Galat pulihkan selain saldo, lewat 90 hari, dan konflik (salinan S6, gaya galat Batalkan). */
-export function restoreFailedText(code: LedgerErrorCode): string {
+export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'): string {
+  if (code === 'entry_moved') {
+    return `Transaksi ini sudah dipindahkan ke ${tujuan} dan tidak bisa dipulihkan dari sini.`;
+  }
   if (code === 'network') return 'Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.';
   if (code === 'account_archived') return 'Belum bisa dipulihkan. Dompetnya sudah diarsipkan.';
+  // Reimburse yang dipulihkan harus tetap sah (0110): talangannya hidup dan sisanya cukup.
+  if (code === 'not_reimbursable') {
+    return 'Belum bisa dipulihkan. Talangannya tidak lagi menunggu diganti.';
+  }
+  if (code === 'reimbursement_exceeds') {
+    return 'Belum bisa dipulihkan. Sisa talangannya tidak cukup untuk reimburse ini.';
+  }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }
 
@@ -109,7 +119,9 @@ export function RestoreControl({
       busy.current = false;
     }
     if (res.ok) {
-      toast({ message: `Dipulihkan di ${RUANG_LABEL[ruang]} · ${formatRupiah(entry.amount)}` });
+      // Antar ruang dipulihkan berpasangan (S7-D1): kedua ruang disebut.
+      const where = entry.kind === 'space_transfer' ? 'Pribadi dan Bersama' : RUANG_LABEL[ruang];
+      toast({ message: `Dipulihkan di ${where} · ${formatRupiah(entry.amount)}` });
       // Sibuk selalu dilepas: bila muat ulang daftar/Detail gagal, tombol tidak tertahan. Klik lagi
       // memakai clientId yang sama (server mengembalikan hasil yang sama, tanpa entri ganda).
       setState('idle');
@@ -156,7 +168,9 @@ export function RestoreControl({
         className="flex items-start gap-1.5 text-meta font-semibold text-danger"
       >
         <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
-        <span className="min-w-0 text-pretty">{restoreFailedText(galat)}</span>
+        <span className="min-w-0 text-pretty">
+          {restoreFailedText(galat, RUANG_LABEL[ruang === 'pribadi' ? 'bersama' : 'pribadi'])}
+        </span>
       </p>
     ) : null;
 

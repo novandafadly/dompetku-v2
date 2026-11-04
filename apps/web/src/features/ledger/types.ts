@@ -27,7 +27,14 @@ export interface CategoryVM {
 export interface EntryVM {
   id: string;
   version: number;
-  kind: 'income' | 'expense' | 'transfer' | 'opening_balance' | 'space_transfer' | 'adjustment';
+  kind:
+    | 'income'
+    | 'expense'
+    | 'transfer'
+    | 'opening_balance'
+    | 'space_transfer'
+    | 'adjustment'
+    | 'reimbursement';
   occurredOn: IsoDate;
   createdAt: string;
   createdBy: { id: string; name: string; initial: string };
@@ -45,6 +52,44 @@ export interface EntryVM {
   sharedNote?: string;
   /** Hanya pengeluaran Pribadi yang ditalangi (S7); `true` bila ya, tidak ada bila tidak. */
   reimbursable?: true;
+  /**
+   * Hanya kaki `space_transfer`: ruang pemilik kaki ini. Kaki Bersama diberi judul dengan nama
+   * pencatat, kaki Pribadi dengan arah (S7-D1); id kaki lawan tidak pernah dikirim.
+   */
+  spaceKind?: 'personal' | 'shared';
+  /** Biaya transfer antar ruang; hanya kaki Pribadi (tidak pernah di kaki Bersama). */
+  fee?: Rupiah;
+  /** Entri asal yang sudah dipindah ke ruang lain (R16): waktu pindah; tanpa penunjuk ke tujuan. */
+  movedAt?: string;
+  /** Reimburse: id talangan yang diganti (ruang yang sama). */
+  reimbursesEntryId?: string;
+}
+
+/** Satu reimburse hidup pada sebuah talangan (daftar di Detail talangan, S7-D3). */
+export interface ReimbursementItemVM {
+  id: string;
+  occurredOn: IsoDate;
+  amount: Rupiah;
+}
+
+/** Status penggantian satu talangan hidup: Σ reimburse hidup dan sisanya. */
+export interface TalanganVM {
+  items: ReimbursementItemVM[];
+  reimbursed: Rupiah;
+  remaining: Rupiah;
+}
+
+/** Talangan hidup dengan sisa > 0 (`api.open_reimbursables`): nominal, Σ reimburse hidup, sisa. */
+export interface ReimbursableVM {
+  entryId: string;
+  occurredOn: IsoDate;
+  description: string | null;
+  /** Nama kategori talangan (label bila tanpa keterangan); `null` bila tanpa kategori. */
+  categoryName?: string | null;
+  accountId: string;
+  amount: Rupiah;
+  reimbursed: Rupiah;
+  remaining: Rupiah;
 }
 
 export interface HistoryVM {
@@ -92,6 +137,15 @@ export type LedgerErrorCode =
   | 'category_depth'
   | 'name_taken'
   | 'restore_window_closed'
+  | 'balance_not_zero'
+  | 'cross_space_not_allowed'
+  | 'cross_space_kantor'
+  | 'not_reimbursable'
+  | 'reimbursement_exceeds'
+  | 'reimbursement_exists'
+  | 'entry_moved'
+  | 'kind_not_movable'
+  | 'not_creator'
   | 'not_found'
   | 'invalid'
   | 'network'

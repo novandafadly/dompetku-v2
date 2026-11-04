@@ -5,20 +5,37 @@ import { BackLink } from '@/components/ui/back-link';
 import { buttonClass } from '@/components/ui/button';
 import { ArrowDownIcon } from '@/components/ui/icons/arrow-down';
 import { ErrorState } from '@/components/ui/state';
+import { focusRing } from '@/components/ui/styles';
+import { ArchiveBlockedCard } from '@/features/dompet/archive-blocked-card';
 import {
   AccountHistoryView,
   type HistoryGroup,
   type HistoryRow,
 } from '@/features/dompet/account-history-view';
 import { groupByDayVM } from '@/features/ledger/group-by-day';
+import { openingEditable } from '@/features/ledger/opening';
 import { effectOnAccountVM, entryKindLabelVM, entryTitleVM } from '@/features/ledger/present';
 import type { Ruang } from '@/features/ledger/types';
 import { buildEntryHref } from '@/features/shell/hrefs';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
+import { ArchiveIsland, ReconcileIsland } from './dompet-actions-islands';
 import { RetryIsland } from './transaksi-islands';
 
 /** Entri per halaman riwayat dompet; "Muat lagi" menambah sebanyak ini (`?tampil=`). */
 export const HISTORY_PAGE = 50;
+
+/**
+ * Entri saldo awal dompet ini dan apakah masih bisa diubah (≤ 7 hari sejak dompet dibuka, aturan DB
+ * `opening_locked`); `null` bila dompet tanpa entri saldo awal (dibuat tanpa saldo).
+ */
+export function openingEntryOf(
+  data: DompetRiwayat,
+  today: IsoDate,
+): { id: string; editable: boolean } | null {
+  const first = data.opening[0];
+  if (first === undefined) return null;
+  return { id: first.id, editable: openingEditable(data.account.openedOn, today) };
+}
 
 /**
  * Riwayat dompet mode nyata (Server Component): entri yang menyentuh dompet ini, dikelompokkan per
@@ -42,6 +59,7 @@ export function DompetDetailReal({
   data: DompetRiwayat;
 }) {
   const { account } = data;
+  const openingEntry = openingEntryOf(data, today);
   const effect = (e: (typeof data.entries)[number]) => effectOnAccountVM(e, account.id);
   const groups: HistoryGroup[] = groupByDayVM(data.entries, today).map((g) => ({
     key: g.date,
@@ -76,6 +94,40 @@ export function DompetDetailReal({
         value: e.amount,
       }))}
       dompetHref={dompetHref}
+      actions={
+        account.archived ? null : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <ReconcileIsland
+              ruang={ruang}
+              account={{ id: account.id, name: account.name, balance: account.balance }}
+            />
+            {openingEntry?.editable === true ? (
+              <Link
+                href={buildEntryHref(ruang, openingEntry.id, query)}
+                aria-label={`Ubah saldo awal ${account.name}`}
+                className={`inline-flex min-h-11 items-center rounded-md text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+              >
+                Ubah saldo awal
+              </Link>
+            ) : null}
+          </div>
+        )
+      }
+      footer={
+        account.archived ? (
+          <p className="text-meta font-medium text-text-muted">
+            Dompet ini sudah diarsipkan. Riwayatnya tetap bisa dilihat.
+          </p>
+        ) : account.balance === 0 ? (
+          <ArchiveIsland
+            ruang={ruang}
+            account={{ id: account.id, name: account.name }}
+            dompetHref={dompetHref}
+          />
+        ) : (
+          <ArchiveBlockedCard name={account.name} />
+        )
+      }
       more={
         moreHref === null ? null : (
           <Link

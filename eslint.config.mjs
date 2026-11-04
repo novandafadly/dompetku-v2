@@ -18,6 +18,7 @@ export default tseslint.config(
     ignores: [
       '**/node_modules/**',
       '**/.next/**',
+      '**/dist/**',
       '**/playwright-report/**',
       '**/playwright-report-ledger/**',
       '**/test-results/**',

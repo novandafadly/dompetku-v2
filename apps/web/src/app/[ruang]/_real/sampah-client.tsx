@@ -16,11 +16,13 @@ export function TrashListReal({
   today,
   items,
   accounts,
+  restoreLockedIds,
 }: {
   ruang: Ruang;
   today: IsoDate;
   items: TrashVM[];
   accounts: AccountVM[];
+  restoreLockedIds?: readonly string[] | undefined;
 }) {
   const router = useRouter();
   return (
@@ -29,6 +31,7 @@ export function TrashListReal({
       today={today}
       items={items}
       accounts={accounts}
+      restoreLockedIds={restoreLockedIds}
       restore={(req) => restoreEntryAction(ruang, req)}
       onConflict={() => {
         router.refresh();

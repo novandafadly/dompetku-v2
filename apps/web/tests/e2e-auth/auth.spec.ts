@@ -260,8 +260,9 @@ test('pemilik: Beranda nyata dengan dompet: kartu, tidak ada pengeluaran hari in
   expect(html).toContain('Kas Rumah');
   expect(html + rsc).not.toContain(PRIBADI_WALLET);
   await page.goto('/bersama/beranda');
-  // Undang Farida hanya di Pribadi.
-  await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(0);
+  // Bersama solo (S7-B1): satu-satunya ajakan adalah kartu ajakan Bersama untuk pemilik.
+  await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Undang Farida ke Bersama' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toBeVisible();
   await checkScreen(page);
   await berandaShots(page, '/bersama/beranda', 'beranda-bersama');
@@ -788,6 +789,12 @@ test('pemilik: ruang Bersama lengkap, undangan diterima', async () => {
   await ownerPage.goto('/undang');
   await expect(ownerPage.getByText('Ruang Bersama sudah berisi dua orang.')).toBeVisible();
   await expect(ownerPage.getByText('Diterima')).toBeVisible();
+  // S7-B1 "Aturan hilang": anggota ≥ 2, tidak ada ajakan Undang Farida di Bersama.
+  for (const page of [ownerPage, partnerPage]) {
+    await page.goto('/bersama/beranda');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(0);
+  }
 });
 
 test('pasangan: keluar, masuk lagi dengan kata sandi + TOTP', async () => {

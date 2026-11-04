@@ -4,7 +4,7 @@ import { lazy, Suspense, useState } from 'react';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { AccountList } from '@/features/dompet/account-list';
 import { AddWalletButton } from '@/features/dompet/add-wallet-button';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { PageHeader } from '@/features/shell/page-header';
 
 const AddAccountSheet = lazy(() =>

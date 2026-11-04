@@ -70,6 +70,29 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(toLedgerError(dup)).toEqual({ code: 'name_taken' });
   });
 
+  it.each([
+    ['balance_not_zero'],
+    ['cross_space_not_allowed'],
+    ['cross_space_kantor'],
+    ['not_reimbursable'],
+    ['reimbursement_exceeds'],
+    ['reimbursement_exists'],
+    ['entry_moved'],
+    ['kind_not_movable'],
+    ['not_creator'],
+  ] as const)('DK422 S7 %s = kode sama, tanpa log', (rule) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK422', rule, 'Rp 500.000 rahasia'))).toEqual({ code: rule });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('nama dompet ganda (accounts_name_unique) = name_taken', () => {
+    const dup = Object.assign(pgError('23505', 'duplicate key value', 'Key (x)=(BCA rahasia)'), {
+      constraint: 'accounts_name_unique',
+    });
+    expect(toLedgerError(dup)).toEqual({ code: 'name_taken' });
+  });
+
   it('23505 dari indeks lain tetap unknown', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const other = Object.assign(pgError('23505', 'duplicate key value'), {
@@ -131,5 +154,16 @@ describe('toLedgerError: bukan galat domain = null (pemanggil melempar ulang)', 
     ['objek tanpa code', { message: 'x' }],
   ])('%s', (_name, e) => {
     expect(toLedgerError(e)).toBeNull();
+  });
+
+  it('DK422 reimbursable_personal_expense_only = invalid kolom reimbursable, tanpa log', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(
+      toLedgerError(pgError('DK422', 'reimbursable_personal_expense_only', 'Rp 1 rahasia')),
+    ).toEqual({
+      code: 'invalid',
+      field: 'reimbursable',
+    });
+    expect(err).not.toHaveBeenCalled();
   });
 });

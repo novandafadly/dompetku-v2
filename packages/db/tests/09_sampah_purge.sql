@@ -1,9 +1,10 @@
 -- Batal, pulihkan, Sampah, purge (BSD §9, §10, §13 #30 sampai #32; keputusan pemilik #8, #10):
 -- void/restore termasuk kedua kaki space_transfer, jendela 90 hari, dompet terarsip, purge_entry
--- dan jobs.purge_voided (tombstone tanpa nominal), purge_idempotency, append-only entry_history,
+-- dan jobs.purge_voided (tombstone tanpa nominal), entri yang dipindah ke ruang lain (S7, 0111),
+-- purge_idempotency, append-only entry_history,
 -- dq_reconcile nol temuan. Jam dipatok 2026-03-20 WIB lalu dimajukan.
 begin;
-select plan(61);
+select plan(64);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -170,6 +171,23 @@ select is(tests.owner_val(null, $$select coalesce(user_id::text, 'null') || ' ' 
   'null 6', 'audit purge_voided tanpa pelaku user');
 select is(tests.worker_val(null, 'select jobs.purge_voided()'), '0', 'purge_voided idempoten');
 
+-- ===== Entri yang dipindah ke ruang lain (S7, 0111) =====
+-- Sampah hanya menyembunyikan entri yang dipindah; batal biasa tetap tampil. Hapus permanen
+-- lewat api.purge_entry tetap boleh (tombstone biasa), entri baru di ruang tujuan tidak tersentuh.
+select pg_temp.spend(:'bca', 'expense', 21) as mv_biasa \gset
+select pg_temp.void(:'mv_biasa', 1);
+select pg_temp.spend(:'bca', 'expense', 22) as mv \gset
+select pg_temp.call(tests.n(), format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$$,
+  :'mv', :'sh', :'kas')) ->> 'entry_id' as mv_baru \gset
+select is(tests.web_val(tests.n(), format($$select (select count(*) from api.trash_list(%1$L) where entry_id = %2$L) || ' '
+  || (select count(*) from api.trash_list(%1$L) where entry_id = %3$L)$$, :'np', :'mv_biasa', :'mv')), '1 0',
+  'Sampah: batal biasa tampil, entri yang dipindah tidak');
+select is(pg_temp.call(tests.n(), format($$select api.purge_entry(%L, 2)$$, :'mv')) ->> 'purged', '1',
+  'purge_entry entri yang dipindah = hapus permanen biasa');
+select is(tests.owner_val(null, format($$select (select count(*) from app.entry_tombstones where entry_id = %L) || ' '
+  || (select count(*) from app.entries where id = %L and voided_at is null)$$, :'mv', :'mv_baru')), '1 1',
+  'tombstone asal ada, entri baru di Bersama tetap hidup');
+
 -- ===== purge_idempotency (30 hari) =====
 select ok(tests.owner_val(null, 'select count(*) from app.idempotency_keys')::int > 0, 'ada kunci idempotensi');
 select tests.clock('31 days');
@@ -186,8 +204,10 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format('delete fr
   'DK422', 'append_only', 'hapus entri di luar fungsi purge ditolak (cascade riwayat)');
 
 -- ===== Cek kualitas data: nol temuan sesudah semua operasi =====
+-- DQ07 (warn) = 1: dompet "X" sengaja dibuat negatif dengan p_allow_negative di atas dan masih
+-- negatif lebih dari 3 hari WIB. Cek error tetap nol.
 select is(tests.worker_val(null, $$select string_agg(check_id || '=' || violations, ',' order by check_id) from jobs.dq_reconcile()$$),
-  'DQ01=0,DQ04=0,DQ04b=0,DQ06=0,DQ09=0,DQ10=0', 'dq_reconcile: nol temuan');
+  'DQ01=0,DQ03=0,DQ04=0,DQ04b=0,DQ06=0,DQ07=1,DQ09=0,DQ10=0,DQ11=0,DQ12=0', 'dq_reconcile: nol temuan error, DQ07 warn untuk dompet negatif');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
 select throws_ok($$select tests.worker_val(null, 'select count(*) from private.dq_run()')$$, '42501', null,

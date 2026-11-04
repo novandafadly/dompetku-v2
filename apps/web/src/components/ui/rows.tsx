@@ -1,4 +1,4 @@
-import type { Rupiah } from '@dompetku/domain';
+import { formatRupiah, type Rupiah } from '@dompetku/domain';
 import type { Route } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -28,19 +28,32 @@ export function TxRow({
   value: Rupiah;
   kind: MoneyKind;
 }) {
+  // Nominal sangat panjang (> 13 karakter, ambang yang sama dengan MoneyText) di bawah 360 px:
+  // turun ke baris kedua kolom teks agar keterangan tidak terperas jadi "Bel…" (grid; DOM tetap).
+  const long = formatRupiah(value, kind === 'income' ? { sign: 'always' } : {}).length > 13;
   return (
     <li className={rowDivider}>
-      <Link href={href} className={rowLink}>
-        <span aria-hidden="true" className={`size-10 ${tile}`}>
+      <Link
+        href={href}
+        className={`${rowLink} ${long ? 'max-narrow:grid max-narrow:grid-cols-tile-text max-narrow:items-center max-narrow:gap-y-0.75' : ''}`}
+      >
+        <span
+          aria-hidden="true"
+          className={`size-10 ${tile} ${long ? 'max-narrow:row-span-2' : ''}`}
+        >
           {icon}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.75">
-          <span className={rowTitle}>{label}</span>
+          <span title={label} className={rowTitle}>
+            {label}
+          </span>
           {meta === undefined ? null : <span className={rowSub}>{meta}</span>}
           {status}
         </span>
         {/* Spasi di DOM agar teks baris terbaca utuh oleh pembaca layar. */}{' '}
-        <MoneyText value={value} kind={kind} />
+        <span className={long ? 'max-narrow:col-start-2 max-narrow:justify-self-start' : ''}>
+          <MoneyText value={value} kind={kind} />
+        </span>
       </Link>
     </li>
   );

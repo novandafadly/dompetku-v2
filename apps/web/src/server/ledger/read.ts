@@ -20,8 +20,12 @@ import type { LedgerCtx } from './write';
 /**
  * Loader baca ledger (server saja): view-model untuk Beranda, Transaksi, Dompet, Sampah.
  * Aturan:
- * - satu transaksi pendek `withLedger` per loader (konteks user + `app.assert_member`), hanya
- *   kerja DB di dalamnya (bisa diulang 40001/40P01);
+ * - setiap bacaan punya dua bentuk: `fooTx(c, ctx, …)` berjalan di transaksi milik pemanggil
+ *   (loader page merangkai beberapa bacaan BERURUTAN di satu `withLedger`, jadi satu muat page =
+ *   satu koneksi pool), dan `foo(ctx, …)` = pembungkus satu `withLedger` untuk pemanggil tunggal
+ *   (action, tes). Input divalidasi Zod di bentuk `Tx` (pembungkus memvalidasi lebih dulu supaya
+ *   input tak sah tidak meminjam koneksi). Hanya kerja DB di dalam transaksi (seluruh blok bisa
+ *   diulang 40001/40P01);
  * - setiap kueri dibatasi `space_id = ctx.spaceId` secara eksplisit, selain RLS: baris tidak
  *   pernah dipilih lewat id saja, dan join ikut membawa `space_id` yang sama;
  * - kaki `space_transfer` hanya membawa dompet ruangnya sendiri; dompet lawan
@@ -79,10 +83,11 @@ const ENTRY_KINDS = new Set<EntryVM['kind']>([
   'opening_balance',
   'space_transfer',
   'adjustment',
+  // S7: reimburse talangan (satu baris utama +nominal, seperti pemasukan).
+  'reimbursement',
 ]);
 
 function entryKind(kind: string): EntryVM['kind'] {
-  // `reimbursement` (talangan) belum punya VM dan belum bisa dibuat di S6.
   if (!ENTRY_KINDS.has(kind as EntryVM['kind'])) throw new Error('jenis entri tidak dikenal');
   return kind as EntryVM['kind'];
 }
@@ -111,6 +116,9 @@ interface EntryRow {
   direction: 'out' | 'in' | null;
   shared_note: string | null;
   reimbursable: boolean;
+  moved_at: string | null;
+  fee: number | null;
+  reimburses_entry_id: string | null;
 }
 
 /**
@@ -126,7 +134,10 @@ const ENTRY_COLUMNS = `
   case when e.kind = 'transfer' then ca.name end as counter_account_name,
   e.category_id, cat.name as category_name, cat.icon as category_icon,
   e.description, ${wib('e.voided_at')} as voided_at, e.direction::text as direction,
-  e.shared_note, e.reimbursable`;
+  e.shared_note, e.reimbursable, ${wib('e.moved_at')} as moved_at,
+  case when e.kind = 'space_transfer' and e.space_kind = 'personal' then
+    (select abs(sum(fl.amount))::bigint from app.entry_lines fl
+      where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -171,6 +182,10 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
   // Ubah = ganti-penuh: nilai talangan sekarang harus ikut terkirim apa adanya.
   if (row.reimbursable) vm.reimbursable = true;
+  if (kind === 'space_transfer') vm.spaceKind = row.space_kind;
+  if (row.fee !== null && row.fee > 0) vm.fee = row.fee;
+  if (row.moved_at !== null) vm.movedAt = row.moved_at;
+  if (row.reimburses_entry_id !== null) vm.reimbursesEntryId = row.reimburses_entry_id;
   return vm;
 }
 
@@ -183,28 +198,36 @@ async function queryEntries(c: pg.PoolClient, sql: string, params: unknown[]): P
  * Entri hidup ruang ini pada satu bulan WIB, terbaru di atas; `accountId` = baris utama/lawan.
  * Dibatasi 1000 baris sebagai pengaman; paginasi ditunda (belum ada penanda "lainnya").
  */
-export async function listEntries(
+export async function listEntriesTx(
+  c: pg.PoolClient,
   ctx: LedgerCtx,
   i: { month: string; accountId?: string },
 ): Promise<EntryVM[]> {
   const m = month.parse(i.month);
   const accountId = i.accountId === undefined ? null : uuid.parse(i.accountId);
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>
-    queryEntries(
-      c,
-      `select ${ENTRY_COLUMNS}
-         from app.entries e ${ENTRY_JOINS}
-        where e.space_id = $1 and e.voided_at is null
-          and e.occurred_on >= $2::date
-          and e.occurred_on < ($2::date + interval '1 month')::date
-          and ($3::uuid is null or exists (
-                select 1 from app.entry_lines l
-                 where l.space_id = e.space_id and l.entry_id = e.id and l.account_id = $3))
-        ${ENTRY_ORDER}
-        limit 1000`,
-      [ctx.spaceId, `${m}-01`, accountId],
-    ),
+  return queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.voided_at is null
+        and e.occurred_on >= $2::date
+        and e.occurred_on < ($2::date + interval '1 month')::date
+        and ($3::uuid is null or exists (
+              select 1 from app.entry_lines l
+               where l.space_id = e.space_id and l.entry_id = e.id and l.account_id = $3))
+      ${ENTRY_ORDER}
+      limit 1000`,
+    [ctx.spaceId, `${m}-01`, accountId],
   );
+}
+
+export async function listEntries(
+  ctx: LedgerCtx,
+  i: { month: string; accountId?: string },
+): Promise<EntryVM[]> {
+  month.parse(i.month);
+  if (i.accountId !== undefined) uuid.parse(i.accountId);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listEntriesTx(c, ctx, i));
 }
 
 /** Batas atas jumlah entri riwayat satu dompet per halaman (`?tampil=`). */
@@ -216,7 +239,8 @@ const historyLimit = z.number().int().min(1).max(ACCOUNT_HISTORY_MAX);
  * lawan, terbaru di atas, dibatasi `n` (`hasMore` bila masih ada yang lebih lama). Entri pembuka
  * (Saldo awal) dikembalikan terpisah dan tidak ikut hitungan `n`, supaya tidak terpotong.
  */
-export async function accountEntries(
+export async function accountEntriesTx(
+  c: pg.PoolClient,
   ctx: LedgerCtx,
   accountId: string,
   n: number,
@@ -226,45 +250,62 @@ export async function accountEntries(
   const touches = `exists (
             select 1 from app.entry_lines l
              where l.space_id = e.space_id and l.entry_id = e.id and l.account_id = $2)`;
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const rows = await queryEntries(
-      c,
-      `select ${ENTRY_COLUMNS}
-         from app.entries e ${ENTRY_JOINS}
-        where e.space_id = $1 and e.voided_at is null and e.kind <> 'opening_balance'
-          and ${touches}
-        ${ENTRY_ORDER}
-        limit $3`,
-      [ctx.spaceId, id, l + 1],
-    );
-    const opening = await queryEntries(
-      c,
-      `select ${ENTRY_COLUMNS}
-         from app.entries e ${ENTRY_JOINS}
-        where e.space_id = $1 and e.voided_at is null and e.kind = 'opening_balance'
-          and ${touches}
-        ${ENTRY_ORDER}
-        limit 10`,
-      [ctx.spaceId, id],
-    );
-    return { entries: rows.slice(0, l), opening, hasMore: rows.length > l };
-  });
+  const rows = await queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.voided_at is null and e.kind <> 'opening_balance'
+        and ${touches}
+      ${ENTRY_ORDER}
+      limit $3`,
+    [ctx.spaceId, id, l + 1],
+  );
+  const opening = await queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.voided_at is null and e.kind = 'opening_balance'
+        and ${touches}
+      ${ENTRY_ORDER}
+      limit 10`,
+    [ctx.spaceId, id],
+  );
+  return { entries: rows.slice(0, l), opening, hasMore: rows.length > l };
+}
+
+export async function accountEntries(
+  ctx: LedgerCtx,
+  accountId: string,
+  n: number,
+): Promise<{ entries: EntryVM[]; opening: EntryVM[]; hasMore: boolean }> {
+  uuid.parse(accountId);
+  historyLimit.parse(n);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>
+    accountEntriesTx(c, ctx, accountId, n),
+  );
 }
 
 /** `limit` entri hidup terbaru ruang ini (1–100). */
-export async function recentEntries(ctx: LedgerCtx, n: number): Promise<EntryVM[]> {
+export async function recentEntriesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  n: number,
+): Promise<EntryVM[]> {
   const l = limit.parse(n);
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>
-    queryEntries(
-      c,
-      `select ${ENTRY_COLUMNS}
-         from app.entries e ${ENTRY_JOINS}
-        where e.space_id = $1 and e.voided_at is null
-        ${ENTRY_ORDER}
-        limit $2`,
-      [ctx.spaceId, l],
-    ),
+  return queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.voided_at is null
+      ${ENTRY_ORDER}
+      limit $2`,
+    [ctx.spaceId, l],
   );
+}
+
+export async function recentEntries(ctx: LedgerCtx, n: number): Promise<EntryVM[]> {
+  limit.parse(n);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => recentEntriesTx(c, ctx, n));
 }
 
 interface HistoryRow {
@@ -280,68 +321,78 @@ interface HistoryRow {
  * Satu entri ruang ini, termasuk yang dibatalkan, dengan riwayat urut versi (lama → baru).
  * `null` bila id bukan uuid, tidak ada, atau milik ruang lain (disamakan).
  */
-export async function getEntry(
+export async function getEntryTx(
+  c: pg.PoolClient,
   ctx: LedgerCtx,
   entryId: string,
 ): Promise<{ entry: EntryVM; history: HistoryVM[] } | null> {
   const parsed = uuid.safeParse(entryId);
   if (!parsed.success) return null;
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const [entry] = await queryEntries(
-      c,
-      `select ${ENTRY_COLUMNS}
-         from app.entries e ${ENTRY_JOINS}
-        where e.space_id = $1 and e.id = $2`,
-      [ctx.spaceId, parsed.data],
-    );
-    if (!entry) return null;
-    const { rows } = await c.query<HistoryRow>(
-      `select h.version, h.op::text as op, ${wib('h.changed_at')} as at, h.changed_by,
-              r.display_name as changed_by_name,
-              (select abs((l ->> 'amount')::bigint)
-                 from jsonb_array_elements(h.snapshot -> 'lines') l
-                where l ->> 'role' = 'main') as amount
-         from app.entry_history h
-         left join app.space_roster($1) r on r.user_id = h.changed_by
-        where h.space_id = $1 and h.entry_id = $2
-        order by h.version`,
-      [ctx.spaceId, parsed.data],
-    );
-    const history = rows.map((row): HistoryVM => {
-      const by = person(row.changed_by, row.changed_by_name);
-      const vm: HistoryVM = {
-        version: row.version,
-        op: row.op,
-        at: row.at,
-        by: { name: by.name, initial: initialOf(by.name) },
-        changedBy: row.changed_by,
-      };
-      if (row.amount !== null) vm.amount = row.amount;
-      return vm;
-    });
-    return { entry, history };
+  const [entry] = await queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.id = $2`,
+    [ctx.spaceId, parsed.data],
+  );
+  if (!entry) return null;
+  const { rows } = await c.query<HistoryRow>(
+    `select h.version, h.op::text as op, ${wib('h.changed_at')} as at, h.changed_by,
+            r.display_name as changed_by_name,
+            (select abs((l ->> 'amount')::bigint)
+               from jsonb_array_elements(h.snapshot -> 'lines') l
+              where l ->> 'role' = 'main') as amount
+       from app.entry_history h
+       left join app.space_roster($1) r on r.user_id = h.changed_by
+      where h.space_id = $1 and h.entry_id = $2
+      order by h.version`,
+    [ctx.spaceId, parsed.data],
+  );
+  const history = rows.map((row): HistoryVM => {
+    const by = person(row.changed_by, row.changed_by_name);
+    const vm: HistoryVM = {
+      version: row.version,
+      op: row.op,
+      at: row.at,
+      by: { name: by.name, initial: initialOf(by.name) },
+      changedBy: row.changed_by,
+    };
+    if (row.amount !== null) vm.amount = row.amount;
+    return vm;
   });
+  return { entry, history };
+}
+
+export async function getEntry(
+  ctx: LedgerCtx,
+  entryId: string,
+): Promise<{ entry: EntryVM; history: HistoryVM[] } | null> {
+  // Bukan uuid = tidak ada, tanpa meminjam koneksi.
+  if (!uuid.safeParse(entryId).success) return null;
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => getEntryTx(c, ctx, entryId));
 }
 
 /** Sampah: `api.trash_list(p_limit => 100)` (batal ≤ 90 hari, terbaru dulu) + bentuk entri. */
+export async function trashListTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<TrashVM[]> {
+  const { rows } = await c.query<EntryRow & { purge_after: string }>(
+    `select ${ENTRY_COLUMNS}, ${wib('t.purge_after')} as purge_after
+       from api.trash_list(p_space_id => $1, p_limit => 100) with ordinality
+            as t (entry_id, version, kind, direction, occurred_on, description, amount,
+                  voided_at, voided_by, purge_after, n)
+       join app.entries e on e.space_id = $1 and e.id = t.entry_id
+       ${ENTRY_JOINS}
+      order by t.n`,
+    [ctx.spaceId],
+  );
+  return rows.map((row) => ({ entry: toEntryVM(row), purgeAfter: row.purge_after }));
+}
+
 export async function trashList(ctx: LedgerCtx): Promise<TrashVM[]> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<EntryRow & { purge_after: string }>(
-      `select ${ENTRY_COLUMNS}, ${wib('t.purge_after')} as purge_after
-         from api.trash_list(p_space_id => $1, p_limit => 100) with ordinality
-              as t (entry_id, version, kind, direction, occurred_on, description, amount,
-                    voided_at, voided_by, purge_after, n)
-         join app.entries e on e.space_id = $1 and e.id = t.entry_id
-         ${ENTRY_JOINS}
-        order by t.n`,
-      [ctx.spaceId],
-    );
-    return rows.map((row) => ({ entry: toEntryVM(row), purgeAfter: row.purge_after }));
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => trashListTx(c, ctx));
 }
 
 // ===== Dompet dan kategori =====
-interface AccountRow {
+export interface AccountRow {
   id: string;
   name: string;
   pocket: Pocket;
@@ -355,27 +406,33 @@ interface AccountRow {
  * Dompet ruang ini dengan saldo (`app.account_balances`). Dompet terarsip disembunyikan kecuali
  * saldonya ≠ 0 (tidak mungkin: `api.archive_account` mewajibkan saldo 0, BSD §2.2 butir 4).
  */
+export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<AccountVM[]> {
+  const { rows } = await c.query<AccountRow>(
+    `select a.id, a.name, a.pocket::text as pocket, a.wallet_type::text as wallet_type,
+            a.opened_on, a.archived_at is not null as archived, b.balance
+       from app.accounts a
+       join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
+      where a.space_id = $1 and (a.archived_at is null or b.balance <> 0)
+      order by a.sort_order, a.created_at, a.id`,
+    [ctx.spaceId],
+  );
+  return rows.map(mapAccountRow);
+}
+
+export function mapAccountRow(r: AccountRow): AccountVM {
+  return {
+    id: r.id,
+    name: r.name,
+    pocket: r.pocket,
+    walletType: r.wallet_type,
+    openedOn: r.opened_on,
+    archived: r.archived,
+    balance: r.balance,
+  };
+}
+
 export async function listAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<AccountRow>(
-      `select a.id, a.name, a.pocket::text as pocket, a.wallet_type::text as wallet_type,
-              a.opened_on, a.archived_at is not null as archived, b.balance
-         from app.accounts a
-         join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
-        where a.space_id = $1 and (a.archived_at is null or b.balance <> 0)
-        order by a.sort_order, a.created_at, a.id`,
-      [ctx.spaceId],
-    );
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      pocket: r.pocket,
-      walletType: r.wallet_type,
-      openedOn: r.opened_on,
-      archived: r.archived,
-      balance: r.balance,
-    }));
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listAccountsTx(c, ctx));
 }
 
 interface CategoryRow {
@@ -388,33 +445,54 @@ interface CategoryRow {
 }
 
 /** Kategori ruang ini: kategori awal dulu (urutan seed), lalu buatan pengguna (urut dibuat). */
-export async function listCategories(
+export async function listCategoriesTx(
+  c: pg.PoolClient,
   ctx: LedgerCtx,
   opts: { includeArchived?: boolean } = {},
 ): Promise<CategoryVM[]> {
   const includeArchived = opts.includeArchived === true;
+  const { rows } = await c.query<CategoryRow>(
+    `select c.id, c.parent_id, c.name, c.type::text as type, c.icon,
+            c.archived_at is not null as archived
+       from app.categories c
+      where c.space_id = $1 and ($2::boolean or c.archived_at is null)
+      order by c.is_system desc, c.sort_order, c.created_at, c.id`,
+    [ctx.spaceId, includeArchived],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    parentId: r.parent_id,
+    name: r.name,
+    type: r.type,
+    icon: r.icon,
+    archived: r.archived,
+  }));
+}
+
+export async function listCategories(
+  ctx: LedgerCtx,
+  opts: { includeArchived?: boolean } = {},
+): Promise<CategoryVM[]> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listCategoriesTx(c, ctx, opts));
+}
+
+/** Opsi Catat layout `[ruang]`: dompet + kategori aktif ruang ini dalam SATU transaksi. */
+export interface RuangShellData {
+  accounts: AccountVM[];
+  categories: CategoryVM[];
+}
+
+export async function loadRuangShell(ctx: LedgerCtx): Promise<RuangShellData> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<CategoryRow>(
-      `select c.id, c.parent_id, c.name, c.type::text as type, c.icon,
-              c.archived_at is not null as archived
-         from app.categories c
-        where c.space_id = $1 and ($2::boolean or c.archived_at is null)
-        order by c.is_system desc, c.sort_order, c.created_at, c.id`,
-      [ctx.spaceId, includeArchived],
-    );
-    return rows.map((r) => ({
-      id: r.id,
-      parentId: r.parent_id,
-      name: r.name,
-      type: r.type,
-      icon: r.icon,
-      archived: r.archived,
-    }));
+    const accounts = await listAccountsTx(c, ctx);
+    const categories = await listCategoriesTx(c, ctx);
+    return { accounts, categories };
   });
 }
 
 /** Id kategori saran (urutan `api.suggest_categories`, 6 teratas); jam kosong = jam WIB DB. */
-export async function suggestCategories(
+export async function suggestCategoriesTx(
+  c: pg.PoolClient,
   ctx: LedgerCtx,
   i: {
     type: 'income' | 'expense';
@@ -424,68 +502,88 @@ export async function suggestCategories(
   },
 ): Promise<string[]> {
   const v = suggestSchema.parse(i);
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{ category_id: string }>(
-      `select s.category_id
-         from api.suggest_categories(
-                p_space_id => $1, p_type => $2::app.category_type, p_hour => $3::smallint,
-                p_amount => $4::bigint, p_description => $5)
-              with ordinality as s (category_id, score, source, n)
-        order by s.n`,
-      [ctx.spaceId, v.type, v.hour ?? null, v.amount ?? null, v.description ?? null],
-    );
-    return rows.map((r) => r.category_id);
-  });
+  const { rows } = await c.query<{ category_id: string }>(
+    `select s.category_id
+       from api.suggest_categories(
+              p_space_id => $1, p_type => $2::app.category_type, p_hour => $3::smallint,
+              p_amount => $4::bigint, p_description => $5)
+            with ordinality as s (category_id, score, source, n)
+      order by s.n`,
+    [ctx.spaceId, v.type, v.hour ?? null, v.amount ?? null, v.description ?? null],
+  );
+  return rows.map((r) => r.category_id);
+}
+
+export async function suggestCategories(
+  ctx: LedgerCtx,
+  i: {
+    type: 'income' | 'expense';
+    hour?: number | undefined;
+    amount?: Rupiah | undefined;
+    description?: string | undefined;
+  },
+): Promise<string[]> {
+  suggestSchema.parse(i);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => suggestCategoriesTx(c, ctx, i));
 }
 
 // ===== Ringkasan =====
 /** `api.month_summary` untuk bulan `YYYY-MM` (kolom kantor tidak dipakai VM). */
-export async function monthSummary(ctx: LedgerCtx, m: string): Promise<MonthSummaryVM> {
+export async function monthSummaryTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  m: string,
+): Promise<MonthSummaryVM> {
   const first = `${month.parse(m)}-01`;
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{
-      pemasukan: number;
-      pengeluaran: number;
-      selisih: number;
-      transfer: number;
-    }>(
-      `select s.pemasukan, s.pengeluaran, s.selisih, s.transfer
-         from api.month_summary(p_space_id => $1, p_month => $2::date) s`,
-      [ctx.spaceId, first],
-    );
-    const r = rows[0];
-    if (!r) throw new Error('month_summary kosong');
-    return {
-      pemasukan: r.pemasukan,
-      pengeluaran: r.pengeluaran,
-      selisih: r.selisih,
-      transfer: r.transfer,
-    };
-  });
+  const { rows } = await c.query<{
+    pemasukan: number;
+    pengeluaran: number;
+    selisih: number;
+    transfer: number;
+  }>(
+    `select s.pemasukan, s.pengeluaran, s.selisih, s.transfer
+       from api.month_summary(p_space_id => $1, p_month => $2::date) s`,
+    [ctx.spaceId, first],
+  );
+  const r = rows[0];
+  if (!r) throw new Error('month_summary kosong');
+  return {
+    pemasukan: r.pemasukan,
+    pengeluaran: r.pengeluaran,
+    selisih: r.selisih,
+    transfer: r.transfer,
+  };
+}
+
+export async function monthSummary(ctx: LedgerCtx, m: string): Promise<MonthSummaryVM> {
+  month.parse(m);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => monthSummaryTx(c, ctx, m));
 }
 
 /** `api.safe_to_spend` dengan hari ini = `app.today()` (p_today kosong). */
+export async function safeToSpendTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<SafeToSpendVM> {
+  const { rows } = await c.query<{
+    operasional: number;
+    bills_until_eom: number;
+    budget_wajib_remaining: number;
+    total: number;
+  }>(
+    `select s.operasional, s.bills_until_eom, s.budget_wajib_remaining, s.total
+       from api.safe_to_spend(p_space_id => $1) s`,
+    [ctx.spaceId],
+  );
+  const r = rows[0];
+  if (!r) throw new Error('safe_to_spend kosong');
+  return {
+    operasional: r.operasional,
+    billsUntilEom: r.bills_until_eom,
+    budgetWajibRemaining: r.budget_wajib_remaining,
+    aman: r.total,
+  };
+}
+
 export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendVM> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{
-      operasional: number;
-      bills_until_eom: number;
-      budget_wajib_remaining: number;
-      total: number;
-    }>(
-      `select s.operasional, s.bills_until_eom, s.budget_wajib_remaining, s.total
-         from api.safe_to_spend(p_space_id => $1) s`,
-      [ctx.spaceId],
-    );
-    const r = rows[0];
-    if (!r) throw new Error('safe_to_spend kosong');
-    return {
-      operasional: r.operasional,
-      billsUntilEom: r.bills_until_eom,
-      budgetWajibRemaining: r.budget_wajib_remaining,
-      aman: r.total,
-    };
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => safeToSpendTx(c, ctx));
 }
 
 /**
@@ -495,35 +593,39 @@ export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendVM> {
  * tombol "Tidak ada pengeluaran hari ini". Baris `no_spend_days` tidak pernah dihapus; UI yang
  * menyembunyikan status tanda bila ada pengeluaran.
  */
+export async function todayStatusTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<TodayStatusVM> {
+  const { rows } = await c.query<{ has_expense: boolean; no_spend: boolean }>(
+    `select exists (select 1 from app.entries e
+                     where e.space_id = $1 and e.voided_at is null
+                       and e.occurred_on = app.today()
+                       and e.kind = 'expense')
+              as has_expense,
+            exists (select 1 from app.no_spend_days d
+                     where d.space_id = $1 and d.on_date = app.today()) as no_spend`,
+    [ctx.spaceId],
+  );
+  const r = rows[0];
+  return { hasExpense: r?.has_expense === true, noSpendMarked: r?.no_spend === true };
+}
+
 export async function todayStatus(ctx: LedgerCtx): Promise<TodayStatusVM> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{ has_expense: boolean; no_spend: boolean }>(
-      `select exists (select 1 from app.entries e
-                       where e.space_id = $1 and e.voided_at is null
-                         and e.occurred_on = app.today()
-                         and e.kind = 'expense')
-                as has_expense,
-              exists (select 1 from app.no_spend_days d
-                       where d.space_id = $1 and d.on_date = app.today()) as no_spend`,
-      [ctx.spaceId],
-    );
-    const r = rows[0];
-    return { hasExpense: r?.has_expense === true, noSpendMarked: r?.no_spend === true };
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => todayStatusTx(c, ctx));
 }
 
 /**
  * Ada pengeluaran hidup di ruang ini (checklist Beranda "Catat satu pengeluaran"), kapan pun.
  * Bukan fungsi SQL baru: satu `exists` dengan `space_id` eksplisit.
  */
+export async function hasExpenseTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<boolean> {
+  const { rows } = await c.query<{ any: boolean }>(
+    `select exists (select 1 from app.entries e
+                     where e.space_id = $1 and e.voided_at is null and e.kind = 'expense')
+              as any`,
+    [ctx.spaceId],
+  );
+  return rows[0]?.any === true;
+}
+
 export async function hasExpense(ctx: LedgerCtx): Promise<boolean> {
-  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{ any: boolean }>(
-      `select exists (select 1 from app.entries e
-                       where e.space_id = $1 and e.voided_at is null and e.kind = 'expense')
-                as any`,
-      [ctx.spaceId],
-    );
-    return rows[0]?.any === true;
-  });
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => hasExpenseTx(c, ctx));
 }

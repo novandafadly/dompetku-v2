@@ -3,8 +3,17 @@
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
 import { recordProductEvent } from '@/server/ledger/events';
 import { listAccounts, listCategories, suggestCategories } from '@/server/ledger/read';
-import { createEntry, createTransfer } from '@/server/ledger/write';
-import { actionContext, ledger, mutate, parseInput, query, quietly } from './context';
+import { createEntry, createSpaceTransfer, createTransfer } from '@/server/ledger/write';
+import {
+  ActionInputError,
+  actionContext,
+  ledger,
+  mutate,
+  parseInput,
+  query,
+  quietly,
+  targetSpace,
+} from './context';
 import {
   catatEventInput,
   saveCatatInput,
@@ -20,13 +29,22 @@ import {
  * "Coba lagi" dengan `clientId` yang sama).
  */
 
+/**
+ * `entryId` = entri di ruang argumen saja. Transfer antar ruang: kaki sumber (ruang argumen);
+ * id kaki ruang lain (`linkedEntryId`) dan `linkId` tidak pernah dikembalikan, sehingga rute
+ * Bersama tidak menerima id entri Pribadi (Global Constraint S7). "Urungkan" membatalkan kaki
+ * sumber; DB membatalkan pasangannya.
+ */
 export interface SaveCatatValue {
   entryId: string;
   version: number;
   replayed: boolean;
 }
 
-/** Simpan pengeluaran, pemasukan, atau transfer di ruang ini. */
+/**
+ * Simpan pengeluaran, pemasukan (talangan: `reimbursable`, pengeluaran Pribadi saja), transfer
+ * di ruang ini, atau transfer antar ruang (`space_transfer`, ruang tujuan `toRuang`).
+ */
 export async function saveCatat(
   ruang: unknown,
   input: SaveCatatInput,
@@ -34,6 +52,27 @@ export async function saveCatat(
   return mutate('saveCatat', actionContext(ruang), async (ctx) => {
     const v = parseInput(saveCatatInput, input);
     if (v.kind === 'transfer') return createTransfer(ledger(ctx), v);
+    if (v.kind === 'space_transfer') {
+      const toSpaceId = await targetSpace(ctx, v.toRuang);
+      const r = await createSpaceTransfer(ledger(ctx), {
+        clientId: v.clientId,
+        fromAccountId: v.fromAccountId,
+        toSpaceId,
+        toAccountId: v.toAccountId,
+        amount: v.amount,
+        fee: v.fee ?? 0,
+        occurredOn: v.occurredOn,
+        description: v.description,
+        sharedNote: v.sharedNote,
+        allowNegative: v.allowNegative ?? false,
+      });
+      return { entryId: r.entryId, version: r.version, replayed: r.replayed };
+    }
+    // Talangan hanya pengeluaran Pribadi (DB `reimbursable_personal_expense_only`): ditolak
+    // sebagai galat input sebelum DB, bukan DK422 tak terpetakan.
+    if (v.reimbursable === true && (v.kind !== 'expense' || ctx.kind !== 'personal')) {
+      throw new ActionInputError('reimbursable');
+    }
     const r = await createEntry(ledger(ctx), v);
     return { entryId: r.entryId, version: r.version, replayed: r.replayed };
   });

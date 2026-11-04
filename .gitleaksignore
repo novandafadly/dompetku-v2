@@ -1,0 +1,3 @@
+# Temuan gitleaks yang sudah diperiksa manual (satu fingerprint per baris; jangan pakai pola luas).
+# 15_talangan.sql:4 di 3c7a8fe = komentar SQL ("api.update_entry, void/pulihkan ..."), bukan secret.
+3c7a8fea687e9cbe2f9bd672799dd92c0ca56f1f:packages/db/tests/15_talangan.sql:generic-api-key:4

@@ -1,7 +1,7 @@
 'use client';
 
 import { EntryList } from '@/features/transaksi/entry-list';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { PageHeader } from '@/features/shell/page-header';
 
 export function TransaksiPage() {

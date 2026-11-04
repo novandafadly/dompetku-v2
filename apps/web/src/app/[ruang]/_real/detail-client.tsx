@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { lazy, Suspense, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
+import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
+import { HandCoinsIcon } from '@/components/ui/icons/hand-coins';
 import { PencilSimpleIcon } from '@/components/ui/icons/pencil-simple';
 import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
@@ -18,10 +20,11 @@ import type {
   LedgerErrorCode,
   Ruang,
 } from '@/features/ledger/types';
-import { RUANG_LABEL } from '@/features/shell/hrefs';
+import { buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { DETAIL_TITLE_ID } from '@/features/transaksi/entry-detail-view';
 import { restoreEntryAction, voidEntryAction } from '../_actions/entri';
 import { RestoreControl } from '../restore-control';
+import { focusHeadingAt, focusTitle as focusTitleById } from './focus-title';
 
 /**
  * Aksi Detail nyata (pulau klien, dimuat malas lewat `detail-islands`). Sheet Ubah (`EditSheet` +
@@ -37,6 +40,29 @@ const preloadEdit = () => {
 const loadVoid = () => import('@/features/transaksi/void-dialog-view');
 const preloadVoid = () => {
   void loadVoid();
+};
+
+const loadMove = () => import('./detail-move');
+const MoveSheetReal = lazy(() => loadMove().then((m) => ({ default: m.MoveSheetReal })));
+const preloadMove = () => {
+  void loadMove();
+};
+
+// Sheet `Catat reimburse` dan dialog `Tidak diganti` satu chunk (hanya talangan yang memakainya).
+const loadReimburse = () => import('./detail-reimburse');
+const ReimburseSheetReal = lazy(() =>
+  loadReimburse().then((m) => ({ default: m.ReimburseSheetReal })),
+);
+const NotReimbursedDialogReal = lazy(() =>
+  loadReimburse().then((m) => ({ default: m.NotReimbursedDialogReal })),
+);
+const preloadReimburse = () => {
+  void loadReimburse();
+};
+
+/** Sesudah halaman dimuat ulang (banner/status berubah): fokus ke judul Detail. */
+const focusTitle = () => {
+  focusTitleById(DETAIL_TITLE_ID);
 };
 
 interface Failure {
@@ -62,6 +88,12 @@ export interface DetailActionsProps {
   listHref: Route;
   editable: boolean;
   voidable: boolean;
+  /** Ruang tujuan "Pindahkan ke ruang lain" (S7-D2); `null` = tidak ditawarkan. */
+  moveTo: Ruang | null;
+  /** Talangan yang masih menunggu diganti (S7-D3); `null` = tidak ditawarkan. */
+  reimbursable: { remaining: number } | null;
+  /** `Tidak diganti` hanya bila belum ada reimburse hidup (DB menolak sebaliknya). */
+  canGiveUp: boolean;
 }
 
 export function DetailActions({
@@ -74,14 +106,23 @@ export function DetailActions({
   listHref,
   editable,
   voidable,
+  moveTo,
+  reimbursable,
+  canGiveUp,
 }: DetailActionsProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [reimbursing, setReimbursing] = useState(false);
+  const [giveUp, setGiveUp] = useState(false);
   const busy = useRef(false);
   const editMounted = useOpenedOnce(editing);
   const voidMounted = useOpenedOnce(confirming);
+  const moveMounted = useOpenedOnce(moving);
+  const reimburseMounted = useOpenedOnce(reimbursing);
+  const giveUpMounted = useOpenedOnce(giveUp);
   const label = RUANG_LABEL[ruang];
 
   async function confirmVoid() {
@@ -126,6 +167,32 @@ export function DetailActions({
 
   return (
     <div className="flex flex-col gap-2">
+      {reimbursable !== null ? (
+        <>
+          <Button
+            onPointerEnter={preloadReimburse}
+            onFocus={preloadReimburse}
+            onClick={() => {
+              setReimbursing(true);
+            }}
+          >
+            <HandCoinsIcon size={18} weight="bold" />
+            Catat reimburse
+          </Button>
+          {canGiveUp ? (
+            <Button
+              variant="secondary"
+              onPointerEnter={preloadReimburse}
+              onFocus={preloadReimburse}
+              onClick={() => {
+                setGiveUp(true);
+              }}
+            >
+              Tidak diganti
+            </Button>
+          ) : null}
+        </>
+      ) : null}
       {editable ? (
         <Button
           variant="secondary"
@@ -154,6 +221,19 @@ export function DetailActions({
           Batalkan transaksi
         </Button>
       ) : null}
+      {moveTo !== null ? (
+        <Button
+          variant="secondary"
+          onPointerEnter={preloadMove}
+          onFocus={preloadMove}
+          onClick={() => {
+            setMoving(true);
+          }}
+        >
+          <ArrowsLeftRightIcon size={18} weight="bold" />
+          {`Pindahkan ke ${RUANG_LABEL[moveTo]}`}
+        </Button>
+      ) : null}
       {editable && editMounted ? (
         <Suspense fallback={null}>
           <EditSheetReal
@@ -165,6 +245,55 @@ export function DetailActions({
             categories={categories}
             today={today}
             me={me}
+          />
+        </Suspense>
+      ) : null}
+      {moveTo !== null && moveMounted ? (
+        <Suspense fallback={null}>
+          <MoveSheetReal
+            open={moving}
+            onOpenChange={setMoving}
+            ruang={ruang}
+            toRuang={moveTo}
+            entry={entry}
+            onMoved={() => {
+              // Id entri baru tidak dikembalikan (R24): ke daftar Transaksi ruang tujuan, fokus ke
+              // judulnya (sheet dan tombol asal ikut tercabut; tanpa ini fokus jatuh ke <body>).
+              const href = buildHref(moveTo, 'transaksi', '');
+              router.push(href);
+              focusHeadingAt(href);
+            }}
+            onConflict={() => {
+              router.refresh();
+            }}
+          />
+        </Suspense>
+      ) : null}
+      {reimbursable !== null && reimburseMounted ? (
+        <Suspense fallback={null}>
+          <ReimburseSheetReal
+            open={reimbursing}
+            onOpenChange={setReimbursing}
+            ruang={ruang}
+            entry={entry}
+            remaining={reimbursable.remaining}
+            accounts={accounts}
+            today={today}
+            onSaved={focusTitle}
+          />
+        </Suspense>
+      ) : null}
+      {reimbursable !== null && canGiveUp && giveUpMounted ? (
+        <Suspense fallback={null}>
+          <NotReimbursedDialogReal
+            open={giveUp}
+            onOpenChange={setGiveUp}
+            ruang={ruang}
+            entry={entry}
+            onDone={focusTitle}
+            onConflict={() => {
+              router.refresh();
+            }}
           />
         </Suspense>
       ) : null}
@@ -199,6 +328,9 @@ const VoidDialogDescribed = lazy(() =>
           onOpenChange={props.onOpenChange}
           onConfirm={props.onConfirm}
           description={m.voidSentenceVM(props.entry)}
+          {...(props.entry.kind === 'space_transfer'
+            ? { title: 'Batalkan transfer antar ruang?', confirmLabel: 'Batalkan transfer' }
+            : {})}
         />
       );
     },
@@ -224,14 +356,8 @@ export function RestoreAction({ ruang, entry, accounts }: RestoreActionProps) {
       entry={entry}
       account={account}
       restore={(req) => restoreEntryAction(ruang, req)}
-      onRestored={() => {
-        // Banner hilang saat Detail dimuat ulang: fokus ke judul, bukan <body>.
-        setTimeout(() => {
-          const title = document.getElementById(DETAIL_TITLE_ID);
-          title?.setAttribute('tabindex', '-1');
-          title?.focus();
-        }, 0);
-      }}
+      // Banner hilang saat Detail dimuat ulang: fokus ke judul, bukan <body>.
+      onRestored={focusTitle}
       onConflict={() => {
         router.refresh();
       }}

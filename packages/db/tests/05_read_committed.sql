@@ -1,7 +1,7 @@
 -- Isolasi wajib READ COMMITTED (BSD §3, §13 #23): penjaga batas user dan undangan hanya benar
--- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4, S5, dan S6 harus menolak.
+-- di tingkat ini. Transaksi tes sengaja REPEATABLE READ; semua jalan tulis S4 sampai S7 harus menolak.
 begin isolation level repeatable read;
-select plan(21);
+select plan(22);
 
 select throws_ok(q, 'DK500', 'isolation_not_read_committed', 'REPEATABLE READ ditolak: ' || t)
 from (values
@@ -25,7 +25,8 @@ from (values
   ('create_category', $$select tests.web_exec(tests.n(), $q$select api.create_category(gen_random_uuid(), gen_random_uuid(), 'expense', 'X', 'X')$q$)$$),
   ('update_category', $$select tests.web_exec(tests.n(), $q$select api.update_category(gen_random_uuid(), 'X', 'X', null)$q$)$$),
   ('archive_category', $$select tests.web_exec(tests.n(), $q$select api.archive_category(gen_random_uuid())$q$)$$),
-  ('mark_no_spend_day', $$select tests.web_exec(tests.n(), $q$select api.mark_no_spend_day(gen_random_uuid())$q$)$$)
+  ('mark_no_spend_day', $$select tests.web_exec(tests.n(), $q$select api.mark_no_spend_day(gen_random_uuid())$q$)$$),
+  ('move_entry_to_space', $$select tests.web_exec(tests.n(), $q$select api.move_entry_to_space(gen_random_uuid(), gen_random_uuid(), 1, gen_random_uuid(), gen_random_uuid(), null)$q$)$$)
 ) v (t, q);
 
 select * from finish();

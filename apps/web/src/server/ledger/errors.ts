@@ -21,10 +21,23 @@ const RULES = new Set<LedgerErrorCode>([
   'category_archived',
   'category_depth',
   'restore_window_closed',
+  // S7: dompet, transfer antar ruang, talangan, pindah ruang (salinan bingkai S7 Task 1).
+  'balance_not_zero',
+  'cross_space_not_allowed',
+  'cross_space_kantor',
+  'not_reimbursable',
+  'reimbursement_exceeds',
+  'reimbursement_exists',
+  'entry_moved',
+  'kind_not_movable',
+  'not_creator',
 ]);
 
-/** Indeks unik nama kategori aktif (0100): satu-satunya 23505 yang punya teks sendiri di UI. */
-const CATEGORY_NAME_INDEX = 'categories_name_unique';
+/**
+ * Indeks unik nama aktif: kategori (0100) dan dompet (0109). Nama indeks = kontrak; 23505 dari
+ * indeks lain tetap `unknown`.
+ */
+const NAME_INDEXES = new Set(['categories_name_unique', 'accounts_name_unique']);
 
 const MACHINE_CODE = /^[a-z_]{1,64}$/;
 
@@ -79,12 +92,19 @@ export function toLedgerError(e: unknown): LedgerError | null {
           ? { code: 'invalid', field: detail }
           : { code: 'invalid' };
       }
-      case '23505':
-        if ((e as { constraint?: unknown }).constraint === CATEGORY_NAME_INDEX) {
+      case '23505': {
+        const constraint = (e as { constraint?: unknown }).constraint;
+        if (typeof constraint === 'string' && NAME_INDEXES.has(constraint)) {
           return { code: 'name_taken' };
         }
         break;
+      }
       case 'DK422':
+        // Talangan di luar pengeluaran Pribadi: galat input kolom `reimbursable`, sama dengan
+        // penolakan saveCatat sebelum DB (UI tidak menawarkan toggle itu di sana).
+        if (d.message === 'reimbursable_personal_expense_only') {
+          return { code: 'invalid', field: 'reimbursable' };
+        }
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         break;
     }

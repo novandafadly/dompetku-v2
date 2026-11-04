@@ -14,6 +14,10 @@ import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 export function voidSentenceVM(e: EntryVM): string {
   const amt = formatRupiah(e.amount);
   const own = e.accountName;
+  // S7-D1: transfer antar ruang dibatalkan berpasangan; salinan tetap tanpa nama dompet ruang lain.
+  if (e.kind === 'space_transfer') {
+    return `Kedua sisinya dibatalkan bersamaan, di Pribadi dan Bersama. Saldo kedua dompet kembali. Bisa dipulihkan dari Sampah selama ${String(SAMPAH_HARI)} hari.`;
+  }
   let effect: string;
   switch (e.kind) {
     case 'expense':
@@ -22,10 +26,13 @@ export function voidSentenceVM(e: EntryVM): string {
     case 'transfer':
       effect = `Saldo ${own} bertambah ${amt}, saldo ${e.counterAccountName ?? ''} berkurang ${amt}.`;
       break;
-    case 'space_transfer':
     case 'adjustment':
       effect =
         e.direction === 'out' ? `Saldo ${own} bertambah ${amt}.` : `Saldo ${own} berkurang ${amt}.`;
+      break;
+    case 'reimbursement':
+      // S7-D3: membatalkan reimburse membuka lagi sisa talangan.
+      effect = `Saldo ${own} berkurang ${amt}. Sisa talangan bertambah lagi.`;
       break;
     default:
       effect = `Saldo ${own} berkurang ${amt}.`;
@@ -33,11 +40,18 @@ export function voidSentenceVM(e: EntryVM): string {
   return `Transaksi ${amt} dibatalkan. ${effect} Bisa dipulihkan ${String(SAMPAH_HARI)} hari dari Sampah.`;
 }
 
-/** Toast sesudah batal (pola toast Catat): "Dibatalkan di Pribadi · Rp 35.000 dari BCA". */
+/**
+ * Toast sesudah batal (pola toast Catat): "Dibatalkan di Pribadi · Rp 35.000 dari BCA".
+ * Reimburse masuk ke dompet ("ke"), antar ruang menyebut kedua ruang tanpa dompet (S7-D1).
+ */
 export function voidedToastVM(ruang: string, e: EntryVM): string {
+  if (e.kind === 'space_transfer') {
+    return `Dibatalkan di Pribadi dan Bersama · ${formatRupiah(e.amount)}`;
+  }
   const head = `Dibatalkan di ${ruang} · ${formatRupiah(e.amount)}`;
   switch (e.kind) {
     case 'income':
+    case 'reimbursement':
       return `${head} ke ${e.accountName}`;
     case 'transfer':
       return `${head} dari ${e.accountName} ke ${e.counterAccountName ?? ''}`;
@@ -52,20 +66,25 @@ export function VoidDialogView({
   onOpenChange,
   onConfirm,
   description,
+  title = 'Batalkan transaksi ini?',
+  confirmLabel = 'Batalkan transaksi',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   description: string;
+  /** Antar ruang (S7-D1): `Batalkan transfer antar ruang?` / `Batalkan transfer`. */
+  title?: string;
+  confirmLabel?: string;
 }) {
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       icon={<ArrowCounterClockwiseIcon size={22} weight="bold" />}
-      title="Batalkan transaksi ini?"
+      title={title}
       description={description}
-      confirmLabel="Batalkan transaksi"
+      confirmLabel={confirmLabel}
       cancelLabel="Kembali"
       onConfirm={onConfirm}
     />

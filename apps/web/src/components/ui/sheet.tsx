@@ -123,7 +123,7 @@ export function Sheet({
         >
           {compact ? null : <span aria-hidden="true" className={SHEET_HANDLE} />}
           <header
-            className={`relative flex items-center gap-2 px-4 ${compact ? 'pt-1.5' : 'pt-2 tablet:px-6 tablet:pt-6'}`}
+            className={`relative flex items-center gap-2 px-4 ${compact ? 'pt-1' : 'pt-2 tablet:px-6 tablet:pt-6'}`}
           >
             {headerStart}
             <Dialog.Title
@@ -148,7 +148,7 @@ export function Sheet({
                 : undefined
             }
             className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 ${
-              compact ? 'gap-2 pt-2' : 'gap-3 pt-3 tablet:px-6'
+              compact ? 'gap-2 pt-1.5' : 'gap-3 pt-3 tablet:px-6'
             }`}
           >
             {children}
@@ -157,7 +157,7 @@ export function Sheet({
             <div
               style={{
                 paddingBottom: compact
-                  ? 'max(0.625rem, env(safe-area-inset-bottom))'
+                  ? 'max(0.5rem, env(safe-area-inset-bottom))'
                   : 'max(1rem, env(safe-area-inset-bottom))',
               }}
               className={`flex flex-col gap-2 px-4 ${compact ? 'pt-2' : 'pt-3 tablet:px-6 tablet:pb-6'}`}

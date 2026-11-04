@@ -1,7 +1,10 @@
+import type { IsoDate } from '@dompetku/domain';
 import { ErrorState } from '@/components/ui/state';
 import { AccountListView } from '@/features/dompet/account-list-view';
-import type { AccountVM, Ruang } from '@/features/ledger/types';
-import { buildAccountHref } from '@/features/shell/hrefs';
+import { ArchivedAccounts } from '@/features/dompet/archived-accounts';
+import { waitingItems, WaitingReimburseList } from '@/features/dompet/reimburse-list';
+import type { AccountVM, ReimbursableVM, Ruang } from '@/features/ledger/types';
+import { buildAccountHref, buildEntryHref } from '@/features/shell/hrefs';
 import { PageHeader } from '@/features/shell/page-header';
 import { AddWalletHostIsland, AddWalletTriggerIsland } from './dompet-islands';
 import { RetryIsland } from './transaksi-islands';
@@ -9,27 +12,46 @@ import { RetryIsland } from './transaksi-islands';
 /**
  * Dompet mode nyata (Server Component): daftar dari `account_balances` ruang ini saja (`AccountVM`,
  * saldo dari VM). Tambah dompet = pulau klien (sheet dimuat malas; `?tambah=1` membukanya).
- * Cocokkan saldo, ubah saldo awal, dan arsip dompet menyusul di S7:
- * tidak dirender.
+ * S7: kartu Menunggu reimburse di atas kelompok dompet (Pribadi saja, W4) dan kartu Diarsipkan
+ * di bawah (W3). Cocokkan saldo dan arsip ada di riwayat dompet.
  */
 export function DompetReal({
   ruang,
   query,
+  today,
   accounts,
+  reimbursables,
+  archived,
 }: {
   ruang: Ruang;
   /** Query yang dibawa tautan (mode nyata: hanya `theme`), '' atau '?a=b'. */
   query: string;
+  today: IsoDate;
   accounts: AccountVM[];
+  /** Talangan terbuka; hanya dipakai di Pribadi (Bersama tidak punya talangan). */
+  reimbursables: ReimbursableVM[];
+  archived: AccountVM[];
 }) {
+  const accountHref = (id: string) => buildAccountHref(ruang, id, query);
+  // Bersama tidak pernah menampilkan talangan, apa pun yang diterima (page juga tidak memuatnya).
+  const waiting = ruang === 'pribadi' ? reimbursables : [];
   return (
     <AddWalletHostIsland ruang={ruang} existingNames={accounts.map((a) => a.name)}>
       <PageHeader title="Dompet" action={<AddWalletTriggerIsland />} />
       <AccountListView
         ruang={ruang}
         accounts={accounts}
-        accountHref={(id) => buildAccountHref(ruang, id, query)}
+        accountHref={accountHref}
         renderAdd={(className) => <AddWalletTriggerIsland className={className} />}
+        above={
+          <WaitingReimburseList
+            items={waitingItems(waiting, [...accounts, ...archived], today, (id) =>
+              buildEntryHref(ruang, id, query),
+            )}
+            total={waiting.reduce((sum, r) => sum + r.remaining, 0)}
+          />
+        }
+        below={<ArchivedAccounts accounts={archived} accountHref={accountHref} />}
       />
     </AddWalletHostIsland>
   );

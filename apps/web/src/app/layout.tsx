@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import { todayWIB } from '@dompetku/domain';
 import '../styles/globals.css';
-import { DemoProvider } from '@/features/shell/demo-provider';
+import { DemoRoot } from '@/features/shell/demo-root';
 import { NavProvider } from '@/features/shell/nav-provider';
 import { themeBootScript } from '@/features/shell/theme';
 import { styleNonceBootScript } from '@/lib/security-headers';
@@ -32,9 +32,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
-        {/* Data demo hanya di prototipe; mode nyata tidak pernah memasang DemoProvider. */}
+        {/* Data demo hanya di prototipe; mode nyata tidak pernah memasang DemoProvider (DemoRoot). */}
         <NavProvider today={todayWIB()} prototype={prototype}>
-          {prototype ? <DemoProvider>{children}</DemoProvider> : children}
+          {prototype ? <DemoRoot>{children}</DemoRoot> : children}
         </NavProvider>
       </body>
     </html>

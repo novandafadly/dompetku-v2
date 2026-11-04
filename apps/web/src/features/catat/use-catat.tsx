@@ -1,7 +1,7 @@
 'use client';
 
 import { nowTimeWIB, type IsoDate, type Rupiah } from '@dompetku/domain';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { newClientId } from './client-id';
 import {
@@ -40,6 +40,18 @@ export type FieldCode = 'before_opening' | 'account_archived' | 'category_archiv
  * salinan"): `network` = S6-C2; `not_found` tanpa Coba lagi; lainnya = kendala server.
  */
 export type GalatKind = 'network' | 'server' | 'not_found';
+/** Galat Catat (S7): `GalatKind` ditambah dua galat transfer antar ruang (S7-C1) tanpa Coba lagi. */
+export type CatatGalatKind = GalatKind | 'cross_space_not_allowed' | 'cross_space_kantor';
+
+/** Dompet tujuan di ruang lain (S7-C1): dimuat saat halaman "Ruang lain…" dibuka. */
+export interface CrossTargets {
+  /** Ruang tujuan = kebalikan ruang sheet. */
+  target: Ruang;
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  accounts: AccountVM[];
+}
+
+const otherRuang = (r: Ruang): Ruang => (r === 'pribadi' ? 'bersama' : 'pribadi');
 
 function usable(o: CatatOptions | null, hidden: ReadonlySet<string>): AccountVM[] {
   return (o?.accounts ?? []).filter((a) => !a.archived && !hidden.has(a.id));
@@ -56,12 +68,25 @@ function defaultAccountId(o: CatatOptions): string {
 
 function clear(
   d: CatatDraft,
-  fields: { category?: boolean; counter?: boolean; description?: boolean },
+  fields: {
+    category?: boolean;
+    /** Tujuan transfer, termasuk pilihan antar ruang dan catatan Bersama. */
+    counter?: boolean;
+    description?: boolean;
+    reimbursable?: boolean;
+    sharedNote?: boolean;
+  },
 ): CatatDraft {
   const next = { ...d };
   if (fields.category === true) delete next.categoryId;
-  if (fields.counter === true) delete next.counterAccountId;
+  if (fields.counter === true) {
+    delete next.counterAccountId;
+    delete next.toRuang;
+    delete next.sharedNote;
+  }
   if (fields.description === true) delete next.description;
+  if (fields.reimbursable === true) delete next.reimbursable;
+  if (fields.sharedNote === true) delete next.sharedNote;
   return next;
 }
 
@@ -71,36 +96,39 @@ function enough(d: CatatDraft, account: AccountVM | undefined): boolean {
   return d.amount <= account.balance;
 }
 
+/** Layout effect di klien; `useEffect` di server (tanpa peringatan SSR). */
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
   const [hour] = useState(() => hourWIB ?? Number(nowTimeWIB().slice(0, 2)));
-  // Opsi ruang awal: sinkron di prototipe (render pertama sudah lengkap), Promise di mode nyata.
-  const [initial] = useState(() => source.options(ruang));
-  const [opts, setOpts] = useState<CatatOptions | null>(() =>
-    isPromise(initial) ? null : initial,
-  );
+  // Opsi ruang awal dimuat di efek (bukan di initializer state): sumber nyata memicu Server Action,
+  // dan initializer StrictMode berjalan dua kali. Sumber sinkron (prototipe) terisi di layout effect,
+  // sebelum cat pertama, sehingga tidak ada kedipan keadaan memuat.
+  const [opts, setOpts] = useState<CatatOptions | null>(null);
   const [draft, setDraft] = useState<CatatDraft>(() => ({
     type: 'expense',
     amount: initialAmount ?? null,
-    accountId: isPromise(initial) ? '' : defaultAccountId(initial),
+    accountId: '',
     date: today,
     dateChosen: false,
     ruang,
     clientId: newClientId(),
   }));
-  // Posisi chip tidak berubah selama sheet terbuka; diminta ulang hanya saat ruang/jenis berganti.
-  const [initialChips] = useState(() =>
-    isPromise(initial) ? null : source.chips(ruang, 'expense', hour),
-  );
-  const [chips, setChips] = useState<CategoryVM[]>(() =>
-    initialChips === null || isPromise(initialChips) ? [] : initialChips,
-  );
+  const [chips, setChips] = useState<CategoryVM[]>([]);
   const [status, setStatus] = useState<CatatStatus>('idle');
   const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const [hiddenCategories, setHiddenCategories] = useState<ReadonlySet<string>>(() => new Set());
   const [archivedCategoryId, setArchivedCategoryId] = useState<string | null>(null);
-  const [galatKind, setGalatKind] = useState<GalatKind | null>(null);
+  const [galatKind, setGalatKind] = useState<CatatGalatKind | null>(null);
   const [switchFailed, setSwitchFailed] = useState<Ruang | null>(null);
+  // Dompet tujuan antar ruang: dimuat malas, dibuang saat ruang sumber berganti.
+  const [cross, setCross] = useState<CrossTargets>(() => ({
+    target: otherRuang(ruang),
+    status: 'idle',
+    accounts: [],
+  }));
+  const crossSeq = useRef(0);
 
   // Ref, bukan state: klik ganda dalam satu tick (sebelum render ulang) tetap satu permintaan.
   const busy = useRef(false);
@@ -139,19 +167,18 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     requestChips(r, typeRef.current);
   };
 
-  useEffect(() => {
-    if (initialChips !== null && isPromise(initialChips)) {
-      const seq = chipsSeq.current;
-      initialChips.then(
-        (c) => {
-          if (seq === chipsSeq.current) setChips(c);
-        },
-        () => undefined,
-      );
-    }
-    if (!isPromise(initial)) return;
+  const started = useRef(false);
+  useIsoLayoutEffect(() => {
+    // Efek ganda StrictMode (pasang, lepas, pasang) tetap satu permintaan.
+    if (started.current) return;
+    started.current = true;
+    const got = source.options(ruang);
     const seq = optsSeq.current;
-    initial.then(
+    if (!isPromise(got)) {
+      receive(ruang, got);
+      return;
+    }
+    got.then(
       (o) => {
         if (seq === optsSeq.current) receive(ruang, o);
       },
@@ -159,8 +186,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
         if (seq === optsSeq.current) setOpts({ accounts: [], categories: [] });
       },
     );
-    // Hanya sekali saat sheet dibuka.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Sekali per pemasangan hook (guard `started` menahan efek ganda StrictMode); sumber dan ruang
+    // awal sengaja tidak jadi dependensi.
   }, []);
 
   const loading = opts === null;
@@ -168,6 +195,17 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const accounts = usable(opts, hidden);
   const selectedAccount = opts?.accounts.find((a) => a.id === draft.accountId);
   const destinations = accounts.filter((a) => a.id !== draft.accountId);
+  // Dompet Kantor tidak pernah ikut antar ruang (S7-C1): bukan sumber bila tujuan di ruang lain.
+  const isCross = draft.toRuang !== undefined;
+  const sourceAccounts = isCross ? accounts.filter((a) => a.pocket !== 'kantor') : accounts;
+  const crossBlocked = selectedAccount?.pocket === 'kantor';
+  const crossAccount = isCross
+    ? cross.accounts.find((a) => a.id === draft.counterAccountId)
+    : undefined;
+  const sharedNoteVisible = draft.type === 'transfer' && isCross;
+  // Talangan (S7-C2): hanya pengeluaran Pribadi dari dompet bukan Kantor (Kantor sudah x_kantor).
+  const canReimburse =
+    draft.type === 'expense' && draft.ruang === 'pribadi' && selectedAccount?.pocket !== 'kantor';
   const allCategories = (opts?.categories ?? [])
     .filter(
       (c) =>
@@ -212,13 +250,79 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   };
   const setAccount = (accountId: string) => {
     if (busy.current) return;
-    update((d) => clear({ ...d, accountId }, { counter: d.counterAccountId === accountId }));
     const next = opts?.accounts.find((a) => a.id === accountId);
+    update((d) =>
+      clear(
+        { ...d, accountId },
+        {
+          // Tujuan satu ruang yang sama dengan sumber baru gugur; Kantor memutus antar ruang.
+          counter:
+            (d.toRuang === undefined && d.counterAccountId === accountId) ||
+            (d.toRuang !== undefined && next?.pocket === 'kantor'),
+          reimbursable: next?.pocket === 'kantor',
+        },
+      ),
+    );
+    if (galatKind === 'cross_space_kantor') toIdle();
     if (status === 'field' && fieldCode === 'account_archived') toIdle();
     if (status === 'saldo_kurang' && enough(draft, next)) toIdle();
   };
+  const dropCrossError = () => {
+    if (galatKind === 'cross_space_not_allowed' || galatKind === 'cross_space_kantor') toIdle();
+  };
+  /** Tujuan di ruang yang sama: melepas pilihan antar ruang (dan catatan Bersama). */
   const setCounterAccount = (counterAccountId: string) => {
-    update((d) => ({ ...d, counterAccountId }));
+    if (busy.current) return;
+    update((d) => {
+      const next = clear(d, { counter: true });
+      return { ...next, counterAccountId };
+    });
+    dropCrossError();
+  };
+  /** Muat dompet tujuan di ruang lain (halaman "Ruang lain…"); aman dipanggil ulang setelah galat. */
+  const loadCrossTargets = () => {
+    const target = otherRuang(draft.ruang);
+    if (cross.status === 'ready' && cross.target === target) return;
+    const seq = ++crossSeq.current;
+    let got: AccountVM[] | Promise<AccountVM[]>;
+    try {
+      got = source.spaceTransferTargets(target);
+    } catch {
+      setCross({ target, status: 'error', accounts: [] });
+      return;
+    }
+    if (!isPromise(got)) {
+      setCross({ target, status: 'ready', accounts: got });
+      return;
+    }
+    setCross({ target, status: 'loading', accounts: [] });
+    got.then(
+      (accounts) => {
+        if (seq === crossSeq.current) setCross({ target, status: 'ready', accounts });
+      },
+      () => {
+        if (seq === crossSeq.current) setCross({ target, status: 'error', accounts: [] });
+      },
+    );
+  };
+  /** Pilih dompet tujuan di ruang lain: `toRuang` = ruang tujuan, catatan Bersama dipertahankan. */
+  const setCrossTarget = (counterAccountId: string) => {
+    if (busy.current) return;
+    update((d) => ({ ...d, counterAccountId, toRuang: cross.target }));
+    dropCrossError();
+  };
+  const setSharedNote = (sharedNote: string) => {
+    update((d) => (sharedNote === '' ? clear(d, { sharedNote: true }) : { ...d, sharedNote }));
+  };
+  const setReimbursable = (on: boolean) => {
+    if (busy.current) return;
+    update((d) => {
+      const allowed =
+        d.type === 'expense' &&
+        d.ruang === 'pribadi' &&
+        opts?.accounts.find((a) => a.id === d.accountId)?.pocket !== 'kantor';
+      return on && allowed ? { ...d, reimbursable: true } : clear(d, { reimbursable: true });
+    });
   };
   const setDate = (date: IsoDate) => {
     if (busy.current) return;
@@ -231,7 +335,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const setType = (type: CatatType) => {
     if (busy.current) return;
     typeRef.current = type;
-    update((d) => clear({ ...d, type }, { category: true, counter: true }));
+    update((d) => clear({ ...d, type }, { category: true, counter: true, reimbursable: true }));
+    dropCrossError();
     if (status === 'saldo_kurang' || (status === 'field' && fieldCode === 'category_archived')) {
       toIdle();
     }
@@ -259,11 +364,14 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     setHidden(new Set());
     setHiddenCategories(new Set());
     const got = source.options(next);
+    // Tujuan antar ruang dihitung dari ruang sumber: dibuang, dimuat ulang bila dibuka lagi.
+    crossSeq.current++;
+    setCross({ target: otherRuang(next), status: 'idle', accounts: [] });
     const reset = (accountId: string) => {
       setDraft((d) =>
         clear(
           { ...d, ruang: next, accountId, clientId: newClientId() },
-          { category: true, counter: true },
+          { category: true, counter: true, reimbursable: true },
         ),
       );
     };
@@ -284,6 +392,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
         if (seq !== optsSeq.current) return;
         // Gagal memuat ruang tujuan: kembali ke ruang lama; suntingan lain selama memuat tetap.
         setOpts(prev.opts);
+        setCross({ target: otherRuang(prev.ruang), status: 'idle', accounts: [] });
         setHidden(prev.hidden);
         setHiddenCategories(prev.hiddenCategories);
         setDraft((d) => ({
@@ -337,7 +446,12 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     } else {
       setStatus('galat');
       setGalatKind(
-        out.code === 'network' ? 'network' : out.code === 'not_found' ? 'not_found' : 'server',
+        out.code === 'network' ||
+          out.code === 'not_found' ||
+          out.code === 'cross_space_not_allowed' ||
+          out.code === 'cross_space_kantor'
+          ? out.code
+          : 'server',
       );
     }
     return out;
@@ -378,6 +492,16 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     selectedAccount,
     archivedAccount,
     destinations,
+    sourceAccounts,
+    cross,
+    crossAccount,
+    crossBlocked,
+    sharedNoteVisible,
+    canReimburse,
+    loadCrossTargets,
+    setCrossTarget,
+    setSharedNote,
+    setReimbursable,
     canSave,
     loading,
     status,

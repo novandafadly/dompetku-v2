@@ -1,6 +1,8 @@
 # Konteks build apps/web/Dockerfile: hanya sumber yang dibutuhkan build.
 **/node_modules
 **/.next
+# Bundel worker dibangun ulang di tahap build.
+apps/worker/dist
 **/.turbo
 **/coverage
 **/playwright-report

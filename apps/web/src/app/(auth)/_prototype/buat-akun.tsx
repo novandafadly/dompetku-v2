@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EnvelopeSimpleIcon } from '@/components/ui/icons/envelope-simple';
 import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { PasswordField } from '@/features/auth/password-field';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 
 const MIN_LENGTH = 12;
 

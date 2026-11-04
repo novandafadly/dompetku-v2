@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   catatOptions: vi.fn(),
   suggestFor: vi.fn(),
   voidEntryAction: vi.fn(),
+  moveTargetsAction: vi.fn(),
 }));
 
 vi.mock('../_actions/catat', () => ({
@@ -18,7 +19,10 @@ vi.mock('../_actions/catat', () => ({
   catatOptions: m.catatOptions,
   suggestFor: m.suggestFor,
 }));
-vi.mock('../_actions/entri', () => ({ voidEntryAction: m.voidEntryAction }));
+vi.mock('../_actions/entri', () => ({
+  voidEntryAction: m.voidEntryAction,
+  moveTargetsAction: m.moveTargetsAction,
+}));
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CLIENT = '11111111-1111-4111-8111-111111111111';
@@ -259,5 +263,102 @@ describe('realCatatSource', () => {
       if (p?.includes('_actions')) expect(p).toMatch(/_actions\/(catat|entri)$/);
     }
     expect(src).not.toMatch(/^import (?!type )[^;]*_actions\/inputs/m);
+  });
+
+  describe('transfer antar ruang dan talangan (S7)', () => {
+    const OK = { ok: true, value: { entryId: ENTRY, version: 1, replayed: false } };
+
+    it('space transfer: kind space_transfer + toRuang; keterangan dan catatan bersama ikut; tanpa nama dompet di toast', async () => {
+      m.saveCatat.mockResolvedValue(OK);
+      const out = await source().save(
+        draft({
+          type: 'transfer',
+          categoryId: undefined as never,
+          counterAccountId: RUMAH,
+          toRuang: 'bersama',
+          description: 'bayar kos adik',
+          sharedNote: 'Setoran bulanan',
+        }),
+      );
+      const [ruang, input] = m.saveCatat.mock.calls[0] as [string, Record<string, unknown>];
+      expect(ruang).toBe('pribadi');
+      expect(input).toEqual({
+        kind: 'space_transfer',
+        toRuang: 'bersama',
+        clientId: CLIENT,
+        fromAccountId: BCA,
+        toAccountId: RUMAH,
+        amount: 35_000,
+        description: 'bayar kos adik',
+        sharedNote: 'Setoran bulanan',
+        allowNegative: false,
+      });
+      expect('categoryId' in input).toBe(false);
+      expect(out).toMatchObject({ ok: true, toast: 'Tersimpan di Pribadi · Rp 35.000 ke Bersama' });
+      if (out.ok) {
+        expect(out.toast).not.toContain('BCA');
+        expect(out.toast).not.toContain('Kas Rumah');
+      }
+    });
+
+    it('transfer satu ruang tetap kind transfer (tanpa toRuang)', async () => {
+      m.saveCatat.mockResolvedValue(OK);
+      await source().save(draft({ type: 'transfer', counterAccountId: TUNAI }));
+      expect(m.saveCatat.mock.calls[0]?.[1]).toMatchObject({
+        kind: 'transfer',
+        fromAccountId: BCA,
+        toAccountId: TUNAI,
+      });
+    });
+
+    it('talangan: reimbursable dikirim hanya bila true; toast menyebut Talangan kantor', async () => {
+      m.saveCatat.mockResolvedValue(OK);
+      const out = await source().save(draft({ reimbursable: true }));
+      expect(m.saveCatat.mock.calls[0]?.[1]).toMatchObject({ kind: 'expense', reimbursable: true });
+      expect(out).toMatchObject({
+        toast: 'Tersimpan di Pribadi · Rp 35.000 dari BCA · Talangan kantor',
+      });
+      m.saveCatat.mockClear();
+      await source().save(draft({ reimbursable: false }));
+      expect('reimbursable' in (m.saveCatat.mock.calls[0]?.[1] as object)).toBe(false);
+    });
+
+    it('spaceTransferTargets: moveTargetsAction dari ruang sumber, hanya dompet; dimuat sekali per sesi', async () => {
+      m.moveTargetsAction.mockResolvedValue({
+        ok: true,
+        value: { accounts: [acc(RUMAH, 'Kas Rumah')], categories: [cat('b1')] },
+      });
+      const s = source();
+      expect(m.moveTargetsAction).not.toHaveBeenCalled();
+      await expect(s.spaceTransferTargets('bersama')).resolves.toEqual([acc(RUMAH, 'Kas Rumah')]);
+      expect(m.moveTargetsAction).toHaveBeenCalledWith('pribadi', 'bersama');
+      await s.spaceTransferTargets('bersama');
+      expect(m.moveTargetsAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('spaceTransferTargets dari Bersama ke Pribadi memakai ruang Bersama sebagai konteks; galat = Promise ditolak dan dicoba lagi', async () => {
+      const s = realCatatSource({
+        ruang: 'bersama',
+        options: BERSAMA,
+        ruangLabel: { pribadi: 'Pribadi', bersama: 'Bersama' },
+      });
+      m.moveTargetsAction.mockResolvedValueOnce({ ok: false, error: { code: 'network' } });
+      await expect(s.spaceTransferTargets('pribadi')).rejects.toThrow();
+      m.moveTargetsAction.mockResolvedValueOnce({
+        ok: true,
+        value: { accounts: [acc(BCA, 'BCA')], categories: [] },
+      });
+      await expect(s.spaceTransferTargets('pribadi')).resolves.toHaveLength(1);
+      expect(m.moveTargetsAction).toHaveBeenLastCalledWith('bersama', 'pribadi');
+      expect(m.moveTargetsAction).toHaveBeenCalledTimes(2);
+    });
+
+    it('galat cross_space_kantor dari server diteruskan sebagai kode', async () => {
+      m.saveCatat.mockResolvedValue({ ok: false, error: { code: 'cross_space_kantor' } });
+      const out = await source().save(
+        draft({ type: 'transfer', counterAccountId: RUMAH, toRuang: 'bersama' }),
+      );
+      expect(out).toEqual({ ok: false, code: 'cross_space_kantor' });
+    });
   });
 });

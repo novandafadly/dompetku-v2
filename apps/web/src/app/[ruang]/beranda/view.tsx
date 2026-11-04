@@ -10,7 +10,7 @@ import { OnboardingChecklist } from '@/features/beranda/onboarding-checklist';
 import { RecentEntries } from '@/features/beranda/recent-entries';
 import { SafeToSpend, SafeToSpendEmpty } from '@/features/beranda/safe-to-spend';
 import { useOpenCatat, usePreloadCatat } from '@/features/shell/catat';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { PageHeader } from '@/features/shell/page-header';
 
 /**

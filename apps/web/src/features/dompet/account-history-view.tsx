@@ -71,6 +71,8 @@ export function AccountHistoryView({
   opening,
   dompetHref,
   more,
+  actions,
+  footer,
 }: {
   account: { name: string; pocket: Pocket; walletType: WalletType; balance: Rupiah };
   groups: HistoryGroup[];
@@ -78,6 +80,10 @@ export function AccountHistoryView({
   opening: Pick<HistoryRow, 'id' | 'href' | 'value'>[];
   dompetHref: Route;
   more?: ReactNode;
+  /** Di kepala dompet, di bawah saldo (mode nyata: Cocokkan saldo, Ubah saldo awal; S7-W1/W2). */
+  actions?: ReactNode;
+  /** Di paling bawah halaman (mode nyata: arsip dompet, S7-W3). */
+  footer?: ReactNode;
 }) {
   const baseId = useId();
   return (
@@ -102,6 +108,7 @@ export function AccountHistoryView({
             <MoneyText value={account.balance} size="amount-sm" />
           </p>
         </div>
+        {actions}
       </section>
       {groups.length === 0 && opening.length === 0 ? (
         <EmptyState
@@ -139,6 +146,7 @@ export function AccountHistoryView({
           ))}
         </GroupList>
       )}
+      {footer}
     </div>
   );
 }

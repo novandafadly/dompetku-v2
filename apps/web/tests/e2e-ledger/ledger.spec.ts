@@ -1,8 +1,24 @@
-import type { Locator, Page, Response, Route } from '@playwright/test';
+import type { Locator, Page, Route } from '@playwright/test';
 import { expectNoSeriousViolations, WCAG_TAGS } from '../e2e/axe';
 import { routeScripts } from '../e2e/route-scripts';
 import { noHorizontalScroll } from '../e2e-auth/helpers';
-import { adminQuery, expect, OWNER, test } from './fixtures';
+import { adminQuery, expect, test } from './fixtures';
+import {
+  addWallet,
+  bersamaResponses,
+  BUDGET_KB,
+  catatCepat,
+  chipsOf,
+  catatSheet,
+  digits,
+  expectRouteBudget,
+  openAndFill,
+  openCatat,
+  spaceId,
+  toasts,
+  trigger,
+  walletBalance,
+} from './helpers';
 
 /**
  * Kriteria keluar S6 ujung ke ujung di mode nyata (Task 19): Catat ≤ 3 ketukan dari Beranda,
@@ -14,134 +30,12 @@ import { adminQuery, expect, OWNER, test } from './fixtures';
 
 test.describe.configure({ mode: 'serial' });
 
-/** Batas JS muat dingin per rute (ADR 0002); konstanta sama dengan tests/e2e/budget.spec.ts. */
-const BUDGET_KB = 162;
-
 const PRIBADI_WALLET = 'KANARI-DOMPET-N';
 const PRIBADI_KANARI = 'KANARI-N-PRIBADI';
 const BERSAMA_WALLET = 'Kas Bersama E2E';
-const RUANG = { pribadi: 'Pribadi', bersama: 'Bersama' } as const;
-type Ruang = keyof typeof RUANG;
 
 /** Deskripsi khas entri seed demo (packages/demo-data); tidak pernah tampil di mode nyata. */
 const SEED_MARKERS = ['Belanja mingguan', 'Gaji bulanan', 'Kopi susu'];
-
-/** 1146750 → '1.146.750' (pemisah ribuan Indonesia, tanpa bergantung pada ICU Node). */
-const digits = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-const toasts = (page: Page) => page.getByRole('region', { name: /Notifikasi/ });
-const catatSheet = (page: Page) =>
-  page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Nominal' }) });
-const chipsOf = (sheet: Locator) =>
-  sheet.getByRole('radiogroup', { name: 'Kategori' }).getByRole('radio');
-const trigger = (page: Page) => page.locator('[data-catat-trigger]:visible');
-
-/** Penghitung klik pointer (event `click` tepercaya dengan `detail > 0`) di dokumen ini. */
-async function startTapCount(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const w = window as unknown as { __taps: number; __tapsOn?: boolean };
-    w.__taps = 0;
-    if (w.__tapsOn) return;
-    w.__tapsOn = true;
-    document.addEventListener(
-      'click',
-      (e) => {
-        if (e.isTrusted && e.detail > 0) w.__taps += 1;
-      },
-      true,
-    );
-  });
-}
-const tapCount = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __taps: number }).__taps);
-
-/** Buka Catat dengan tombol Catat sampai sheet sebenarnya (bukan placeholder) termuat. */
-async function openCatat(page: Page): Promise<Locator> {
-  const sheet = catatSheet(page);
-  // Klik sebelum hidrasi selesai tidak membuka sheet: ulangi hanya bila belum ada dialog.
-  await expect(async () => {
-    if ((await page.getByRole('dialog').count()) === 0) await trigger(page).click();
-    await expect(chipsOf(sheet).first()).toBeVisible({ timeout: 2_000 });
-  }).toPass();
-  return sheet;
-}
-
-/**
- * Buka Catat dengan tombol Catat, ketik nominal (ketikan tidak dihitung), isi keterangan bila ada
- * (keyboard), lalu pilih chip; belum menyimpan. Mengembalikan sheet.
- */
-async function openAndFill(
-  page: Page,
-  { amount, description, chip = 0 }: { amount: number; description?: string; chip?: number },
-): Promise<Locator> {
-  const sheet = await openCatat(page);
-  const nominal = sheet.getByRole('textbox', { name: 'Nominal' });
-  await expect(nominal).toBeFocused();
-  await page.keyboard.type(String(amount));
-  await expect(nominal).toHaveValue(digits(amount));
-  if (description !== undefined) {
-    await sheet.getByLabel(/Keterangan/).focus();
-    await page.keyboard.type(description);
-  }
-  await chipsOf(sheet).nth(chip).click();
-  await expect(chipsOf(sheet).nth(chip)).toHaveAttribute('aria-checked', 'true');
-  return sheet;
-}
-
-/** Jalur tercepat Catat; mengembalikan jumlah ketukan dari tombol Catat sampai toast. */
-async function catatCepat(
-  page: Page,
-  args: { amount: number; ruang: Ruang; wallet: string; description?: string },
-): Promise<number> {
-  await startTapCount(page);
-  const sheet = await openAndFill(page, args);
-  await sheet.getByRole('button', { name: 'Simpan', exact: true }).click();
-  await expect(
-    toasts(page).getByText(
-      `Tersimpan di ${RUANG[args.ruang]} · Rp ${digits(args.amount)} dari ${args.wallet}`,
-    ),
-  ).toBeVisible();
-  await expect(sheet).toHaveCount(0);
-  return tapCount(page);
-}
-
-/** Saldo dompet `wallet` dari layar Dompet ruang itu (bertanda: `−Rp` = negatif). */
-async function walletBalance(page: Page, ruang: Ruang, wallet: string): Promise<number> {
-  await page.goto(`/${ruang}/dompet`);
-  const link = page.getByRole('main').getByRole('link', { name: new RegExp(wallet) });
-  const m = /(−?)Rp\s([\d.]+)/.exec(await link.innerText());
-  if (!m) throw new Error('saldo tidak terbaca');
-  const n = Number((m[2] ?? '').replaceAll('.', ''));
-  return m[1] === '−' ? -n : n;
-}
-
-/** Tambah dompet operasional lewat layar Dompet (`?tambah=1`), saldo awal hari ini. */
-async function addWallet(page: Page, ruang: Ruang, name: string, opening: number) {
-  await page.goto(`/${ruang}/dompet?tambah=1`);
-  const sheet = page.getByRole('dialog', { name: /Tambah dompet/ });
-  await expect(sheet.getByRole('textbox', { name: 'Nama' })).toBeFocused();
-  await sheet.getByRole('textbox', { name: 'Nama' }).fill(name);
-  await sheet.getByRole('radio', { name: 'Operasional' }).click();
-  await sheet.getByRole('textbox', { name: 'Saldo hari ini' }).fill(String(opening));
-  await sheet.getByRole('button', { name: 'Simpan dompet' }).click();
-  await expect(
-    toasts(page).getByText(`Dompet ${name} ditambahkan di ${RUANG[ruang]}`),
-  ).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-}
-
-/** Ruang pemilik (superuser, hanya untuk asersi). */
-async function spaceId(kind: 'personal' | 'shared'): Promise<string> {
-  const [row] = await adminQuery<{ sid: string }>(
-    `select s.id as sid from auth."user" u
-       join app.space_members m on m.user_id = u.id
-       join app.spaces s on s.id = m.space_id and s.kind = $2::app.space_kind
-      where u.email = $1`,
-    [OWNER, kind],
-  );
-  if (!row) throw new Error('ruang tidak ada');
-  return row.sid;
-}
 
 const entriesWith = async (description: string) =>
   (
@@ -194,6 +88,33 @@ test('Tidak ada pengeluaran hari ini', async ({ page }) => {
     `select space_kind::text from app.product_events where event = 'tanpa_pengeluaran'`,
   );
   expect(events).toEqual([{ space_kind: 'personal' }]);
+});
+
+test('Beranda Bersama kosong (B2) dan solo (B1) sebelum ada dompet Bersama', async ({ page }) => {
+  // Bersama tanpa dompet operasional dan tanpa entri (persona N tanpa F): State kosong S7-B2.
+  await page.goto('/bersama/beranda');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { name: 'Bersama belum punya dompet.' })).toBeVisible();
+  const add = main.getByRole('link', { name: 'Tambah dompet' });
+  await expect(add).toHaveAttribute('href', /^\/bersama\/dompet\?tambah=1/);
+  // B1 tetap berlaku: kartu ajakan untuk pemilik, pengantar checklist satu anggota, Aktivitas kosong.
+  await expect(main.getByRole('link', { name: 'Undang Farida ke Bersama' })).toBeVisible();
+  await expect(
+    main.getByText(
+      'Ruang untuk pengeluaran rumah tangga. Sekarang hanya kamu di sini; Farida belum bergabung.',
+    ),
+  ).toBeVisible();
+  await expect(main.getByText(/^Belum ada aktivitas\./)).toBeVisible();
+  for (const theme of ['dark', 'light']) {
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/bersama/beranda?theme=${theme}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(add).toBeVisible();
+      await expectNoSeriousViolations(page, { tags: WCAG_TAGS });
+      if (width === 320) await noHorizontalScroll(page);
+    }
+  }
 });
 
 test('Tambah dompet lalu Catat ≤ 3 ketukan dari Beranda, Transaksi, Dompet di Pribadi dan Bersama', async ({
@@ -470,47 +391,6 @@ test('konflik versi', async ({ page, browser, ownerState }) => {
   }
 });
 
-/**
- * Teks semua respons GET rute Bersama selama `act` (dokumen dan payload RSC). Respons yang gagal
- * dibaca di browser (prefetch RSC yang dibatalkan saat halaman pindah) tidak lolos sebagai teks
- * kosong: URL itu diminta ulang dengan header permintaan aslinya (cookie sesi sama) dan badannya
- * diperiksa juga; yang tetap gagal masuk `unread` dan pemanggil mewajibkan 0. Pengalihan (3xx)
- * tidak punya badan dan tidak dihitung.
- */
-async function bersamaResponses(
-  page: Page,
-  act: () => Promise<unknown>,
-): Promise<{ bodies: string[]; unread: string[] }> {
-  const reads: Promise<{ url: string; body: string | null }>[] = [];
-  const onResponse = (r: Response) => {
-    const url = new URL(r.url());
-    if (r.request().method() !== 'GET' || !url.pathname.startsWith('/bersama')) return;
-    if (r.status() >= 300 && r.status() < 400) return;
-    const headers = r.request().headers();
-    reads.push(
-      r.text().then(
-        (body) => ({ url: r.url(), body }),
-        async () => {
-          const again = await page.request.get(r.url(), { headers, maxRedirects: 0 });
-          return { url: r.url(), body: again.ok() ? await again.text() : null };
-        },
-      ),
-    );
-  };
-  page.on('response', onResponse);
-  try {
-    await act();
-    await page.waitForLoadState('networkidle');
-  } finally {
-    page.off('response', onResponse);
-  }
-  const all = await Promise.all(reads);
-  return {
-    bodies: all.flatMap((x) => (x.body === null ? [] : [x.body])),
-    unread: all.flatMap((x) => (x.body === null ? [x.url] : [])),
-  };
-}
-
 /** Respons Bersama terbaca semua, ada isinya, dan tanpa kanari Pribadi (nama dompet dan keterangan). */
 function expectNoPribadi({ bodies, unread }: { bodies: string[]; unread: string[] }) {
   expect(unread).toEqual([]);
@@ -599,6 +479,48 @@ test('tidak ada teks "Data demo" di mode nyata', async ({ page }) => {
   await expect(page.getByText('Data demo')).toHaveCount(0);
   for (const marker of SEED_MARKERS) await expect(page.getByText(marker)).toHaveCount(0);
   await page.keyboard.press('Escape');
+});
+
+/**
+ * Penanda kode seed demo (packages/demo-data/src/seed.ts): deskripsi entri dan id kategori/anggota
+ * yang hanya ada di seed, jadi muncul di chunk JS hanya bila `createSeed` ikut dibundel.
+ */
+const SEED_CODE_MARKERS = [...SEED_MARKERS, 'cp-makan', 'm-novanda'];
+
+test('JS mode nyata tanpa seed demo (K3)', async ({ browser, ownerState }) => {
+  const paths = ['beranda', 'transaksi', 'dompet', 'sampah', 'kategori'].flatMap((r) => [
+    `/pribadi/${r}`,
+    `/bersama/${r}`,
+  ]);
+  expect(detailPath).not.toBe('');
+  for (const path of [...paths, detailPath]) {
+    // Konteks baru per rute: semua JS yang dimuat rute ini (muat awal, prefetch, muat malas
+    // sampai jaringan diam) tidak boleh memuat seed demo.
+    const context = await browser.newContext({ storageState: ownerState });
+    const page = await context.newPage();
+    const scripts: Promise<{ url: string; body: string }>[] = [];
+    page.on('response', (r) => {
+      if (new URL(r.url()).pathname.endsWith('.js'))
+        scripts.push(r.text().then((body) => ({ url: r.url(), body })));
+    });
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(200);
+    const own = routeScripts((await res?.text()) ?? '');
+    await page.waitForLoadState('networkidle');
+    const loaded = await Promise.all(scripts);
+    await context.close();
+    // Setiap skrip rute ikut diperiksa (bukan lolos karena tidak tertangkap).
+    const seen = new Set(loaded.map((s) => new URL(s.url).pathname));
+    expect(
+      [...own].filter((p) => !seen.has(p)),
+      path,
+    ).toEqual([]);
+    for (const { url, body } of loaded)
+      for (const marker of SEED_CODE_MARKERS)
+        expect(body.includes(marker), `${path}: ${new URL(url).pathname} memuat "${marker}"`).toBe(
+          false,
+        );
+  }
 });
 
 test('keyboard saja', async ({ page }) => {
@@ -708,35 +630,6 @@ for (const path of [
   }) => {
     const url = path === 'detail' ? detailPath : path;
     expect(url).not.toBe('');
-    // Konteks baru = cache kosong, sesi pemilik yang sama.
-    const context = await browser.newContext({ storageState: ownerState });
-    const page = await context.newPage();
-    const response = await page.goto(url);
-    if (!response) throw new Error('tidak ada respons dokumen');
-    const own = routeScripts(await response.text());
-    await page.waitForLoadState('networkidle');
-    const sizes = await page.evaluate(() =>
-      performance
-        .getEntriesByType('resource')
-        .filter((e): e is PerformanceResourceTiming => e instanceof PerformanceResourceTiming)
-        .filter((e) => new URL(e.name).pathname.endsWith('.js'))
-        .map((e) => ({ path: new URL(e.name).pathname, bytes: e.encodedBodySize })),
-    );
-    await context.close();
-
-    const kB = (n: number) => n / 1024;
-    const routeKb = kB(sizes.filter((s) => own.has(s.path)).reduce((a, s) => a + s.bytes, 0));
-    const allKb = kB(sizes.reduce((a, s) => a + s.bytes, 0));
-    test
-      .info()
-      .annotations.push(
-        { type: 'js-route-kB', description: routeKb.toFixed(1) },
-        { type: 'js-all-kB', description: allKb.toFixed(1) },
-      );
-    const measured = new Set(sizes.map((s) => s.path));
-    expect([...own].filter((p) => !measured.has(p))).toEqual([]);
-    expect(sizes.filter((s) => own.has(s.path)).every((s) => s.bytes > 0)).toBe(true);
-    expect(routeKb).toBeGreaterThan(100);
-    expect(routeKb).toBeLessThanOrEqual(BUDGET_KB);
+    await expectRouteBudget(browser, ownerState, url);
   });
 }

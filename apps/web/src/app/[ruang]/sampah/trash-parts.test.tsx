@@ -57,7 +57,11 @@ type Restore = (r: {
 const ok: ActionResult<{ version: number }> = { ok: true, value: { version: 4 } };
 const fail = (code: LedgerErrorCode) => ({ ok: false, error: { code } }) as const;
 
-function view(items: TrashVM[], restore: Restore, extra: { onConflict?: () => void } = {}) {
+function view(
+  items: TrashVM[],
+  restore: Restore,
+  extra: { onConflict?: () => void; restoreLockedIds?: string[] } = {},
+) {
   return render(
     <>
       <h1 id="sampah-judul">Sampah · Pribadi</h1>
@@ -97,6 +101,33 @@ describe('TrashList (daftar Sampah + Pulihkan)', () => {
     expect(btn.getAttribute('aria-label')).toMatch(/^Pulihkan Nasi padang .*25\.000$/);
     expect(btn).toHaveTextContent('Pulihkan');
     expect(btn.className).toContain('min-h-11');
+  });
+
+  it('restoreLockedIds: baris tanpa tombol Pulihkan, teks "Hanya {Nama} yang bisa memulihkan."', () => {
+    const restore = vi.fn<Restore>();
+    view(
+      [
+        item('s1', {
+          kind: 'space_transfer',
+          direction: 'in',
+          createdBy: { id: 'f', name: 'Farida', initial: 'F' },
+        }),
+        item('e2'),
+      ],
+      restore,
+      { restoreLockedIds: ['s1'] },
+    );
+    expect(screen.getByText('Hanya Farida yang bisa memulihkan.')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^Pulihkan/ })).toHaveLength(1);
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it('Pulihkan reimburse ditolak not_reimbursable: salinan sendiri (role=alert)', async () => {
+    view([item('r1', { kind: 'reimbursement' })], () => Promise.resolve(fail('not_reimbursable')));
+    fireEvent.click(screen.getByRole('button', { name: /^Pulihkan/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Belum bisa dipulihkan. Talangannya tidak lagi menunggu diganti.',
+    );
   });
 
   it('daftar kosong: salinan S6-S1', () => {

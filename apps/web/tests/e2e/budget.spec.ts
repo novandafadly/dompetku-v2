@@ -1,6 +1,6 @@
 import { createSeed } from '@dompetku/demo-data';
 import { expect, test } from '@playwright/test';
-import { routeScripts } from './route-scripts';
+import { isDemoChunk, routeScripts } from './route-scripts';
 import { TODAY } from './routes';
 
 /**
@@ -21,15 +21,26 @@ for (const path of [
   `/pribadi/transaksi/${detailId}`,
   '/pribadi/sampah',
   '/pribadi/dompet',
+  // Riwayat dompet (S7 Task 12): dompet BCA di seed penuh.
+  '/pribadi/dompet/acc-bca',
 ]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.
     const context = await browser.newContext();
     const page = await context.newPage();
+    const bodies: Promise<{ path: string; demo: boolean }>[] = [];
+    page.on('response', (r) => {
+      const p = new URL(r.url()).pathname;
+      if (p.endsWith('.js')) bodies.push(r.text().then((b) => ({ path: p, demo: isDemoChunk(b) })));
+    });
     const response = await page.goto(`${path}?seed=full&today=${TODAY}`);
     if (!response) throw new Error('tidak ada respons dokumen');
     const own = routeScripts(await response.text());
     await page.waitForLoadState('networkidle');
+    // Chunk DemoProvider (route-scripts.ts) dihitung sebagai JS rute: hidrasi prototipe menunggunya.
+    const demoChunks = (await Promise.all(bodies)).filter((b) => b.demo).map((b) => b.path);
+    expect(demoChunks).toHaveLength(1);
+    for (const p of demoChunks) own.add(p);
     const sizes = await page.evaluate(() =>
       performance
         .getEntriesByType('resource')

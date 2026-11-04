@@ -2,18 +2,24 @@ import { formatRupiah } from '@dompetku/domain';
 import { newClientId } from './client-id';
 import type { CatatType } from './source';
 
-/** Toast sesudah simpan: `Tersimpan di {Ruang} · {Rp} dari {dompet}` (pemasukan: `ke {dompet}`). */
+/**
+ * Toast sesudah simpan: `Tersimpan di {Ruang} · {Rp} dari {dompet}` (pemasukan: `ke {dompet}`;
+ * antar ruang: `ke {Ruang tujuan}`; talangan: `… · Talangan kantor`).
+ */
 export function savedToast(
   label: string,
   amount: number,
   kind: CatatType,
   from: string,
   to?: string,
+  extra: { toRuang?: string; reimbursable?: boolean } = {},
 ): string {
   const head = `Tersimpan di ${label} · ${formatRupiah(amount)}`;
   if (kind === 'income') return `${head} ke ${from}`;
+  // Antar ruang (S7-C1): hanya nama ruang tujuan, tanpa nama dompet (batas Pribadi/Bersama).
+  if (kind === 'transfer' && extra.toRuang !== undefined) return `${head} ke ${extra.toRuang}`;
   if (kind === 'transfer') return `${head} dari ${from} ke ${to ?? ''}`;
-  return `${head} dari ${from}`;
+  return `${head} dari ${from}${extra.reimbursable === true ? ' · Talangan kantor' : ''}`;
 }
 
 export const UNDO_FAILED = 'Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.';

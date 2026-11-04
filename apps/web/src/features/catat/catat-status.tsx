@@ -20,7 +20,15 @@ export const CATAT_COPY = {
 } as const;
 
 /** Salinan galat simpan per jenis (s6-bingkai.md, "Tambahan salinan (keputusan controller)"). */
-export function galatText(kind: 'network' | 'server' | 'not_found'): string {
+export function galatText(
+  kind: 'network' | 'server' | 'not_found' | 'cross_space_not_allowed' | 'cross_space_kantor',
+): string {
+  if (kind === 'cross_space_not_allowed') {
+    return 'Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.';
+  }
+  if (kind === 'cross_space_kantor') {
+    return 'Dompet Kantor tidak bisa ikut transfer antar ruang. Pilih dompet lain.';
+  }
   if (kind === 'network') return CATAT_COPY.galat;
   if (kind === 'not_found') return 'Data ini sudah tidak ada. Tutup lalu buka Catat lagi.';
   return 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.';
@@ -54,8 +62,8 @@ export function noAccountText(ruang: string): string {
 
 /**
  * Kotak pesan sebaris di atas baris kaki (S6-C2 galat, S6-C4 kunci bentrok): `role="alert"`.
- * Mode keyboard: satu baris dengan ellipsis; teks lengkap tetap di DOM (dibaca lewat
- * `aria-describedby` tombol kaki).
+ * Mode keyboard: teks utuh (tidak dipotong ellipsis), boleh dua baris; kotak dirapatkan agar tinggi
+ * sheet tetap ≤ 356.
  */
 export function CatatAlert({
   id,
@@ -69,21 +77,29 @@ export function CatatAlert({
   children: ReactNode;
 }) {
   const Icon = tone === 'danger' ? WarningCircleIcon : WarningIcon;
+  const toneClass =
+    tone === 'danger' ? 'bg-danger-tint text-danger' : 'bg-warning-tint text-warning';
+  if (compact) {
+    // Ikon sebaris di awal teks (bukan kolom sendiri) agar teks utuh muat dua baris di 360 px.
+    return (
+      <p
+        id={id}
+        role="alert"
+        className={`-mt-1.5 -mb-0.5 rounded-lg px-3 py-0.5 text-caption/tight font-semibold ${toneClass}`}
+      >
+        <Icon size={16} weight="fill" className="mr-1.5 -my-0.5 inline-block align-text-bottom" />
+        {children}
+      </p>
+    );
+  }
   return (
     <p
       id={id}
       role="alert"
-      // Mode keyboard: satu baris 24 px, jarak ke isi dan kaki dirapatkan agar sheet tetap ≤ 356.
-      className={`flex gap-2 rounded-lg font-semibold ${
-        tone === 'danger' ? 'bg-danger-tint text-danger' : 'bg-warning-tint text-warning'
-      } ${compact ? '-mt-1 -mb-0.5 items-center px-3 py-1 text-meta' : 'items-start p-3 text-label'}`}
+      className={`flex items-start gap-2 rounded-lg p-3 text-label font-semibold ${toneClass}`}
     >
-      <Icon
-        size={compact ? 16 : 18}
-        weight="fill"
-        className={`shrink-0 ${compact ? '' : 'mt-px'}`}
-      />
-      <span className={compact ? 'min-w-0 truncate' : 'text-pretty'}>{children}</span>
+      <Icon size={18} weight="fill" className="mt-px shrink-0" />
+      <span className="text-pretty">{children}</span>
     </p>
   );
 }

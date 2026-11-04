@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { PARTNER } from '../../auth/__int__/harness';
+import { withUser } from '../../db';
 import { loadBeranda } from '../beranda';
 import { listAccounts } from '../read';
 import { resolveSpace } from '../space';
@@ -17,6 +19,7 @@ afterAll(async () => {
   await h.close();
 });
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const KANARI_DESC = 'KANARI-BERANDA-PRIBADI-91c2';
 const KANARI_DOMPET = 'KANARI-DOMPET-BERANDA';
 const KANARI_RP = 6_543_217;
@@ -69,6 +72,18 @@ describe('loadBeranda (persona N)', () => {
         hasExpense: false,
         recent: [],
         invite: ruang === 'pribadi',
+        bersama:
+          ruang === 'pribadi'
+            ? null
+            : {
+                members: 1,
+                isOwner: true,
+                empty: true,
+                pendingInvite: {
+                  email: PARTNER,
+                  expiresOn: expect.stringMatching(ISO_DATE) as string,
+                },
+              },
       });
     }
     // Dompet tabungan saja bukan dompet operasional (checklist dan kartu B3 tetap).
@@ -124,6 +139,7 @@ describe('loadBeranda (persona N)', () => {
       });
       expect(p.recent.length).toBeLessThanOrEqual(5);
       expect(p.invite).toBe(false);
+      expect(p.bersama).toBeNull();
 
       const b = await loadBeranda(bersama);
       expect(b).toMatchObject({
@@ -132,7 +148,10 @@ describe('loadBeranda (persona N)', () => {
         today: { hasExpense: false, noSpendMarked: false },
         safe: { operasional: 1_000_000, aman: 1_000_000 },
         invite: false,
+        // Dua anggota: tidak solo, tidak kosong, tanpa data undangan.
+        bersama: { members: 2, isOwner: true, empty: false },
       });
+      expect(b.bersama).not.toHaveProperty('pendingInvite');
       // Saldo awal bukan pengeluaran dan bukan "mencatat hari ini".
       expect(b.recent.map((e) => e.kind)).toEqual(['opening_balance']);
 
@@ -151,6 +170,64 @@ describe('loadBeranda (persona N)', () => {
 
       // Farida (anggota, bukan pemilik) tidak pernah melihat Undang Farida.
       expect((await loadBeranda(await ctxOf(f, 'bersama'))).invite).toBe(false);
+    });
+
+    it('Bersama dua anggota kosong: empty tanpa ajakan; bukan pemilik: isOwner false', async () => {
+      const bn = await loadBeranda(await ctxOf(n, 'bersama'));
+      expect(bn.bersama).toEqual({ members: 2, isOwner: true, empty: true });
+      const bf = await loadBeranda(await ctxOf(f, 'bersama'));
+      expect(bf.bersama).toEqual({ members: 2, isOwner: false, empty: true });
+    });
+  });
+
+  describe('Bersama solo (Farida belum bergabung)', () => {
+    it('satu anggota: pemilik menerima undangan menunggu; empty mengikuti dompet operasional dan entri', async () => {
+      await resetLedger(h);
+      const { n } = await seedPersonas(h, { farida: 'diundang' });
+      const bersama = await ctxOf(n, 'bersama');
+
+      const kosong = await loadBeranda(bersama);
+      expect(kosong.bersama).toMatchObject({ members: 1, isOwner: true, empty: true });
+      expect(kosong.bersama?.pendingInvite).toEqual({
+        email: PARTNER,
+        expiresOn: expect.stringMatching(ISO_DATE) as string,
+      });
+
+      // Dompet tabungan saja: bukan operasional, tetapi saldo awal = entri hidup, jadi tidak kosong.
+      await wallet(bersama, 'Tabungan Rumah', 100_000, 'tabungan');
+      expect((await loadBeranda(bersama)).bersama).toMatchObject({ members: 1, empty: false });
+    });
+
+    it('dompet operasional membuat tidak kosong; tanpa undangan: pendingInvite null', async () => {
+      await resetLedger(h);
+      const { n } = await seedPersonas(h, { farida: 'tidak_ada' });
+      const bersama = await ctxOf(n, 'bersama');
+      expect((await loadBeranda(bersama)).bersama).toEqual({
+        members: 1,
+        isOwner: true,
+        empty: true,
+        pendingInvite: null,
+      });
+      await wallet(bersama, 'Kas Rumah', 0);
+      expect((await loadBeranda(bersama)).bersama).toMatchObject({
+        members: 1,
+        empty: false,
+        pendingInvite: null,
+      });
+    });
+
+    it('undangan dicabut: tidak lagi menunggu', async () => {
+      await resetLedger(h);
+      const { n } = await seedPersonas(h, { farida: 'diundang' });
+      const { rows } = await h.admin.query<{ id: string }>(
+        'select id from app.invitations where used_at is null and revoked_at is null',
+      );
+      const id = rows[0]?.id;
+      if (!id) throw new Error('undangan tidak ada');
+      await withUser(h.pools.app, n.id, (c) =>
+        c.query('select api.revoke_invitation(p_invitation_id => $1)', [id]),
+      );
+      expect((await loadBeranda(await ctxOf(n, 'bersama'))).bersama?.pendingInvite).toBeNull();
     });
   });
 });

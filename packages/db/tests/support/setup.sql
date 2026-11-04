@@ -224,6 +224,19 @@ begin
   delete from app.settings where key = 'owner_email';
 end $$;
 
+-- Rusak data dengan sengaja (tes positif cek kualitas data, 17_dq.sql): jalankan p_sql sebagai
+-- superuser dengan session_replication_role = replica, jadi FK, trigger bentuk/append-only, dan
+-- RLS tidak berlaku; CHECK tetap berlaku. Dipulihkan saat fungsi selesai (klausa SET); tes selalu
+-- rollback. Tidak ada hak baru untuk role aplikasi.
+create function tests.raw_exec(p_sql text) returns bigint
+language plpgsql security definer set search_path = '' set session_replication_role = replica as $$
+declare v_n bigint;
+begin
+  execute p_sql;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
 revoke all on all functions in schema tests from public;
 grant execute on function tests.n(), tests.f(), tests.x(),
   tests.signup(uuid, text, boolean, boolean), tests.fixture(boolean),
@@ -231,5 +244,5 @@ grant execute on function tests.n(), tests.f(), tests.x(),
   tests.account(uuid, uuid, text, text, bigint, date), tests.balance(uuid),
   tests.peer_open(text, text), tests.peer_close(text), tests.peer_exec(text, text),
   tests.peer_val(text, text), tests.peer_send(text, text), tests.peer_blocked(text),
-  tests.peer_result(text), tests.wipe()
+  tests.peer_result(text), tests.wipe(), tests.raw_exec(text)
   to dompetku_test;

@@ -46,10 +46,14 @@ function as(p: Persona): void {
   session.userId = p.id;
 }
 
-async function wallet(ruang: 'pribadi' | 'bersama', openingBalance: number): Promise<string> {
+async function wallet(
+  ruang: 'pribadi' | 'bersama',
+  openingBalance: number,
+  name = 'BCA',
+): Promise<string> {
   const r = await createAccountAction(ruang, {
     clientId: randomUUID(),
-    name: 'BCA',
+    name,
     pocket: 'operasional',
     walletType: 'bank',
     openingBalance,
@@ -111,7 +115,7 @@ describe('server action ruang terhadap DB', () => {
   it('transfer satu ruang lewat saveCatat', async () => {
     as(ps.n);
     const from = await wallet('bersama', 200_000);
-    const to = await wallet('bersama', 0);
+    const to = await wallet('bersama', 0, 'Tunai');
     const r = await saveCatat('bersama', {
       kind: 'transfer',
       clientId: randomUUID(),

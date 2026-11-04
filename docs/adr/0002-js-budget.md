@@ -63,3 +63,17 @@ Ikon Phosphor sudah ter-tree-shake per ikon. Satu ikon tetap membawa enam bobot 
 
 - Penambahan fitur yang memuat ulang dialog, cmdk, atau toast ke muat awal akan menggagalkan tes.
 - Budget ROADMAP M2 (≤ 150 kB) juga di bawah angka sekarang (157 kB rute, 187 kB semua JS). Budget itu perlu diputuskan ulang sebelum M2: naikkan batasnya, atau kurangi kode, misalnya ikon dengan bobot terbatas atau data demo di server. **Keputusan pemilik 2026-10-31:** target 150 kB di M2 dibatalkan; batas tetap 162 kB rute.
+
+## Pembaruan 2026-11-03 (S7 Task 9, keputusan pemilik K3)
+
+`DemoProvider` + seed demo tidak lagi ikut JS muat awal mode nyata. Root layout memasangnya lewat `DemoRoot` (`React.lazy`, hanya di cabang prototipe), jadi chunk-nya tidak dirujuk HTML. Hidrasi prototipe menunggu chunk itu, maka gerbang prototipe (`budget.spec.ts`) tetap menghitungnya sebagai JS rute (dikenali lewat penanda seed, `tests/e2e/route-scripts.ts`). Ini pengecualian dari butir "chunk muat malas tidak dihitung" di atas. `e2e:ledger` menegaskan tidak ada JS mode nyata (muat awal, prefetch, muat malas) yang memuat seed demo.
+
+| Rute (JS rute, kB)   | Nyata sebelum | Nyata sesudah | Prototipe sebelum | Prototipe sesudah (termasuk chunk demo) |
+| -------------------- | ------------- | ------------- | ----------------- | --------------------------------------- |
+| `/pribadi/beranda`   | 160,8         | 157,3         | 160,8             | 161,4                                   |
+| `/pribadi/transaksi` | 160,0         | 156,5         | 160,0             | 160,7                                   |
+| Detail transaksi     | 156,9         | 153,4         | 156,8             | 157,5                                   |
+| `/pribadi/sampah`    | 158,0         | 154,4         | 158,0             | 158,5                                   |
+| `/pribadi/dompet`    | 156,4         | 152,9         | 156,3             | 157,0                                   |
+
+Harga di prototipe: satu permintaan tambahan sebelum hidrasi (±55 ms median pada latensi 40 ms) dan ±0,6 kB.

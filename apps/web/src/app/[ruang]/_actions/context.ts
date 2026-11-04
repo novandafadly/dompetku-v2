@@ -2,7 +2,7 @@ import 'server-only';
 import { refresh } from 'next/cache';
 import { unstable_rethrow } from 'next/navigation';
 import { z, ZodError, type ZodType } from 'zod';
-import type { ActionResult, LedgerErrorCode } from '@/features/ledger/types';
+import type { ActionResult, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { authService, requireDataUser } from '@/server/auth/next';
 import type { Pools } from '@/server/db';
 import { toLedgerError } from '@/server/ledger/errors';
@@ -59,6 +59,8 @@ export function parseInput<S extends ZodType>(schema: S, input: unknown): z.outp
 export interface ActionCtx {
   pools: Pools;
   userId: string;
+  /** Slug ruang argumen (sudah lolos Zod), untuk membandingkan dengan ruang tujuan. */
+  ruang: Ruang;
   spaceId: string;
   kind: 'personal' | 'shared';
 }
@@ -77,7 +79,18 @@ export async function actionContext(ruang: unknown): Promise<ActionCtx> {
   const parsed = parseInput(ruangInput, { ruang });
   const pools = authService().pools;
   const { spaceId, kind } = await resolveSpace(pools, state.userId, parsed.ruang);
-  return { pools, userId: state.userId, spaceId, kind };
+  return { pools, userId: state.userId, ruang: parsed.ruang, spaceId, kind };
+}
+
+/**
+ * Ruang tujuan action antar ruang (transfer antar ruang, pindah ruang): slug yang sudah lolos Zod,
+ * wajib berbeda dari ruang argumen (`invalid toRuang`), lalu di-resolve di server dengan konteks
+ * user seperti ruang argumen (bukan anggota = `not_found`). Klien tidak pernah mengirim uuid ruang.
+ */
+export async function targetSpace(ctx: ActionCtx, toRuang: Ruang): Promise<string> {
+  if (toRuang === ctx.ruang) throw new ActionInputError('toRuang');
+  const { spaceId } = await resolveSpace(ctx.pools, ctx.userId, toRuang);
+  return spaceId;
 }
 
 /** Konteks untuk wrapper `server/ledger/*` (tanpa `kind`). */

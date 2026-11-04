@@ -1,13 +1,23 @@
 'use client';
 
 import { addDays, dayLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
-import { useEffect, useId, useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MouseEvent,
+  type SyntheticEvent,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Combobox } from '@/components/ui/combobox';
 import { FieldLabel } from '@/components/ui/field';
 import { IconButton } from '@/components/ui/icon-button';
 import { ArrowLeftIcon } from '@/components/ui/icons/arrow-left';
+import { BriefcaseIcon } from '@/components/ui/icons/briefcase';
 import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
 import { CalendarBlankIcon } from '@/components/ui/icons/calendar-blank';
 import { InfoIcon } from '@/components/ui/icons/info';
@@ -15,6 +25,7 @@ import { NotePencilIcon } from '@/components/ui/icons/note-pencil';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
+import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import type { Ruang } from '@/features/ledger/types';
 import { AppKeypad } from './app-keypad';
@@ -38,7 +49,22 @@ import { createCatatFlow } from './telemetry';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
 import { useKeyboardMode } from './use-keyboard-mode';
-import { DestinationChips, MetaSelect } from './wallet-picker';
+import { CROSS_COPY, DestinationChips, MetaSelect } from './wallet-picker';
+
+// Halaman "Ruang lain…" (S7-C1) dimuat malas saat diketuk pertama kali: tidak ikut JS muat awal.
+const SpaceTargetPage = lazy(() => import('./space-target-page'));
+
+/** Salinan tetap S7-C2. */
+const TALANGAN_COPY = {
+  label: 'Talangan kantor',
+  hint: 'Tidak masuk hitungan pribadi. Tercatat di Menunggu reimburse.',
+  /** Mode keyboard: satu baris utuh; teks lengkap tetap terbaca lewat `aria-describedby`. */
+  hintShort: 'Tidak masuk hitungan pribadi.',
+} as const;
+
+const NOTE_MAX = 200;
+/** Penghitung catatan muncul dari sini (S7-C1). */
+const NOTE_COUNT_FROM = 160;
 
 export interface CatatSheetProps {
   open: boolean;
@@ -156,22 +182,32 @@ function CatatSession({
   const noteId = useId();
   const hintId = useId();
   const typeHintId = useId();
-  const [page, setPage] = useState<'form' | 'kategori'>('form');
+  const [page, setPage] = useState<'form' | 'kategori' | 'ruang'>('form');
   const [menuOpen, setMenuOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   // Setelah halaman kategori ditutup: fokus ke chip terpilih (pilih) atau "Kategori lain…" (kembali).
-  const refocus = useRef<'chosen' | 'more' | 'note' | null>(null);
+  const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | null>(null);
+  const crossMoreRef = useRef<HTMLButtonElement>(null);
+  const crossSelectedRef = useRef<HTMLButtonElement>(null);
+  const sharedNoteId = useId();
+  const sharedCountId = useId();
+  const reimbId = useId();
   const chipsRef = useRef<HTMLDivElement>(null);
   const compact = useKeyboardMode(open) && keypad === 'os';
   const label = ruangLabel[draft.ruang];
+  const audience = source.sharedAudience?.();
   const target = other(draft.ruang);
-  const title = `${TYPE_TITLE[draft.type]} · ${label}`;
+  const toLabel = draft.toRuang === undefined ? undefined : ruangLabel[draft.toRuang];
+  const baseTitle = `${TYPE_TITLE[draft.type]} · ${label}`;
+  // Antar ruang: kedua ruang tertulis di judul (S7-C1), bukan hanya lewat warna.
+  const title = toLabel === undefined ? baseTitle : `${baseTitle} → ${toLabel}`;
 
   useEffect(() => {
     const where = refocus.current;
     if (where === null) return;
     refocus.current = null;
     if (where === 'more') moreRef.current?.focus();
+    else if (where === 'cross') (crossSelectedRef.current ?? crossMoreRef.current)?.focus();
     else if (where === 'note') noteRef.current?.focus();
     else chipsRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
@@ -185,6 +221,10 @@ function CatatSession({
     if (status === 'field' && c.field === 'category_id') {
       // Kategori dilepas: fokus ke chip pertama (titik masuk roving tabindex).
       chipsRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    } else if (status === 'galat' && c.galatKind === 'cross_space_not_allowed') {
+      (crossSelectedRef.current ?? crossMoreRef.current)?.focus();
+    } else if (status === 'galat' && c.galatKind === 'cross_space_kantor') {
+      accountRef.current?.focus();
     } else if (status === 'field') {
       (c.field === 'occurred_on' ? dateRef : accountRef).current?.focus();
     } else if (status === 'galat' && c.galatKind === 'not_found') {
@@ -231,6 +271,8 @@ function CatatSession({
   }
 
   const hasAccounts = c.loading || c.accounts.length > 0 || c.selectedAccount !== undefined;
+  const crossTarget = c.cross.target;
+  const crossLabel = ruangLabel[crossTarget];
   const isTransfer = draft.type === 'transfer';
   const hasAmount = draft.amount !== null && draft.amount > 0;
   const missing = isTransfer
@@ -287,8 +329,73 @@ function CatatSession({
     );
   }
 
+  if (page === 'ruang') {
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={onSheetOpenChange}
+        title={title}
+        titleHidden
+        tint={draft.ruang}
+        headerStart={
+          <>
+            <IconButton
+              label={`Kembali ke ${TYPE_TITLE[draft.type]}`}
+              icon={<ArrowLeftIcon size={20} />}
+              onClick={() => {
+                setPage('form');
+                refocus.current = 'cross';
+              }}
+            />
+            <h3 className="min-w-0 truncate text-subheading font-extrabold">{`Ke dompet di ${crossLabel}`}</h3>
+          </>
+        }
+        returnFocus={returnFocus}
+        onClickCapture={countTap}
+        fill
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape dari fokus di dalam halaman */}
+        <div
+          data-own-escape=""
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            setPage('form');
+            refocus.current = 'cross';
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <Suspense
+            fallback={
+              <p role="status" className="px-1 py-3 text-label font-semibold text-text-muted">
+                Memuat dompet…
+              </p>
+            }
+          >
+            <SpaceTargetPage
+              targets={c.cross}
+              targetLabel={crossLabel}
+              value={draft.toRuang === undefined ? undefined : draft.counterAccountId}
+              onPick={(id) => {
+                c.setCrossTarget(id);
+                setPage('form');
+                refocus.current = 'cross';
+              }}
+              onRetry={c.loadCrossTargets}
+              onAddAccount={(r) => {
+                onOpenChange(false);
+                onAddAccount?.(r);
+              }}
+            />
+          </Suspense>
+        </div>
+      </Sheet>
+    );
+  }
+
   const primaryLabel =
-    status === 'galat' && c.galatKind !== 'not_found'
+    status === 'galat' && (c.galatKind === 'network' || c.galatKind === 'server')
       ? CATAT_COPY.cobaLagi
       : status === 'saldo_kurang'
         ? CATAT_COPY.tetapSimpan
@@ -336,18 +443,21 @@ function CatatSession({
         {saving ? CATAT_COPY.menyimpan : ''}
       </p>
       <div className="flex items-center gap-2">
-        <Button
-          variant="text"
-          size="sm"
-          className="px-2.5"
-          aria-disabled={saving || undefined}
-          onClick={() => {
-            c.switchRuang(target);
-          }}
-        >
-          <ArrowsLeftRightIcon size={18} weight="bold" />
-          <span className={moveLabelClass}>Pindah ke {ruangLabel[target]}</span>
-        </Button>
+        {/* Transfer antar ruang sedang disusun: pindah ruang akan membuang pilihannya, jadi disembunyikan. */}
+        {draft.toRuang === undefined ? (
+          <Button
+            variant="text"
+            size="sm"
+            className="px-2.5"
+            aria-disabled={saving || undefined}
+            onClick={() => {
+              c.switchRuang(target);
+            }}
+          >
+            <ArrowsLeftRightIcon size={18} weight="bold" />
+            <span className={moveLabelClass}>Pindah ke {ruangLabel[target]}</span>
+          </Button>
+        ) : null}
         <Button
           ref={primaryRef}
           type="submit"
@@ -387,8 +497,8 @@ function CatatSession({
     (d) => opened === undefined || d >= opened || d === draft.date,
   );
   const accountOptions = [
-    ...c.accounts,
-    ...(c.selectedAccount !== undefined && !c.accounts.includes(c.selectedAccount)
+    ...c.sourceAccounts,
+    ...(c.selectedAccount !== undefined && !c.sourceAccounts.includes(c.selectedAccount)
       ? [c.selectedAccount]
       : []),
   ];
@@ -418,7 +528,17 @@ function CatatSession({
           <TypeMenuButton
             ref={titleRef}
             space={draft.ruang}
-            title={title}
+            title={baseTitle}
+            toSpace={
+              draft.toRuang === undefined || toLabel === undefined
+                ? undefined
+                : {
+                    space: draft.toRuang,
+                    label: toLabel,
+                    head: `${TYPE_TITLE[draft.type]} ·`,
+                    from: label,
+                  }
+            }
             open={menuOpen}
             describedBy={typeHintId}
             busy={saving}
@@ -480,6 +600,20 @@ function CatatSession({
               accounts={c.destinations}
               value={draft.counterAccountId}
               onChange={c.setCounterAccount}
+              busy={saving}
+              crossEnabled
+              crossLabel={
+                draft.toRuang === undefined || toLabel === undefined
+                  ? undefined
+                  : `${c.crossAccount?.name ?? ''}${c.crossAccount === undefined ? '' : ' · '}${toLabel}`
+              }
+              crossBlocked={c.crossBlocked}
+              crossMoreRef={crossMoreRef}
+              crossSelectedRef={crossSelectedRef}
+              onOpenCross={() => {
+                c.loadCrossTargets();
+                setPage('ruang');
+              }}
             />
           ) : (
             <div ref={chipsRef}>
@@ -512,6 +646,30 @@ function CatatSession({
                 : 'Pilih kategori untuk menyimpan'}
             </p>
           ) : null}
+          {draft.reimbursable === true ? (
+            <p
+              id={reimbId}
+              // Slot petunjuk yang sama dengan petunjuk simpan: tidak ada baris tambahan (S7-C2).
+              className={
+                showHint
+                  ? 'sr-only'
+                  : `flex gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`
+              }
+            >
+              <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
+              {/* Mode keyboard: satu baris (tinggi sheet); selain itu teks utuh boleh membungkus. */}
+              {compact ? (
+                <>
+                  <span aria-hidden="true" data-testid="talangan-hint" className="min-w-0 truncate">
+                    {TALANGAN_COPY.hintShort}
+                  </span>
+                  <span className="sr-only">{TALANGAN_COPY.hint}</span>
+                </>
+              ) : (
+                <span className="min-w-0 text-pretty">{TALANGAN_COPY.hint}</span>
+              )}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <MetaSelect
               label={draft.type === 'income' ? 'Ke dompet' : 'Dari dompet'}
@@ -520,6 +678,7 @@ function CatatSession({
               onChange={c.setAccount}
               options={accountOptions.map((a) => ({ value: a.id, label: a.name }))}
               selectRef={accountRef}
+              tight={c.canReimburse}
               busy={saving}
               invalid={c.field === 'account_id'}
               describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
@@ -532,6 +691,7 @@ function CatatSession({
               onChange={c.setDate}
               options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
               selectRef={dateRef}
+              tight={c.canReimburse}
               busy={saving}
               invalid={c.field === 'occurred_on'}
               describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
@@ -547,6 +707,28 @@ function CatatSession({
                 refocus.current = noteOpen ? null : 'note';
               }}
             />
+            {c.canReimburse ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.reimbursable === true}
+                aria-label={TALANGAN_COPY.label}
+                aria-describedby={draft.reimbursable === true ? reimbId : undefined}
+                aria-disabled={saving || undefined}
+                onClick={() => {
+                  if (!saving) c.setReimbursable(draft.reimbursable !== true);
+                }}
+                // Mati: ubin surface-2; aktif: tint aksen + garis 1 px (aktif juga lewat aria-checked
+                // dan petunjuk, bukan warna saja).
+                className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
+                  draft.reimbursable === true
+                    ? 'border-accent-text bg-accent-tint text-accent-text'
+                    : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
+                } aria-disabled:text-text-muted`}
+              >
+                <BriefcaseIcon size={20} />
+              </button>
+            ) : null}
           </div>
           {fieldError === null ? null : (
             <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
@@ -554,7 +736,7 @@ function CatatSession({
           {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}
           <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
             <FieldLabel htmlFor={noteId} optional>
-              Keterangan
+              {c.sharedNoteVisible ? CROSS_COPY.keterangan : 'Keterangan'}
             </FieldLabel>
             <input
               id={noteId}
@@ -571,6 +753,37 @@ function CatatSession({
               className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
             />
           </div>
+          {c.sharedNoteVisible ? (
+            <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
+              <FieldLabel htmlFor={sharedNoteId} optional>
+                {CROSS_COPY.catatan}
+              </FieldLabel>
+              <input
+                id={sharedNoteId}
+                type="text"
+                autoComplete="off"
+                maxLength={NOTE_MAX}
+                placeholder={
+                  audience === undefined ? CROSS_COPY.audienceUmum : CROSS_COPY.audience(audience)
+                }
+                value={draft.sharedNote ?? ''}
+                readOnly={saving || undefined}
+                aria-disabled={saving || undefined}
+                aria-describedby={
+                  (draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? sharedCountId : undefined
+                }
+                onChange={(e) => {
+                  c.setSharedNote(e.target.value);
+                }}
+                className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
+              />
+              {(draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? (
+                <p id={sharedCountId} className="text-caption font-medium text-text-muted">
+                  {`${String(draft.sharedNote?.length ?? 0)} / ${String(NOTE_MAX)}`}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </form>
       ) : (
         <NoAccountState

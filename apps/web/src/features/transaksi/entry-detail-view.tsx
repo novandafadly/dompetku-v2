@@ -15,6 +15,7 @@ const KIND_NAME: Record<EntryVM['kind'], string> = {
   opening_balance: 'Saldo awal',
   space_transfer: 'Antar ruang',
   adjustment: 'Cocokkan saldo',
+  reimbursement: 'Reimburse',
 };
 
 /** Dompet entri: transfer satu ruang = "BCA → Tunai". */
@@ -24,7 +25,7 @@ export function entryWalletVM(e: EntryVM): string {
     : e.accountName;
 }
 
-function DetailRow({ term, children }: { term: string; children: ReactNode }) {
+export function DetailRow({ term, children }: { term: string; children: ReactNode }) {
   return (
     <div className={`flex min-h-13 items-center justify-between gap-3 ${rowDivider}`}>
       <dt className="text-body font-medium text-text-muted">{term}</dt>
@@ -73,6 +74,10 @@ export function EntryDetailView({
   heroNote,
   actions,
   struck = false,
+  struckText = 'dibatalkan',
+  ruangValue,
+  rows,
+  after,
 }: {
   entry: EntryVM;
   /** Judul (deskripsi, catatan bersama, atau kategori). */
@@ -94,6 +99,14 @@ export function EntryDetailView({
   actions?: ReactNode;
   /** Nominal dicoret + teks pembaca layar `dibatalkan` (S6-D3). */
   struck?: boolean;
+  /** Teks pembaca layar di nominal yang dicoret (`dipindahkan` untuk entri asal Pindahkan, S7-D2). */
+  struckText?: string;
+  /** Isi baris Ruang bila bukan satu `SpaceTag` (antar ruang Pribadi: `Pribadi → Bersama`, S7-D1). */
+  ruangValue?: ReactNode;
+  /** Baris rincian tambahan sesudah Dicatat oleh (mis. `Talangan`, S7-D3). */
+  rows?: ReactNode;
+  /** Di bawah rincian, di atas aksi (mis. daftar reimburse, S7-D3). */
+  after?: ReactNode;
 }) {
   const { value, kind } = amount;
   const sizeClass = amountClass(
@@ -127,7 +140,7 @@ export function EntryDetailView({
               .filter((c) => c !== null)
               .join(' ')}
           />
-          {struck ? <span className="sr-only"> dibatalkan</span> : null}
+          {struck ? <span className="sr-only"> {struckText}</span> : null}
         </p>
         {heroNote}
       </section>
@@ -135,14 +148,17 @@ export function EntryDetailView({
         <DetailRow term="Kategori">{category}</DetailRow>
         <DetailRow term="Dompet">{entryWalletVM(entry)}</DetailRow>
         <DetailRow term="Tanggal">{detailDateLabel(entry.occurredOn, today)}</DetailRow>
-        <DetailRow term="Ruang">
-          <SpaceTag space={ruang} />
-        </DetailRow>
+        <DetailRow term="Ruang">{ruangValue ?? <SpaceTag space={ruang} />}</DetailRow>
         <DetailRow term="Dicatat oleh">{by}</DetailRow>
+        {entry.kind === 'space_transfer' && entry.description !== undefined ? (
+          <DetailRow term="Keterangan">{entry.description}</DetailRow>
+        ) : null}
         {entry.sharedNote === undefined ? null : (
           <DetailRow term="Catatan">{entry.sharedNote}</DetailRow>
         )}
+        {rows}
       </dl>
+      {after}
       {actions}
     </article>
   );

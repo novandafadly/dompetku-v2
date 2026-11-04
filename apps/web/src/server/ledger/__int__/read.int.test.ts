@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createPools, withUser, type Pools } from '../../db';
 import {
+  accountEntries,
   getEntry,
   listAccounts,
   listCategories,
@@ -13,10 +14,12 @@ import {
   todayStatus,
   trashList,
 } from '../read';
+import { createReimbursement } from '../reimburse';
 import {
   createAccount,
   createCategory,
   createEntry,
+  createSpaceTransfer,
   createTransfer,
   markNoSpendDay,
   restoreEntry,
@@ -314,6 +317,68 @@ describe('loader baca ledger (N dan F bergabung)', () => {
     });
   });
 
+  describe('transfer antar ruang lewat wrapper S7 (Review Focus 1)', () => {
+    it('setor N Pribadi → Bersama: F membaca kaki masuk tanpa deskripsi dan tanpa dompet Pribadi', async () => {
+      const month = await currentMonth();
+      const bca = await wallet(nPribadi, 2_000_000, KANARI_DOMPET);
+      const kas = await wallet(nBersama, 0, 'Kas Rumah');
+      const setor = await createSpaceTransfer(nPribadi, {
+        clientId: randomUUID(),
+        fromAccountId: bca,
+        toSpaceId: nBersama.spaceId,
+        toAccountId: kas,
+        amount: 1_250_000,
+        fee: 6_500,
+        description: KANARI_DESC,
+        sharedNote: 'Setoran November',
+        allowNegative: false,
+      });
+
+      const list = await listEntries(fBersama, { month });
+      const masuk = must(list.find((e) => e.id === setor.linkedEntryId));
+      const { createdAt, ...vm } = masuk;
+      expect(createdAt).toMatch(WIB_TS);
+      expect(vm).toEqual({
+        id: setor.linkedEntryId,
+        version: 1,
+        kind: 'space_transfer',
+        occurredOn: await dbToday(),
+        createdBy: { id: ps.n.id, name: 'Novanda', initial: 'N' },
+        accountId: kas,
+        accountName: 'Kas Rumah',
+        amount: 1_250_000,
+        direction: 'in',
+        spaceKind: 'shared',
+        sharedNote: 'Setoran November',
+      });
+
+      const blob = JSON.stringify({
+        list,
+        perAccount: await listEntries(fBersama, { month, accountId: kas }),
+        detail: await getEntry(fBersama, setor.linkedEntryId),
+        foreign: await getEntry(fBersama, setor.entryId),
+        foreignAccount: await listEntries(fBersama, { month, accountId: bca }),
+      });
+      for (const kanari of [KANARI_DESC, KANARI_DOMPET, bca, setor.entryId, nPribadi.spaceId]) {
+        expect(blob).not.toContain(kanari);
+      }
+      // Biaya hanya di kaki Pribadi: tidak ada nominal biaya di Bersama.
+      expect(blob).not.toContain('6500');
+
+      // Sisi Pribadi N: kaki keluar membawa deskripsi, tanpa catatan Bersama.
+      const keluar = must(
+        (await listEntries(nPribadi, { month })).find((e) => e.id === setor.entryId),
+      );
+      expect(keluar).toMatchObject({
+        kind: 'space_transfer',
+        direction: 'out',
+        accountId: bca,
+        description: KANARI_DESC,
+      });
+      expect(keluar).not.toHaveProperty('sharedNote');
+    });
+  });
+
   describe('batas hari WIB (Review Focus 3)', () => {
     /** Pool `dompetku_web` dengan jam DB tiruan (`app.now_override`, aktif bila env = test). */
     function clockPools(at: string): Pools {
@@ -512,6 +577,52 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       for (const e of list.filter((x) => x.kind !== 'adjustment')) {
         expect(e).not.toHaveProperty('direction');
       }
+    });
+
+    it('reimburse talangan tampil sebagai kind reimbursement (pemasukan ke dompet)', async () => {
+      const month = await currentMonth();
+      const a = await wallet(nPribadi, 1_000_000, 'BCA');
+      const t = await createEntry(nPribadi, {
+        clientId: randomUUID(),
+        accountId: a,
+        kind: 'expense',
+        amount: 300_000,
+        categoryId: await categoryOf(nPribadi.spaceId, 'expense'),
+        description: 'hotel dinas',
+        reimbursable: true,
+      });
+      const r = await createReimbursement(nPribadi, {
+        clientId: randomUUID(),
+        entryId: t.entryId,
+        accountId: a,
+        amount: 100_000,
+        description: 'transfer kantor',
+      });
+
+      const list = await listEntries(nPribadi, { month });
+      expect(must(list.find((e) => e.id === t.entryId))).toMatchObject({
+        kind: 'expense',
+        reimbursable: true,
+      });
+      const { createdAt, ...vm } = must(list.find((e) => e.id === r.entryId));
+      expect(createdAt).toMatch(WIB_TS);
+      expect(vm).toEqual({
+        id: r.entryId,
+        version: 1,
+        kind: 'reimbursement',
+        occurredOn: await dbToday(),
+        createdBy: { id: ps.n.id, name: 'Novanda', initial: 'N' },
+        accountId: a,
+        accountName: 'BCA',
+        amount: 100_000,
+        description: 'transfer kantor',
+        reimbursesEntryId: t.entryId,
+      });
+      expect(must(await getEntry(nPribadi, r.entryId)).entry.kind).toBe('reimbursement');
+      expect((await accountEntries(nPribadi, a, 10)).entries.map((e) => e.kind)).toEqual([
+        'reimbursement',
+        'expense',
+      ]);
     });
 
     it('getEntry entri batal tetap terbaca dengan voidedAt', async () => {

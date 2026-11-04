@@ -1,9 +1,9 @@
 -- Isolasi ruang tabel ledger (BSD §13 #10 sampai #14; IPD S5: isolasi penuh semua tabel baru):
 -- dua user x tabel/view ledger x SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; fungsi api.*
--- dengan id pasangan = DK404; tanpa konteks = 0 baris / DK401; Bersama tidak pernah membuka data
--- Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
+-- dengan id pasangan = DK404 (termasuk talangan, reimburse, dan pindah ruang S7); tanpa konteks = 0 baris / DK401;
+-- Bersama tidak pernah membuka data Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
 begin;
-select plan(168);
+select plan(179);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -45,6 +45,12 @@ select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uu
   :'np', :'bca', :'kas')) as setor \gset
 select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 50000, 0, null, 'rahasia ambil', 'Diambil')$$,
   :'sh', :'kas', :'bca')) as ambil \gset
+
+-- Talangan (S7): N dan F masing-masing punya talangan Pribadi.
+select pg_temp.call(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 5000, null, null, 'talangan N', true)$$,
+  :'np', :'bca')) ->> 'entry_id' as nt \gset
+select pg_temp.call(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 6000, null, null, 'talangan F', true)$$,
+  :'fp', :'fbca')) ->> 'entry_id' as ft \gset
 
 -- Hari tanpa pengeluaran (S6): N menandai Pribadi N, F menandai Pribadi F.
 select tests.web_exec(u, format('select api.mark_no_spend_day(%L)', sp))
@@ -155,12 +161,23 @@ from (values
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'np')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np')),
-  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np'))
+  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np')),
+  ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'fbca')),
+  ('create_reimbursement ke', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'ft', :'bca')),
+  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
+  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas')),
+  ('move_entry_to_space ke', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'np', :'bca')),
+  ('move_entry_to_space dompet', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'sh', :'bca'))
 ) v (t, q);
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
+select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' '
+  || (select count(*) from app.entries where moved_at is not null) from app.entries where id = %L$$, :'fe')),
+  '1 true 0', 'percobaan pindah lintas ruang tanpa efek (entri F hidup, tidak ada entri dipindah)');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.categories where id = %L and name = 'Makan' and archived_at is null$$, :'ncat')), '1',
   'kategori N tidak tersentuh');
+select is(tests.owner_val(null, format($$select count(*) from app.entries where reimburses_entry_id in (%L, %L)$$, :'nt', :'ft')), '0',
+  'talangan N dan F tanpa reimburse sesudah percobaan lintas ruang');
 
 -- Tanpa konteks: fungsi tulis dan baca = DK401.
 select throws_ok(format($$select tests.web_exec(null, %L)$$, q), 'DK401', 'unauthenticated', 'tanpa konteks = DK401: ' || t)
@@ -182,7 +199,10 @@ from (values
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh')),
-  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh'))
+  ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh')),
+  ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'bca')),
+  ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
+  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====

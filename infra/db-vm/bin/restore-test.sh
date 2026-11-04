@@ -49,6 +49,9 @@ done
 [ "$(rt postgres "select count(*) from pg_database where datname = 'dompetku'")" = 1 ] || fail "database dompetku tidak ada"
 [ "$(rt dompetku "select count(*) >= 7 from pg_roles where rolname like 'dompetku\_%'")" = t ] || fail "role kurang"
 rt dompetku "select app.today()" >/dev/null || fail "app.today()"
+# Skema dibatasi ke milik owner. Jangan tambahkan `pgboss`: tabelnya dibuat dan dimiliki
+# dompetku_worker, dan dibaca superuser (sesi ini) = risiko eskalasi (view/fungsi buatan worker
+# berjalan dengan hak pemanggil; lihat docs/ops/runbook-s7-worker.md langkah 5).
 ROWS=$(rt dompetku "
 	do \$\$ declare t record; n bigint; total bigint := 0; begin
 	  for t in select schemaname, tablename from pg_tables where schemaname in ('app','audit','auth','public') loop

@@ -6,7 +6,7 @@ import { EyeSlashIcon } from '@/components/ui/icons/eye-slash';
 import { UsersThreeFillIcon } from '@/components/ui/icons/users-three-fill';
 import { AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 
 export function TerimaUndanganPrototype() {
   const { authHref } = useDemo();

@@ -8,7 +8,7 @@ import { PaperPlaneTiltIcon } from '@/components/ui/icons/paper-plane-tilt';
 import { TextField } from '@/components/ui/text-field';
 import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { LinkButton } from '@/features/auth/link-button';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 
 export function UndangPrototype() {
   const { authHref, href } = useDemo();

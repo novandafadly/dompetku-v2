@@ -38,5 +38,13 @@ export default async function Page({
     console.error('[sampah] gagal memuat', errorTag(e));
     return <SampahFailed ruang={ctx.ruang} backHref={backHref} />;
   }
-  return <SampahReal ruang={ctx.ruang} today={todayWIB()} backHref={backHref} data={data} />;
+  return (
+    <SampahReal
+      ruang={ctx.ruang}
+      today={todayWIB()}
+      backHref={backHref}
+      data={data}
+      me={ctx.userId}
+    />
+  );
 }

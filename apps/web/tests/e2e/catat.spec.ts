@@ -1,6 +1,6 @@
 import { parseRupiah } from '@dompetku/domain';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { routeScripts } from './route-scripts';
+import { isDemoChunk, routeScripts } from './route-scripts';
 
 const q = 'today=2026-10-17';
 
@@ -67,8 +67,17 @@ test.describe('Catat 390', () => {
       }
       const path = new URL(request.url()).pathname;
       if (path.endsWith('.js') && !own.has(path)) {
+        // Chunk DemoProvider (route-scripts.ts) = JS rute prototipe yang ditunggu hidrasi.
+        const response = await route.fetch();
+        const body = await response.text();
+        if (isDemoChunk(body)) {
+          await route.fulfill({ response, body });
+          return;
+        }
         held();
         await gate;
+        await route.fulfill({ response, body }).catch(() => undefined);
+        return;
       }
       await route.continue().catch(() => undefined);
     });
@@ -109,8 +118,13 @@ test.describe('Catat 390', () => {
         return;
       }
       const path = new URL(request.url()).pathname;
-      // Kode sheet tidak pernah datang dalam tes ini.
-      if (path.endsWith('.js') && !own.has(path)) return;
+      if (path.endsWith('.js') && !own.has(path)) {
+        // Kode sheet tidak pernah datang dalam tes ini; chunk DemoProvider (JS rute prototipe) datang.
+        const response = await route.fetch();
+        const body = await response.text();
+        if (isDemoChunk(body)) await route.fulfill({ response, body });
+        return;
+      }
       await route.continue();
     });
     await page.goto(`/pribadi/beranda?${q}`);

@@ -1,4 +1,5 @@
 import type { Ruang } from '@/features/ledger/types';
+import type { BerandaBersama } from '@/server/ledger/beranda';
 
 /**
  * Langkah checklist "Mulai dari sini" mode nyata (tanpa label/aksi; dirangkai `BerandaReal`),
@@ -27,4 +28,22 @@ export function berandaSteps(i: {
   ];
   if (i.ruang === 'pribadi' && i.invite) steps.push({ key: 'undang', done: false });
   return steps;
+}
+
+/**
+ * Turunan tampilan Bersama (S7-B1/B2) dari `BerandaData.bersama`. `solo` = hanya satu anggota
+ * (tanpa avatar/nama anggota kedua); `invite` = kartu ajakan: hanya pemilik, `baru` (belum ada
+ * undangan) atau `menunggu`; `empty` = tanpa dompet operasional dan tanpa entri.
+ */
+export interface BersamaView {
+  solo: boolean;
+  empty: boolean;
+  invite: 'none' | 'baru' | 'menunggu';
+}
+
+export function bersamaView(ruang: Ruang, b: BerandaBersama | null): BersamaView {
+  if (ruang !== 'bersama' || b === null) return { solo: false, empty: false, invite: 'none' };
+  const solo = b.members < 2;
+  const invite = !solo || !b.isOwner ? 'none' : b.pendingInvite ? 'menunggu' : 'baru';
+  return { solo, empty: b.empty, invite };
 }

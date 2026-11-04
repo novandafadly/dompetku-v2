@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(35);
+select plan(39);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -55,15 +55,16 @@ select set_eq($$
         'invitation_peek', 'decline_invitation', 'accept_invitation', 'list_invitations',
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
-        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6, invitation_peek, list_invitations)');
+        'create_category', 'update_category', 'archive_category', 'mark_no_spend_day',
+        'create_reimbursement', 'move_entry_to_space'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
-        'trash_list', 'suggest_categories'],
-  'daftar fungsi baca api INVOKER (S5, S6)');
+        'trash_list', 'suggest_categories', 'open_reimbursables'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
@@ -247,11 +248,12 @@ select set_eq($$
                                    'create_transfer', 'update_entry', 'void_entry',
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account', 'create_category', 'update_category',
-                                   'archive_category', 'mark_no_spend_day']) f
+                                   'archive_category', 'mark_no_spend_day',
+                                   'create_reimbursement', 'move_entry_to_space']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
-                      'suggest_categories']) f
+                      'suggest_categories', 'open_reimbursables']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -278,6 +280,24 @@ select ok((select bool_and('default_transaction_isolation=read committed' = any 
                where r.rolname in ('dompetku_web', 'dompetku_worker')) = 2,
           'default READ COMMITTED di role web dan worker');
 
+-- Skema pgboss (S7, 0112): milik owner, hanya worker yang punya USAGE + CREATE (tabel pg-boss
+-- milik worker); tidak ada role aplikasi dengan CREATE/TEMPORARY di database.
+select is((select nspowner::regrole::text from pg_namespace where nspname = 'pgboss'), 'dompetku_owner',
+  'skema pgboss milik dompetku_owner');
+select set_eq($$
+  select r.rolname::text, p.priv from pg_roles r
+  cross join (values ('USAGE'), ('CREATE')) p (priv)
+  where r.rolname like 'dompetku\_%' and r.rolname not in ('dompetku_owner', 'dompetku_test')
+    and has_schema_privilege(r.oid, 'pgboss', p.priv) $$,
+  $$ values ('dompetku_worker', 'USAGE'), ('dompetku_worker', 'CREATE') $$,
+  'hak skema pgboss hanya untuk worker');
+select is_empty($$
+  select r.rolname || ' ' || p.priv from pg_roles r
+  cross join (values ('CREATE'), ('TEMPORARY')) p (priv)
+  where r.rolname like 'dompetku\_%' and r.rolname not in ('dompetku_owner', 'dompetku_test')
+    and has_database_privilege(r.oid, current_database(), p.priv) $$,
+  'role aplikasi tanpa CREATE/TEMPORARY di database');
+
 -- #7 Setiap FK punya indeks non-parsial dengan kolom terdepan = kolom FK (sebagai himpunan).
 select is_empty($$
   select c.conrelid::regclass::text || ' ' || c.conname from pg_constraint c
@@ -299,6 +319,12 @@ select set_eq($$
   $$ values ('auth.recovery_codes', 'c'), ('auth.session', 'c'), ('auth.account', 'c'),
             ('auth."twoFactor"', 'c'), ('auth.passkey', 'c') $$,
   'FK ke auth.user restrict, kecuali tabel auth (kode pemulihan, Better Auth) cascade');
+
+-- Indeks unik nama (S7, 0109): nama dompet aktif unik per ruang tanpa beda huruf besar/spasi;
+-- server memetakan 23505 dari indeks ini ke name_taken, jadi nama dan bentuknya dikunci di sini.
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_name_unique'),
+  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
+  'indeks unik nama dompet aktif per ruang');
 
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');

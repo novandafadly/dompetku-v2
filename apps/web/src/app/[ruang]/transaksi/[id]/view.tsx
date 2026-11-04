@@ -1,7 +1,7 @@
 'use client';
 
 import { notFound, useParams } from 'next/navigation';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { EntryDetail } from '@/features/transaksi/entry-detail';
 
 export function TransaksiDetailPage() {

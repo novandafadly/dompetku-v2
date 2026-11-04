@@ -17,3 +17,13 @@ export function routeScripts(html: string): Set<string> {
   }
   return paths;
 }
+
+/**
+ * Penanda chunk DemoProvider + seed demo (packages/demo-data/src/seed.ts). Sejak K3 (S7 Task 9)
+ * chunk itu dimuat malas dari cabang prototipe (`DemoRoot`) agar tidak ikut JS mode nyata, jadi
+ * tidak dirujuk HTML. Hidrasi prototipe menunggunya, maka tes prototipe memperlakukannya sebagai
+ * JS rute (dihitung di budget, tidak ditahan bersama kode muat malas lain).
+ */
+export const DEMO_CHUNK_MARKER = 'Belanja mingguan';
+
+export const isDemoChunk = (body: string): boolean => body.includes(DEMO_CHUNK_MARKER);

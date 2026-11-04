@@ -3,10 +3,10 @@
 import { newClientId } from '@/features/catat/client-id';
 import { savedToast } from '@/features/catat/saved-toast';
 import type { CatatOptions, CatatSource, SaveOutcome } from '@/features/catat/source';
-import type { CategoryVM, Ruang } from '@/features/ledger/types';
+import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SaveCatatInput } from '../_actions/inputs';
 import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
-import { voidEntryAction } from '../_actions/entri';
+import { moveTargetsAction, voidEntryAction } from '../_actions/entri';
 
 /**
  * Sumber Catat mode nyata (modul klien): hanya referensi Server Action dari `_actions/*`, tidak
@@ -42,6 +42,10 @@ function deferred<T>(start: () => Promise<T>): Promise<T> {
 export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceArgs): CatatSource {
   const loaded = new Map<Ruang, CatatOptions>([[ruang, options]]);
   const frozen = new Map<string, Promise<CategoryVM[]>>();
+  // Dompet tujuan antar ruang (S7-C1), per ruang tujuan, hanya selama sesi sheet ini. Dimuat saat
+  // halaman "Ruang lain…" dibuka (R27): data Pribadi untuk pemanggil di rute Bersama tidak lewat
+  // props RSC, URL, atau cache bersama.
+  const targets = new Map<Ruang, Promise<AccountVM[]>>();
 
   const optionsOf = async (r: Ruang): Promise<CatatOptions> => {
     const have = loaded.get(r);
@@ -98,6 +102,23 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
       }
       return got;
     },
+    spaceTransferTargets(toRuang) {
+      let got = targets.get(toRuang);
+      if (got === undefined) {
+        // Ruang sumber = kebalikan tujuan (hanya dua ruang): action memuat dompet ruang tujuan.
+        const from: Ruang = toRuang === 'pribadi' ? 'bersama' : 'pribadi';
+        got = moveTargetsAction(from, toRuang).then((res) => {
+          if (!res.ok) throw new Error(res.error.code);
+          return res.value.accounts;
+        });
+        targets.set(toRuang, got);
+        got.catch(() => {
+          // Gagal tidak dibekukan: pembukaan halaman berikutnya mencoba lagi.
+          targets.delete(toRuang);
+        });
+      }
+      return got;
+    },
     async save(d): Promise<SaveOutcome> {
       if (d.amount === null) return { ok: false, code: 'invalid', field: 'amount' };
       const common = {
@@ -108,15 +129,31 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
         ...(d.description === undefined ? {} : { description: d.description }),
         allowNegative: d.allowNegative,
       };
+      const crossTo = d.type === 'transfer' ? d.toRuang : undefined;
       const input: SaveCatatInput =
-        d.type === 'transfer'
+        crossTo !== undefined
           ? {
-              kind: 'transfer',
+              kind: 'space_transfer',
+              toRuang: crossTo,
               fromAccountId: d.accountId,
               toAccountId: d.counterAccountId ?? '',
+              ...(d.sharedNote === undefined ? {} : { sharedNote: d.sharedNote }),
               ...common,
             }
-          : { kind: d.type, accountId: d.accountId, categoryId: d.categoryId ?? '', ...common };
+          : d.type === 'transfer'
+            ? {
+                kind: 'transfer',
+                fromAccountId: d.accountId,
+                toAccountId: d.counterAccountId ?? '',
+                ...common,
+              }
+            : {
+                kind: d.type,
+                accountId: d.accountId,
+                categoryId: d.categoryId ?? '',
+                ...(d.type === 'expense' && d.reimbursable === true ? { reimbursable: true } : {}),
+                ...common,
+              };
       try {
         const res = await saveCatat(d.ruang, input);
         if (!res.ok) {
@@ -135,6 +172,10 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
             d.type,
             name(d.accountId),
             name(d.counterAccountId),
+            {
+              ...(crossTo === undefined ? {} : { toRuang: ruangLabel[crossTo] }),
+              reimbursable: d.type === 'expense' && d.reimbursable === true,
+            },
           ),
         };
       } catch {

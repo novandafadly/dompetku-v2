@@ -1,5 +1,6 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
 # S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools). S3: web (profil web).
+# S7: worker (profil web, image sama dengan web).
 name: dompetku
 
 services:
@@ -44,8 +45,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./pki/postgres:/etc/dompetku/tls:ro
-    # internal: klien aplikasi (pg_hba hanya subnet ini). egress: hanya untuk WAL-G ke bucket OCI.
-    networks: [internal, egress]
+    # internal: klien aplikasi web/migrate (pg_hba subnet ini). worker_db: hanya worker (S7, pg_hba
+    # subnet sendiri). egress: hanya untuk WAL-G ke bucket OCI.
+    networks: [internal, worker_db, egress]
     shm_size: 128m
     mem_limit: 1g
     cpus: 1.0
@@ -108,17 +110,63 @@ services:
       start_period: 30s
       start_interval: 2s
 
+  worker:
+    # S7 (K1). Image yang sama dengan web (tag lokal dari deployer, rollback bersama web); entri
+    # /app/worker/worker.mjs (pg-boss, job terjadwal WIB). Deployer mengganti worker sesudah web sehat
+    # dan melewatinya selama env/worker.env belum ada (docs/ops/runbook-s7-worker.md). required:
+    # false agar berkas yang belum ada tidak menggagalkan compose untuk web dan migrate.
+    image: dompetku-web:current
+    pull_policy: never
+    profiles: [web]
+    restart: unless-stopped
+    command: ['worker/worker.mjs']
+    env_file:
+      - path: ./env/worker.env
+        required: false
+    # worker_db: ke postgres saja (pg_hba: dompetku_worker hanya dari subnet ini). worker_egress:
+    # egress untuk Healthchecks (tidak difilter). Worker tidak berbagi network dengan gw/web: worker
+    # yang disusupi tidak bisa memanggil web:3000 langsung (melewati gw, memalsukan X-Forwarded-For).
+    networks: [worker_db, worker_egress]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    # CA DompetKu untuk DATABASE_URL sslmode=verify-full (sama dengan web).
+    volumes:
+      - ./pki/postgres/ca.crt:/etc/dompetku/ca.crt:ro
+    user: '65532:65532'
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    # SIGTERM -> pg-boss stop graceful (job aktif diselesaikan, batas STOP_TIMEOUT_MS 30 s di
+    # apps/worker/src/worker.ts) + pool.end sebelum SIGKILL; harus > 30 s (dijaga worker.test.ts).
+    stop_grace_period: 45s
+    # Tanpa HTTP: HEALTHCHECK image (milik web, port 3000) dimatikan. Health = deployer
+    # (running + RestartCount stabil 20 detik).
+    healthcheck:
+      disable: true
+
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).
   app: {}
-  # web/worker/migrate <-> postgres, tanpa akses keluar dan tanpa port host. Subnet dipatok untuk pg_hba.
+  # web/migrate <-> postgres, tanpa akses keluar dan tanpa port host. Subnet dipatok untuk pg_hba.
   internal:
     internal: true
     ipam:
       config:
         - subnet: 172.24.0.0/16
+  # worker <-> postgres saja (S7), tanpa akses keluar. Subnet dipatok untuk pg_hba.
+  worker_db:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
   # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
   egress: {}
+  # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
+  # egress (postgres).
+  worker_egress: {}
 
 volumes:
   pgdata: {}

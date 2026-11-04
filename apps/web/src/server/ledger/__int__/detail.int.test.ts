@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadDetail } from '../detail';
+import { createReimbursement } from '../reimburse';
 import { resolveSpace } from '../space';
-import { createAccount, createEntry, updateEntry, voidEntry, type LedgerCtx } from '../write';
+import {
+  createAccount,
+  createEntry,
+  createSpaceTransfer,
+  moveEntryToSpace,
+  updateEntry,
+  voidEntry,
+  type LedgerCtx,
+} from '../write';
 import { createLedgerHarness, resetLedger, seedPersonas, type Persona } from './harness';
 
 /**
@@ -187,5 +196,147 @@ describe('loadDetail (persona N, F bergabung)', () => {
     ]) {
       expect(blob).not.toContain(kanari);
     }
+  });
+});
+
+describe('loadDetail S7: talangan, antar ruang, pindah', () => {
+  let n: Persona;
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    const ps = await seedPersonas(h, { farida: 'bergabung' });
+    n = ps.n;
+  });
+
+  it('talangan: reimburse hidup, sisa, dan reimbursesEntryId di Detail reimburse; spaceCount 2', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const acc = await wallet(pribadi, 'Mandiri', 20_000_000);
+    const cat = await firstExpenseCategory(pribadi);
+    const t = await createEntry(pribadi, {
+      clientId: randomUUID(),
+      accountId: acc,
+      kind: 'expense',
+      amount: 500_000,
+      categoryId: cat,
+      reimbursable: true,
+    });
+    const pertama = await loadDetail(pribadi, t.entryId);
+    expect(pertama?.spaceCount).toBe(2);
+    expect(pertama?.talangan).toEqual({ items: [], reimbursed: 0, remaining: 500_000 });
+
+    const r1 = await createReimbursement(pribadi, {
+      clientId: randomUUID(),
+      entryId: t.entryId,
+      accountId: acc,
+      amount: 300_000,
+    });
+    const r2 = await createReimbursement(pribadi, {
+      clientId: randomUUID(),
+      entryId: t.entryId,
+      accountId: acc,
+      amount: 200_000,
+    });
+    const lunas = await loadDetail(pribadi, t.entryId);
+    expect(lunas?.talangan?.remaining).toBe(0);
+    expect(lunas?.talangan?.reimbursed).toBe(500_000);
+    expect(lunas?.talangan?.items.map((i) => ({ id: i.id, amount: i.amount }))).toEqual([
+      { id: r1.entryId, amount: 300_000 },
+      { id: r2.entryId, amount: 200_000 },
+    ]);
+
+    // Batal salah satu reimburse membuka lagi sisanya.
+    const detailR2 = await loadDetail(pribadi, r2.entryId);
+    expect(detailR2?.entry).toMatchObject({ kind: 'reimbursement', reimbursesEntryId: t.entryId });
+    expect(detailR2?.talangan).toBeNull();
+    await voidEntry(pribadi, {
+      clientId: randomUUID(),
+      entryId: r2.entryId,
+      expectedVersion: detailR2?.entry.version ?? 0,
+    });
+    expect((await loadDetail(pribadi, t.entryId))?.talangan).toMatchObject({
+      reimbursed: 300_000,
+      remaining: 200_000,
+    });
+    // Pengeluaran biasa: tanpa talangan.
+    const biasa = await createEntry(pribadi, {
+      clientId: randomUUID(),
+      accountId: acc,
+      kind: 'expense',
+      amount: 1_000,
+      categoryId: cat,
+    });
+    expect((await loadDetail(pribadi, biasa.entryId))?.talangan).toBeNull();
+  });
+
+  it('antar ruang: kaki Bersama tanpa dompet/keterangan/id Pribadi; kaki Pribadi bertanda spaceKind', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const bersama = await ctxOf(n, 'bersama');
+    const dompetP = await wallet(pribadi, KANARI_DOMPET, 5_000_000);
+    const dompetB = await wallet(bersama, 'Kas Rumah', 0);
+    const st = await createSpaceTransfer(pribadi, {
+      clientId: randomUUID(),
+      fromAccountId: dompetP,
+      toSpaceId: bersama.spaceId,
+      toAccountId: dompetB,
+      amount: 250_000,
+      fee: 6_543,
+      description: KANARI_DESC,
+      allowNegative: false,
+    });
+    const kakiB = await loadDetail(bersama, st.linkedEntryId);
+    expect(kakiB?.entry).toMatchObject({
+      kind: 'space_transfer',
+      spaceKind: 'shared',
+      accountName: 'Kas Rumah',
+    });
+    const json = JSON.stringify(kakiB);
+    for (const bocor of [KANARI_DESC, KANARI_DOMPET, st.entryId, st.linkId, dompetP]) {
+      expect(json).not.toContain(bocor);
+    }
+    // Id kaki Pribadi dari rute Bersama = tidak ada (ruang berbeda).
+    expect(await loadDetail(bersama, st.entryId)).toBeNull();
+    const kakiP = await loadDetail(pribadi, st.entryId);
+    expect(kakiB?.entry.fee).toBeUndefined();
+    expect(json).not.toContain('6543');
+    expect(kakiP?.entry.fee).toBe(6_543);
+    expect(kakiP?.entry).toMatchObject({
+      spaceKind: 'personal',
+      description: KANARI_DESC,
+      direction: 'out',
+    });
+    expect(JSON.stringify(kakiP)).not.toContain(st.linkedEntryId);
+  });
+
+  it('pindah ruang: entri asal bertanda movedAt (tanpa penunjuk ke tujuan), tetap terbuka', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const bersama = await ctxOf(n, 'bersama');
+    const dompetP = await wallet(pribadi, KANARI_DOMPET, 5_000_000);
+    const dompetB = await wallet(bersama, 'Kas Rumah', 1_000_000);
+    const catP = await firstExpenseCategory(pribadi);
+    const catB = await firstExpenseCategory(bersama);
+    const e = await createEntry(pribadi, {
+      clientId: randomUUID(),
+      accountId: dompetP,
+      kind: 'expense',
+      amount: 90_000,
+      categoryId: catP,
+      description: KANARI_DESC,
+    });
+    const moved = await moveEntryToSpace(pribadi, {
+      clientId: randomUUID(),
+      entryId: e.entryId,
+      expectedVersion: e.version,
+      toSpaceId: bersama.spaceId,
+      accountId: dompetB,
+      categoryId: catB,
+    });
+    const asal = await loadDetail(pribadi, e.entryId);
+    expect(asal?.entry.movedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
+    expect(asal?.entry.voidedAt).toBeDefined();
+    // Entri baru di Bersama tanpa keterangan Pribadi (R11) dan tanpa penunjuk balik.
+    const baru = await loadDetail(bersama, moved.entryId);
+    expect(baru?.entry.movedAt).toBeUndefined();
+    expect(JSON.stringify(baru)).not.toContain(KANARI_DESC);
+    expect(JSON.stringify(baru)).not.toContain(e.entryId);
   });
 });

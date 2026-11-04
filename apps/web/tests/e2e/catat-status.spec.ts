@@ -61,6 +61,22 @@ test('catat galat muat di atas keyboard', async ({ page }) => {
   for (let i = 0; i < 4; i++) await expectFullyVisible(chips.nth(i), `chip ${String(i)}`);
   await expectFullyVisible(sheet.getByLabel('Dari dompet'), 'dompet');
   await expectFullyVisible(alert, 'pesan galat');
+  // Teks galat utuh: tidak dipotong ellipsis, paling banyak dua baris (utang S6, temuan critique).
+  expect(await alert.evaluate((n) => getComputedStyle(n).textOverflow)).not.toBe('ellipsis');
+  expect(await alert.evaluate((n) => n.scrollWidth <= n.clientWidth + 0.5)).toBe(true);
+  const lineCount = await alert.evaluate((n) => {
+    // Hanya simpul teks (ikon sebaris punya `top` sendiri): baris = nilai `bottom` berbeda.
+    const bottoms = new Set<number>();
+    const walker = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      const r = document.createRange();
+      r.selectNodeContents(t);
+      for (const q of r.getClientRects()) bottoms.add(Math.round(q.bottom));
+    }
+    return bottoms.size;
+  });
+  expect(lineCount).toBeLessThanOrEqual(2);
+  await sheet.screenshot({ path: '/tmp/claude-0/sdd/shots14/galat-c2-keyboard-360.png' });
   await expectFullyVisible(retry, 'Coba lagi');
   const height = (await sheet.boundingBox())?.height ?? Infinity;
   expect(height).toBeLessThanOrEqual(356);

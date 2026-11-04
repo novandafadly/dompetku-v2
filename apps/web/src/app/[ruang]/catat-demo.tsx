@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { CatatSheet } from '@/features/catat/catat-sheet';
 import { demoCatatSource } from '@/features/catat/demo-source';
-import { useDemo } from '@/features/shell/demo-provider';
+import { useDemo } from '@/features/shell/demo-context';
 import { useNav } from '@/features/shell/nav-provider';
 import type { LazySheetProps } from './catat-slot';
 

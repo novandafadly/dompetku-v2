@@ -94,6 +94,28 @@ const ACCOUNTS: AccountVM[] = [
   },
 ];
 
+/** Bukti tata letak utang S6: nama dompet 40 karakter dengan saldo sangat panjang. */
+const LONG_NAME_ACCOUNTS: AccountVM[] = [
+  {
+    id: 'a-9',
+    name: 'Tabungan Pendidikan Anak Pertama Nova 40',
+    pocket: 'operasional',
+    walletType: 'bank',
+    openedOn: '2026-09-01',
+    archived: false,
+    balance: 12_345_678_900,
+  },
+  {
+    id: 'a-10',
+    name: 'Tunai',
+    pocket: 'operasional',
+    walletType: 'cash',
+    openedOn: '2026-09-01',
+    archived: false,
+    balance: 75_000,
+  },
+];
+
 function Frame({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <div data-frame={id} className="flex flex-col gap-3">
@@ -259,6 +281,14 @@ export function KategoriFrames() {
         <AccountListView
           ruang="pribadi"
           accounts={ACCOUNTS}
+          accountHref={href}
+          renderAdd={(className) => <AddWalletButton onAdd={noop} className={className} />}
+        />
+      </Frame>
+      <Frame id="d-nama-panjang" title="Dompet nyata · Nama 40 karakter, saldo panjang">
+        <AccountListView
+          ruang="pribadi"
+          accounts={LONG_NAME_ACCOUNTS}
           accountHref={href}
           renderAdd={(className) => <AddWalletButton onAdd={noop} className={className} />}
         />
