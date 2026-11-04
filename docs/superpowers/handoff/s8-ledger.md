@@ -34,3 +34,4 @@ Task 4: minor (deferred): tes id non-RFC hanya menguji category_id; entry_id/act
 Task 4: minor (deferred): DK404 dari sebab apa pun di blok guarded menjadikan seluruh Beranda 404 (sekarang hanya keanggotaan; perhatikan bila bacaan baru ditambah).
 Task 4: minor (deferred): halaman Aktivitas galat baru bisa dicek di Task 7 (ErrorState).
 Task 4: complete (commits 8a49a59..3c6b784, review clean)
+Task 5: implementasi commit 3519298 (playwright.bersama.config port 3302, fixture ownerState/partnerState/kanari, s8.spec kerangka; e2e:bersama 1, e2e:ledger 38 + 7 dilewati). Concern: storageState kosong eksplisit untuk konteks F, timeout fixture worker 120 s, tag registry menunggu Task 11, kanari F diisi tapi belum diasersi (Task 10).
