@@ -69,12 +69,19 @@ afterEach(() => {
 });
 
 describe('page Aktivitas', () => {
-  it('prototipe: view demo, tanpa gerbang dan tanpa loader (tidak 404)', async () => {
+  it('prototipe Bersama: view demo, tanpa gerbang dan tanpa loader', async () => {
     h.prototype = true;
-    const el = await run({}, 'pribadi');
+    const el = await run({}, 'bersama');
     expect(el.type).toBe(AktivitasPage);
     expect(h.ctx).not.toHaveBeenCalled();
     expect(h.load).not.toHaveBeenCalled();
+  });
+
+  it('prototipe Pribadi (dan ruang tak dikenal) = 404, bukan feed Bersama', async () => {
+    h.prototype = true;
+    await expect(run({}, 'pribadi')).rejects.toThrow();
+    await expect(run({}, 'xyz')).rejects.toThrow();
+    expect(h.ctx).not.toHaveBeenCalled();
   });
 
   it('nyata: gerbang dulu, lalu loader tanpa kursor; hanya theme terbawa', async () => {

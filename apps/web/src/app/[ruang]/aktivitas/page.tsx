@@ -17,7 +17,7 @@ function withCursor(query: string, cursor: string): string {
 }
 
 /**
- * Prototipe: feed demo ringan, tanpa auth/DB (tidak 404). Nyata: gerbang di page (`ruangContext` =
+ * Prototipe: feed demo ringan di /bersama, tanpa auth/DB (ruang lain = 404). Nyata: gerbang di page (`ruangContext` =
  * `requireDataUser()` → `resolveSpace`), hanya ruang Bersama (Pribadi = 404), lalu `loadAktivitas`
  * lewat `withUser`. `?sebelum=` rusak = halaman pertama. Galat loader = layar gagal muat (bukan
  * galat rute); redirect/404 tetap dilempar. Halaman berdata: dirender per request,
@@ -30,7 +30,11 @@ export default async function Page({
   params: Promise<{ ruang: string }>;
   searchParams: SearchParams;
 }) {
-  if (isPrototype()) return <AktivitasPage />;
+  if (isPrototype()) {
+    // Demo hanya di rute Bersama; Pribadi = 404 standar (frame S8-A3, R8).
+    if ((await params).ruang !== 'bersama') notFound();
+    return <AktivitasPage />;
+  }
   const ctx = await ruangContext(params);
   if (ctx.ruang !== 'bersama') notFound();
   const raw = await searchParams;

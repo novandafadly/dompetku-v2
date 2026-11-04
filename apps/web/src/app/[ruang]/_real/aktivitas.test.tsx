@@ -140,7 +140,7 @@ describe('AktivitasReal (S8-A3)', () => {
     ).toBeInTheDocument();
   });
 
-  it('tidak pernah menulis "rumah tangga" dan nama dompet tidak ada', () => {
+  it('salinan tidak memuat "rumah tangga" (pakai "bersama")', () => {
     const { container } = render(<AktivitasReal {...base} items={[item(1)]} />);
     expect(container.textContent).not.toMatch(/rumah tangga/i);
   });
