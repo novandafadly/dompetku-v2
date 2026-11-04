@@ -19,6 +19,8 @@
 # Kode keluar: 0 selesai/tidak ada rilis, 1 galat, 2 ditolak (verifikasi/lebih tua/preflight),
 # 3 rilis gagal health (web atau worker) dan sudah di-rollback, 4 rollback juga gagal.
 set -euo pipefail
+# Tanpa `grep -q` di ujung pipa: grep -q keluar pada cocokan pertama, penulis kena SIGPIPE, dan
+# pipefail membuat pipa gagal walau cocok. Pakai `grep ... >/dev/null` (membaca semua masukan).
 umask 077
 
 ROOT=${DEPLOY_ROOT:-/opt/dompetku}
@@ -237,7 +239,7 @@ worker_db_ready() {
 worker_skip_reason() {
   if [[ ! -f $WORKER_ENV ]]; then
     echo worker_env_missing
-  elif ! compose config --services 2>/dev/null | grep -qx "$WORKER_SERVICE"; then
+  elif ! compose config --services 2>/dev/null | grep -x "$WORKER_SERVICE" >/dev/null; then
     echo worker_service_missing
   elif ! worker_db_ready; then
     echo worker_db_not_ready
@@ -331,7 +333,7 @@ if [[ -z $WANT_DIGEST ]] && grep -qxF "$TO_DIGEST" "$STATE_DIR/failed"; then
   exit 0
 fi
 # Digest yang pernah berjalan lalu digantikan = lebih tua (tag main dipaksa mundur).
-if ((!ALLOW_OLDER)) && awk -F'\t' -v d="$TO_DIGEST" '$2 == d && $3 == "ok"' "$STATE_DIR/history.tsv" | grep -q .; then
+if ((!ALLOW_OLDER)) && awk -F'\t' -v d="$TO_DIGEST" '$2 == d && $3 == "ok"' "$STATE_DIR/history.tsv" | grep . >/dev/null; then
   fail 2 rejected "digest $TO_DIGEST pernah dideploy sebelumnya (lebih tua dari yang berjalan)"
 fi
 
@@ -357,7 +359,7 @@ fi
 # --- 4. Preflight ------------------------------------------------------------------------------
 free_mb=$(df -Pm /var/lib/docker 2>/dev/null | awk 'NR == 2 { print $4 }')
 [[ ${free_mb:-0} -ge $MIN_FREE_MB ]] || fail 2 rejected "disk /var/lib/docker sisa ${free_mb:-?} MB < $MIN_FREE_MB MB"
-compose config --services | grep -qx "$SERVICE" || fail 2 rejected "layanan $SERVICE tidak ada di $ROOT/compose.yml"
+compose config --services | grep -x "$SERVICE" >/dev/null || fail 2 rejected "layanan $SERVICE tidak ada di $ROOT/compose.yml"
 db_preflight || fail 2 rejected 'postgres tidak sehat atau pengarsipan WAL gagal'
 WORKER_SKIP=$(worker_skip_reason)
 WORKER_RUNNING=0
