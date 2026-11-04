@@ -79,3 +79,5 @@ Task 8: design review → Approved (O1, O2, B1a lolos). Catatan: peristiwa sendi
 Task 8: complete (commits f33901b..2fb4a9f, review clean)
 Task 9: dispatch implementer (sonnet) dari 5151cef; Step 1 reproduksi wajib dulu; review nanti terkuat (tampilan uang).
 Task 9: implementasi commit 9782152 (Step 1: read.ts hanya memuat fee kaki Pribadi → kaki keluar Bersama tanpa biaya; perbaikan tanpa migrasi; unit web 2022, test:int 172, e2e prototipe 296, e2e:ledger 38, e2e:bersama 6). Budget prototipe Beranda 161,7 (headroom 0,3), Transaksi 160,9, Detail 157,6, Aktivitas 155,1. Concern: baris Biaya tertutup nav di screenshot fullPage; riwayat Dompet/[id] tanpa biaya (di luar D1a). Review terkuat + design berjalan.
+Task 9: design review → Approved. Baris Biaya terlihat di 390 (setelah Catatan, rata kanan, tanpa tanda); kaki Pribadi F tanpa biaya ganda; status `Biaya Rp 2.500` hanya di kaki keluar. Tidak terverifikasi: Detail 320 (tertutup nav).
+Task 9: minor (deferred): label catatan berbeda antara kaki Bersama (`Catatan`) dan kaki Pribadi (`Keterangan`) — perilaku lama, cek di critique Task 12.
