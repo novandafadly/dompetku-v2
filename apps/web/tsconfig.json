@@ -9,7 +9,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@dompetku/domain": ["../../packages/domain/src/index.ts"],
-      "@dompetku/demo-data": ["../../packages/demo-data/src/index.ts"]
+      "@dompetku/demo-data": ["../../packages/demo-data/src/index.ts"],
+      "@dompetku/demo-data/select/*": ["../../packages/demo-data/src/select/*.ts"]
     }
   },
   "include": [

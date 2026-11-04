@@ -92,6 +92,11 @@ export function buildSectionHref(
   return `/${ruang}/${section}${query}` as Route;
 }
 
+/** Halaman Aktivitas Bersama (S8, K5): hanya ruang Bersama, di luar tab. */
+export function buildAktivitasHref(query: string): Route {
+  return `/bersama/aktivitas${query}` as Route;
+}
+
 export const AUTH_PAGES = ['masuk', 'amankan', 'undang', 'terima-undangan', 'buat-akun'] as const;
 export type AuthPage = (typeof AUTH_PAGES)[number];
 

@@ -17,8 +17,12 @@ export const BERSAMA_OWNER_STATE = path.join(dir, 'test-results', 'bersama-owner
 export const BERSAMA_PARTNER_STATE = path.join(dir, 'test-results', 'bersama-partner.json');
 const executablePath = process.env.PW_CHROMIUM_PATH;
 
+// SCREENS=1 hanya menjalankan tes @screens (screenshot critique); selain itu dilewati.
+const screens = process.env.SCREENS === '1';
+
 export default defineConfig({
   testDir: './tests/e2e-bersama',
+  ...(screens ? { grep: /@screens/ } : { grepInvert: /@screens/ }),
   globalSetup: './tests/e2e-bersama/global-setup.ts',
   workers: 1,
   fullyParallel: false,
