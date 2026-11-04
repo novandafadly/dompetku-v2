@@ -16,6 +16,7 @@ Deployer **melewati** worker (bukan gagal, kode 0, web tetap terpasang) dan menu
 
 - `worker_env_missing`: `/opt/dompetku/env/worker.env` tidak ada. Bila worker lama masih berjalan, deployer menghentikan dan menghapusnya (`docker compose rm -sf worker`) dan menambah penanda `worker_stopped` di detail: worker tidak dibiarkan basi di belakang web baru.
 - `worker_service_missing`: `/opt/dompetku/compose.yml` di VM belum memuat layanan `worker`. Worker lama (bila ada) **tidak** disentuh; perbarui `compose.yml` (langkah 2).
+- `worker_db_not_ready`: postgres belum ikut network `dompetku_worker_db` (mis. `docker compose build postgres` gagal sehingga `up` tidak jalan), atau `pg_hba_file_rules` belum memuat aturan `dompetku_worker` untuk `172.25.0.0` (mis. `up -d postgres` tanpa `build`, image lama) atau punya baris galat. Worker lama (bila ada) **tidak** disentuh dan web tidak di-rollback; ulangi langkah 2 sampai verifikasinya lulus.
 
 Bila `worker.env` ada tetapi ditolak `--check-config` (mis. `DATABASE_URL` kosong), audit `"result":"rejected"` dengan detail `worker_config_invalid <NAMA_VARIABEL,...>` (tanpa nilai), kode 2; timer mencoba lagi tiap 5 menit sampai env diperbaiki (tidak dicatat `failed`).
 
@@ -58,14 +59,35 @@ sudo install -m 644 README.md /opt/dompetku/deploy/README.md
 sudo install -m 644 worker.env.example /opt/dompetku/deploy/worker.env.example
 ```
 
+Subnet `172.25.0.0/16` belum boleh dipakai network lain (pool bawaan Docker 172.17–172.31 bisa sudah memberikannya ke network otomatis; bila begitu `up -d postgres` gagal "Pool overlaps"):
+
+```bash
+sudo docker network inspect $(sudo docker network ls -q) -f '{{ .Name }} {{ range .IPAM.Config }}{{ .Subnet }} {{ end }}' | grep ' 172\.25\.'   # kosong
+```
+
+Bila tidak kosong: berhenti di sini, catat nama network itu, dan tanyakan ke sesi Claude (jangan hapus network yang masih dipakai container).
+
+Image postgres yang berjalan disimpan dengan tag `-s6` (target rollback langkah 7 tanpa build ulang), dan versi pgaudit dicatat. Build ulang memasang `postgresql-17-pgaudit`/`postgresql-17-pgtap` dari PGDG tanpa versi dipatok, jadi versinya bisa naik:
+
+```bash
+sudo docker tag dompetku-postgres:17.11-1 dompetku-postgres:17.11-1-s6
+sudo docker run --rm --entrypoint dpkg-query dompetku-postgres:17.11-1-s6 -W postgresql-17-pgaudit postgresql-17-pgtap   # catat
+```
+
 Postgres dibangun ulang (tag sama) dan dibuat ulang agar memakai `pg_hba.conf`/`postgresql.conf` baru dan ikut network `worker_db`. Web putus beberapa detik (koneksi pool dibuka ulang); jalankan di luar jam pakai:
 
 ```bash
 cd /opt/dompetku
 sudo flock /run/lock/dompetku-deploy.lock sh -c 'docker compose build postgres && docker compose up -d postgres'
+sudo docker run --rm --entrypoint dpkg-query dompetku-postgres:17.11-1 -W postgresql-17-pgaudit postgresql-17-pgtap   # bandingkan dengan catatan
 sudo docker compose exec -T postgres gosu postgres psql -X -d dompetku -Atc "show log_error_verbosity"   # terse
+sudo docker compose exec -T postgres gosu postgres psql -X -d dompetku -Atc \
+  "select count(*) filter (where 'dompetku_worker' = any(user_name) and address = '172.25.0.0' and error is null), count(*) filter (where error is not null) from pg_hba_file_rules"   # 1|0
 sudo docker network inspect dompetku_worker_db -f '{{ .Internal }} {{ (index .IPAM.Config 0).Subnet }}'  # true 172.25.0.0/16
+sudo docker network inspect dompetku_worker_db -f '{{ range .Containers }}{{ .Name }} {{ end }}'          # memuat dompetku-postgres-1
 ```
+
+Bila versi pgaudit berubah (mayor/minor), `shared_preload_libraries` memuat `.so` baru: cek `sudo docker compose logs --tail 50 postgres` tanpa `FATAL`/`ERROR` dan `select extversion from pg_extension where extname = 'pgaudit'` tetap terbaca. Ragu = rollback postgres saja (langkah 7, baris tag `-s6`).
 
 Tunggu `docker compose ps postgres` = `healthy` dan web kembali sehat (`curl` health seperti runbook S3) sebelum lanjut.
 
@@ -218,9 +240,12 @@ sudo flock /run/lock/dompetku-deploy.lock docker compose --profile web rm -sf wo
 sudo mv /opt/dompetku/compose.yml.s6 /opt/dompetku/compose.yml
 sudo mv /opt/dompetku/bin/deploy.s6 /opt/dompetku/bin/deploy
 sudo rm -rf /opt/dompetku/postgres && sudo mv /opt/dompetku/postgres.s6 /opt/dompetku/postgres
-sudo flock /run/lock/dompetku-deploy.lock sh -c 'docker compose build postgres && docker compose up -d postgres'
+sudo docker tag dompetku-postgres:17.11-1-s6 dompetku-postgres:17.11-1   # image S6 persis, tanpa build ulang
+sudo flock /run/lock/dompetku-deploy.lock docker compose up -d postgres
 sudo docker network rm dompetku_worker_egress dompetku_worker_db || true
 ```
+
+Tag `dompetku-postgres:17.11-1-s6` dihapus (`docker rmi`) hanya sesudah S7 dinyatakan stabil; selama masih ada, rollback postgres tidak bergantung pada PGDG/GitHub.
 
 `env/worker.env` boleh tetap ada (tidak dibaca deployer lama) atau dihapus; jeda kedua check di Healthchecks. Image rilis tetap memuat `worker.mjs`, tidak berpengaruh pada web. Tabel `pgboss.*` dan `jobs.job_runs` tetap (migrasi expand-only).
 
