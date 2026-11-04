@@ -43,7 +43,7 @@ WORKER_ENV=$ROOT/env/worker.env # belum ada = worker dilewati (diisi pemilik, ru
 WORKER_STABLE_CHECKS=5          # worker sehat = running, image baru, RestartCount tetap
 WORKER_INTERVAL=4               # selama 5 x 4 = 20 detik
 WORKER_DB_NETWORK=dompetku_worker_db # network postgres + worker (compose.yml S7)
-WORKER_DB_ADDRESS=172.25.0.0    # alamat aturan pg_hba dompetku_worker (subnet worker_db)
+WORKER_DB_ADDRESS=172.16.25.0  # alamat aturan pg_hba dompetku_worker (subnet worker_db)
 MIN_FREE_MB=2048
 HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
 GHCR_USER=''

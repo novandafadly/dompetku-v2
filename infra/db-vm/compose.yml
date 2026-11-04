@@ -156,12 +156,14 @@ networks:
     ipam:
       config:
         - subnet: 172.24.0.0/16
-  # worker <-> postgres saja (S7), tanpa akses keluar. Subnet dipatok untuk pg_hba.
+  # worker <-> postgres saja (S7), tanpa akses keluar. Subnet dipatok untuk pg_hba, sengaja di luar
+  # pool bawaan Docker (172.17-31.0.0/16, 192.168.0.0/16): network tanpa subnet dipatok (app, egress,
+  # worker_egress, project lain di VM) mengambil dari pool itu dan bisa menabrak subnet dipatok.
   worker_db:
     internal: true
     ipam:
       config:
-        - subnet: 172.25.0.0/16
+        - subnet: 172.16.25.0/24
   # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
   egress: {}
   # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
