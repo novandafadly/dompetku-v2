@@ -84,6 +84,8 @@ export interface ReimbursableVM {
   entryId: string;
   occurredOn: IsoDate;
   description: string | null;
+  /** Nama kategori talangan (label bila tanpa keterangan); `null` bila tanpa kategori. */
+  categoryName?: string | null;
   accountId: string;
   amount: Rupiah;
   reimbursed: Rupiah;

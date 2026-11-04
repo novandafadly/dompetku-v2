@@ -32,7 +32,9 @@ export default async function Page({
   let accounts;
   let extra;
   try {
-    [accounts, extra] = await Promise.all([ruangAccounts(ctx), loadDompetDaftar(ctx, ctx.kind)]);
+    // Berurutan: puncak satu koneksi pool dari page ini (pool max 5).
+    accounts = await ruangAccounts(ctx);
+    extra = await loadDompetDaftar(ctx, ctx.kind);
   } catch (e) {
     unstable_rethrow(e);
     console.error('[dompet] gagal memuat', errorTag(e));

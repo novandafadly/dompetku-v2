@@ -131,7 +131,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
       'href',
       '/pribadi/transaksi/e-t1?theme=light',
     );
-    expect(within(waiting).getByText('Talangan kantor')).toBeTruthy();
+    expect(within(waiting).getByText('Talangan')).toBeTruthy();
     const ops = screen.getByRole('region', { name: 'Operasional' });
     expect(waiting.compareDocumentPosition(ops) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -169,6 +169,21 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
     );
     const ops = screen.getByRole('region', { name: 'Operasional' });
     expect(ops.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('semua dompet aktif kosong: kartu Menunggu reimburse tetap tampil bersama Diarsipkan', () => {
+    render(
+      <DompetReal
+        ruang="pribadi"
+        query=""
+        today="2026-11-04"
+        accounts={[]}
+        reimbursables={[open({ accountId: 'a9' })]}
+        archived={archived}
+      />,
+    );
+    const waiting = screen.getByRole('region', { name: 'Menunggu reimburse' });
+    expect(waiting).toHaveTextContent('Dompet Lama');
   });
 
   it('semua dompet terarsip: salinan kosong tetap, kartu Diarsipkan tetap ada', () => {

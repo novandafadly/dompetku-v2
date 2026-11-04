@@ -45,7 +45,9 @@ export function DompetReal({
         renderAdd={(className) => <AddWalletTriggerIsland className={className} />}
         above={
           <WaitingReimburseList
-            items={waitingItems(waiting, accounts, today, (id) => buildEntryHref(ruang, id, query))}
+            items={waitingItems(waiting, [...accounts, ...archived], today, (id) =>
+              buildEntryHref(ruang, id, query),
+            )}
             total={waiting.reduce((sum, r) => sum + r.remaining, 0)}
           />
         }

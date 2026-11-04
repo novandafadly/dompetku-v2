@@ -14,6 +14,7 @@ import type { LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { RUANG_LABEL } from '@/features/shell/hrefs';
 import { archiveAccountAction, reconcileAction } from '../_actions/dompet';
 import { voidEntryAction } from '../_actions/entri';
+import { focusHeadingAt } from './focus-title';
 
 /**
  * Aksi riwayat dompet nyata (pulau klien, dimuat malas lewat `dompet-actions-islands`): tombol
@@ -135,23 +136,6 @@ export function ReconcileButton({ ruang, account }: ReconcileButtonProps) {
   );
 }
 
-/** Sesudah pindah halaman: fokus ke judul halaman tujuan, bukan <body> (menunggu halaman termuat). */
-function focusTitleAt(href: string) {
-  const path = new URL(href, window.location.origin).pathname;
-  let tries = 0;
-  const timer = setInterval(() => {
-    tries += 1;
-    const h1 = window.location.pathname === path ? document.querySelector('h1') : null;
-    if (h1 instanceof HTMLElement) {
-      h1.setAttribute('tabindex', '-1');
-      h1.focus();
-      clearInterval(timer);
-    } else if (tries >= 40) {
-      clearInterval(timer);
-    }
-  }, 50);
-}
-
 export interface ArchiveButtonProps {
   ruang: Ruang;
   account: { id: string; name: string };
@@ -188,7 +172,7 @@ export function ArchiveButton({ ruang, account, dompetHref }: ArchiveButtonProps
     setOpen(false);
     toast({ message: archivedWalletToast(account.name, ruang) });
     router.push(dompetHref);
-    focusTitleAt(dompetHref);
+    focusHeadingAt(dompetHref);
   }
 
   return (

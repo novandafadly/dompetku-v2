@@ -18,6 +18,16 @@ const accounts: AccountVM[] = [
   },
 ];
 
+const BASE: AccountVM = {
+  id: 'x',
+  name: 'x',
+  pocket: 'operasional',
+  walletType: 'bank',
+  openedOn: '2026-10-01',
+  archived: false,
+  balance: 1,
+};
+
 const r = (n: number, over: Partial<ReimbursableVM> = {}): ReimbursableVM => ({
   entryId: `e${String(n)}`,
   occurredOn: '2026-11-03',
@@ -32,7 +42,22 @@ const r = (n: number, over: Partial<ReimbursableVM> = {}): ReimbursableVM => ({
 const href = (id: string) => `/pribadi/transaksi/${id}` as Route;
 
 describe('waitingItems', () => {
-  it('label keterangan atau Talangan kantor; meta Talangan · dompet · hari; sebagian ditandai', () => {
+  it('label keterangan, lalu nama kategori, lalu Talangan; dompet terarsip tetap bernama', () => {
+    const items = waitingItems(
+      [
+        r(1, { description: null, categoryName: 'Transportasi' }),
+        r(2, { description: null, categoryName: null }),
+        r(3, { accountId: 'a9' }),
+      ],
+      [...accounts, { ...BASE, id: 'a9', name: 'Dompet Lama', archived: true }],
+      '2026-11-04',
+      href,
+    );
+    expect(items.map((i) => i.label)).toEqual(['Transportasi', 'Talangan', 'Talangan 3']);
+    expect(items[2]?.meta).toContain('Dompet Lama');
+  });
+
+  it('label keterangan atau kategori; meta Talangan · dompet · hari; sebagian ditandai', () => {
     const items = waitingItems(
       [
         r(1),
@@ -54,7 +79,7 @@ describe('waitingItems', () => {
       href: '/pribadi/transaksi/e1',
     });
     expect(items[1]).toMatchObject({
-      label: 'Talangan kantor',
+      label: 'Talangan',
       meta: 'Talangan · BCA · Hari ini',
       partial: true,
       remaining: 200_000,

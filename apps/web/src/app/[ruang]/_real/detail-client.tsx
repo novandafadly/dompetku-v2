@@ -24,6 +24,7 @@ import { buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { DETAIL_TITLE_ID } from '@/features/transaksi/entry-detail-view';
 import { restoreEntryAction, voidEntryAction } from '../_actions/entri';
 import { RestoreControl } from '../restore-control';
+import { focusTitle as focusTitleById } from './focus-title';
 
 /**
  * Aksi Detail nyata (pulau klien, dimuat malas lewat `detail-islands`). Sheet Ubah (`EditSheet` +
@@ -59,14 +60,10 @@ const preloadReimburse = () => {
   void loadReimburse();
 };
 
-/** Sesudah halaman dimuat ulang (banner/status berubah): fokus ke judul, bukan <body>. */
-function focusTitle() {
-  setTimeout(() => {
-    const title = document.getElementById(DETAIL_TITLE_ID);
-    title?.setAttribute('tabindex', '-1');
-    title?.focus();
-  }, 0);
-}
+/** Sesudah halaman dimuat ulang (banner/status berubah): fokus ke judul Detail. */
+const focusTitle = () => {
+  focusTitleById(DETAIL_TITLE_ID);
+};
 
 interface Failure {
   ok: false;

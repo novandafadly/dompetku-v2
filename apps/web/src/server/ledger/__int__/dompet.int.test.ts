@@ -209,6 +209,7 @@ describe('Dompet nyata S7: terarsip dan Menunggu reimburse', () => {
       expect.objectContaining({
         entryId: t1.entryId,
         description: 'Tiket dinas',
+        categoryName: expect.any(String) as string,
         amount: 500_000,
         reimbursed: 300_000,
         remaining: 200_000,

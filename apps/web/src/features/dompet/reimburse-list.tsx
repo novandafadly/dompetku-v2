@@ -1,10 +1,12 @@
 import { dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import type { Route } from 'next';
+import Link from 'next/link';
 import { ClockIcon } from '@/components/ui/icons/clock';
 import { HandCoinsIcon } from '@/components/ui/icons/hand-coins';
 import { ListCard } from '@/components/ui/list-card';
 import { MoneyText } from '@/components/ui/money-text';
-import { TxRow } from '@/components/ui/rows';
+import { rowTitle } from '@/components/ui/row-text';
+import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import type { AccountVM, ReimbursableVM } from '@/features/ledger/types';
 
 /**
@@ -27,6 +29,7 @@ export interface WaitingItem {
   partial: boolean;
 }
 
+/** `accounts` = dompet aktif dan terarsip (talangan lama bisa berasal dari dompet yang sudah diarsipkan). */
 export function waitingItems(
   rows: ReimbursableVM[],
   accounts: AccountVM[],
@@ -36,12 +39,46 @@ export function waitingItems(
   return rows.map((r) => ({
     id: r.entryId,
     href: entryHref(r.entryId),
-    label: r.description ?? 'Talangan kantor',
+    label: r.description ?? r.categoryName ?? 'Talangan',
     meta: `Talangan · ${accounts.find((a) => a.id === r.accountId)?.name ?? 'Dompet'} · ${dayLabel(r.occurredOn, today)}`,
     remaining: r.remaining,
     total: r.amount,
     partial: r.reimbursed > 0,
   }));
+}
+
+/**
+ * Baris HP (< 600): keterangan + meta penuh lebar (meta boleh turun baris), nominal di baris
+ * sendiri seperti S6-S1; tablet ke atas satu baris.
+ */
+function WaitingRow({ item }: { item: WaitingItem }) {
+  return (
+    <li className={rowDivider}>
+      <Link
+        href={item.href}
+        className={`-mx-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 hover-pointer:bg-hover active:bg-hover ${focusRing}`}
+      >
+        <span className="flex min-w-0 basis-full items-start gap-3 tablet:grow tablet:basis-0">
+          <span aria-hidden="true" className={`size-10 ${tile}`}>
+            <HandCoinsIcon size={20} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.75">
+            <span className={rowTitle}>{item.label}</span>
+            <span className="block text-meta font-medium break-words text-text-muted">
+              {item.meta}
+            </span>
+            {item.partial ? (
+              <span className="flex items-start gap-1.5 text-meta font-semibold text-warning">
+                <ClockIcon size={14} className="mt-0.5 shrink-0" />
+                {`sisa ${formatRupiah(item.remaining)} dari ${formatRupiah(item.total)}`}
+              </span>
+            ) : null}
+          </span>
+        </span>{' '}
+        <MoneyText value={item.remaining} kind="neutral" className="shrink-0" />
+      </Link>
+    </li>
+  );
 }
 
 export function WaitingReimburseList({ items, total }: { items: WaitingItem[]; total: Rupiah }) {
@@ -56,23 +93,7 @@ export function WaitingReimburseList({ items, total }: { items: WaitingItem[]; t
     >
       <ul aria-label="Talangan menunggu reimburse">
         {items.slice(0, WAITING_MAX).map((i) => (
-          <TxRow
-            key={i.id}
-            href={i.href}
-            icon={<HandCoinsIcon size={20} />}
-            label={i.label}
-            meta={i.meta}
-            status={
-              i.partial ? (
-                <span className="flex items-center gap-1.5 text-meta font-semibold text-warning">
-                  <ClockIcon size={14} className="shrink-0" />
-                  {`sisa ${formatRupiah(i.remaining)} dari ${formatRupiah(i.total)}`}
-                </span>
-              ) : undefined
-            }
-            value={i.remaining}
-            kind="neutral"
-          />
+          <WaitingRow key={i.id} item={i} />
         ))}
       </ul>
     </ListCard>

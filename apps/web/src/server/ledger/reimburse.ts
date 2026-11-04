@@ -76,6 +76,7 @@ interface ReimbursableRow {
   entry_id: string;
   occurred_on: string;
   description: string | null;
+  category_name: string | null;
   account_id: string;
   amount: number;
   reimbursed: number;
@@ -88,10 +89,12 @@ export async function openReimbursablesTx(
   ctx: LedgerCtx,
 ): Promise<ReimbursableVM[]> {
   const { rows } = await c.query<ReimbursableRow>(
-    `select o.entry_id, o.occurred_on, o.description, o.account_id, o.amount, o.reimbursed,
-            o.remaining
+    `select o.entry_id, o.occurred_on, o.description, cat.name as category_name, o.account_id,
+            o.amount, o.reimbursed, o.remaining
        from api.open_reimbursables(p_space_id => $1) with ordinality as o (
               entry_id, occurred_on, description, account_id, amount, reimbursed, remaining, n)
+       left join app.entries e on e.space_id = $1 and e.id = o.entry_id
+       left join app.categories cat on cat.space_id = e.space_id and cat.id = e.category_id
       order by o.n`,
     [ctx.spaceId],
   );
@@ -99,6 +102,7 @@ export async function openReimbursablesTx(
     entryId: r.entry_id,
     occurredOn: r.occurred_on,
     description: r.description,
+    categoryName: r.category_name,
     accountId: r.account_id,
     amount: r.amount,
     reimbursed: r.reimbursed,

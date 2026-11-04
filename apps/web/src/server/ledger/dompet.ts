@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import type pg from 'pg';
 import type { AccountVM, EntryVM, ReimbursableVM } from '@/features/ledger/types';
-import { accountEntries, type AccountRow, mapAccountRow } from './read';
+import { accountEntries, accountEntriesTx, type AccountRow, mapAccountRow } from './read';
 import { openReimbursablesTx } from './reimburse';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
@@ -69,11 +69,17 @@ export async function loadDompetRiwayat(
   accounts: AccountVM[],
 ): Promise<DompetRiwayat | null> {
   if (!z.uuid().safeParse(accountId).success) return null;
-  // Dompet terarsip tidak ada di `accounts` (daftar aktif) tetapi riwayatnya tetap bisa dibuka.
-  const account =
-    accounts.find((a) => a.id === accountId) ??
-    (await withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => archivedTx(c, ctx, accountId)))[0];
-  if (account === undefined) return null;
-  const { entries, opening, hasMore } = await accountEntries(ctx, accountId, shown);
-  return { account, entries, opening, hasMore };
+  const active = accounts.find((a) => a.id === accountId);
+  if (active !== undefined) {
+    const { entries, opening, hasMore } = await accountEntries(ctx, accountId, shown);
+    return { account: active, entries, opening, hasMore };
+  }
+  // Dompet terarsip tidak ada di `accounts` (daftar aktif) tetapi riwayatnya tetap bisa dibuka;
+  // dompet dan entrinya dibaca dalam satu transaksi.
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const account = (await archivedTx(c, ctx, accountId))[0];
+    if (account === undefined) return null;
+    const { entries, opening, hasMore } = await accountEntriesTx(c, ctx, accountId, shown);
+    return { account, entries, opening, hasMore };
+  });
 }

@@ -957,6 +957,7 @@ describe('wrapper S7 (N, F bergabung, Luar)', () => {
           entryId: t,
           occurredOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as string,
           description: 'hotel dinas',
+          categoryName: expect.any(String) as string,
           accountId: bca,
           amount: 500_000,
           reimbursed: 0,
