@@ -114,7 +114,7 @@ Gerbang keluar: N memakai 7 hari berturut-turut (PRD §6.1: hari WIB beruntun, t
 - **Dependensi.** S4; BSD final.
 - **Kriteria keluar.** pgTAP memanggil fungsi (bukan insert mentah); `clientId` sama + isi beda → DK410; klik ganda = 1 entri; tes konkurensi lulus; Σ transfer = −fee; **isolasi ruang penuh pada semua tabel baru**; worker menjalankan job uji dan alert terkirim saat gagal.
 - **Risiko / mitigasi.** Deadlock: urutan lock tetap, retry terbatas. Tipe `date`/`int8` salah baca: parser tipe di driver. Tes hijau palsu karena constraint deferrable: cek eksplisit. Beban worker di VM sempit: limit memori.
-- **Status worker (2026-11-04).** Bagian worker minimal S5 dikerjakan di S7 (Task 15 dan 16, urutan dimajukan R21) di branch `ccr-93c19006-ivqnyt`, belum di-merge dan belum di-deploy: `apps/worker` (pg-boss `createSchema: false`, role `dompetku_worker`, `jobs.job_runs`, alert Healthchecks tanpa nominal), dibundel ke image yang sama dengan web dan dijalankan deployer cosign sebagai layanan compose kedua (K1). Bukti: tes unit worker 34 dan int worker 8 (job CI `auth`: job gagal berakhir `failed` dan `/fail` terkirim, dua instance tidak menjalankan job sama, cron 01:00 WIB), `deploy-test.sh` 22 skenario (job `infra`). Pemasangan di VM: `docs/ops/runbook-s7-worker.md`.
+- **Status worker (2026-11-04).** Bagian worker minimal S5 dikerjakan di S7 (Task 15 dan 16, urutan dimajukan R21) di branch `ccr-93c19006-ivqnyt`, belum di-merge dan belum di-deploy: `apps/worker` (pg-boss `createSchema: false`, role `dompetku_worker`, `jobs.job_runs`, alert Healthchecks tanpa nominal), dibundel ke image yang sama dengan web dan dijalankan deployer cosign sebagai layanan compose kedua (K1). Bukti: tes unit worker 34 dan int worker 8 (job CI `auth`: job gagal berakhir `failed` dan `/fail` terkirim, dua instance tidak menjalankan job sama, cron 01:00 WIB), `deploy-test.sh` 25 skenario (job `infra`). Pemasangan di VM: `docs/ops/runbook-s7-worker.md`.
 
 ### S6: Catat, transaksi, Sampah, event produk
 
@@ -147,7 +147,7 @@ Gerbang awal: bingkai desain Catat (galat, "Menyimpan…", peringatan saldo, tra
   | Utang S6 (nama dompet unik, pool Beranda, tes lintas ruang, seed demo keluar dari JS nyata, deadlock kategori) | Task 2, 6, 7, 9, 12, 14                                                                                                                                                                                                        |
   | Hari pertama pakai dimulai                                                                                     | langkah pemilik sesudah merge + deploy (`docs/ops/auth.md`, runbook worker); bukan kriteria sprint                                                                                                                             |
 
-  Angka: pgTAP 965, unit web 1906, worker unit 34 + int 8, `test:int` 154, e2e prototipe 290, `e2e:auth` 21, `e2e:ledger` 38 (+7 screenshot dilewati), `deploy-test.sh` 22; budget JS Beranda prototipe 161,5 kB / nyata 157,4 kB (batas 162).
+  Angka: pgTAP 965, unit web 1906, worker unit 34 + int 8, `test:int` 154, e2e prototipe 290, `e2e:auth` 21, `e2e:ledger` 38 (+7 screenshot dilewati), `deploy-test.sh` 25; budget JS Beranda prototipe 161,5 kB / nyata 157,4 kB (batas 162).
 
 ## 5. M2: Bersama penuh, anggaran, laporan
 
