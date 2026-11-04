@@ -17,6 +17,7 @@ export function ConfirmDialog({
   tone = 'danger',
   holdOpen = false,
   busy = false,
+  confirmDisabled = false,
   alert,
 }: {
   open: boolean;
@@ -37,6 +38,11 @@ export function ConfirmDialog({
   holdOpen?: boolean;
   /** Selama aksi berjalan: tombol `aria-disabled`, klik diabaikan. */
   busy?: boolean;
+  /**
+   * Aksi tidak mungkin berhasil (mis. server sudah menolaknya): tombol `aria-disabled`, klik
+   * diabaikan, tanpa `aria-busy`.
+   */
+  confirmDisabled?: boolean;
   /** Pesan galat di dalam dialog (`role="alert"`); muncul = fokus kembali ke tombol aman. */
   alert?: ReactNode;
 }) {
@@ -91,11 +97,11 @@ export function ConfirmDialog({
               <Button
                 variant={tone === 'danger' ? 'danger-fill' : 'primary'}
                 className="w-full"
-                aria-disabled={busy || undefined}
+                aria-disabled={busy || confirmDisabled || undefined}
                 aria-busy={busy || undefined}
                 onClick={(e) => {
-                  if (holdOpen) e.preventDefault();
-                  if (busy) {
+                  if (holdOpen || confirmDisabled) e.preventDefault();
+                  if (busy || confirmDisabled) {
                     e.preventDefault();
                     return;
                   }

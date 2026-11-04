@@ -70,12 +70,18 @@ export function AccountListView({
   accounts,
   accountHref,
   renderAdd,
+  above,
+  below,
 }: {
   ruang: Ruang;
   accounts: AccountVM[];
   accountHref: (id: string) => Route;
   /** Tombol Tambah dompet; `className` mengatur tata letaknya (HP/tablet di isi, laptop di header). */
   renderAdd: (className: string) => ReactNode;
+  /** Kartu di atas kelompok dompet (mode nyata: Menunggu reimburse, S7-W4). */
+  above?: ReactNode;
+  /** Kartu di paling bawah (mode nyata: Diarsipkan, S7-W3). */
+  below?: ReactNode;
 }) {
   if (accounts.length === 0) {
     return (
@@ -86,6 +92,7 @@ export function AccountListView({
           description="Tambah dompet yang kamu pakai sehari-hari untuk mulai mencatat."
           action={renderAdd('')}
         />
+        {below}
       </div>
     );
   }
@@ -116,6 +123,7 @@ export function AccountListView({
       </section>
       {/* Tombol tambah di HP/tablet ada di isi; laptop memakai tombol di header halaman. */}
       {renderAdd('w-full laptop:hidden')}
+      {above}
       <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 laptop:grid-cols-3 laptop:items-start laptop:gap-5">
         {POCKETS.map((pocket) => {
           const inPocket = accounts.filter((a) => a.pocket === pocket);
@@ -124,6 +132,7 @@ export function AccountListView({
           );
         })}
       </div>
+      {below}
     </div>
   );
 }
