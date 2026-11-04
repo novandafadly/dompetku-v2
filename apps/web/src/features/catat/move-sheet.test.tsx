@@ -219,7 +219,7 @@ describe('MoveSheet (S7-D2)', () => {
     expect(alert.textContent).not.toMatch(/Rp/);
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Kembali' }));
     expect(onMoved).not.toHaveBeenCalled();
-    await user.click(within(dialog).getByRole('button', { name: 'Pindahkan' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Coba lagi' }));
     await waitFor(() => {
       expect(move).toHaveBeenCalledTimes(2);
     });
@@ -241,6 +241,17 @@ describe('MoveSheet (S7-D2)', () => {
     setup({ targets: { ok: false, error: { code: 'network' } } });
     expect(await screen.findByText(/Belum bisa memuat pilihan di ruang tujuan/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Coba lagi' })).toBeTruthy();
+  });
+
+  it('fokus awal ke Select Dompet sesudah data termuat; saldo_negatif netral tanpa nominal', async () => {
+    setup();
+    const select = await screen.findByLabelText<HTMLSelectElement>('Dompet di Bersama');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(select);
+    });
+    expect(moveFailedText('saldo_negatif', 'Bersama')).toBe(
+      'Saldo dompet asal atau tujuan jadi kurang dari nol. Periksa saldonya dulu.',
+    );
   });
 
   it('salinan galat tabel S7: entry_moved, kind_not_movable, not_creator', () => {

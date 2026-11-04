@@ -11,15 +11,17 @@ vi.mock('./detail-islands', () => ({
     voidable,
     moveTo,
     reimbursable,
+    canGiveUp,
   }: {
     editable: boolean;
     voidable: boolean;
     moveTo: string | null;
     reimbursable: { remaining: number } | null;
+    canGiveUp: boolean;
   }) => (
     <div>
       {reimbursable ? <button type="button">Catat reimburse</button> : null}
-      {reimbursable ? <button type="button">Tidak diganti</button> : null}
+      {reimbursable && canGiveUp ? <button type="button">Tidak diganti</button> : null}
       {editable ? <button type="button">Ubah</button> : null}
       {voidable ? <button type="button">Batalkan transaksi</button> : null}
       {moveTo ? <button type="button">{`Pindahkan ke ${moveTo}`}</button> : null}
@@ -265,7 +267,7 @@ describe('DetailReal antar ruang (S7-D1)', () => {
     amount: { value: e.amount, kind: 'neutral' as const },
   });
 
-  it('kaki Bersama: judul dengan nama pencatat, dompet Bersama, tanpa jejak Pribadi (props loader)', () => {
+  it('kaki Bersama (props sebentuk keluaran loadDetail): judul nama pencatat, dompet Bersama, tanpa jejak Pribadi', () => {
     const e = kakiBersama();
     const { container } = render(
       <DetailReal
@@ -428,7 +430,7 @@ describe('DetailReal talangan (S7-D3)', () => {
     expect(links[0]?.getAttribute('href')).toBe('/pribadi/transaksi/r1');
     expect(screen.queryByRole('button', { name: 'Batalkan transaksi' })).toBeNull();
     expect(
-      screen.getByText('Batalkan reimburse di bawah dulu untuk membatalkan talangan ini.'),
+      screen.getByText('Batalkan reimburse di atas dulu untuk membatalkan talangan ini.'),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Catat reimburse' })).toBeTruthy();
   });
@@ -472,5 +474,59 @@ describe('DetailReal talangan (S7-D3)', () => {
     );
     expect(screen.getByRole('button', { name: 'Batalkan transaksi' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Ubah' })).toBeNull();
+  });
+});
+
+describe('ronde perbaikan 1', () => {
+  it('entri asal dipindah, dilihat bukan pencatat: nama pencatat, tanpa tautan', () => {
+    const moved = entry({
+      voidedAt: '2026-11-02T09:00:00+07:00',
+      movedAt: '2026-11-02T09:00:00+07:00',
+    });
+    render(<DetailReal {...props} me="u-f" data={data(moved)} labels={labels} />);
+    expect(screen.getByText('Novanda memindahkan transaksi ini ke ruang lain.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Buka di/ })).toBeNull();
+  });
+
+  it('Tidak diganti hanya bila belum ada reimburse hidup', () => {
+    const t = entry({ reimbursable: true });
+    const sebagian = {
+      items: [{ id: 'r1', occurredOn: TODAY, amount: 5_000 }],
+      reimbursed: 5_000,
+      remaining: 20_000,
+    };
+    render(
+      <DetailReal
+        {...props}
+        me="u-n"
+        data={data(t, false, { talangan: sebagian })}
+        labels={labels}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Catat reimburse' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tidak diganti' })).toBeNull();
+  });
+
+  it('kaki Pribadi antar ruang: baris Biaya bila ada', () => {
+    const e = entry({
+      kind: 'space_transfer',
+      spaceKind: 'personal',
+      direction: 'out',
+      fee: 6_500,
+      categoryName: undefined as never,
+    });
+    render(
+      <DetailReal
+        {...props}
+        me="u-n"
+        data={data(e)}
+        labels={{
+          title: 'Setor ke Bersama',
+          category: 'Antar ruang',
+          amount: { value: -25_000, kind: 'neutral' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Biaya')).toBeTruthy();
   });
 });

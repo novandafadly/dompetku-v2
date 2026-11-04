@@ -87,7 +87,7 @@ export function moveFailedText(code: LedgerErrorCode, tujuan: string): string {
     case 'category_archived':
       return `Dompet atau kategori di ${tujuan} sudah diarsipkan. Pilih yang lain.`;
     case 'saldo_negatif':
-      return `Saldo dompet di ${tujuan} tidak cukup untuk pemindahan ini. Pilih dompet lain.`;
+      return 'Saldo dompet asal atau tujuan jadi kurang dari nol. Periksa saldonya dulu.';
     case 'before_opening':
       return `Tanggal transaksi ini lebih awal dari saat dompet di ${tujuan} dibuka. Pilih dompet lain.`;
     case 'not_found':
@@ -196,6 +196,11 @@ function MoveSession({
   }, [source, toRuang, attempt]);
 
   const data = load.state === 'ready' ? load.data : null;
+  // Sheet terbuka sebelum data tiba: fokus awal ke Dompet begitu Select-nya ada.
+  const ready = load.state === 'ready';
+  useEffect(() => {
+    if (ready && page === 'form') accountRef.current?.focus();
+  }, [ready, page]);
   const accounts = data?.accounts.filter((a) => !a.archived) ?? [];
   const all = (data?.categories ?? []).filter((c) => c.type === type && !c.archived);
   const chips = [
@@ -457,7 +462,7 @@ function MoveSession({
             ))}
           </ul>
         }
-        confirmLabel={MOVE_COPY.confirm}
+        confirmLabel={failure === 'network' ? MOVE_COPY.retry : MOVE_COPY.confirm}
         cancelLabel={MOVE_COPY.back}
         alert={failure === null ? undefined : moveFailedText(failure, tujuan)}
         onConfirm={() => {

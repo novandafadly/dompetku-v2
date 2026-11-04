@@ -279,7 +279,7 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
       toSpaceId: bersama.spaceId,
       toAccountId: dompetB,
       amount: 250_000,
-      fee: 0,
+      fee: 6_543,
       description: KANARI_DESC,
       allowNegative: false,
     });
@@ -296,6 +296,9 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
     // Id kaki Pribadi dari rute Bersama = tidak ada (ruang berbeda).
     expect(await loadDetail(bersama, st.entryId)).toBeNull();
     const kakiP = await loadDetail(pribadi, st.entryId);
+    expect(kakiB?.entry.fee).toBeUndefined();
+    expect(json).not.toContain('6543');
+    expect(kakiP?.entry.fee).toBe(6_543);
     expect(kakiP?.entry).toMatchObject({
       spaceKind: 'personal',
       description: KANARI_DESC,

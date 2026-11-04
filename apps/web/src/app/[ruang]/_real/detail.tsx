@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import { BackLink } from '@/components/ui/back-link';
 import { buttonClass } from '@/components/ui/button';
+import { CaretRightIcon } from '@/components/ui/icons/caret-right';
 import { CheckCircleIcon } from '@/components/ui/icons/check-circle';
 import { ClockIcon } from '@/components/ui/icons/clock';
 import { InfoIcon } from '@/components/ui/icons/info';
@@ -113,16 +114,17 @@ function TalanganStatus({ total, talangan }: { total: number; talangan: Talangan
 function ReimbursementList({ ruang, talangan }: { ruang: Ruang; talangan: TalanganVM }) {
   if (talangan.items.length === 0) return null;
   return (
-    <section className="flex flex-col gap-1.5">
+    <section className="flex flex-col gap-1.5 pt-1">
       <h2 className="text-meta font-semibold text-text-soft">Reimburse</h2>
       <ul aria-label="Reimburse untuk talangan ini" className={`px-4 ${card}`}>
         {talangan.items.map((i) => (
           <li key={i.id} className={rowDivider}>
             <Link
               href={buildEntryHref(ruang, i.id, '')}
-              className={`-mx-4 flex min-h-13 items-center px-4 text-body font-semibold text-text hover-pointer:bg-hover ${focusRing}`}
+              className={`-mx-4 flex min-h-13 items-center justify-between gap-3 px-4 text-body font-semibold text-text hover-pointer:bg-hover ${focusRing}`}
             >
               {`${shortDateLabel(i.occurredOn)} · ${formatRupiah(i.amount)}`}
+              <CaretRightIcon size={16} weight="bold" className="shrink-0 text-text-muted" />
             </Link>
           </li>
         ))}
@@ -178,15 +180,20 @@ export function DetailReal({
   const antarRuang = entry.kind === 'space_transfer';
   const creator = entry.createdBy.id === me;
 
+  // Entri Pribadi orang lain tidak bisa dibuka dari ruang tujuan (Pribadi mereka): tanpa tautan.
   const banner = moved ? (
-    <MovedBanner tujuan={RUANG_LABEL[tujuan]}>
-      <Link
-        href={buildHref(tujuan, 'transaksi', '')}
-        className={buttonClass('secondary', 'sm', 'self-start')}
-      >
-        {`Buka di ${RUANG_LABEL[tujuan]}`}
-      </Link>
-    </MovedBanner>
+    creator ? (
+      <MovedBanner tujuan={RUANG_LABEL[tujuan]}>
+        <Link
+          href={buildHref(tujuan, 'transaksi', '')}
+          className={buttonClass('secondary', 'sm', 'self-start')}
+        >
+          {`Buka di ${RUANG_LABEL[tujuan]}`}
+        </Link>
+      </MovedBanner>
+    ) : (
+      <MovedBanner text={`${entry.createdBy.name} memindahkan transaksi ini ke ruang lain.`} />
+    )
   ) : voidedAt === undefined ? null : (
     <VoidedBanner>
       {data.restoreClosed ? (
@@ -228,7 +235,7 @@ export function DetailReal({
         <ActionNote>{`Hanya ${entry.createdBy.name} yang bisa membatalkan transfer ini.`}</ActionNote>
       ) : null}
       {entry.kind === 'expense' && talangan !== null && talangan.items.length > 0 ? (
-        <ActionNote>Batalkan reimburse di bawah dulu untuk membatalkan talangan ini.</ActionNote>
+        <ActionNote>Batalkan reimburse di atas dulu untuk membatalkan talangan ini.</ActionNote>
       ) : null}
     </>
   ) : null;
@@ -252,7 +259,14 @@ export function DetailReal({
           <TalanganStatus total={entry.amount} talangan={talangan} />
         ) : null
       }
-      rows={entry.reimbursable === true ? <DetailRow term="Talangan">Ya, kantor</DetailRow> : null}
+      rows={
+        <>
+          {entry.reimbursable === true ? <DetailRow term="Talangan">Ya, kantor</DetailRow> : null}
+          {entry.fee === undefined ? null : (
+            <DetailRow term="Biaya">{formatRupiah(entry.fee)}</DetailRow>
+          )}
+        </>
+      }
       after={
         <>
           {talangan === null ? null : <ReimbursementList ruang={ruang} talangan={talangan} />}
@@ -282,6 +296,7 @@ export function DetailReal({
                 voidable={voidable}
                 moveTo={movable ? tujuan : null}
                 reimbursable={reimbursable}
+                canGiveUp={talangan !== null && talangan.items.length === 0}
               />
             ) : null}
             {notes}

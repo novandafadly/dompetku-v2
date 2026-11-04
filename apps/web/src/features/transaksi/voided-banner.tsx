@@ -32,12 +32,20 @@ export function VoidedBanner({ children }: { children?: ReactNode }) {
  * `VoidedBanner`; tautan ke daftar Transaksi ruang tujuan (id entri di sana tidak disimpan, R16),
  * tanpa Pulihkan.
  */
-export function MovedBanner({ tujuan, children }: { tujuan: string; children?: ReactNode }) {
+export function MovedBanner({
+  tujuan,
+  text,
+  children,
+}: {
+  tujuan?: string;
+  text?: string;
+  children?: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3 narrow:flex-row narrow:flex-wrap narrow:items-center">
       <p className="flex min-w-0 flex-1 items-center gap-2 text-body font-semibold text-text">
         <ArrowsLeftRightIcon size={18} className="shrink-0 text-text-soft" />
-        {`Transaksi ini sudah dipindahkan ke ${tujuan}.`}
+        {text ?? `Transaksi ini sudah dipindahkan ke ${tujuan ?? 'ruang lain'}.`}
       </p>
       {children}
     </div>

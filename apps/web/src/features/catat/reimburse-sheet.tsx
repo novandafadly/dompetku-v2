@@ -284,6 +284,7 @@ export function NotReimbursedDialog({
   entry,
   source,
   onDone,
+  onConflict,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -291,6 +292,8 @@ export function NotReimbursedDialog({
   source: ReimburseSource;
   /** Sesudah berhasil (toast tampil, dialog menutup): pemanggil mengatur fokus. */
   onDone?: () => void;
+  /** Konflik versi: pemanggil memuat ulang Detail. */
+  onConflict?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<LedgerErrorCode | null>(null);
@@ -317,7 +320,10 @@ export function NotReimbursedDialog({
       onDone?.();
       return;
     }
-    if (res.error.code === 'conflict') clientId.current = newClientId();
+    if (res.error.code === 'conflict') {
+      clientId.current = newClientId();
+      onConflict?.();
+    }
     setFailure(res.error.code);
   }
 

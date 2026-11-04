@@ -95,6 +95,8 @@ export interface DetailActionsProps {
   moveTo: Ruang | null;
   /** Talangan yang masih menunggu diganti (S7-D3); `null` = tidak ditawarkan. */
   reimbursable: { remaining: number } | null;
+  /** `Tidak diganti` hanya bila belum ada reimburse hidup (DB menolak sebaliknya). */
+  canGiveUp: boolean;
 }
 
 export function DetailActions({
@@ -109,6 +111,7 @@ export function DetailActions({
   voidable,
   moveTo,
   reimbursable,
+  canGiveUp,
 }: DetailActionsProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -179,16 +182,18 @@ export function DetailActions({
             <HandCoinsIcon size={18} weight="bold" />
             Catat reimburse
           </Button>
-          <Button
-            variant="secondary"
-            onPointerEnter={preloadReimburse}
-            onFocus={preloadReimburse}
-            onClick={() => {
-              setGiveUp(true);
-            }}
-          >
-            Tidak diganti
-          </Button>
+          {canGiveUp ? (
+            <Button
+              variant="secondary"
+              onPointerEnter={preloadReimburse}
+              onFocus={preloadReimburse}
+              onClick={() => {
+                setGiveUp(true);
+              }}
+            >
+              Tidak diganti
+            </Button>
+          ) : null}
         </>
       ) : null}
       {editable ? (
@@ -278,7 +283,7 @@ export function DetailActions({
           />
         </Suspense>
       ) : null}
-      {reimbursable !== null && giveUpMounted ? (
+      {reimbursable !== null && canGiveUp && giveUpMounted ? (
         <Suspense fallback={null}>
           <NotReimbursedDialogReal
             open={giveUp}
@@ -286,6 +291,9 @@ export function DetailActions({
             ruang={ruang}
             entry={entry}
             onDone={focusTitle}
+            onConflict={() => {
+              router.refresh();
+            }}
           />
         </Suspense>
       ) : null}

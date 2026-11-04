@@ -57,6 +57,8 @@ export interface EntryVM {
    * pencatat, kaki Pribadi dengan arah (S7-D1); id kaki lawan tidak pernah dikirim.
    */
   spaceKind?: 'personal' | 'shared';
+  /** Biaya transfer antar ruang; hanya kaki Pribadi (tidak pernah di kaki Bersama). */
+  fee?: Rupiah;
   /** Entri asal yang sudah dipindah ke ruang lain (R16): waktu pindah; tanpa penunjuk ke tujuan. */
   movedAt?: string;
   /** Reimburse: id talangan yang diganti (ruang yang sama). */

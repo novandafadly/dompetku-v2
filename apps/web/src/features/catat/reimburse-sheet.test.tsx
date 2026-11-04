@@ -246,3 +246,25 @@ describe('NotReimbursedDialog (S7-D3)', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy();
   });
 });
+
+describe('NotReimbursedDialog konflik', () => {
+  it('conflict memanggil onConflict', async () => {
+    const user = userEvent.setup();
+    const kit = source({ notReimbursed: { ok: false, error: { code: 'conflict' } } });
+    const onConflict = vi.fn();
+    render(
+      <NotReimbursedDialog
+        open
+        onOpenChange={vi.fn()}
+        entry={TALANGAN}
+        source={kit.src}
+        onConflict={onConflict}
+      />,
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Tandai tidak diganti' }));
+    await waitFor(() => {
+      expect(onConflict).toHaveBeenCalledTimes(1);
+    });
+  });
+});
