@@ -1,7 +1,7 @@
 -- audit.events dan product_events (BSD §6, §10, §13 #17, #32): user_id dari konteks, daftar
 -- tertutup event dan kunci meta, tanpa INSERT langsung, append-only, retensi lewat job.
 begin;
-select plan(44);
+select plan(45);
 select tests.fixture();
 
 -- user_id selalu dari konteks request.
@@ -63,6 +63,12 @@ select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(),
     $q$insert into audit.events (event, user_id) values ('login_success', '22222222-2222-2222-2222-222222222222')$q$),
   '42501', null, r || ': INSERT langsung ke audit.events ditolak')
 from unnest(array['web', 'api', 'worker']) r;
+
+-- Bentuk insert infra/db-vm/bin/dompetku-psql (owner, kunci meta yang diizinkan) diterima.
+select lives_ok($$select tests.owner_exec(null, $q$insert into audit.events (event, meta)
+    values ('db_manual_access', jsonb_build_object('via', 'cli', 'target', 'dompetku_owner',
+            'reason', repeat('a', 120), 'op', 'novanda'))$q$)$$,
+  'owner: db_manual_access dari dompetku-psql diterima');
 
 -- Web hanya membaca event miliknya.
 select is(tests.web_val(tests.f(), $$select count(*) from audit.events where event in ('login_success', 'step_up', 'space_move')$$),
