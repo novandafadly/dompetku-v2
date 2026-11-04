@@ -115,3 +115,4 @@ Task 14: minor (deferred): slack tinggi mode keyboard Catat 360Ã—356 tinggal 1â€
 Task 14: complete (commits ab17a0a..782bbcf, review clean)
 Task 17: dimulai (sesi ccr-8504abb0), implementer terhenti batas pemakaian 5 jam sesudah menulis tes int tambahan di s7.int.test.ts (belum dijalankan). Commit WIP; sesi berikutnya: jalankan test:int dulu, lalu lanjut brief docs/superpowers/handoff/s7-task-17-brief.md.
 Task 17: WIP tes int diverifikasi (sesi ccr-93c19006): test:int 154 hijau.
+Task 17: implementasi (sesi ccr-93c19006) commits 7dfd31c..4caaa2c; e2e:ledger 38 (s7.spec 18 tes), int 154, e2e:auth 21, pgTAP 961, worker int 7, deploy-test 22; e2e prototipe 289 + 1 gagal tergantung jam (catat-s7 "Talangan keyboard 360" gagal 12:30 WIB, chip saran ke-3 melewati 360 px; sudah ada sebelum T17). Fix produk: fokus h1 sesudah Pindahkan.
