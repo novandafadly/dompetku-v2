@@ -70,3 +70,4 @@ Task 7: minor (deferred): e2e Luar → 404 di /bersama/aktivitas belum ada (harn
 Task 7: fix round 1/5 (1 addressed + M3 + bingkai, 0 open; commits 03e3e78..14c1e44). Re-review bersih.
 Task 7: minor (deferred): bingkai baris Paginasi (±81) dan tabel target (±238) masih menulis "44 px" untuk Muat sebelumnya (kode 48 px md) → selaraskan di Task 12.
 Task 7: complete (commits 30bbb74..14c1e44, review clean)
+Task 8: dispatch implementer (sonnet) dari f33901b, salinan R4 eksplisit (keputusan pemilik S8-B1a).
