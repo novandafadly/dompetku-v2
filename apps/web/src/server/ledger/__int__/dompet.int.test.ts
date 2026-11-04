@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { toLedgerError } from '../errors';
-import { loadDompetRiwayat } from '../dompet';
+import { loadDompetDaftar, loadDompetRiwayat } from '../dompet';
 import { listAccounts, listCategories } from '../read';
 import { resolveSpace } from '../space';
 import {
+  archiveAccount,
   archiveCategory,
   createAccount,
   createCategory,
@@ -14,6 +15,7 @@ import {
   voidEntry,
   type LedgerCtx,
 } from '../write';
+import { createReimbursement } from '../reimburse';
 import { createLedgerHarness, resetLedger, seedPersonas, type Persona } from './harness';
 
 /**
@@ -132,6 +134,96 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     expect(await muatRiwayat(pribadi, randomUUID(), 50)).toBeNull();
     expect(await muatRiwayat(bersama, a, 50)).toBeNull();
     expect(await muatRiwayat(pribadi, a, 50)).not.toBeNull();
+  });
+});
+
+describe('Dompet nyata S7: terarsip dan Menunggu reimburse', () => {
+  let n: Persona;
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    const ps = await seedPersonas(h, { farida: 'bergabung' });
+    n = ps.n;
+  });
+
+  const kind = (ruang: 'pribadi' | 'bersama') => (ruang === 'pribadi' ? 'personal' : 'shared');
+
+  async function talangan(ctx: LedgerCtx, accountId: string, amount: number, desc: string) {
+    return createEntry(ctx, {
+      clientId: randomUUID(),
+      accountId,
+      kind: 'expense',
+      amount,
+      categoryId: await firstExpenseCategory(ctx),
+      description: desc,
+      reimbursable: true,
+    });
+  }
+
+  it('dompet terarsip (saldo 0) tidak di daftar aktif; muncul di archived dan riwayatnya tetap terbuka', async () => {
+    const ctx = await ctxOf(n, 'pribadi');
+    const aktif = await wallet(ctx, 'BCA', 100_000);
+    const lama = await wallet(ctx, 'Dompet Lama', 0);
+    await archiveAccount(ctx, lama);
+
+    expect((await listAccounts(ctx)).map((a) => a.id)).toEqual([aktif]);
+    const daftar = await loadDompetDaftar(ctx, 'personal');
+    expect(daftar.archived).toEqual([
+      expect.objectContaining({ id: lama, name: 'Dompet Lama', archived: true, balance: 0 }),
+    ]);
+    // Riwayat dompet terarsip tetap bisa dibuka (tautan dari kartu Diarsipkan).
+    const riwayat = await muatRiwayat(ctx, lama, 50);
+    expect(riwayat?.account).toMatchObject({ id: lama, archived: true });
+    // Tetap terkurung per ruang: dari Bersama dompet Pribadi (terarsip pun) = null.
+    expect(await muatRiwayat(await ctxOf(n, 'bersama'), lama, 50)).toBeNull();
+  });
+
+  it('terarsip hanya milik ruang ini: Bersama tidak melihat dompet terarsip Pribadi', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const bersama = await ctxOf(n, 'bersama');
+    await archiveAccount(pribadi, await wallet(pribadi, KANARI_DOMPET, 0));
+    const daftar = await loadDompetDaftar(bersama, 'shared');
+    expect(daftar.archived).toEqual([]);
+    expect(JSON.stringify(daftar)).not.toContain(KANARI_DOMPET);
+  });
+
+  it('Pribadi: talangan dengan sisa tampil (sebagian diganti = sisa), lunas hilang', async () => {
+    const ctx = await ctxOf(n, 'pribadi');
+    const bca = await wallet(ctx, 'BCA', 10_000_000);
+    const t1 = await talangan(ctx, bca, 500_000, 'Tiket dinas');
+    const t2 = await talangan(ctx, bca, 200_000, 'Taksi dinas');
+    await createReimbursement(ctx, {
+      clientId: randomUUID(),
+      entryId: t1.entryId,
+      accountId: bca,
+      amount: 300_000,
+    });
+    await createReimbursement(ctx, {
+      clientId: randomUUID(),
+      entryId: t2.entryId,
+      accountId: bca,
+      amount: 200_000,
+    });
+    const daftar = await loadDompetDaftar(ctx, kind('pribadi'));
+    expect(daftar.reimbursables).toEqual([
+      expect.objectContaining({
+        entryId: t1.entryId,
+        description: 'Tiket dinas',
+        amount: 500_000,
+        reimbursed: 300_000,
+        remaining: 200_000,
+      }),
+    ]);
+  });
+
+  it('Bersama: reimbursables kosong dan kueri talangan tidak dijalankan', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const bca = await wallet(pribadi, KANARI_DOMPET, 5_000_000);
+    await talangan(pribadi, bca, 123_457, 'KANARI-TALANGAN');
+    const bersama = await ctxOf(n, 'bersama');
+    const daftar = await loadDompetDaftar(bersama, 'shared');
+    expect(daftar.reimbursables).toEqual([]);
+    expect(JSON.stringify(daftar)).not.toMatch(/KANARI|123457/);
   });
 });
 

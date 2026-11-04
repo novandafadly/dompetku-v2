@@ -392,7 +392,7 @@ export async function trashList(ctx: LedgerCtx): Promise<TrashVM[]> {
 }
 
 // ===== Dompet dan kategori =====
-interface AccountRow {
+export interface AccountRow {
   id: string;
   name: string;
   pocket: Pocket;
@@ -416,7 +416,11 @@ export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<
       order by a.sort_order, a.created_at, a.id`,
     [ctx.spaceId],
   );
-  return rows.map((r) => ({
+  return rows.map(mapAccountRow);
+}
+
+export function mapAccountRow(r: AccountRow): AccountVM {
+  return {
     id: r.id,
     name: r.name,
     pocket: r.pocket,
@@ -424,7 +428,7 @@ export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<
     openedOn: r.opened_on,
     archived: r.archived,
     balance: r.balance,
-  }));
+  };
 }
 
 export async function listAccounts(ctx: LedgerCtx): Promise<AccountVM[]> {
