@@ -342,7 +342,7 @@ export async function createInvitationAction(_: FormState, form: FormData): Prom
     case 'user_limit':
       return { kind: 'error', message: 'Ruang Bersama sudah berisi dua orang.' };
     case 'not_owner':
-      return { kind: 'error', message: 'Hanya pemilik rumah tangga yang bisa mengundang.' };
+      return { kind: 'error', message: 'Hanya pemilik ruang Bersama yang bisa mengundang.' };
   }
 }
 

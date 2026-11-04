@@ -37,7 +37,7 @@ function view(over: Partial<BerandaData>, ruang: 'pribadi' | 'bersama' = 'bersam
 /** Bacaan S8 (feed, Kontribusi, partner) tidak dimuat: kartu S8 belum dirender (Task 6). */
 const S8_NONE = { partner: null, activity: null, contributions: null };
 
-const INTRO = /Sekarang hanya kamu di sini; Farida belum bergabung\./;
+const INTRO = /^Ruang untuk keuangan bersama\.$/;
 const AKTIVITAS = /Belum ada aktivitas\. Yang dicatat di Bersama akan muncul di sini/;
 
 describe('BerandaReal Bersama solo (S7-B1)', () => {
@@ -100,7 +100,7 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
     render(view({ ...kosong, bersama: { ...S8_NONE, members: 2, isOwner: true, empty: true } }));
     expect(screen.getByRole('heading', { name: 'Bersama belum punya dompet.' })).toBeTruthy();
     expect(
-      screen.getByText('Buat dompet bersama dulu, lalu catat pengeluaran rumah tangga di sini.'),
+      screen.getByText('Buat dompet bersama dulu, lalu catat pengeluaran bersama di sini.'),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Tambah dompet' }).getAttribute('href')).toBe(
       '/bersama/dompet?tambah=1',
@@ -148,7 +148,11 @@ describe('BerandaReal Bersama dua anggota dan Pribadi (tidak berubah)', () => {
     render(view({ bersama: { ...S8_NONE, members: 2, isOwner: true, empty: false } }));
     expect(screen.queryByText('Farida belum bergabung di Bersama.')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Aktivitas' })).toBeNull();
-    expect(screen.getByText(/Farida dan kamu sama-sama bisa mencatat/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Pengeluaran yang kalian bagi. Kamu dan Farida sama-sama bisa mencatat dan mengubah di sini.',
+      ),
+    ).toBeTruthy();
   });
 
   it('Pribadi: tanpa ajakan/aktivitas Bersama', () => {
@@ -372,5 +376,45 @@ describe('BerandaReal Bersama dua anggota: Kontribusi (S8-K1)', () => {
     const kartu = screen.getByRole('region', { name: 'Kontribusi' });
     expect(within(kartu).getByText('Kontribusi belum bisa dimuat.')).toBeTruthy();
     expect(within(kartu).getByRole('link', { name: 'Coba lagi' })).toBeTruthy();
+  });
+});
+
+describe('BerandaReal sisi Farida (anggota, S8-O1/O2)', () => {
+  it('Pribadi baru: 1 dari 3 selesai, Akun aman selesai, tanpa Undang Farida', () => {
+    const { container } = render(
+      view({ hasOperasional: false, hasExpense: false, invite: false }, 'pribadi'),
+    );
+    const cl = screen.getByRole('region', { name: 'Mulai dari sini' });
+    expect(within(cl).getByText('1 dari 3 selesai')).toBeTruthy();
+    expect(within(cl).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.queryByText(/Undang/)).toBeNull();
+    expect(container.textContent).not.toContain('Farida');
+  });
+
+  it('Bersama berisi dompet Novanda: tanpa B1 dan ajakan, pengantar memakai nama Novanda', () => {
+    const { container } = render(
+      view({
+        hasExpense: false,
+        bersama: dua({ isOwner: false, partner: { name: 'Novanda', initial: 'N' }, activity: [] }),
+      }),
+    );
+    expect(screen.queryByText(/belum bergabung/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /Undang|Kelola undangan/ })).toBeNull();
+    expect(screen.queryByText('Ruang untuk keuangan bersama.')).toBeNull();
+    expect(
+      screen.getByText(
+        'Pengeluaran yang kalian bagi. Kamu dan Novanda sama-sama bisa mencatat dan mengubah di sini.',
+      ),
+    ).toBeTruthy();
+    expect(container.textContent).not.toContain('@');
+    // Tidak ada "Farida" tetap di layar Farida, kecuali nama di data feed/Kontribusi.
+    expect(screen.getByRole('region', { name: 'Mulai dari sini' }).textContent).not.toContain(
+      'Farida',
+    );
+  });
+
+  it('pemilik melihat nama Farida di pengantar', () => {
+    render(view({ bersama: dua({ activity: [] }) }));
+    expect(screen.getByText(/Kamu dan Farida sama-sama bisa mencatat/)).toBeTruthy();
   });
 });

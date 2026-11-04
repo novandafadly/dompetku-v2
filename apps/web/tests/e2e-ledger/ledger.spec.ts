@@ -99,11 +99,7 @@ test('Beranda Bersama kosong (B2) dan solo (B1) sebelum ada dompet Bersama', asy
   await expect(add).toHaveAttribute('href', /^\/bersama\/dompet\?tambah=1/);
   // B1 tetap berlaku: kartu ajakan untuk pemilik, pengantar checklist satu anggota, Aktivitas kosong.
   await expect(main.getByRole('link', { name: 'Undang Farida ke Bersama' })).toBeVisible();
-  await expect(
-    main.getByText(
-      'Ruang untuk pengeluaran rumah tangga. Sekarang hanya kamu di sini; Farida belum bergabung.',
-    ),
-  ).toBeVisible();
+  await expect(main.getByText('Ruang untuk keuangan bersama.')).toBeVisible();
   await expect(main.getByText(/^Belum ada aktivitas\./)).toBeVisible();
   for (const theme of ['dark', 'light']) {
     for (const width of [320, 390, 1280]) {

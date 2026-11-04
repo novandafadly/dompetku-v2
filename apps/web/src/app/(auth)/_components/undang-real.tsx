@@ -105,7 +105,7 @@ export function UndangReal({
       </AuthText>
       {notice ? <Notice tone="ok">{notice}</Notice> : null}
       {!owner ? (
-        <Notice tone="error">Hanya pemilik rumah tangga yang bisa mengundang.</Notice>
+        <Notice tone="error">Hanya pemilik ruang Bersama yang bisa mengundang.</Notice>
       ) : full ? (
         <Notice tone="ok">Ruang Bersama sudah berisi dua orang.</Notice>
       ) : open ? (

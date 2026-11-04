@@ -36,7 +36,7 @@ test.describe('Beranda Pribadi kosong', () => {
     const main = page.getByRole('main');
     await expect(main.getByText('Undang Farida')).toHaveCount(0);
     await expect(main.getByText('Buat dompet bersama')).toBeVisible();
-    await expect(main.getByText(/Pengeluaran rumah tangga yang kalian bagi/)).toBeVisible();
+    await expect(main.getByText(/Pengeluaran yang kalian bagi/)).toBeVisible();
   });
 });
 

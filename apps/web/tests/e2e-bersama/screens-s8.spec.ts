@@ -26,6 +26,13 @@ const OUT_DIR_AKTIVITAS = fileURLToPath(
     import.meta.url,
   ),
 );
+/** Onboarding Farida (Task 8): S8-O1 (Pribadi baru) dan S8-O2 (Bersama berisi dompet Novanda). */
+const OUT_DIR_T8 = fileURLToPath(
+  new URL(
+    '../../../../.superpowers/sdd/2026-11-04-dompetku-v2-s8-bersama/task-8-screens/',
+    import.meta.url,
+  ),
+);
 const BASE = 'http://localhost:3302';
 
 interface Shot {
@@ -168,6 +175,31 @@ async function spaceTransfer(
     [randomUUID(), space, from, to, amount, 'Catatan pribadi', note],
   );
 }
+
+// Harus pertama: tanpa fixture `kanari`, Pribadi F masih kosong (S8-O1).
+test('@screens S8-O1 Beranda pertama Farida di Pribadi (kosong)', async ({
+  browser,
+  partnerState,
+}) => {
+  test.setTimeout(300_000);
+  const ctx = await browser.newContext({ storageState: partnerState, baseURL: BASE });
+  const page = await ctx.newPage();
+  await page.goto('/pribadi/beranda');
+  const cl = page.getByRole('region', { name: 'Mulai dari sini' });
+  await expect(cl).toContainText('1 dari 3 selesai');
+  await expect(page.getByText(/Undang/)).toHaveCount(0);
+  await expect(page.getByText(/belum bergabung/)).toHaveCount(0);
+  await ctx.close();
+  const t8 = { dir: OUT_DIR_T8, heading: 'Beranda' };
+  await shoot(
+    browser,
+    partnerState,
+    'o1-f-pribadi-baru',
+    '/pribadi/beranda',
+    [...V(390, ['dark', 'light'], 2), ...V(320)],
+    t8,
+  );
+});
 
 test('@screens Beranda Bersama dua anggota: kosong, lalu berisi', async ({
   browser,
@@ -321,4 +353,34 @@ test('@screens Aktivitas Bersama berisi: dua hari, 30 baris, Muat sebelumnya', a
   await ctx.close();
   expect(href).toContain('sebelum=');
   await shoot(browser, ownerState, 'aktivitas-halaman2-n', href ?? '', V(390), aktivitas);
+});
+
+test('@screens S8-O2 Beranda Bersama pertama bagi Farida (dompet dan entri Novanda)', async ({
+  browser,
+  partnerState,
+  kanari,
+}) => {
+  test.setTimeout(300_000);
+  expect(kanari.f.wallet).toBeTruthy();
+  const ctx = await browser.newContext({ storageState: partnerState, baseURL: BASE });
+  const page = await ctx.newPage();
+  await page.goto('/bersama/beranda');
+  await expect(page.getByRole('heading', { name: 'Beranda' }).first()).toBeVisible();
+  const cl = page.getByRole('region', { name: 'Mulai dari sini' });
+  if ((await cl.count()) > 0) {
+    await expect(cl).toContainText(
+      'Kamu dan Novanda sama-sama bisa mencatat dan mengubah di sini.',
+    );
+    await expect(cl).not.toContainText('Farida');
+  }
+  await expect(page.getByText(/belum bergabung|Undang/)).toHaveCount(0);
+  await ctx.close();
+  await shoot(
+    browser,
+    partnerState,
+    'o2-f-bersama',
+    '/bersama/beranda',
+    [...V(390, ['dark', 'light'], 2), ...V(1280)],
+    { dir: OUT_DIR_T8, heading: 'Beranda' },
+  );
 });

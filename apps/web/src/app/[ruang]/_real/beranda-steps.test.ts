@@ -78,3 +78,22 @@ describe('bersamaView (S7-B1/B2)', () => {
     });
   });
 });
+
+describe('persona anggota (Farida, S8-O1/O2)', () => {
+  // Loader: `invite` hanya true untuk pemilik Bersama solo, jadi F selalu `invite: false`.
+  it('Pribadi baru: tiga langkah, Akun aman selesai, tanpa Undang dan tanpa pengganti', () => {
+    const steps = berandaSteps({ ruang: 'pribadi', ...base });
+    expect(steps.map((s) => s.key)).toEqual(['aman', 'dompet', 'catat']);
+    expect(steps.filter((s) => s.done)).toHaveLength(1);
+    const satu = berandaSteps({ ruang: 'pribadi', ...base, hasOperasional: true });
+    expect(satu.filter((s) => s.done)).toHaveLength(2);
+  });
+
+  it('Bersama dua anggota, bukan pemilik: tanpa ajakan dan tanpa solo', () => {
+    expect(bersamaView('bersama', { members: 2, isOwner: false, empty: false })).toEqual({
+      solo: false,
+      empty: false,
+      invite: 'none',
+    });
+  });
+});

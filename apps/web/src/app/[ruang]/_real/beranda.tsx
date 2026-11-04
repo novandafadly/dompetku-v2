@@ -97,6 +97,7 @@ export function BerandaReal({
       ruang={ruang}
       steps={steps.map(toStep)}
       {...(view.solo ? { intro: BERSAMA_SOLO_INTRO } : {})}
+      {...(data.bersama?.partner ? { partnerName: data.bersama.partner.name } : {})}
     />
   );
   // Ajakan hanya untuk pemilik: bukan pemilik tidak menerima data undangan sama sekali.

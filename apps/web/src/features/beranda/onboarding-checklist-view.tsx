@@ -103,11 +103,14 @@ export function OnboardingChecklistView({
   ruang,
   steps,
   intro,
+  partnerName = 'Farida',
 }: {
   ruang: Ruang;
   steps: ChecklistStep[];
   /** Pengantar Bersama pengganti bawaan (S7-B1: ruang baru berisi satu orang). */
   intro?: string;
+  /** Anggota lain dari roster untuk pengantar bawaan (layar Farida: Novanda). */
+  partnerName?: string;
 }) {
   const doneCount = steps.filter((s) => s.done).length;
 
@@ -125,7 +128,7 @@ export function OnboardingChecklistView({
       {ruang === 'bersama' ? (
         <p className="pt-1 text-label font-medium text-text-soft">
           {intro ??
-            'Pengeluaran rumah tangga yang kalian bagi. Farida dan kamu sama-sama bisa mencatat dan mengubah di sini.'}
+            `Pengeluaran yang kalian bagi. Kamu dan ${partnerName} sama-sama bisa mencatat dan mengubah di sini.`}
         </p>
       ) : null}
       <ul aria-label="Mulai dari sini">

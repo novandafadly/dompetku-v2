@@ -200,6 +200,9 @@ describe('loadBeranda (persona N)', () => {
         empty: true,
         ...s8({ name: 'Novanda', initial: 'N' }),
       });
+      // Farida tidak pernah menerima data undangan, bukan hanya `null` (S8-O2).
+      expect(bf.bersama).not.toHaveProperty('pendingInvite');
+      expect(bf.invite).toBe(false);
     });
   });
 
