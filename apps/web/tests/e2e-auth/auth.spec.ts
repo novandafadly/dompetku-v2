@@ -260,8 +260,9 @@ test('pemilik: Beranda nyata dengan dompet: kartu, tidak ada pengeluaran hari in
   expect(html).toContain('Kas Rumah');
   expect(html + rsc).not.toContain(PRIBADI_WALLET);
   await page.goto('/bersama/beranda');
-  // Undang Farida hanya di Pribadi.
-  await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(0);
+  // Bersama solo (S7-B1): satu-satunya ajakan adalah kartu ajakan Bersama untuk pemilik.
+  await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Undang Farida ke Bersama' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Tidak ada pengeluaran hari ini' })).toBeVisible();
   await checkScreen(page);
   await berandaShots(page, '/bersama/beranda', 'beranda-bersama');

@@ -21,6 +21,8 @@ for (const path of [
   `/pribadi/transaksi/${detailId}`,
   '/pribadi/sampah',
   '/pribadi/dompet',
+  // Riwayat dompet (S7 Task 12): dompet BCA di seed penuh.
+  '/pribadi/dompet/acc-bca',
 ]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.

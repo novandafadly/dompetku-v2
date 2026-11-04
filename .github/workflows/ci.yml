@@ -214,7 +214,8 @@ jobs:
     # (Playwright, autentikator passkey virtual). Cluster sekali pakai dengan image dan migrasi
     # yang sama dengan job db; port hanya untuk runner ini.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # e2e:ledger S6 + S7 (axe tiga lebar x dua tema) menambah beberapa menit.
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
