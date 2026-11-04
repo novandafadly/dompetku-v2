@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import pg from 'pg';
 import { test as base, expect, type Browser, type Page } from '@playwright/test';
 import {
   BERSAMA_MAIL_FILE,
@@ -11,6 +12,7 @@ import {
   createWallet,
   lastMail,
   linkIn,
+  spaceOf,
   totp,
 } from '../e2e-auth/helpers';
 import { OWNER, PARTNER } from './global-setup';
@@ -33,6 +35,38 @@ export const KANARI = {
   },
 } as const;
 export type Kanari = typeof KANARI;
+
+/** Satu kueri superuser untuk memeriksa baris (tidak menulis data uji). */
+async function adminRows<T extends pg.QueryResultRow>(
+  sql: string,
+  params: unknown[],
+): Promise<T[]> {
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  try {
+    return (await admin.query<T>(sql, params)).rows;
+  } finally {
+    await admin.end();
+  }
+}
+
+/**
+ * Isi Pribadi satu orang; idempoten karena worker dimulai ulang sesudah tes gagal dan nama dompet
+ * unik per ruang (createWallet kedua kali akan melempar): cek dulu dompet dan entri yang ada.
+ */
+export async function seedKanari(k: Kanari['n'] | Kanari['f']): Promise<void> {
+  const { sid } = await spaceOf(k.email, 'personal');
+  const [wallet] = await adminRows('select 1 from app.accounts where space_id = $1 and name = $2', [
+    sid,
+    k.wallet,
+  ]);
+  if (!wallet) await createWallet(k.email, 'personal', k.wallet, 20_000_000);
+  const [entry] = await adminRows(
+    'select 1 from app.entries where space_id = $1 and description = $2',
+    [sid, k.description],
+  );
+  if (!entry) await createExpense(k.email, 'personal', k.wallet, k.amount, k.description);
+}
 
 const EMPTY_STATE = { cookies: [], origins: [] };
 
@@ -153,10 +187,7 @@ export const test = base.extend<
   kanari: [
     async ({ partnerState }, provide) => {
       if (!partnerState) throw new Error('F belum terdaftar');
-      for (const k of [KANARI.n, KANARI.f]) {
-        await createWallet(k.email, 'personal', k.wallet, 20_000_000);
-        await createExpense(k.email, 'personal', k.wallet, k.amount, k.description);
-      }
+      for (const k of [KANARI.n, KANARI.f]) await seedKanari(k);
       await provide(KANARI);
     },
     { scope: 'worker', timeout: 120_000 },
