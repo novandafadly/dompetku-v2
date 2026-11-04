@@ -19,6 +19,9 @@ D8=sha256:$(printf '8%.0s' {1..64})
 D9=sha256:$(printf '9%.0s' {1..64})
 DA=sha256:$(printf 'a%.0s' {1..64})
 DB=sha256:$(printf 'b%.0s' {1..64})
+DC=sha256:$(printf 'c%.0s' {1..64})
+DD=sha256:$(printf 'd%.0s' {1..64})
+DE=sha256:$(printf 'e%.0s' {1..64})
 SHA1=$(printf 'a%.0s' {1..40})
 SHA2=$(printf 'b%.0s' {1..40})
 SHA3=$(printf 'c%.0s' {1..40})
@@ -30,6 +33,9 @@ SHA8=$(printf '8%.0s' {1..40})
 SHA9=$(printf '9%.0s' {1..40})
 SHAA=$(printf '0%.0s' {1..40})
 SHAB=$(printf '1%.0s' {1..40})
+SHAC=$(printf '2%.0s' {1..40})
+SHAD=$(printf '3%.0s' {1..40})
+SHAE=$(printf '4%.0s' {1..40})
 
 mkdir -p "$W/bin" "$W/root/env" "$W/root/bin" "$W/root/keys" "$W/sim"
 touch "$W/root/compose.yml" "$W/root/compose.web.yml"
@@ -50,7 +56,8 @@ CFG
 # worker (digest container worker yang berjalan; tidak ada = worker tidak berjalan), crashloop
 # (digest yang worker-nya restart berulang), noworkersvc (compose.yml belum punya layanan worker),
 # workerupfail (compose up worker gagal sekali; container lama tetap berjalan), badworkerenv
-# (worker.mjs --check-config menolak worker.env).
+# (worker.mjs --check-config menolak worker.env), nopgworkernet (postgres belum ikut network
+# dompetku_worker_db), oldhba (pg_hba di postgres belum memuat aturan dompetku_worker).
 cat >"$W/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -116,7 +123,12 @@ case $1 in
       config)
         printf 'gw\npostgres\nweb\n'
         [[ -e $SIM/noworkersvc ]] || echo worker ;;
-      exec) if [[ $* == *pg_stat_archiver* ]]; then echo t; fi ;;
+      exec)
+        if [[ $* == *pg_stat_archiver* ]]; then echo t; fi
+        if [[ $* == *pg_hba_file_rules* ]]; then
+          [[ $* == *"'dompetku_worker' = any(user_name) and address = '172.25.0.0' and error is null"* ]] || exit 9
+          [[ -e $SIM/oldhba ]] && echo f || echo t
+        fi ;;
       run) echo "migrate $(cat "$SIM/remote")" >>"$SIM/calls"; [[ ! -e $SIM/migratefail ]] ;;
       rm)
         echo "rm ${*:2}" >>"$SIM/calls"
@@ -129,7 +141,15 @@ case $1 in
         true ;;
     esac ;;
   inspect)
-    [[ $* == *pgcid* ]] && { echo healthy; exit 0; }
+    if [[ $* == *pgcid* ]]; then
+      if [[ $* == *NetworkSettings.Networks* ]]; then
+        [[ $* == *'"dompetku_worker_db"'* ]] || exit 9
+        [[ -e $SIM/nopgworkernet ]] || echo ok
+      else
+        echo healthy
+      fi
+      exit 0
+    fi
     if [[ $* == *wcid* ]]; then
       w=$(cat "$SIM/worker")
       # Worker crash loop: RestartCount naik di setiap inspeksi.
@@ -160,6 +180,9 @@ $D8 $SHA8 2026-11-07T10:00:00Z
 $D9 $SHA9 2026-11-08T10:00:00Z
 $DA $SHAA 2026-11-09T10:00:00Z
 $DB $SHAB 2026-11-10T10:00:00Z
+$DC $SHAC 2026-11-11T10:00:00Z
+$DD $SHAD 2026-11-12T10:00:00Z
+$DE $SHAE 2026-11-13T10:00:00Z
 META
 : >"$SIM/unhealthy"
 : >"$SIM/crashloop"
@@ -310,6 +333,30 @@ grep -q '^rm -sf worker$' "$SIM/calls" || { echo 'GAGAL: worker tidak dihapus'; 
 tail -n 1 "$W/log/deploy.log" | grep -q '"result":"ok".*"detail":"worker_env_missing worker_stopped"' ||
   { echo 'GAGAL: audit worker_stopped'; exit 1; }
 mv "$W/root/env/worker.env.off" "$W/root/env/worker.env"
+
+# Postgres belum siap untuk worker (runbook S7 langkah 2 baru sebagian): worker dilewati, web
+# terpasang, tanpa rollback dan tanpa menyentuh worker lama. A: build postgres gagal = postgres belum
+# ikut network worker_db. B: up tanpa build = pg_hba lama tanpa aturan dompetku_worker.
+cp "$SIM/local" "$SIM/worker"
+: >"$SIM/restarts"
+prev=$(cat "$SIM/worker")
+for kasus in nopgworkernet oldhba; do
+  touch "$SIM/$kasus"
+  : >"$SIM/calls"
+  next=$([[ $kasus == nopgworkernet ]] && echo "$DC" || echo "$DD")
+  echo "$next" >"$SIM/remote"
+  check "postgres belum siap untuk worker ($kasus) = worker dilewati" 0 "$next"
+  [[ $(cat "$SIM/local") == "$next" ]] || { echo "GAGAL: web tidak terpasang ($kasus)"; exit 1; }
+  worker_is "worker lama tidak disentuh ($kasus)" "$prev"
+  grep -q '^up worker\|^rm \|^stop \|^run ' "$SIM/calls" && { echo "GAGAL: worker disentuh ($kasus)"; exit 1; }
+  tail -n 1 "$W/log/deploy.log" | grep -q '"result":"ok".*"detail":"worker_db_not_ready"' ||
+    { echo "GAGAL: audit worker_db_not_ready ($kasus)"; exit 1; }
+  grep -q 'worker dilewati: worker_db_not_ready' "$W/stderr" || { echo "GAGAL: log worker_db_not_ready ($kasus)"; exit 1; }
+  rm "$SIM/$kasus"
+done
+echo "$DE" >"$SIM/remote"
+check 'postgres siap lagi = worker ikut rilis' 0 "$DE"
+worker_is 'worker ikut rilis setelah postgres siap' "$DE"
 
 # Tanpa digest sebelumnya: pesan menyebut hanya layanan yang disentuh.
 mv "$W/state" "$W/state.keep"

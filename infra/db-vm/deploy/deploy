@@ -7,8 +7,8 @@
 # preflight -> restore point + migrasi dbmate (berkas migrasi diambil dari image rilis) -> ganti web
 # -> health -> ganti worker (image sama, S7) -> stabil -> selesai, atau rollback keduanya ke digest
 # sebelumnya. Env worker divalidasi dengan image rilis di preflight (tidak valid = ditolak). Worker
-# dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada; tanpa env, worker lama
-# yang masih berjalan dihentikan. Setiap hasil = satu baris audit JSON.
+# dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada, atau postgres belum ikut
+# network worker_db/pg_hba worker; tanpa env, worker lama yang masih berjalan dihentikan. Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -40,6 +40,8 @@ WORKER_SERVICE=worker           # image sama dengan web, entri /app/worker/worke
 WORKER_ENV=$ROOT/env/worker.env # belum ada = worker dilewati (diisi pemilik, runbook-s7-worker)
 WORKER_STABLE_CHECKS=5          # worker sehat = running, image baru, RestartCount tetap
 WORKER_INTERVAL=4               # selama 5 x 4 = 20 detik
+WORKER_DB_NETWORK=dompetku_worker_db # network postgres + worker (compose.yml S7)
+WORKER_DB_ADDRESS=172.25.0.0    # alamat aturan pg_hba dompetku_worker (subnet worker_db)
 MIN_FREE_MB=2048
 HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
 GHCR_USER=''
@@ -215,13 +217,30 @@ wait_worker() {
 
 switch_worker() { compose up -d --no-deps "$WORKER_SERVICE"; }
 
+# Postgres siap menerima worker: container ikut network WORKER_DB_NETWORK dan pg_hba di disk memuat
+# aturan dompetku_worker untuk subnet itu tanpa baris galat. Gagal bila langkah 2 runbook S7 baru
+# sebagian (build postgres gagal = belum ikut network; up tanpa build = pg_hba lama).
+worker_db_ready() {
+  local cid net hba
+  cid=$(compose ps -q postgres 2>/dev/null | head -n 1)
+  [[ -n $cid ]] || return 1
+  net=$(docker inspect -f "{{ with index .NetworkSettings.Networks \"$WORKER_DB_NETWORK\" }}ok{{ end }}" "$cid" 2>/dev/null) ||
+    return 1
+  [[ $net == ok ]] || return 1
+  hba=$(psql_postgres "select count(*) filter (where 'dompetku_worker' = any(user_name) and address = '$WORKER_DB_ADDRESS' and error is null) > 0 and count(*) filter (where error is not null) = 0 from pg_hba_file_rules" 2>/dev/null) ||
+    return 1
+  [[ $hba == t ]]
+}
+
 # Alasan worker dilewati (kosong = worker ikut diganti). Bukan kegagalan: deploy pertama sebelum
-# pemilik mengisi env/worker.env atau menyalin compose.yml S7 tetap memasang web.
+# pemilik mengisi env/worker.env, menyalin compose.yml S7, atau menyiapkan postgres tetap memasang web.
 worker_skip_reason() {
   if [[ ! -f $WORKER_ENV ]]; then
     echo worker_env_missing
   elif ! compose config --services 2>/dev/null | grep -qx "$WORKER_SERVICE"; then
     echo worker_service_missing
+  elif ! worker_db_ready; then
+    echo worker_db_not_ready
   fi
 }
 
@@ -372,6 +391,9 @@ switch_to "$TO_DIGEST" || log 'compose up rilis baru gagal'
 if wait_healthy "$TO_SHA"; then
   if [[ -n $WORKER_SKIP ]]; then
     log "worker dilewati: $WORKER_SKIP"
+    if [[ $WORKER_SKIP == worker_db_not_ready ]]; then
+      log "postgres belum ikut $WORKER_DB_NETWORK atau pg_hba belum memuat aturan dompetku_worker $WORKER_DB_ADDRESS (runbook S7 langkah 2); worker lama tidak disentuh"
+    fi
     # Tanpa env/worker.env worker dimatikan pemilik: jangan biarkan worker lama basi di belakang web baru.
     if [[ $WORKER_SKIP == worker_env_missing ]] && ((WORKER_RUNNING)); then
       if compose rm -sf "$WORKER_SERVICE" >/dev/null; then
