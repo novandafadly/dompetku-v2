@@ -33,12 +33,19 @@ function view(over: Partial<BerandaData>, ruang: 'pribadi' | 'bersama' = 'bersam
   return <BerandaReal ruang={ruang} today="2026-11-04" query="" data={{ ...base, ...over }} />;
 }
 
+/** Bacaan S8 (feed, Kontribusi, partner) tidak dimuat: kartu S8 belum dirender (Task 6). */
+const S8_NONE = { partner: null, activity: null, contributions: null };
+
 const INTRO = /Sekarang hanya kamu di sini; Farida belum bergabung\./;
 const AKTIVITAS = /Belum ada aktivitas\. Yang dicatat di Bersama akan muncul di sini/;
 
 describe('BerandaReal Bersama solo (S7-B1)', () => {
   it('pemilik, belum ada undangan: kartu ajakan, pengantar checklist, Aktivitas kosong', () => {
-    render(view({ bersama: { members: 1, isOwner: true, empty: false, pendingInvite: null } }));
+    render(
+      view({
+        bersama: { ...S8_NONE, members: 1, isOwner: true, empty: false, pendingInvite: null },
+      }),
+    );
     const ajakan = screen.getByRole('region', { name: 'Farida belum bergabung di Bersama.' });
     const link = within(ajakan).getByRole('link', { name: 'Undang Farida ke Bersama' });
     expect(link.getAttribute('href')).toBe('/undang');
@@ -55,6 +62,7 @@ describe('BerandaReal Bersama solo (S7-B1)', () => {
     render(
       view({
         bersama: {
+          ...S8_NONE,
           members: 1,
           isOwner: true,
           empty: false,
@@ -71,7 +79,9 @@ describe('BerandaReal Bersama solo (S7-B1)', () => {
   });
 
   it('bukan pemilik: tanpa kartu ajakan dan tanpa email', () => {
-    const { container } = render(view({ bersama: { members: 1, isOwner: false, empty: false } }));
+    const { container } = render(
+      view({ bersama: { ...S8_NONE, members: 1, isOwner: false, empty: false } }),
+    );
     expect(screen.queryByText('Farida belum bergabung di Bersama.')).toBeNull();
     expect(screen.queryByRole('link', { name: /Undang|Kelola undangan/ })).toBeNull();
     expect(screen.getByText(INTRO)).toBeTruthy();
@@ -86,7 +96,7 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
   };
 
   it('State kosong menggantikan Aman; tanpa Tanpa pengeluaran dan Terbaru', () => {
-    render(view({ ...kosong, bersama: { members: 2, isOwner: true, empty: true } }));
+    render(view({ ...kosong, bersama: { ...S8_NONE, members: 2, isOwner: true, empty: true } }));
     expect(screen.getByRole('heading', { name: 'Bersama belum punya dompet.' })).toBeTruthy();
     expect(
       screen.getByText('Buat dompet bersama dulu, lalu catat pengeluaran rumah tangga di sini.'),
@@ -107,7 +117,7 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
     const { container } = render(
       view({
         ...kosong,
-        bersama: { members: 1, isOwner: true, empty: true, pendingInvite: null },
+        bersama: { ...S8_NONE, members: 1, isOwner: true, empty: true, pendingInvite: null },
       }),
     );
     const order = [
@@ -124,7 +134,7 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
     render(
       view({
         ...kosong,
-        bersama: { members: 2, isOwner: true, empty: false },
+        bersama: { ...S8_NONE, members: 2, isOwner: true, empty: false },
       }),
     );
     expect(screen.getByTestId('balance-card')).toBeTruthy();
@@ -134,7 +144,7 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
 
 describe('BerandaReal Bersama dua anggota dan Pribadi (tidak berubah)', () => {
   it('Bersama dua anggota: tanpa ajakan, tanpa Aktivitas, pengantar S6', () => {
-    render(view({ bersama: { members: 2, isOwner: true, empty: false } }));
+    render(view({ bersama: { ...S8_NONE, members: 2, isOwner: true, empty: false } }));
     expect(screen.queryByText('Farida belum bergabung di Bersama.')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Aktivitas' })).toBeNull();
     expect(screen.getByText(/Farida dan kamu sama-sama bisa mencatat/)).toBeTruthy();

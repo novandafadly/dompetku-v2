@@ -1,7 +1,9 @@
 import 'server-only';
 import { todayWIB, type IsoDate } from '@dompetku/domain';
 import type { AccountVM, EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
+import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
 import type pg from 'pg';
+import { bersamaBerandaTx } from './bersama';
 import {
   hasExpenseTx,
   listAccountsTx,
@@ -16,7 +18,8 @@ import type { LedgerCtx } from './write';
  * Data Beranda nyata untuk satu ruang (page `[ruang]/beranda`, sesudah `requireDataUser` dan
  * `resolveSpace`). Hanya data ruang ini, ditambah satu boolean rumah tangga (`invite`): hasilnya
  * diserialisasi ke payload RSC, jadi rute Bersama tidak pernah membawa data Pribadi.
- * Anggaran, tagihan, dan feed aktivitas belum dimuat (S8/S9).
+ * Bersama berisi dua anggota juga memuat feed Aktivitas dan Kontribusi (S8) di transaksi yang sama.
+ * Anggaran dan tagihan belum dimuat (S9).
  */
 export interface BerandaData {
   safe: SafeToSpendVM;
@@ -49,6 +52,15 @@ export interface BerandaBersama {
   /** Tanpa dompet operasional aktif dan tanpa entri hidup (saldo awal juga entri). */
   empty: boolean;
   pendingInvite?: { email: string; expiresOn: IsoDate } | null;
+  /** Anggota lain dari roster (salinan `Yang kamu dan {Nama} …`, S8-A1/O2); `null` bila solo. */
+  partner: { name: string; initial: string } | null;
+  /**
+   * S8-A1: 5 peristiwa terbaru (`api.shared_activity`), hanya bila anggota ≥ 2 (`null` = solo,
+   * kartu S7-B1). `'error'` = bacaan feed gagal (savepoint): kartu menampilkan galat, Beranda tetap.
+   */
+  activity: ActivityItemVM[] | 'error' | null;
+  /** S8-K1: Kontribusi bulan kalender WIB berjalan (K3); `null` = solo, `'error'` = gagal dimuat. */
+  contributions: ContributionVM | 'error' | null;
 }
 
 const RECENT = 5;
@@ -134,7 +146,12 @@ export async function loadBeranda(
       const recent = await recentEntriesTx(c, ctx, RECENT);
       const invite = ctx.kind === 'personal' ? await inviteOpenTx(c) : false;
       const bersama = ctx.kind === 'shared' ? await bersamaTx(c, ctx) : null;
-      return { safe, today, accounts, expense, recent, invite, bersama };
+      // Feed dan Kontribusi hanya untuk Bersama berisi ≥ 2 anggota (S8); koneksi yang sama.
+      const extra =
+        bersama && bersama.members >= 2
+          ? await bersamaBerandaTx(c, ctx)
+          : { partner: null, activity: null, contributions: null };
+      return { safe, today, accounts, expense, recent, invite, bersama, extra };
     }),
     given ?? null,
   ]);
@@ -143,7 +160,7 @@ export async function loadBeranda(
   let bersama: BerandaBersama | null = null;
   if (read.bersama) {
     const { anyEntry, ...rest } = read.bersama;
-    bersama = { ...rest, empty: !hasOperasional && !anyEntry };
+    bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra };
   }
   return {
     safe: read.safe,

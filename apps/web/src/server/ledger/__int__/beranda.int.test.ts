@@ -79,6 +79,10 @@ describe('loadBeranda (persona N)', () => {
                 members: 1,
                 isOwner: true,
                 empty: true,
+                // Solo: feed, Kontribusi, dan anggota lain tidak dimuat (S8).
+                partner: null,
+                activity: null,
+                contributions: null,
                 pendingInvite: {
                   email: PARTNER,
                   expiresOn: expect.stringMatching(ISO_DATE) as string,
@@ -140,6 +144,8 @@ describe('loadBeranda (persona N)', () => {
       expect(p.recent.length).toBeLessThanOrEqual(5);
       expect(p.invite).toBe(false);
       expect(p.bersama).toBeNull();
+      // Pribadi tidak pernah memuat feed atau Kontribusi Bersama (S8).
+      expect(JSON.stringify(p)).not.toMatch(/activity|contributions|partner/);
 
       const b = await loadBeranda(bersama);
       expect(b).toMatchObject({
@@ -173,10 +179,27 @@ describe('loadBeranda (persona N)', () => {
     });
 
     it('Bersama dua anggota kosong: empty tanpa ajakan; bukan pemilik: isOwner false', async () => {
+      // Dua anggota: feed kosong (bukan null) dan Kontribusi semua nol (S8, isinya di
+      // bersama.int.test); anggota lain dari roster.
+      const s8 = (partner: { name: string; initial: string }) => ({
+        partner,
+        activity: [],
+        contributions: expect.objectContaining({ allZero: true }) as unknown,
+      });
       const bn = await loadBeranda(await ctxOf(n, 'bersama'));
-      expect(bn.bersama).toEqual({ members: 2, isOwner: true, empty: true });
+      expect(bn.bersama).toEqual({
+        members: 2,
+        isOwner: true,
+        empty: true,
+        ...s8({ name: 'Farida', initial: 'F' }),
+      });
       const bf = await loadBeranda(await ctxOf(f, 'bersama'));
-      expect(bf.bersama).toEqual({ members: 2, isOwner: false, empty: true });
+      expect(bf.bersama).toEqual({
+        members: 2,
+        isOwner: false,
+        empty: true,
+        ...s8({ name: 'Novanda', initial: 'N' }),
+      });
     });
   });
 
@@ -207,6 +230,9 @@ describe('loadBeranda (persona N)', () => {
         isOwner: true,
         empty: true,
         pendingInvite: null,
+        partner: null,
+        activity: null,
+        contributions: null,
       });
       await wallet(bersama, 'Kas Rumah', 0);
       expect((await loadBeranda(bersama)).bersama).toMatchObject({

@@ -41,7 +41,10 @@ export interface BersamaView {
   invite: 'none' | 'baru' | 'menunggu';
 }
 
-export function bersamaView(ruang: Ruang, b: BerandaBersama | null): BersamaView {
+export function bersamaView(
+  ruang: Ruang,
+  b: Pick<BerandaBersama, 'members' | 'isOwner' | 'empty' | 'pendingInvite'> | null,
+): BersamaView {
   if (ruang !== 'bersama' || b === null) return { solo: false, empty: false, invite: 'none' };
   const solo = b.members < 2;
   const invite = !solo || !b.isOwner ? 'none' : b.pendingInvite ? 'menunggu' : 'baru';
