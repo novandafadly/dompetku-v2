@@ -73,6 +73,8 @@ export const ROUTES: AppRoute[] = [
     route(`${r}-dompet-detail`, `/${r}/dompet/${accountId(r)}`),
     route(`${r}-rencana`, `/${r}/rencana`),
   ]),
+  // Aktivitas Bersama (S8 K5): hanya ruang Bersama; prototipe = feed demo ringan.
+  route('bersama-aktivitas', '/bersama/aktivitas'),
   route('masuk', '/masuk'),
   route('amankan', '/amankan'),
   route('undang', '/undang'),

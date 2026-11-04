@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 import type { Browser, Page } from '@playwright/test';
 import { asUser, createWallet, spaceOf } from '../e2e-auth/helpers';
 import { expect, test } from './fixtures';
@@ -15,6 +16,13 @@ import { OWNER, PARTNER } from './global-setup';
 const OUT_DIR = fileURLToPath(
   new URL(
     '../../../../.superpowers/sdd/2026-11-04-dompetku-v2-s8-bersama/task-6-screens/',
+    import.meta.url,
+  ),
+);
+/** Halaman Aktivitas (Task 7) memakai folder laporannya sendiri. */
+const OUT_DIR_AKTIVITAS = fileURLToPath(
+  new URL(
+    '../../../../.superpowers/sdd/2026-11-04-dompetku-v2-s8-bersama/task-7-screens/',
     import.meta.url,
   ),
 );
@@ -35,8 +43,15 @@ async function settle(page: Page) {
   await page.waitForTimeout(300);
 }
 
-async function shoot(browser: Browser, state: string, name: string, path: string, shots = ALL) {
-  await mkdir(OUT_DIR, { recursive: true });
+async function shoot(
+  browser: Browser,
+  state: string,
+  name: string,
+  path: string,
+  shots = ALL,
+  target: { dir: string; heading: string } = { dir: OUT_DIR, heading: 'Beranda' },
+) {
+  await mkdir(target.dir, { recursive: true });
   for (const v of shots) {
     const context = await browser.newContext({
       storageState: state,
@@ -49,10 +64,10 @@ async function shoot(browser: Browser, state: string, name: string, path: string
       const page = await context.newPage();
       await page.goto(`${path}${path.includes('?') ? '&' : '?'}theme=${v.theme}`);
       await expect(page.locator('html')).toHaveAttribute('data-theme', v.theme);
-      await expect(page.getByRole('heading', { name: 'Beranda' }).first()).toBeVisible();
+      await expect(page.getByRole('heading', { name: target.heading }).first()).toBeVisible();
       await settle(page);
       await page.screenshot({
-        path: `${OUT_DIR}${name}-${String(v.w)}-${v.theme}.png`,
+        path: `${target.dir}${name}-${String(v.w)}-${v.theme}.png`,
         fullPage: true,
         animations: 'disabled',
       });
@@ -183,6 +198,17 @@ test('@screens Beranda Bersama dua anggota: kosong, lalu berisi', async ({
     ...V(390, ['dark', 'light'], 2),
     ...V(1280, ['dark']),
   ]);
+  // Halaman Aktivitas kosong, dua anggota (Task 7).
+  const aktivitas = { dir: OUT_DIR_AKTIVITAS, heading: 'Aktivitas' };
+  await shoot(browser, ownerState, 'aktivitas-kosong-n', '/bersama/aktivitas', ALL, aktivitas);
+  await shoot(
+    browser,
+    partnerState,
+    'aktivitas-kosong-f',
+    '/bersama/aktivitas',
+    V(390, ['dark', 'light'], 2),
+    aktivitas,
+  );
 
   const i = await ids();
   // Peristiwa: pengeluaran kedua anggota, setoran besar N, setoran F, ambil N, ubah, batal.
@@ -234,4 +260,65 @@ test('@screens Beranda Bersama dua anggota: kosong, lalu berisi', async ({
     }
   }
   await page.context().close();
+});
+
+test('@screens Aktivitas Bersama berisi: dua hari, 30 baris, Muat sebelumnya', async ({
+  browser,
+  ownerState,
+  partnerState,
+  kanari,
+}) => {
+  test.setTimeout(600_000);
+  expect(kanari.f.wallet).toBeTruthy();
+  // Memakai dompet dan peristiwa tes sebelumnya (satu berkas, urutan tetap, satu worker).
+  const i = await ids();
+  const ids2: string[] = [];
+  for (let n = 1; n <= 28; n++) {
+    ids2.push(
+      await expense(
+        n % 2 === 0 ? i.fUid : i.nUid,
+        i.bersama,
+        i.accKas,
+        n % 3 === 0 ? i.catLain : i.catMakan,
+        n === 7 ? 12_345_678_900 : 10_000 * n,
+        `Belanja harian ${String(n)}`,
+      ),
+    );
+  }
+  // Geser 18 peristiwa tertua ke kemarin dan 6 ke dua hari lalu agar ada beberapa kelompok hari.
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query('begin');
+    await admin.query('set local session_replication_role = replica');
+    await admin.query(
+      "update app.entry_history set changed_at = changed_at - interval '1 day' where entry_id = any($1::uuid[])",
+      [ids2.slice(0, 18)],
+    );
+    await admin.query(
+      "update app.entry_history set changed_at = changed_at - interval '2 days' where entry_id = any($1::uuid[])",
+      [ids2.slice(0, 6)],
+    );
+    await admin.query('commit');
+  } finally {
+    await admin.end();
+  }
+  const aktivitas = { dir: OUT_DIR_AKTIVITAS, heading: 'Aktivitas' };
+  await shoot(browser, ownerState, 'aktivitas-berisi-n', '/bersama/aktivitas', ALL, aktivitas);
+  await shoot(
+    browser,
+    partnerState,
+    'aktivitas-berisi-f',
+    '/bersama/aktivitas',
+    [...V(390, ['dark', 'light'], 2), ...V(1280, ['dark', 'light'])],
+    aktivitas,
+  );
+  // Halaman berkursor (Kembali ke terbaru).
+  const ctx = await browser.newContext({ storageState: ownerState, baseURL: BASE });
+  const page = await ctx.newPage();
+  await page.goto('/bersama/aktivitas');
+  const href = await page.getByRole('link', { name: 'Muat sebelumnya' }).getAttribute('href');
+  await ctx.close();
+  expect(href).toContain('sebelum=');
+  await shoot(browser, ownerState, 'aktivitas-halaman2-n', href ?? '', V(390), aktivitas);
 });

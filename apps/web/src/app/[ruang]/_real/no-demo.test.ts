@@ -121,6 +121,7 @@ describe('_real tanpa data demo saat runtime', () => {
         'dompet.tsx',
         'dompet-detail.tsx',
         'kategori.tsx',
+        'aktivitas.tsx',
       ]),
     );
     const { seen, offenders, gated } = scan(entries);
@@ -155,8 +156,26 @@ describe('_real tanpa data demo saat runtime', () => {
         'features/kategori/category-list.tsx',
         'features/kategori/category-form.tsx',
         'features/kategori/archive-dialog.tsx',
+        // Aktivitas Bersama nyata (S8-A3): baris feed, Server Component.
+        'features/bersama/activity-item-row.tsx',
       ]),
     );
     expect(offenders).toEqual([]);
+  });
+
+  it("pohon rute Aktivitas nyata: tanpa 'use client' baru dan tanpa modul demo/klien (budget S8)", () => {
+    const { seen } = scan([path.join(here, 'aktivitas.tsx')]);
+    const clientFiles = [...seen]
+      .filter((f) => /^\s*['"]use client['"]/.test(readFileSync(f, 'utf8')))
+      .map((f) => path.relative(src, f));
+    // PageHeader (+ NavProvider) sudah ada di bundel shell, dipakai semua halaman; tidak ada pulau baru.
+    expect(clientFiles.sort()).toEqual([
+      'features/shell/nav-provider.tsx',
+      'features/shell/page-header.tsx',
+    ]);
+    const reached = [...seen].map((f) => path.relative(src, f));
+    expect(reached).not.toContain('features/shell/demo-context.ts');
+    expect(reached).not.toContain('features/shell/demo-provider.tsx');
+    expect(reached.filter((f) => f.endsWith('-islands.tsx') || f.includes('demo'))).toEqual([]);
   });
 });

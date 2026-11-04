@@ -23,6 +23,8 @@ for (const path of [
   '/pribadi/dompet',
   // Riwayat dompet (S7 Task 12): dompet BCA di seed penuh.
   '/pribadi/dompet/acc-bca',
+  // Aktivitas Bersama (S8 Task 7): rute demo ringan.
+  '/bersama/aktivitas',
 ]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.
