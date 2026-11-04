@@ -20,6 +20,8 @@
 
 Keputusan kecil yang diambil agen di plan ini (biaya bila salah ditulis di tasknya): DQ02 (checkpoint saldo) ditunda ke S10; `api.update_transfer` tidak dibuat (transfer diubah dengan Batalkan + catat ulang); entri asal "Pindahkan" tidak bisa dipulihkan dan tidak tampil di Sampah; reimburse boleh sebagian.
 
+> **Catatan Task 18 (2026-11-04): ruling menggantikan teks plan di bawah.** Teks Task 4 dan 5 yang menyebut kolom `moved_to_entry_id`, "DQ12 = `moved_to_entry_id` menunjuk entri yang ada", `restore_entry` menolak entri ber-`moved_to_entry_id`, atau "DQ03 memanggil `private.assert_entry_shape`" sudah tidak berlaku. Bentuk final: kolom `moved_at timestamptz` tanpa id lintas ruang (R16, `p_keep_description` R11/R13), DQ03 kueri SQL independen (R2), DQ11/DQ12 versi R19, skema `pgboss` dengan `createSchema: false` tanpa hak CREATE database (R22), alert R20/R23, dan `purge_voided` dua lintasan (0113). Urutan kunci talangan = entri dulu, lalu akun (R14). Lihat `docs/superpowers/handoff/s7-ledger.md` dan BSD §16 "Catatan S7". Plan tidak ditulis ulang.
+
 ## Global Constraints
 
 **Semua Global Constraints rencana S6 berlaku tanpa perubahan** (`docs/superpowers/plans/2026-11-01-dompetku-v2-s6-catat.md` bagian Global Constraints: proses, aturan M1, kontrak `api.*`, migrasi, Catat dan event produk, desain dan aksesibilitas, salinan tetap). Konteks subagent: `docs/superpowers/handoff/s6-konteks-subagent.md` (perbarui nomor sprint, branch, angka). Tambahan S7:
