@@ -13,3 +13,5 @@ Task 1: implementasi commit 9ced62c (bingkai S8-A1..D1a, 11 konflik + 9 keputusa
 Task 1: review desain + task → Needs fixes (5 Important: tanggal mundur ambigu, baris href null, cabang empty/!hasOperasional dua anggota, fallback per op, budget muat malas harus melapor js-all-kB + selector demo bukan lewat barrel). Minor #6–#15 ikut ronde 1.
 Ruling R2: label Kontribusi tetap `Setor`/`Diambil` sesuai K2 yang disetujui pemilik (usul `Disetor` dicatat untuk critique Task 12) — biaya: tidak paralel secara tata bahasa.
 Ruling R3: konflik bingkai 1–10 diterima sesuai rekomendasi bingkai (reviewer setuju); `Semua` menggantikan `Lihat semua`; S8-B1a menunggu pemilik, bawaan tetap salinan S7 sampai dijawab — biaya: tidak ada.
+Task 1: fix round 1/5 (5 Important + Minor #6–#15 addressed; commit f840313). Re-review → 3 Minor salinan basi (tabel salinan final A2, `Lihat semua` di plan, riwayat konflik 1) diperbaiki controller; reviewer menyatakan Approved setelah #1 dan #2.
+Task 1: complete (commits 9ced62c..HEAD, review clean). S8-B1a menunggu pemilik.
