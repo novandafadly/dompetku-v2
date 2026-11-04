@@ -304,9 +304,9 @@ select is(tests.owner_val(null, format($$select (select count(*) from app.entrie
   || (select count(*) from app.entries where id = %2$L and voided_at is null)$$, :'e1', (:'m1'::jsonb) ->> 'entry_id')),
   '0 1 1', 'asal dipurge (tombstone), entri baru tetap hidup');
 select is(tests.owner_val(null, format($$select (select count(*) from app.entries where id = %L) || ' '
-  || (select count(*) from app.entries where id = %L)$$, :'r3', :'t3')), '0 1',
-  'talangan asal menunggu reimburse batalnya dipurge lebih dulu');
-select is(tests.worker_val(null, 'select jobs.purge_voided()'), '1', 'putaran berikutnya memurge talangan asal');
+  || (select count(*) from app.entries where id = %L)$$, :'r3', :'t3')), '0 0',
+  'reimburse batal lalu talangan asal dipurge dalam putaran yang sama (0113, dua lintasan)');
+select is(tests.worker_val(null, 'select jobs.purge_voided()'), '0', 'putaran berikutnya tidak ada sisa');
 select throws_ok(format($$select pg_temp.call(tests.n(), %L)$$, format(
     $q$select api.restore_entry(gen_random_uuid(), %L, 2)$q$, :'e1')),
   'DK404', 'entry_not_found', 'pulihkan asal yang sudah dipurge = DK404');

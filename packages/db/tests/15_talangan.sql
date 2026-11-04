@@ -5,7 +5,7 @@
 -- Pribadi tidak berubah oleh talangan maupun reimburse, isolasi ruang.
 -- Semua lewat api.* sebagai role web; jam dipatok 2026-03-20 WIB.
 begin;
-select plan(63);
+select plan(67);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -233,6 +233,25 @@ select throws_ok(format($$select pg_temp.open_list(tests.f(), %L)$$, :'np'),
 select is(pg_temp.open_list(tests.f(), :'fp'), '-', 'F: daftar talangan Pribadi F kosong (0 baris milik N)');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where reimburses_entry_id = %L$$, :'t5')),
   '2', 'percobaan F tidak menulis apa pun');
+
+-- ===== Purge: talangan batal dengan reimburse batal terhapus dalam satu siklus (0113) =====
+-- Reimburse salah dicatat lalu dibatalkan, kemudian talangannya juga dibatalkan. Sebelum 0113 talangan
+-- baru terhapus satu Senin kemudian (umur > 97 hari = DQ10 warn palsu).
+select pg_temp.talangan(tests.n(), :'bca', 45000, '2026-03-19', 'ojek klien') as t9 \gset
+select pg_temp.reimb(tests.n(), :'t9', :'bca', 15000) ->> 'entry_id' as r9 \gset
+select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'r9'));
+select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, %s)$$, :'t9',
+  tests.owner_val(null, format($q$select version from app.entries where id = %L$q$, :'t9'))));
+select tests.clock_at('2026-06-19 10:00+07');  -- +91 hari
+select ok(tests.worker_val(null, 'select jobs.purge_voided()')::int >= 2, 'purge_voided berjalan');
+select is(tests.owner_val(null, format($$select (select count(*) from app.entries where id in (%1$L, %2$L)) || ' '
+  || (select count(*) from app.entry_tombstones where entry_id in (%1$L, %2$L))$$, :'t9', :'r9')),
+  '0 2', 'reimburse batal dan talangannya dipurge dalam satu putaran (dua tombstone)');
+-- Tanpa purge lain sebelum Senin berikutnya: umur sisa mana pun sudah > 97 hari.
+select tests.clock_at('2026-06-26 10:00+07');  -- +98 hari: lewat ambang DQ10 (97 hari)
+select is(tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ10'$$), '0',
+  'DQ10 tidak alarm untuk talangan + reimburse batal');
+select is(tests.worker_val(null, 'select jobs.purge_voided()'), '0', 'putaran berikutnya tidak ada sisa');
 
 select * from finish();
 rollback;
