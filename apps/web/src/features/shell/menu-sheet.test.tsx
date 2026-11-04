@@ -10,6 +10,8 @@ vi.mock('./nav-provider', () => ({
   }),
 }));
 
+vi.mock('@/server/auth/actions', () => ({ signOutAction: vi.fn() }));
+
 afterEach(cleanup);
 
 describe('MenuSheet: Kategori', () => {
@@ -35,5 +37,23 @@ describe('MenuSheet: Kategori', () => {
   it('Sampah aktif di kedua mode', () => {
     render(<MenuSheet open onOpenChange={vi.fn()} />);
     expect(screen.getByRole('link', { name: 'Sampah' })).toHaveAttribute('href', '/bersama/sampah');
+  });
+});
+
+describe('MenuSheet: Keluar', () => {
+  it('mode nyata: Keluar adalah tombol submit dalam form, baris terakhir daftar', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const btn = screen.getByRole('button', { name: 'Keluar' });
+    expect(btn).toHaveAttribute('type', 'submit');
+    expect(btn.closest('form')).not.toBeNull();
+    const items = screen.getAllByRole('listitem');
+    expect(items[items.length - 1]).toContainElement(btn);
+    // Bukan butir "Segera": tidak dinonaktifkan.
+    expect(btn).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('prototipe (bawaan): Keluar tidak ditampilkan', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Keluar' })).toBeNull();
   });
 });
