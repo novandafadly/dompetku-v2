@@ -119,3 +119,5 @@ Task 17: implementasi (sesi ccr-93c19006) commits 7dfd31c..4caaa2c; e2e:ledger 3
 Task 17: review → Approved untuk diff T17; 1 Important di luar rentang (T10): catat-s7 "Talangan keyboard 360" tak deterministik (jam WIB nyata, chip bergeser ±24 px saat dipilih; bukan cacat produk, baris chip memang bisa digeser) → kunci jam dengan page.clock. Minor M1, M2, M4, M6 ikut ronde 1.
 Ruling R31: perbaikan determinisme tes prototipe catat-s7 (kunci jam, tanpa mengubah asersi) diizinkan walau tes prototipe lama tidak boleh diubah — tidak melemahkan janji, hanya menghapus ketergantungan jam — biaya: tidak ada.
 Task 17: minor (deferred): M3 "Talangan bukan pengeluaran pribadi" dibuktikan pgTAP Task 3 (mode nyata belum menampilkan angka periode; catat di T18); M5 arah ambil Bersama→Pribadi hanya dijaga s7.int; chip saran bergeser ±24 px saat dipilih (critique T18).
+Task 17: fix round 1/5 (I1 + M1, M2, M4, M6 addressed, 0 open; commits 17eca4a..06ee9af; catat-s7 prototipe 7/7, e2e:auth 21, e2e:ledger 38). Re-review controller atas diff kecil tes saja: bersih.
+Task 17: complete (commits b5ebd44..06ee9af, review clean)
