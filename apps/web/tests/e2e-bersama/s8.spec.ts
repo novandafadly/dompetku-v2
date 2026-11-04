@@ -302,7 +302,11 @@ test(
         expect(html, `${who} ${path}`).toContain('memindahkan transaksi ke ruang lain');
         expect(html, `${who} ${path}`).toContain('menyetor ke Bersama');
         expect(html, `${who} ${path}`).toContain('mengambil dari Bersama');
-        expectNoKanari(`${who} ${path} reload`, await bersamaResponses(p, () => p.reload()));
+        const reload = await bersamaResponses(p, () => p.reload());
+        expectNoKanari(`${who} ${path} reload`, reload);
+        expect(reload.bodies.join('\n'), `${who} ${path} reload`).toContain(
+          'memindahkan transaksi ke ruang lain',
+        );
       }
       // Navigasi klien Beranda → Semua → Aktivitas → Beranda (payload RSC navigasi).
       await p.goto('/bersama/beranda');
@@ -657,7 +661,12 @@ test('axe 0 serious/critical terang + gelap 320/390/1280; 320 tanpa gulir horizo
        p_allow_negative => true)`,
     [randomUUID(), sid, ids.acc, STRESS, ids.cat, KET_40],
   );
-  // Nama tampilan F 40 karakter (batas profil) selama tes ini; dikembalikan sesudahnya.
+  // Nama tampilan F 40 karakter (batas profil) selama tes ini; nilai asli dikembalikan sesudahnya.
+  const [asli] = await adminQuery<{ name: string }>(
+    'select display_name as name from app.profiles where user_id = $1',
+    [f.uid],
+  );
+  if (!asli) throw new Error('profil F tidak ada');
   await adminQuery('update app.profiles set display_name = $2 where user_id = $1', [
     f.uid,
     NAMA_40,
@@ -692,7 +701,7 @@ test('axe 0 serious/critical terang + gelap 320/390/1280; 320 tanpa gulir horizo
   } finally {
     await adminQuery('update app.profiles set display_name = $2 where user_id = $1', [
       f.uid,
-      'Farida',
+      asli.name,
     ]);
   }
 });

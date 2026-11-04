@@ -631,29 +631,15 @@ test('@screens S8 kriteria keluar: Beranda, Aktivitas, Detail dua anggota (docs/
   if (!setoran) throw new Error('setoran tidak ada');
 
   const docs = (heading: string) => ({ dir: OUT_DIR_DOCS, heading });
+  // Beranda dan Aktivitas F identis byte dengan milik N (nama, bukan "kamu"; Kontribusi pemilik dulu
+  // bagi kedua pembaca), jadi F hanya dipotret di layar yang berbeda (Detail B5 dan D2).
   await shoot(browser, ownerState, 'a1-beranda-n', '/bersama/beranda', ALL, docs('Beranda'));
-  await shoot(
-    browser,
-    partnerState,
-    'a1-beranda-f',
-    '/bersama/beranda',
-    [...V(390, ['dark', 'light'], 2), ...V(1280)],
-    docs('Beranda'),
-  );
   await shoot(
     browser,
     ownerState,
     'a3-aktivitas-n',
     '/bersama/aktivitas',
     [...V(390, ['dark', 'light'], 2), ...V(1280, ['dark'])],
-    docs('Aktivitas'),
-  );
-  await shoot(
-    browser,
-    partnerState,
-    'a3-aktivitas-f',
-    '/bersama/aktivitas',
-    V(390, ['dark'], 2),
     docs('Aktivitas'),
   );
   await shoot(
