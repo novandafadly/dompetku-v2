@@ -1,4 +1,4 @@
-import { daysInclusive, formatRupiah, shortDateLabel, type IsoDate } from '@dompetku/domain';
+import { formatRupiah, shortDateLabel, type IsoDate } from '@dompetku/domain';
 import type { Route } from 'next';
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
@@ -12,6 +12,7 @@ import { WarningIcon } from '@/components/ui/icons/warning';
 import { ErrorState } from '@/components/ui/state';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { card, focusRing, rowDivider } from '@/components/ui/styles';
+import { openingEditable, openingLockedOn } from '@/features/ledger/opening';
 import type { EntryVM, Ruang, TalanganVM } from '@/features/ledger/types';
 import { buildEntryHref, buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { DetailRow, EntryDetailView } from '@/features/transaksi/entry-detail-view';
@@ -19,9 +20,6 @@ import { MovedBanner, VOIDED_COPY, VoidedBanner } from '@/features/transaksi/voi
 import type { DetailData } from '@/server/ledger/detail';
 import { DetailActionsIsland, RestoreIsland } from './detail-islands';
 import { RetryIsland } from './transaksi-islands';
-
-/** Saldo awal hanya bisa diubah (nominalnya saja) ≤ 7 hari sejak dompet dibuka (BSD §9.1). */
-const OPENING_EDIT_DAYS = 7;
 
 /** Hasil `detailAbilities`: apa yang dirender di bawah rincian (S6 + S7). */
 export interface DetailAbilities {
@@ -59,7 +57,7 @@ export function detailAbilities(
   if (entry.voidedAt !== undefined) return none;
   if (entry.kind === 'opening_balance') {
     const opened = data.accounts.find((a) => a.id === entry.accountId)?.openedOn;
-    const editable = opened !== undefined && daysInclusive(opened, today) - 1 <= OPENING_EDIT_DAYS;
+    const editable = opened !== undefined && openingEditable(opened, today);
     return { ...none, editable };
   }
   if (entry.kind === 'space_transfer') return { ...none, voidable: entry.createdBy.id === me };
@@ -225,9 +223,20 @@ export function DetailReal({
     ) : undefined;
 
   const live = voidedAt === undefined;
+  // Saldo awal lewat 7 hari (S7-W2): tanpa Ubah, dengan keterangan dan arahan Cocokkan saldo.
+  const openedOn =
+    entry.kind === 'opening_balance'
+      ? accounts.find((a) => a.id === entry.accountId)?.openedOn
+      : undefined;
+  const openingLocked = live && openedOn !== undefined && !editable;
   const showActions = editable || voidable || movable || reimbursable !== null;
   const notes = live ? (
     <>
+      {openingLocked ? (
+        <ActionNote>
+          {`Saldo awal terkunci sejak ${shortDateLabel(openingLockedOn(openedOn))}. Pakai Cocokkan saldo untuk menyesuaikan.`}
+        </ActionNote>
+      ) : null}
       {antarRuang && voidable ? (
         <ActionNote>Transfer tidak bisa diubah. Batalkan, lalu catat lagi.</ActionNote>
       ) : null}

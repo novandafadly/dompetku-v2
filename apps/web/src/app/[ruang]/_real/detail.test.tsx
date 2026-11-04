@@ -530,3 +530,47 @@ describe('ronde perbaikan 1', () => {
     expect(screen.getByText('Biaya')).toBeTruthy();
   });
 });
+
+describe('Detail saldo awal (S7-W2)', () => {
+  const open = entry({
+    kind: 'opening_balance',
+    categoryName: undefined as never,
+    description: undefined as never,
+    amount: 1_000_000,
+  });
+  const oplabels = {
+    title: 'Saldo awal',
+    category: 'Saldo awal',
+    amount: { value: 1_000_000, kind: 'neutral' as const },
+  };
+
+  it('terkunci (> 7 hari): baris Saldo awal terkunci sejak {tanggal}, tanpa Ubah', () => {
+    render(
+      <DetailReal {...props} today="2026-11-20" me="u-n" data={data(open)} labels={oplabels} />,
+    );
+    // Dompet dibuka 28 Okt: 7 hari penuh berakhir 4 Nov, terkunci sejak 5 Nov.
+    expect(
+      screen.getByText('Saldo awal terkunci sejak 5 Nov. Pakai Cocokkan saldo untuk menyesuaikan.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ubah' })).toBeNull();
+  });
+
+  it('masih bisa diubah: Ubah ada, tanpa baris terkunci', () => {
+    render(<DetailReal {...props} me="u-n" data={data(open)} labels={oplabels} />);
+    expect(screen.getByRole('button', { name: 'Ubah' })).toBeTruthy();
+    expect(screen.queryByText(/terkunci sejak/)).toBeNull();
+  });
+
+  it('saldo awal yang dibatalkan atau dompet tak ditemukan: tanpa baris terkunci', () => {
+    render(
+      <DetailReal
+        {...props}
+        today="2026-11-20"
+        me="u-n"
+        data={data(open, false, { accounts: [] })}
+        labels={oplabels}
+      />,
+    );
+    expect(screen.queryByText(/terkunci sejak/)).toBeNull();
+  });
+});
