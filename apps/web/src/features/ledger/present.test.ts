@@ -102,3 +102,29 @@ describe('effectOnAccountVM: efek entri pada satu dompet (riwayat dompet)', () =
     );
   });
 });
+
+describe('judul kaki antar ruang (S7-D1)', () => {
+  const kaki: EntryVM = {
+    id: 'e',
+    version: 1,
+    kind: 'space_transfer',
+    occurredOn: '2026-11-02',
+    createdAt: '2026-11-02T08:00:00+07:00',
+    createdBy: { id: 'u-n', name: 'Novanda', initial: 'N' },
+    accountId: 'a',
+    accountName: 'Kas',
+    amount: 100_000,
+  };
+
+  it('kaki Pribadi dari arah, bukan keterangan', () => {
+    const p = { ...kaki, spaceKind: 'personal' as const, description: 'bayar kos adik' };
+    expect(entryTitleVM({ ...p, direction: 'out' })).toBe('Setor ke Bersama');
+    expect(entryTitleVM({ ...p, direction: 'in' })).toBe('Ambil dari Bersama');
+  });
+
+  it('kaki Bersama dari nama pencatat, bukan catatan; tidak menyebut Pribadi', () => {
+    const b = { ...kaki, spaceKind: 'shared' as const, sharedNote: 'Patungan listrik' };
+    expect(entryTitleVM({ ...b, direction: 'in' })).toBe('Setoran dari Novanda');
+    expect(entryTitleVM({ ...b, direction: 'out' })).toBe('Diambil oleh Novanda');
+  });
+});

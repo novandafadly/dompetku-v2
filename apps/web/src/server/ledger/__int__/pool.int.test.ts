@@ -284,6 +284,8 @@ describe('satu transaksi baca per page', () => {
       accounts: await listAccounts(pribadi),
       categories: await listCategories(pribadi),
       restoreClosed: false,
+      spaceCount: 2,
+      talangan: null,
     });
     const tidakAda = await peakDuring(() => loadDetail(pribadi, randomUUID()));
     expect(tidakAda).toEqual({ peak: 1, result: null });

@@ -348,6 +348,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         accountName: 'Kas Rumah',
         amount: 1_250_000,
         direction: 'in',
+        spaceKind: 'shared',
         sharedNote: 'Setoran November',
       });
 
@@ -615,6 +616,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         accountName: 'BCA',
         amount: 100_000,
         description: 'transfer kantor',
+        reimbursesEntryId: t.entryId,
       });
       expect(must(await getEntry(nPribadi, r.entryId)).entry.kind).toBe('reimbursement');
       expect((await accountEntries(nPribadi, a, 10)).entries.map((e) => e.kind)).toEqual([

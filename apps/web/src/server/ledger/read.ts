@@ -116,6 +116,8 @@ interface EntryRow {
   direction: 'out' | 'in' | null;
   shared_note: string | null;
   reimbursable: boolean;
+  moved_at: string | null;
+  reimburses_entry_id: string | null;
 }
 
 /**
@@ -131,7 +133,7 @@ const ENTRY_COLUMNS = `
   case when e.kind = 'transfer' then ca.name end as counter_account_name,
   e.category_id, cat.name as category_name, cat.icon as category_icon,
   e.description, ${wib('e.voided_at')} as voided_at, e.direction::text as direction,
-  e.shared_note, e.reimbursable`;
+  e.shared_note, e.reimbursable, ${wib('e.moved_at')} as moved_at, e.reimburses_entry_id`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -176,6 +178,9 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
   // Ubah = ganti-penuh: nilai talangan sekarang harus ikut terkirim apa adanya.
   if (row.reimbursable) vm.reimbursable = true;
+  if (kind === 'space_transfer') vm.spaceKind = row.space_kind;
+  if (row.moved_at !== null) vm.movedAt = row.moved_at;
+  if (row.reimburses_entry_id !== null) vm.reimbursesEntryId = row.reimburses_entry_id;
   return vm;
 }
 

@@ -13,6 +13,15 @@ export function entryTitleVM(e: EntryVM): string {
     case 'reimbursement':
       return e.description ?? 'Reimburse talangan';
     case 'space_transfer':
+      // S7-D1: judul dari arah dan pencatat, bukan keterangan; kaki Bersama tidak menyebut Pribadi.
+      if (e.spaceKind === 'shared') {
+        return e.direction === 'in'
+          ? `Setoran dari ${e.createdBy.name}`
+          : `Diambil oleh ${e.createdBy.name}`;
+      }
+      if (e.spaceKind === 'personal') {
+        return e.direction === 'in' ? 'Ambil dari Bersama' : 'Setor ke Bersama';
+      }
       return (
         e.sharedNote ??
         e.description ??

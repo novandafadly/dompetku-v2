@@ -52,6 +52,29 @@ export interface EntryVM {
   sharedNote?: string;
   /** Hanya pengeluaran Pribadi yang ditalangi (S7); `true` bila ya, tidak ada bila tidak. */
   reimbursable?: true;
+  /**
+   * Hanya kaki `space_transfer`: ruang pemilik kaki ini. Kaki Bersama diberi judul dengan nama
+   * pencatat, kaki Pribadi dengan arah (S7-D1); id kaki lawan tidak pernah dikirim.
+   */
+  spaceKind?: 'personal' | 'shared';
+  /** Entri asal yang sudah dipindah ke ruang lain (R16): waktu pindah; tanpa penunjuk ke tujuan. */
+  movedAt?: string;
+  /** Reimburse: id talangan yang diganti (ruang yang sama). */
+  reimbursesEntryId?: string;
+}
+
+/** Satu reimburse hidup pada sebuah talangan (daftar di Detail talangan, S7-D3). */
+export interface ReimbursementItemVM {
+  id: string;
+  occurredOn: IsoDate;
+  amount: Rupiah;
+}
+
+/** Status penggantian satu talangan hidup: Σ reimburse hidup dan sisanya. */
+export interface TalanganVM {
+  items: ReimbursementItemVM[];
+  reimbursed: Rupiah;
+  remaining: Rupiah;
 }
 
 /** Talangan hidup dengan sisa > 0 (`api.open_reimbursables`): nominal, Σ reimburse hidup, sisa. */
