@@ -16,16 +16,29 @@ export function SampahReal({
   today,
   backHref,
   data,
+  me,
 }: {
   ruang: Ruang;
   today: IsoDate;
   backHref: Route;
   data: SampahData;
+  /** User sesi: hanya untuk menghitung `restoreLockedIds` di server, tidak dikirim ke klien. */
+  me: string;
 }) {
+  // Kaki antar ruang hanya dipulihkan pencatatnya (R25; server menjawab not_found untuk yang lain).
+  const locked = data.items
+    .filter((t) => t.entry.kind === 'space_transfer' && t.entry.createdBy.id !== me)
+    .map((t) => t.entry.id);
   return (
     <section className={TRASH_WIDTH}>
       <TrashHeader ruang={ruang} backHref={backHref} />
-      <TrashListIsland ruang={ruang} today={today} items={data.items} accounts={data.accounts} />
+      <TrashListIsland
+        ruang={ruang}
+        today={today}
+        items={data.items}
+        accounts={data.accounts}
+        {...(locked.length > 0 ? { restoreLockedIds: locked } : {})}
+      />
     </section>
   );
 }

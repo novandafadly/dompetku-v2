@@ -80,6 +80,7 @@ describe('page Sampah', () => {
       today: '2026-10-31',
       backHref: '/bersama/transaksi?theme=light',
       data: DATA,
+      me: 'u',
     });
   });
 

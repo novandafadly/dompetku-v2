@@ -163,18 +163,20 @@ Rujukan: bingkai S6-D1 sampai D3 dan `EntryDetailView` (rincian `dl`, banner, ak
 
 Kode galat mesin dipetakan ke `LedgerError.code` oleh Task 8; salinan di bawah mengikat Task 10 sampai 12. Tampilan mengikuti pola S6 (galat kolom S6-C5 atau kotak S6-C2); `Coba lagi` hanya untuk galat jaringan.
 
-| Kode                      | Tampilan                                                                                | Teks                                                                                     |
-| ------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `cross_space_not_allowed` | kotak `role="alert"` di atas kaki Catat, tanpa `Coba lagi`; fokus ke chip `Ruang lain…` | `Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.`    |
-| `cross_space_kantor`      | sama; fokus ke Select `Dari dompet`                                                     | `Dompet Kantor tidak bisa ikut transfer antar ruang. Pilih dompet lain.`                 |
-| `name_taken` (dompet)     | galat kolom di bawah kolom Nama sheet Tambah dompet (pola S6-K1)                        | `Nama ini sudah dipakai dompet lain di {Ruang}.`                                         |
-| `balance_not_zero`        | di dalam dialog S7-W3 (`role="alert"`)                                                  | `{nama} masih berisi saldo, jadi belum bisa diarsipkan. Pindahkan isinya dulu.`          |
-| `not_reimbursable`        | kotak `role="alert"` di sheet reimburse atau dialog `Tidak diganti`                     | `Transaksi ini bukan talangan yang menunggu diganti. Muat ulang halaman.`                |
-| `reimbursement_exceeds`   | galat kolom di bawah `Jumlah diganti`; fokus ke kolom                                   | `Jumlah ini lebih besar dari sisa yang belum diganti. Kurangi jumlahnya.`                |
-| `reimbursement_exists`    | kotak `role="alert"` pada Batalkan/`Tidak diganti`/Ubah talangan                        | `Talangan ini sudah punya reimburse. Batalkan reimburse itu dulu.`                       |
-| `entry_moved`             | banner di Detail entri asal (S7-D2) dan, bila Pulihkan tertembus, pesan di bawah tombol | `Transaksi ini sudah dipindahkan ke {Ruang tujuan} dan tidak bisa dipulihkan dari sini.` |
-| `kind_not_movable`        | kotak `role="alert"` di sheet Pindahkan (tombol seharusnya tidak dirender)              | `Jenis transaksi ini tidak bisa dipindahkan ke ruang lain.`                              |
-| `not_creator`             | kotak `role="alert"` di dialog Batalkan/Pulihkan/Pindahkan                              | `Hanya pencatat yang bisa membatalkan, memulihkan, atau memindahkan transaksi ini.`      |
+| Kode                                         | Tampilan                                                                                | Teks                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `cross_space_not_allowed`                    | kotak `role="alert"` di atas kaki Catat, tanpa `Coba lagi`; fokus ke chip `Ruang lain…` | `Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.`    |
+| `cross_space_kantor`                         | sama; fokus ke Select `Dari dompet`                                                     | `Dompet Kantor tidak bisa ikut transfer antar ruang. Pilih dompet lain.`                 |
+| `name_taken` (dompet)                        | galat kolom di bawah kolom Nama sheet Tambah dompet (pola S6-K1)                        | `Nama ini sudah dipakai dompet lain di {Ruang}.`                                         |
+| `balance_not_zero`                           | di dalam dialog S7-W3 (`role="alert"`)                                                  | `{nama} masih berisi saldo, jadi belum bisa diarsipkan. Pindahkan isinya dulu.`          |
+| `not_reimbursable`                           | kotak `role="alert"` di sheet reimburse atau dialog `Tidak diganti`                     | `Transaksi ini bukan talangan yang menunggu diganti. Muat ulang halaman.`                |
+| `reimbursement_exceeds`                      | galat kolom di bawah `Jumlah diganti`; fokus ke kolom                                   | `Jumlah ini lebih besar dari sisa yang belum diganti. Kurangi jumlahnya.`                |
+| `reimbursement_exists`                       | kotak `role="alert"` pada Batalkan/`Tidak diganti`/Ubah talangan                        | `Talangan ini sudah punya reimburse. Batalkan reimburse itu dulu.`                       |
+| `entry_moved`                                | banner di Detail entri asal (S7-D2) dan, bila Pulihkan tertembus, pesan di bawah tombol | `Transaksi ini sudah dipindahkan ke {Ruang tujuan} dan tidak bisa dipulihkan dari sini.` |
+| `not_reimbursable` (Pulihkan reimburse)      | pesan `role="alert"` di bawah tombol Pulihkan (Sampah, Detail), gaya galat Pulihkan S6  | `Belum bisa dipulihkan. Talangannya tidak lagi menunggu diganti.`                        |
+| `reimbursement_exceeds` (Pulihkan reimburse) | sama                                                                                    | `Belum bisa dipulihkan. Sisa talangannya tidak cukup untuk reimburse ini.`               |
+| `kind_not_movable`                           | kotak `role="alert"` di sheet Pindahkan (tombol seharusnya tidak dirender)              | `Jenis transaksi ini tidak bisa dipindahkan ke ruang lain.`                              |
+| `not_creator`                                | kotak `role="alert"` di dialog Batalkan/Pulihkan/Pindahkan                              | `Hanya pencatat yang bisa membatalkan, memulihkan, atau memindahkan transaksi ini.`      |
 
 ## Salinan final S7 (mengikat Task 10 sampai 14)
 

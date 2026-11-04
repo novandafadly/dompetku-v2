@@ -38,6 +38,7 @@ export function TrashList({
   accounts,
   restore,
   onConflict,
+  restoreLockedIds,
 }: {
   ruang: Ruang;
   today: IsoDate;
@@ -47,22 +48,33 @@ export function TrashList({
   restore: RestoreFn;
   /** Konflik versi: pemanggil memuat ulang daftar. */
   onConflict?: () => void;
+  /**
+   * Entri yang hanya bisa dipulihkan pencatatnya (kaki antar ruang milik anggota lain, S7-D1/R25):
+   * tombol diganti `Hanya {Nama} yang bisa memulihkan.` seperti Detail. Dihitung server.
+   */
+  restoreLockedIds?: readonly string[] | undefined;
 }) {
   return (
     <TrashListView
       today={today}
       items={items}
-      restore={({ entry }, slot) => (
-        <RestoreControl
-          ruang={ruang}
-          entry={entry}
-          account={accounts.find((a) => a.id === entry.accountId)}
-          restore={restore}
-          labelSuffix={slot.labelSuffix}
-          onRestored={slot.onRestored}
-          onConflict={onConflict}
-        />
-      )}
+      restore={({ entry }, slot) =>
+        restoreLockedIds?.includes(entry.id) === true ? (
+          <p className="text-meta font-medium text-text-muted">
+            {`Hanya ${entry.createdBy.name} yang bisa memulihkan.`}
+          </p>
+        ) : (
+          <RestoreControl
+            ruang={ruang}
+            entry={entry}
+            account={accounts.find((a) => a.id === entry.accountId)}
+            restore={restore}
+            labelSuffix={slot.labelSuffix}
+            onRestored={slot.onRestored}
+            onConflict={onConflict}
+          />
+        )
+      }
     />
   );
 }

@@ -56,6 +56,13 @@ export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'):
   }
   if (code === 'network') return 'Belum bisa dipulihkan. Periksa koneksi lalu coba lagi.';
   if (code === 'account_archived') return 'Belum bisa dipulihkan. Dompetnya sudah diarsipkan.';
+  // Reimburse yang dipulihkan harus tetap sah (0110): talangannya hidup dan sisanya cukup.
+  if (code === 'not_reimbursable') {
+    return 'Belum bisa dipulihkan. Talangannya tidak lagi menunggu diganti.';
+  }
+  if (code === 'reimbursement_exceeds') {
+    return 'Belum bisa dipulihkan. Sisa talangannya tidak cukup untuk reimburse ini.';
+  }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }
 

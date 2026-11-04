@@ -39,6 +39,7 @@ describe('SampahReal', () => {
         today="2026-11-02"
         backHref={backHref}
         data={{ items, accounts }}
+        me="u"
       />,
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sampah · Bersama');
@@ -49,6 +50,43 @@ describe('SampahReal', () => {
       items,
       accounts,
     });
+  });
+});
+
+describe('SampahReal: Pulihkan kaki antar ruang (R25)', () => {
+  const leg = (id: string, by: string): TrashVM => ({
+    entry: {
+      ...entry,
+      id,
+      kind: 'space_transfer',
+      direction: 'in',
+      createdBy: { id: by, name: by === 'u' ? 'Novanda' : 'Farida', initial: 'F' },
+    },
+    purgeAfter: '2027-01-31T09:00:00+07:00',
+  });
+
+  it('kaki antar ruang milik anggota lain dikunci; milik sendiri dan entri biasa tidak', () => {
+    const all = [
+      leg('s-f', 'f'),
+      leg('s-u', 'u'),
+      {
+        entry: { ...entry, createdBy: { id: 'f', name: 'Farida', initial: 'F' } },
+        purgeAfter: '2027-01-31T09:00:00+07:00',
+      },
+    ];
+    render(
+      <SampahReal
+        ruang="bersama"
+        today="2026-11-02"
+        backHref={backHref}
+        data={{ items: all, accounts }}
+        me="u"
+      />,
+    );
+    const props = island.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(props.restoreLockedIds).toEqual(['s-f']);
+    // Id user sesi tidak ikut ke pulau klien.
+    expect(JSON.stringify(props)).not.toContain('"me"');
   });
 });
 
