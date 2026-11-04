@@ -38,3 +38,6 @@ Task 5: implementasi commit 3519298 (playwright.bersama.config port 3302, fixtur
 Task 5: review (task) → Needs fixes (2 Important: fixture kanari tidak idempoten saat worker restart (nama dompet unik 0109); kerangka s8.spec bisa lulus karena hal salah (tanpa kontrol positif kanari F, tanpa bukti F login/anggota)). Port 3302 tidak bentrok (auth 3300, ledger 3301, README db).
 Task 5: minor (deferred): PASSWORD dan registerOwner diduplikasi dari fixture ledger (ekstrak helper bersama nanti).
 Task 5: minor (deferred): `cp -r public .next/standalone/apps/web/public` bisa bersarang pada run lokal berulang (pola sama dengan config ledger).
+Task 5: fix round 1/5 (2 addressed, 0 open — seedKanari idempoten per (ruang, nama/keterangan); kerangka s8.spec dengan kontrol positif kanari F, toHaveURL tiap navigasi, heading Beranda, DB 2 anggota; commits 3081761..49cb1e2). Re-review: semua ADDRESSED, tanpa breakage baru.
+Task 5: minor (deferred): `adminRows` di e2e-bersama/fixtures.ts menduplikasi `adminQuery` e2e-ledger.
+Task 5: complete (commits 0026439..49cb1e2, review clean)
