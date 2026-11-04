@@ -243,7 +243,12 @@ select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(),
 select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, %s)$$, :'t9',
   tests.owner_val(null, format($q$select version from app.entries where id = %L$q$, :'t9'))));
 select tests.clock_at('2026-06-19 10:00+07');  -- +91 hari
-select ok(tests.worker_val(null, 'select jobs.purge_voided()')::int >= 2, 'purge_voided berjalan');
+-- Semua entri batal > 90 hari di berkas ini tidak punya dependen aktif, jadi satu putaran menghapus
+-- semuanya. Definisi 0104 (satu lintasan) menyisakan t9 dan mengembalikan satu kurang.
+select tests.owner_val(null, $$select count(*) from app.entries where voided_at < app.now() - interval '90 days'$$)
+  as old_voided \gset
+select is(tests.worker_val(null, 'select jobs.purge_voided()'), :'old_voided',
+  'purge_voided menghapus semua entri batal > 90 hari dalam satu putaran');
 select is(tests.owner_val(null, format($$select (select count(*) from app.entries where id in (%1$L, %2$L)) || ' '
   || (select count(*) from app.entry_tombstones where entry_id in (%1$L, %2$L))$$, :'t9', :'r9')),
   '0 2', 'reimburse batal dan talangannya dipurge dalam satu putaran (dua tombstone)');
