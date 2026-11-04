@@ -219,9 +219,25 @@ test('setor Pribadi → Bersama: rute Bersama tanpa dompet, keterangan, dan id k
   ];
   const expectClean = async (label: string) => {
     for (const path of bersamaPaths) {
-      const html = await (await page.request.get(path)).text();
-      const rsc = await (await page.request.get(path, { headers: { RSC: '1' } })).text();
+      // Kontrol positif per respons: sesi kedaluwarsa (alih ke /masuk) atau halaman galat tidak
+      // boleh lulus palsu hanya karena kanari tidak ada di sana.
+      const htmlRes = await page.request.get(path);
+      const rscRes = await page.request.get(path, { headers: { RSC: '1' } });
+      for (const res of [htmlRes, rscRes]) {
+        expect(res.status(), `${label} ${path}`).toBe(200);
+        expect(new URL(res.url()).pathname, `${label} ${path}`).not.toBe('/masuk');
+      }
+      expect(htmlRes.headers()['content-type'] ?? '', path).toContain('text/html');
+      expect(rscRes.headers()['content-type'] ?? '', path).toContain('text/x-component');
+      const html = await htmlRes.text();
+      const rsc = await rscRes.text();
       expect(html, path).toContain('Bersama');
+      if (path === `/bersama/transaksi/${legs.bersama.id}`) {
+        expect(html.includes(legs.bersama.id), `${label} ${path}: id kaki Bersama (HTML)`).toBe(
+          true,
+        );
+        expect(rsc.includes(legs.bersama.id), `${label} ${path}: id kaki Bersama (RSC)`).toBe(true);
+      }
       for (const body of [html, rsc])
         for (const k of kanari) expect(body.includes(k), `${label} ${path}: ${k}`).toBe(false);
     }
@@ -253,6 +269,8 @@ test('setor Pribadi → Bersama: rute Bersama tanpa dompet, keterangan, dan id k
     await expect(page).toHaveURL(new RegExp(`/bersama/transaksi/${legs.bersama.id}$`));
   });
   expectNoKanari(nav);
+  // Kontrol positif: flight Detail kaki Bersama benar-benar tertangkap pada navigasi klien.
+  expect(nav.bodies.some((b) => b.includes(legs.bersama.id))).toBe(true);
   // Muat ulang Detail kaki masuk (dokumen + RSC dari server, bukan cache klien).
   expectNoKanari(await bersamaResponses(page, () => page.reload()));
   // Detail kaki masuk: dompet Bersama sendiri (R9), bukan dompet Pribadi.

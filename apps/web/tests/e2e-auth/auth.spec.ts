@@ -789,6 +789,12 @@ test('pemilik: ruang Bersama lengkap, undangan diterima', async () => {
   await ownerPage.goto('/undang');
   await expect(ownerPage.getByText('Ruang Bersama sudah berisi dua orang.')).toBeVisible();
   await expect(ownerPage.getByText('Diterima')).toBeVisible();
+  // S7-B1 "Aturan hilang": anggota ≥ 2, tidak ada ajakan Undang Farida di Bersama.
+  for (const page of [ownerPage, partnerPage]) {
+    await page.goto('/bersama/beranda');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Undang Farida/ })).toHaveCount(0);
+  }
 });
 
 test('pasangan: keluar, masuk lagi dengan kata sandi + TOTP', async () => {

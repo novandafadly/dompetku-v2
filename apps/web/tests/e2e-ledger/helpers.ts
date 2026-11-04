@@ -92,11 +92,18 @@ export async function catatCepat(
   return tapCount(page);
 }
 
+/** Escape karakter khusus regex pada teks literal (mis. nama dompet). */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Saldo dompet `wallet` dari layar Dompet ruang itu (bertanda: `−Rp` = negatif). */
 export async function walletBalance(page: Page, ruang: Ruang, wallet: string): Promise<number> {
   await page.goto(`/${ruang}/dompet`);
   // Tautan dompet (namanya diawali nama dompet), bukan baris Menunggu reimburse yang menyebutnya.
-  const link = page.getByRole('main').getByRole('link', { name: new RegExp(`^${wallet} `) });
+  const link = page
+    .getByRole('main')
+    .getByRole('link', { name: new RegExp(`^${escapeRegExp(wallet)} `) });
   const m = /(−?)Rp\s([\d.]+)/.exec(await link.innerText());
   if (!m) throw new Error('saldo tidak terbaca');
   const n = Number((m[2] ?? '').replaceAll('.', ''));
