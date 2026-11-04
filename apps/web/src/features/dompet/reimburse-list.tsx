@@ -49,7 +49,8 @@ export function waitingItems(
 
 /**
  * Baris HP (< 600): keterangan + meta penuh lebar (meta boleh turun baris), nominal di baris
- * sendiri seperti S6-S1; tablet ke atas satu baris.
+ * sendiri sejajar kolom teks (ubin 40 + jarak 12 = `ml-13`, seperti TxRow < 360); tablet ke atas
+ * satu baris.
  */
 function WaitingRow({ item }: { item: WaitingItem }) {
   return (
@@ -75,7 +76,7 @@ function WaitingRow({ item }: { item: WaitingItem }) {
             ) : null}
           </span>
         </span>{' '}
-        <MoneyText value={item.remaining} kind="neutral" className="shrink-0" />
+        <MoneyText value={item.remaining} kind="neutral" className="ml-13 shrink-0 tablet:ml-0" />
       </Link>
     </li>
   );

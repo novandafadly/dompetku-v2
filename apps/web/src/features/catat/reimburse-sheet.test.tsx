@@ -214,7 +214,7 @@ describe('NotReimbursedDialog (S7-D3)', () => {
     const dialog = await screen.findByRole('alertdialog', { name: 'Tandai tidak diganti?' });
     expect(
       within(dialog).getByText(
-        /Pengeluaran ini jadi pengeluaran pribadi biasa dan masuk hitungan Pribadi\. Bisa ditandai talangan lagi lewat Ubah\./,
+        /Pengeluaran ini jadi pengeluaran pribadi biasa dan masuk hitungan Pribadi\./,
       ),
     ).toBeTruthy();
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Kembali' }));

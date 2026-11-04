@@ -54,8 +54,7 @@ export const REIMBURSE_COPY = {
   exists: 'Talangan ini sudah punya reimburse. Batalkan reimburse itu dulu.',
   undoFailed: 'Belum bisa diurungkan. Buka reimburse itu untuk membatalkannya.',
   notTitle: 'Tandai tidak diganti?',
-  notBody:
-    'Pengeluaran ini jadi pengeluaran pribadi biasa dan masuk hitungan Pribadi. Bisa ditandai talangan lagi lewat Ubah.',
+  notBody: 'Pengeluaran ini jadi pengeluaran pribadi biasa dan masuk hitungan Pribadi.',
   notConfirm: 'Tandai tidak diganti',
   notDone: 'Ditandai tidak diganti di Pribadi',
 } as const;
