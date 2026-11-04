@@ -1,0 +1,242 @@
+# Bingkai desain S8 (feed Aktivitas Bersama, Kontribusi, Farida bergabung, biaya kaki keluar Bersama)
+
+Gerbang awal S8 (IPD §0 butir 3, §5 S8; DBD §9 baris 5 dan 6). Bingkai ini ditulis agen mengikuti pola Panel Malam (`DESIGN.md`, `docs/design/panel-malam/README.md`, token `apps/web/src/styles/tokens.css`) dan format `docs/design/s7-bingkai.md`. Alur: AFD §1 (Beranda pertama Farida), §4 (antar ruang); aturan data: BSD §1.1, §8; keputusan pemilik K1 sampai K6 (2026-11-04, sesuai rekomendasi plan; `docs/superpowers/handoff/s8-ledger.md`). ID `S8-*` dirujuk Task 4, 6, 7, 8, 9, 10, 12 rencana S8. Bingkai ini tekstual: layar baru belum ada, jadi tidak ada screenshot (R8 S7); foto layar jadi diambil Task 12 dari mode nyata (`e2e:bersama` `SCREENS=1`). Kursi design reviewer dijalankan controller sesudah berkas ini diserahkan; self-review agen ada di bagian "Self-review".
+
+Semua bingkai memakai ulang komponen yang sudah ada: `ListCard` (+ `note`, `link`), `EmptyLine`, `EmptyState`/`ErrorState`, `BackLink`, `PageHeader`, `Button`/`buttonClass`, `MoneyText`, `TxRow` (+ slot `status`), `DetailRow`, `OnboardingChecklistView`, `focusRing`, `card`, `rowDivider`. Ikon yang sudah ada: `users-three`, `hand-coins`, `arrow-right`, `warning-circle`, `user-plus`, `clock`. Tidak ada token, radius, atau keluarga ikon baru. **Satu komponen presentasional baru:** `ActivityItemRow` (Server Component, `features/bersama/`), alasan di bagian "Budget JS".
+
+## Fakta kode dan produksi yang membentuk bingkai
+
+- **Produksi:** Farida sudah mendaftar dan masuk, Bersama sudah berisi dua anggota, jadi B1 (S7-B1) tidak tampil di produksi (ledger S8). Bingkai S8-O1/O2/B1a tetap dibuat: (a) Farida sudah melihat Beranda dengan salinan S7 yang masih menulis "Farida" di layarnya sendiri (lihat bagian "Salinan di layar Farida"), (b) e2e dua user dan lingkungan baru memakai keadaan itu.
+- **Nama di layar:** semua nama orang berasal dari roster (`app.space_roster`: `display_name`, `initial`), tidak ada "Farida"/"Novanda" tetap di layar milik orang itu sendiri. Pengecualian yang sah dan tidak diubah: layar khusus pemilik (`/undang`, kartu ajakan B1, langkah checklist `Undang Farida`, kategori awal `Kontribusi Farida`, footer email).
+- **Judul peristiwa memakai nama, bukan `kamu`** (sama untuk kedua anggota; pola judul S7-D1): Farida melihat `Farida · mencatat pengeluaran …` untuk catatannya sendiri.
+- **Bagian yang berubah di Beranda nyata sejak S7:** `BerandaData.bersama` hanya memuat `members`, `isOwner`, `empty`, `pendingInvite`. Salinan berbasis roster butuh **nama anggota lain** (`partner`); itu tambahan antarmuka untuk Task 4 (lihat "Pertanyaan dan konflik" butir 3).
+
+## Aturan bersama semua bingkai
+
+Aturan bersama S6 dan S7 berlaku tanpa perubahan (ruang selalu tertulis; status = ikon + teks; target ≥ 44 dan jarak ≥ 8; tidak ada aksi hover; 320 px tanpa gulir horizontal termasuk `Rp 12.345.678.900`; kerangka HP/tablet/laptop; salinan galat tanpa nominal). Tambahan S8:
+
+- **Batas privasi feed dan Kontribusi (K1, kriteria keluar IPD).** Tidak ada di markup, payload RSC, `aria-label`, `title`, tautan, maupun log: nama dompet (juga dompet Bersama), `account_id`, `link_id`/`linkedEntryId`, id entri ruang lain, deskripsi kaki antar ruang, baris atau kanari Pribadi. Satu-satunya teks bebas dari kaki antar ruang adalah `shared_note`. Teks baris hanya boleh tersusun dari: nama pelaku, kata kerja tetap, `description`/`shared_note` entri Bersama itu sendiri, nama kategori Bersama, dan nominal.
+- **Tanpa persentase, peringkat, atau warna menang/kalah** di Kontribusi (K2). Angka nol netral (`text-muted`), bukan `danger`.
+- **Panah bukan satu-satunya penanda.** Setiap `→` aria-hidden dan diganti teks `sr-only` (`dari … menjadi …`).
+- **Status = teks.** Batal, pulih, dan dipindah ditulis sebagai kata kerja di kalimat, bukan warna atau coretan.
+- **Target 44 px.** Seluruh baris aktivitas adalah satu tautan (min tinggi 62 px, sama dengan `ActivityRow` yang ada), `Lihat semua` dan `Muat sebelumnya` 44 px.
+- **Nama panjang dan keterangan panjang.** Nama pelaku `break-words` tanpa dipotong; kalimat dibatasi `line-clamp-3` (teks penuh ada di Detail, tempat baris menaut). Nominal 12 digit `nowrap` dan tidak pernah dipotong.
+- **Tanpa JS klien baru di mode nyata** (Aturan budget S8): kartu, baris, halaman Aktivitas, dan kartu Kontribusi nyata adalah Server Component; tidak ada hover-only, tidak ada fokus programatik.
+- **Mode prototipe** (`isPrototype()`) tidak berubah perilaku; `ActivityFeed` demo tetap seperti sekarang (lihat butir S8-A1 dan "Budget JS").
+
+## Aktivitas
+
+### S8-A1 · Kartu Aktivitas di Beranda Bersama (anggota ≥ 2)
+
+- **Tujuan:** Novanda dan Farida melihat apa yang dicatat berdua, siapa yang mengubah apa, tanpa membuka Transaksi.
+- **Tata letak:** `ListCard` judul `Aktivitas` (ikon `users-three` 18), tautan `Lihat semua` (K5, `link={{ href: /bersama/aktivitas, label: 'Lihat semua', srLabel: 'aktivitas Bersama' }}`) tampil bila ada ≥ 1 baris. Isi: tepat 5 baris terbaru (`ActivityItemRow`, lihat S8-A2 untuk teks). **Anatomi baris:** satu tautan penuh ke Detail entri (`min-h-15.5`, `py-2.5`, `-mx-4 px-4` agar fokus selebar kartu, garis pemisah `rowDivider`); kiri avatar 36 (N netral `surface-3`/`text`, anggota violet `bersama-tint`/`bersama`, ditentukan peran, bukan huruf; `aria-hidden`); tengah kolom `min-w-0 flex-1`: (1) kalimat 14/500 `text` dengan nama 14/700, `Nama · kalimat`, `line-clamp-3`; (2) baris perubahan 13/500 `text-soft` tabular bila ada (lihat A2), maksimum dua baris; (3) waktu 11/500 `text-muted`: `{dayLabel} · {HH.mm}` (WIB, sama dengan prototipe `Hari ini · 10.32`); kanan nominal `MoneyText` (tanpa tanda, nominal sesudah peristiwa; kosong bila baris perubahan nominal memuatnya, lihat A2). Bila transaksi bertanggal lain dari hari peristiwa (create/restore dicatat mundur), baris waktu ditambah ` · tanggal {shortDateLabel}` (mis. `Hari ini · 14.05 · tanggal 26 Okt`).
+- **Keadaan kosong, dua anggota:** `EmptyLine` `Belum ada aktivitas. Yang kamu dan {Nama} catat di Bersama akan muncul di sini, terbaru di atas.` `{Nama}` = anggota lain dari roster (Novanda melihat `Farida`, Farida melihat `Novanda`). Tanpa link `Lihat semua`. (Solo tetap `BersamaAktivitasKosong` S7-B1: tanpa nama.)
+- **Urutan, mode nyata, anggota ≥ 2:** HP satu kolom: Aman → `Tanpa pengeluaran` → checklist (bila belum selesai semua) → **Kontribusi (S8-K1)** → **Aktivitas** → Terakhir. Laptop: kolom kiri = Aman, Tanpa pengeluaran, checklist, Kontribusi; kolom kanan = **Aktivitas di atas Terakhir**, sama dengan prototipe (kolom kanan, di atas Terakhir). Solo tetap S7 (Aktivitas kosong di bawah Terakhir). Pribadi: tidak ada kartu ini.
+- **Prototipe:** `ActivityFeed` demo tetap persis (tanpa `Lihat semua`, tanpa tautan baris, tanpa baris perubahan). Satu-satunya perubahan yang diizinkan: salinan kosong dua anggota (nama dari roster demo bila perlu). Tidak menambah komponen ke bundel Beranda prototipe selain yang dimuat malas.
+- **Komponen:** `ListCard`, `EmptyLine`, `ActivityItemRow`, `Link`, `MoneyText`.
+- **Token:** `surface`, `hairline`, `text`, `text-soft`, `text-muted`, `bersama`/`bersama-tint`, `surface-3`, `accent-text` (tautan), `focus`.
+- **ARIA:** kartu `section aria-labelledby`; daftar `ul` (bukan `role=list` palsu); nama aksesibel tiap tautan = kalimat lengkap + waktu (avatar `aria-hidden`); baris perubahan memakai teks `sr-only` (A2).
+- **Fokus:** tab normal; tidak ada fokus programatik.
+- **Galat:** lihat "Salinan galat S8".
+
+### S8-A2 · Matriks teks peristiwa (op × kind × arah)
+
+**Sumber:** satu baris `api.shared_activity` (`op`, `kind`, `direction`, `amount`, `before_amount`, `category_id`, `before_category_id`, `description`, `shared_note`, `moved`). **Bentuk:** `{Nama} · {kalimat}`; nama dari roster (`actor_id`), bukan `kamu`. `{J}` = judul = `description`, bila kosong nama kategori (`ctx.categoryName(category_id)`), bila kosong `Tanpa kategori`. Fungsi murni `activityText(row, ctx) → { text, change?: string[], srText? }` (Task 4) mengikuti tabel ini; setiap sel di bawah adalah satu kasus uji. **Tidak pernah** memuat nama dompet, string dari field selain `description`, `shared_note`, nama kategori, nominal, dan nama anggota.
+
+| kind (arah)                    | `create`                                                            | `update`                           | `void`                                                                             | `restore`                                         |
+| ------------------------------ | ------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `expense`                      | `mencatat pengeluaran {J}`                                          | `mengubah {J}` (+ baris perubahan) | `membatalkan pengeluaran {J}`                                                      | `memulihkan pengeluaran {J}`                      |
+| `income`                       | `mencatat pemasukan {J}`                                            | `mengubah {J}` (+ baris perubahan) | `membatalkan pemasukan {J}`                                                        | `memulihkan pemasukan {J}`                        |
+| `transfer` (dalam Bersama)     | `mencatat transfer antar dompet` + ` · {description}` bila ada      | tidak terjadi (lihat fallback)     | `membatalkan transfer antar dompet`                                                | `memulihkan transfer antar dompet`                |
+| `space_transfer` `in` (setor)  | `menyetor ke Bersama` + ` · {shared_note}` bila ada                 | tidak terjadi (lihat fallback)     | `membatalkan setoran ke Bersama`                                                   | `memulihkan setoran ke Bersama`                   |
+| `space_transfer` `out` (ambil) | `mengambil dari Bersama` + ` · {shared_note}` bila ada              | tidak terjadi (lihat fallback)     | `membatalkan pengambilan dari Bersama`                                             | `memulihkan pengambilan dari Bersama`             |
+| `adjustment` `in`              | `mencocokkan saldo (naik)`                                          | tidak terjadi (lihat fallback)     | `membatalkan pencocokan saldo`                                                     | `memulihkan pencocokan saldo`                     |
+| `adjustment` `out`             | `mencocokkan saldo (turun)`                                         | tidak terjadi (lihat fallback)     | `membatalkan pencocokan saldo`                                                     | `memulihkan pencocokan saldo`                     |
+| entri yang dipindah (`moved`)  | (tidak ada: kaki yang dibuat di ruang tujuan adalah `create` biasa) | (tidak ada)                        | **`memindahkan transaksi ke ruang lain`** (R26): tanpa `{J}`, nominal tetap tampil | (tidak ada; entri dipindah tidak bisa dipulihkan) |
+
+- **Mengapa `mencatat transfer antar dompet`, bukan `memindahkan`:** menghindari tabrakan dengan R26 (`memindahkan transaksi ke ruang lain`). Keterangan transfer dalam Bersama adalah teks Bersama sendiri, aman.
+- **Baris perubahan hanya untuk `update`** (versi sebelumnya = `version − 1` entri yang sama, bukan versi pertama):
+  - Nominal berubah (`before_amount` ≠ `amount`): baris `Rp 50.000 → Rp 75.000`, nominal kanan **dikosongkan** (kedua angka sudah di baris itu; tidak ada angka ganda).
+  - Kategori berubah (`before_category_id` ≠ `category_id`): baris `Makan → Belanja`; kategori hilang atau tidak dikenal = `Tanpa kategori`.
+  - Keduanya berubah: dua baris, nominal dulu. Tidak ada yang berubah selain keterangan, tanggal, atau dompet (nama dompet tidak pernah ditampilkan, K1): hanya `mengubah {J}`, nominal kanan = nominal sesudah.
+  - **Aksesibilitas:** baris tampil `aria-hidden` dan `srText` `sr-only` menggantikannya: `dari Rp 50.000 menjadi Rp 75.000` dan `dari Makan menjadi Belanja` (kata `dari`/`menjadi` ada di teks, panah hanya dekorasi).
+- **Fallback (kombinasi yang DB tidak menghasilkan, tetap tidak boleh jatuh ke string mentah):** `memperbarui transaksi` (tanpa `{J}`), nominal kanan bila ada. Termasuk `reimbursement` dan `opening_balance` (yang pertama tidak ada di Bersama, yang kedua dikeluarkan fungsi).
+- **Pelaku tidak ada di roster** (anggota terhapus, tidak terjadi hari ini): nama `Anggota`, avatar `?`, avatar netral.
+- **Nominal kanan:** `amount` sesudah peristiwa, tanpa tanda dan tanpa warna pemasukan/pengeluaran (kalimat sudah menyebut jenisnya). Untuk `void`/`restore` nominal entri itu.
+- **Contoh render:**
+  - `Novanda · menyetor ke Bersama · Belanja bulanan` + `Hari ini · 10.32` + `Rp 500.000`
+  - `Farida · mengubah Makan siang` + `Rp 50.000 → Rp 75.000` + `Kemarin · 19.04` (tanpa nominal kanan)
+  - `Farida · membatalkan pengeluaran Listrik` + `Sen, 26 Okt · 08.10` + `Rp 450.000`
+  - `Novanda · memindahkan transaksi ke ruang lain` + `Hari ini · 14.05` + `Rp 85.000`
+
+### S8-A3 · Halaman Aktivitas `/bersama/aktivitas` (K5)
+
+- **Tujuan:** riwayat perubahan lengkap, terutama untuk memeriksa sebelum/sesudah yang tergeser dari lima baris Beranda.
+- **Tata letak:** halaman biasa di bawah `[ruang]` (kerangka HP/tablet/laptop yang ada, isi maks 720 di tablet dan `laptop:max-w-180`). Urutan: `BackLink` `Beranda` (ke `/bersama/beranda`), `PageHeader` `Aktivitas` (judul sr-only di HP, terlihat di laptop seperti halaman lain), lalu kelompok per hari. **Kelompok** (pola `EntryListView`): `h3` per hari 13/700 `text-soft` (`dayLabel` dari tanggal WIB peristiwa, bukan `occurred_on`), di bawahnya satu kartu `ul` berisi baris `ActivityItemRow`; di halaman ini baris waktu hanya `HH.mm` (hari sudah di judul kelompok). **Halaman berisi paling banyak 30 baris**, urutan turun menurut waktu peristiwa. Hari yang terbelah antar halaman diberi judul lagi di halaman berikutnya.
+- **Paginasi tanpa JS:** `Muat sebelumnya` = tautan sekunder 44 px di bawah daftar, `?sebelum=<kursor>` (kursor `parseCursor`: rusak atau tidak sah = halaman pertama, tidak pernah 404/500), hanya bila ada baris lebih lama. Di halaman berkursor, di atas daftar ada tautan `Kembali ke terbaru` (44 px, pola `BackLink`) ke URL tanpa kursor. Halaman tidak mengakumulasi; tombol kembali browser bekerja.
+- **Keadaan kosong (dua anggota, belum ada peristiwa):** `EmptyState` ikon `users-three`, judul `Belum ada aktivitas.`, deskripsi `Yang kamu dan {Nama} catat di Bersama akan muncul di sini, terbaru di atas.` (nama roster). **Bersama solo:** halaman tetap ada dan menampilkan keadaan kosong S7-B1 (`Belum ada aktivitas. Yang dicatat di Bersama akan muncul di sini, terbaru di atas.`) tanpa memuat feed (sejalan kartu Beranda solo; lihat "Pertanyaan dan konflik" butir 8).
+- **Pribadi:** tidak ada tab, tautan, atau rute; `/pribadi/aktivitas` = 404 standar.
+- **Prototipe:** rekomendasi `notFound()` (nol byte, pratinjau tidak butuh; kartu demo tidak menautkan ke sana); lihat butir 9.
+- **Komponen:** `BackLink`, `PageHeader`, `ActivityItemRow`, `EmptyState`, `buttonClass('secondary', 'md')`.
+- **Token:** `text-soft`, `surface`, `hairline`, `accent-text`.
+- **ARIA:** `h2` sr-only `Daftar aktivitas` (pola `Daftar transaksi`), tiap kelompok `section aria-labelledby` + `ul aria-label` `Aktivitas {hari}`; `Muat sebelumnya` bernama sendiri (`aria-label` tidak perlu).
+- **Fokus:** tanpa JS tidak ada fokus programatik; navigasi `?sebelum=` memuat halaman baru dari atas (perilaku Next).
+- **Cache:** `Cache-Control: no-store` seperti rute berdata lain.
+
+## Kontribusi
+
+### S8-K1 · Kartu Kontribusi di Beranda Bersama
+
+- **Tujuan:** menunjukkan siapa menyetor berapa ke Bersama bulan ini, tanpa membandingkan orang (K2).
+- **Tata letak:** `ListCard` judul `Kontribusi {Bulan}` (mis. `Kontribusi November`, `monthName` periode; ikon `hand-coins` 18), `note` 13/500 `text-muted` `Setoran dan pengambilan antar ruang bulan ini.` **Satu blok per anggota**, urutan tetap pemilik lalu anggota (sama untuk kedua pembaca, bukan "kamu dulu"): baris judul = avatar 36 (aturan peran A1) + nama 15/700; di bawahnya, rata kiri 48 px (lebar avatar + jarak), daftar dua kolom label/nilai: `Setor` (label 13/500 `text-soft`, nilai `MoneyText` 15/800 `text`) dan, **hanya bila `Diambil` > 0**, `Diambil` (label sama, nilai `MoneyText` 13/500 `text-soft`). Nilai rata kanan, label rata kiri; di 320 px nilai 12 digit (±130 px) dan label muat satu baris tanpa membungkus. Anggota tanpa setoran tetap muncul: `Setor Rp 0` dengan warna `text-muted` (netral; `Rp 0` di sini bukan "angka palsu" karena nol memang jawabannya).
+- **Tidak ada:** persentase, peringkat, bilah, warna aksen/hijau/merah, "lebih banyak/sedikit", angka bersih. `Setor` = Σ kaki masuk Bersama; `Diambil` = Σ kaki keluar Bersama; biaya transfer tidak dihitung (K2).
+- **Kapan tampil:** hanya Bersama dengan anggota ≥ 2; Bersama solo dan Pribadi tidak merender kartu ini. Periode = bulan kalender WIB berjalan (K3); bulan yang tidak berganti nama di tengah muat (hari terakhir 23.59 → 00.00): kartu mengikuti `todayWIB()` saat muat.
+- **Prototipe:** kartu demo `ContributionDemo` dimuat malas (definisi K2 atas seed). **Fallback anggaran:** bila Beranda prototipe > 162 kB walau dimuat malas, kartu demo tidak ditambahkan (mode nyata tetap punya; galeri `/dev/ui` memotret bingkainya) dan Task 6 melapor itu.
+- **Komponen:** `ListCard`, `MoneyText`, `dl`.
+- **Token:** `text`, `text-soft`, `text-muted`, `bersama`/`bersama-tint`, `surface-3`.
+- **ARIA:** `section aria-labelledby`; daftar anggota `ul`; tiap anggota `li` dengan `dl` (`dt` `Setor`, `dd` nominal); tidak ada `role=img`/grafik.
+- **Fokus:** tidak ada elemen interaktif.
+
+## Onboarding Farida
+
+### S8-O1 · Beranda pertama Farida di Pribadi (kosong)
+
+- **Tujuan:** AFD §1: Farida mendarat di `/pribadi/beranda` tanpa angka palsu, dengan tiga langkah yang jelas dan tanpa jejak pemilik.
+- **Tata letak (HP, satu kolom):** kartu utama keadaan B3 (`SafeToSpendEmptyView` ruang Pribadi): `Tambahkan dompet operasional untuk melihat berapa yang aman dipakai bulan ini.` + tombol primer `Tambah dompet` (tidak pernah `Rp 0`); checklist `Mulai dari sini` dengan `1 dari 3 selesai`: `Akun aman` (selesai, ikon `check-circle` fill, `Selesai`), `Tambah dompet sehari-hari` (›, ke `/pribadi/dompet?tambah=1`), `Catat satu pengeluaran` (›, membuka Catat; tanpa dompet Catat memberi S6-C6 `Belum ada dompet di Pribadi…` + `Tambah dompet`); kartu `Terakhir` kosong `Belum ada transaksi. Catatan pertamamu akan muncul di sini.` Tanpa kartu ajakan, **tanpa langkah `Undang Farida`**, tanpa langkah pengganti, tanpa pengantar (pengantar checklist hanya untuk Bersama), tanpa kartu sambutan baru.
+- **Laptop:** satu kolom `laptop:max-w-180` (keadaan tanpa dompet operasional memang satu kolom, sama dengan S6).
+- **Aturan hitung:** `Akun aman` selalu selesai (sesi penuh). Setelah dompet dan pengeluaran ada, checklist hilang. Penyebut selalu 3 untuk Farida; untuk Novanda 4 selama Bersama belum berisi dua orang, lalu langkah `Undang Farida` **hilang** (bukan "selesai"), sehingga penyebut jadi 3 (lihat butir 10).
+- **Komponen:** `SafeToSpendEmptyView`, `OnboardingChecklistView`, `RecentEntriesView`.
+- **ARIA/Fokus:** tidak berubah dari S6/S7; langkah belum selesai membawa `sr-only` `Belum`.
+- **Salinan baru:** tidak ada (hanya memastikan tidak ada "Farida" tetap dan tidak ada langkah undang).
+
+### S8-O2 · Beranda Bersama pertama bagi Farida (dompet dan entri Novanda sudah ada)
+
+- **Tujuan:** Farida membuka Bersama yang sudah hidup dan langsung paham siapa mencatat apa, tanpa kartu yang ditujukan ke pemilik.
+- **Tata letak:** Beranda Bersama dua anggota (A1): Aman (angka Bersama), `Tanpa pengeluaran`, checklist **bila masih ada langkah belum selesai** (di ruang ini langkah dompet dan catat dihitung per ruang, bukan per orang; dengan dompet dan pengeluaran Novanda checklist sudah hilang), Kontribusi (baris Novanda dan baris Farida `Setor Rp 0`), Aktivitas (peristiwa Novanda tampil dengan nama `Novanda`), Terakhir. **Tidak ada:** B1, kartu ajakan, data atau tombol undangan (`pendingInvite` tidak ada di payload), kartu sambutan.
+- **Pengantar checklist bila tampil:** `Pengeluaran rumah tangga yang kalian bagi. {Nama} dan kamu sama-sama bisa mencatat dan mengubah di sini.` dengan `{Nama}` = anggota lain dari roster (kini `Farida dan kamu` di layar Farida sendiri adalah salah; lihat "Salinan di layar Farida").
+- **Komponen:** sama dengan A1, K1, `OnboardingChecklistView` (pengantar berprop).
+- **Fokus/ARIA:** tidak berubah.
+
+### S8-B1a · Pengantar checklist B1 tanpa pengulangan (T5)
+
+- **Tujuan:** menghapus pengulangan di Bersama solo milik pemilik: kartu ajakan sudah berkata `Farida belum bergabung di Bersama.` (atau undangan menunggu), jadi pengantar checklist tidak mengulanginya.
+- **Usulan salinan:** `Ruang untuk pengeluaran rumah tangga.` menggantikan `Ruang untuk pengeluaran rumah tangga. Sekarang hanya kamu di sini; Farida belum bergabung.` (`BERSAMA_SOLO_INTRO`), dipakai selama kartu ajakan tampil (dua keadaan: belum diundang dan undangan menunggu). Tidak ada keadaan Bersama solo tanpa kartu ajakan (Bersama solo selalu milik pemilik).
+- **Status:** **usulan; menunggu jawaban pemilik** (pertanyaan terbuka 2 plan). Bila pemilik menolak, salinan S7 tetap dan tes S7 tidak berubah. Dampak di produksi kecil (Bersama sudah dua anggota); manfaat ada di tangkapan layar portofolio dan pemasangan baru.
+
+## Detail
+
+### S8-D1a · Baris `Biaya` pada kaki keluar Bersama (utang S7 M6)
+
+- **Tujuan:** biaya transfer yang keluar dari dompet Bersama (`Diambil oleh {Nama}` dengan biaya) terlihat oleh kedua anggota, karena itu uang Bersama; saldo dompet Bersama turun sebesar nominal ditambah biaya, dan kini tidak ada yang menjelaskannya.
+- **Fakta kode:** biaya hanya dimuat untuk kaki Pribadi (`read.ts`: `space_kind = 'personal'`); DB menaruh baris `fee` di kaki **keluar** dari ruangnya (`create_transfer`): setor = kaki Pribadi, ambil = kaki Bersama. Kaki masuk tidak pernah punya biaya.
+- **Tata letak Detail, kaki keluar Bersama:** rincian seperti S7-D1 (Kategori `Antar ruang`, Dompet `{dompet Bersama}`, Tanggal, Ruang `Bersama`, Dicatat oleh, Catatan bila ada) + **`Biaya` `Rp 2.500`** (`DetailRow term="Biaya"`, urutan sama dengan kaki Pribadi: sesudah baris lain). Kaki masuk Bersama (`Setoran dari {Nama}`) tidak punya baris Biaya. Kaki Pribadi pencatat tidak menampilkan biaya Bersama dua kali (kaki masuk Pribadi `Ambil dari Bersama` tidak punya biaya).
+- **Tata letak daftar (Transaksi, Terakhir, Sampah tidak):** `TxRow` kaki keluar Bersama menambah **baris status ketiga** `Biaya Rp 2.500` (13/600 `text-muted`, tanpa ikon: ini keterangan, bukan status), memakai slot `status` yang sudah dipakai `Menunggu reimburse`; meta tetap `Antar ruang · {dompet Bersama} · {hari}` (tidak diperpanjang agar tidak terpotong `truncate` di 320). Nominal kanan tetap nominal transfer (`−Rp 100.000`), tanpa biaya digabung.
+- **Privasi:** biaya kaki keluar **Pribadi** (setor) tidak pernah tampil di ruang Bersama; fungsi pembaca menambah biaya hanya untuk `space_kind = 'shared'` dan `direction = 'out'`. Tidak ada nama dompet Pribadi.
+- **Kontribusi:** biaya tidak dihitung (K2); feed tidak menyebut biaya (peristiwa hanya jenis dan nominal transfer).
+- **Komponen:** `DetailRow`, `TxRow` slot `status`.
+- **Token:** `text-muted`.
+- **ARIA:** `dt`/`dd` standar; baris status teks biasa.
+
+## Salinan di layar Farida (temuan grep `Farida`)
+
+Layar yang bisa dilihat Farida dan masih memuat "Farida" tetap, dengan keputusan:
+
+| Berkas                                                    | Teks sekarang                                                                      | Keputusan                                                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `features/beranda/onboarding-checklist-view.tsx`          | `…Farida dan kamu sama-sama bisa mencatat dan mengubah di sini.` (Bersama, bawaan) | **Salah di layar Farida.** Pakai `{Nama} dan kamu …` dengan nama anggota lain dari roster (S8-O2). Task 8.                |
+| `features/beranda/activity-feed.tsx` (prototipe)          | `Yang kamu dan Farida catat di Bersama…`                                           | Prototipe memakai persona Novanda; salinan tetap, nama dari roster demo bila diubah (S8-A1).                              |
+| `features/beranda/bersama-views.tsx` (B1)                 | `Farida belum bergabung…`, `Undang Farida`, `BERSAMA_SOLO_INTRO`                   | Layar khusus pemilik (hanya `isOwner` dan solo); tetap. `BERSAMA_SOLO_INTRO` berubah hanya bila S8-B1a disetujui.         |
+| `_real/beranda.tsx` dan `beranda-steps.ts`                | langkah `Undang Farida`                                                            | Hanya untuk pemilik di Pribadi; tetap. Farida tidak pernah menerimanya (diuji Task 8).                                    |
+| `components/ui/category-icon-map.tsx`, kategori awal 0106 | `Kontribusi Farida` (kategori pemasukan Bersama)                                   | Nama kategori data, bukan salinan; tidak diubah. Lihat pertanyaan terbuka 3 plan; tidak dihitung sebagai Kontribusi (K4). |
+| `server/auth/mailer.ts`                                   | footer `Novanda dan Farida`                                                        | Email, bukan layar; tetap.                                                                                                |
+| `app/(auth)/_prototype/*`                                 | `Undang Farida ke ruang Bersama`, `Buka sebagai Farida`                            | Hanya prototipe.                                                                                                          |
+| `app/dev/ui/*`, `test/*`                                  | persona demo                                                                       | Galeri dan fixture; tetap.                                                                                                |
+
+## Salinan galat S8 (tanpa nominal)
+
+Galat memuat feed memakai pola `ErrorState` S6; **`Coba lagi` adalah tautan muat ulang tanpa JS** (`<a href>` biasa ke URL yang sama, memuat ulang penuh), bukan `router.refresh`, supaya rute Aktivitas tetap tanpa pulau klien. Tombol berupa `buttonClass('primary', 'md')`, 44 px.
+
+| Tempat                                                                                                        | Tampilan                                                                                                      | Teks                                                                                  |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| S8-A3, galat loader (page menangkap, `unstable_rethrow` untuk redirect/404)                                   | `ErrorState` seluruh halaman, di bawah `BackLink` dan `PageHeader`                                            | `Aktivitas belum bisa dimuat.` + `Periksa koneksi lalu coba lagi.` + `Coba lagi`      |
+| S8-A1 dan S8-K1 di Beranda, **hanya bila** Task 4 mengisolasi bacaan Bersama dengan savepoint (lihat butir 7) | baris di dalam kartu (ikon `warning-circle` fill `danger` 16 + teks 13/600 `danger`), kartu lain tetap tampil | `Aktivitas belum bisa dimuat.` / `Kontribusi belum bisa dimuat.` + tautan `Coba lagi` |
+| Kursor `?sebelum=` rusak                                                                                      | tidak ada pesan                                                                                               | halaman pertama                                                                       |
+| `/pribadi/aktivitas`, ruang tidak dikenal                                                                     | 404 standar                                                                                                   | (halaman 404 yang ada)                                                                |
+
+## Salinan final S8 (mengikat Task 4 sampai 9)
+
+| Bingkai | Teks                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S8-A1   | `Aktivitas`; `Lihat semua` (sr-only `aktivitas Bersama`); kosong dua anggota: `Belum ada aktivitas. Yang kamu dan {Nama} catat di Bersama akan muncul di sini, terbaru di atas.`                                                                                                                                                                                                                                                                                  |
+| S8-A2   | `mencatat pengeluaran {J}`, `mencatat pemasukan {J}`, `mencatat transfer antar dompet`, `menyetor ke Bersama`, `mengambil dari Bersama`, `mencocokkan saldo (naik)`/`(turun)`, `mengubah {J}`, `membatalkan …`, `memulihkan …`, `memindahkan transaksi ke ruang lain`, `memperbarui transaksi` (fallback); perubahan `Rp {lama} → Rp {baru}` (sr-only `dari … menjadi …`), `{lama} → {baru}` kategori; tanggal mundur ` · tanggal {tgl}`; pelaku hilang `Anggota` |
+| S8-A3   | `Aktivitas` (judul), `‹ Beranda`, `Muat sebelumnya`, `Kembali ke terbaru`, `Daftar aktivitas` (sr-only), `Aktivitas {hari}` (sr-only), kosong: `Belum ada aktivitas.` + `Yang kamu dan {Nama} catat di Bersama akan muncul di sini, terbaru di atas.`                                                                                                                                                                                                             |
+| S8-K1   | `Kontribusi {Bulan}`; `Setoran dan pengambilan antar ruang bulan ini.`; `Setor`; `Diambil`                                                                                                                                                                                                                                                                                                                                                                        |
+| S8-O1   | tidak ada salinan baru (tanpa `Undang Farida`, tanpa langkah pengganti)                                                                                                                                                                                                                                                                                                                                                                                           |
+| S8-O2   | pengantar checklist Bersama dua anggota: `Pengeluaran rumah tangga yang kalian bagi. {Nama} dan kamu sama-sama bisa mencatat dan mengubah di sini.`                                                                                                                                                                                                                                                                                                               |
+| S8-B1a  | usulan: `Ruang untuk pengeluaran rumah tangga.` (menunggu pemilik; bila tidak, S7 tetap)                                                                                                                                                                                                                                                                                                                                                                          |
+| S8-D1a  | `Biaya` (baris Detail); `Biaya Rp {biaya}` (baris status daftar)                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Galat   | `Aktivitas belum bisa dimuat.`, `Kontribusi belum bisa dimuat.`, `Periksa koneksi lalu coba lagi.`, `Coba lagi`                                                                                                                                                                                                                                                                                                                                                   |
+
+Salinan tetap rencana S6/S7 (Global Constraints) dan salinan S7 yang tidak disebut di sini tidak diubah. `{J}`, `{Nama}`, `{Bulan}`, `{hari}`, `{tgl}` adalah isian; tidak ada tanda seru, "Oops", atau kalimat kosong.
+
+## Budget JS dan aturan implementasi
+
+Angka dasar (main sesudah PR #18, ledger R1): Beranda prototipe 161,5 / 162 kB (headroom 0,5 kB), nyata 157,4 kB (headroom 4,6 kB). Task UI mengukur ulang dari `main` sebelum menambah apa pun dan melapor angka prototipe dan nyata untuk Beranda, Transaksi, Aktivitas; berhenti bila > 162 kB.
+
+- **Mode nyata:** `ActivityCardView`, `ContributionCardView`, halaman Aktivitas, dan `ActivityItemRow` tanpa `'use client'`; tidak mengimpor `@dompetku/demo-data`, `features/shell/demo-context`, atau modul klien; tidak ada Server Action baru. `PageHeader` dan `BackLink` sudah dipakai halaman lain (tidak menambah JS rute yang sudah memuatnya).
+- **Komponen baru, bukan mengubah `ActivityRow` prototipe.** `ActivityRow` ada di bundel Beranda prototipe (headroom 0,5 kB, sekitar 500 B gzip). Rekomendasi: `features/bersama/activity-item-row.tsx` (Server Component, berbagi kelas dari `styles.ts`) dipakai mode nyata; `ActivityRow` prototipe tidak disentuh. Bila Task 6 tetap memilih menambah prop `tone` ke `ActivityRow`, wajib ukur ulang dan lapor (lihat butir 2).
+- **Prototipe:** kartu Kontribusi demo dimuat malas (`lazy` + `Suspense`, pola `beranda-states`; `lazy`/`Suspense` sudah ada di `view.tsx`); `ActivityFeed` demo tidak berubah perilaku; halaman Aktivitas prototipe = `notFound()` (butir 9). Bila tetap > 162 kB, tidak ditambahkan.
+- **Ukuran uji layar (Task 6 sampai 8, 12):** 320, 390, 1280; gelap dan terang; nama 40 huruf; kalimat 200 karakter; `Rp 12.345.678.900` di Kontribusi dan baris; peristiwa dua baris perubahan; keadaan kosong; axe tanpa pelanggaran serius.
+
+## Keputusan agen atas nama pemilik (Task 1)
+
+Dasar: plan S8, K1 sampai K6, AFD §1, kode. Biaya bila salah ditulis di sisi masing-masing.
+
+1. **Seluruh baris aktivitas adalah satu tautan ke Detail** (Beranda dan halaman Aktivitas), bukan hanya halaman Aktivitas. Biaya bila salah: baris Beranda jadi tidak interaktif (hapus `Link`, nol perubahan data).
+2. **Nominal kanan dikosongkan bila baris perubahan memuat nominal** (tidak ada angka ganda). Biaya bila salah: satu prop di `ActivityItemRow`.
+3. **Kontribusi: urutan pemilik lalu anggota, nama bukan `kamu`**, supaya kedua anggota melihat kartu yang sama. Biaya bila salah: urutan di VM.
+4. **`mencatat transfer antar dompet`** (bukan `memindahkan dana`) agar tidak bertabrakan dengan R26.
+5. **Tanggal transaksi mundur** ditambahkan di baris waktu (` · tanggal 26 Okt`) memakai kolom `occurred_on` yang sudah diminta fungsi; tanpa itu pencatatan mundur terlihat seperti terjadi hari ini. Biaya bila salah: hapus satu cabang di `activityText`.
+6. **Biaya di daftar lewat baris status ketiga**, bukan perpanjangan meta (yang terpotong `truncate` di 320).
+7. **Kartu sambutan untuk Farida tidak ada** (Aktivitas Novanda di Bersama sudah menjadi pengantarnya).
+8. **`Kembali ke terbaru`** ditambahkan di halaman Aktivitas berkursor (plan hanya menyebut `Muat sebelumnya`).
+9. **Kartu Kontribusi tampil walau semuanya nol**, bukan diganti kalimat kosong (plan: anggota tanpa setoran tetap muncul dengan 0).
+
+## Pertanyaan dan konflik (plan terhadap dokumen/kode; rekomendasi, bukan keputusan diam-diam)
+
+1. **`Lihat semua` vs `Semua`.** Kartu `Terakhir` di kolom yang sama memakai tautan `Semua` (sr-only `transaksi`); K5 dan Task 6 memakai `Lihat semua`. Bingkai ini mengikuti plan (`Lihat semua`). **Rekomendasi:** samakan dengan `Semua` + sr-only `aktivitas Bersama` untuk konsistensi dua kartu bertetangga. Biaya: satu string.
+2. **Plan Task 6 memodifikasi `components/ui/activity-row.tsx` (prop `tone`)** padahal headroom prototipe 0,5 kB dan baris nyata butuh tautan, baris perubahan, dan 3 baris teks. **Rekomendasi:** komponen baru `ActivityItemRow` hanya untuk nyata (lihat "Budget JS"); `ActivityRow` prototipe tak berubah. Biaya: satu komponen kecil terduplikasi, nol byte di prototipe.
+3. **Antarmuka Task 4 kurang satu data.** Salinan sisi Farida (S8-A1 kosong, S8-O2 pengantar) butuh nama anggota lain, tetapi `BerandaBersama` hanya membawa `members`/`isOwner`/`empty`/`pendingInvite`. **Rekomendasi:** `BerandaBersama.partner: { name: string; initial: string } | null` dari `app.space_roster` di transaksi yang sama (tanpa koneksi tambahan); `null` bila solo.
+4. **Plan Task 6 menyebut kartu `Terbaru`; kodenya `Terakhir`.** Hanya nama; bingkai memakai `Terakhir`.
+5. **Plan Task 8 menyebut `0 dari 3`/`1 dari 3`.** `Akun aman` selalu selesai, jadi Farida paling sedikit `1 dari 3 selesai` (AFD §1 juga menulis `1 dari 3`). **Rekomendasi:** hapus `0 dari 3` dari uji.
+6. **Urutan Aktivitas vs Terakhir berbeda antar mode.** Prototipe: Aktivitas di atas Terakhir; nyata solo (S7): Aktivitas kosong di bawah Terakhir. **Rekomendasi:** dua anggota = Aktivitas di atas Terakhir di kedua mode; solo tetap S7.
+7. **Galat feed di Beranda mematikan seluruh Beranda.** Page Beranda nyata tidak menangkap galat (berbeda dari Transaksi/Dompet) dan feed dibaca di `withLedger` yang sama; galat SQL membatalkan transaksi, galat validasi Zod ketat (kolom tak dikenal ditolak) memutus Beranda Bersama secara permanen. **Rekomendasi:** feed dan Kontribusi dibaca dengan savepoint, galat disimpan sebagai keadaan kartu (salinan "Salinan galat S8"), Beranda tetap tampil; validasi Zod per baris dengan fallback `memperbarui transaksi` bukan melempar. Bila Task 4 menolak savepoint, baris kartu galat dihapus dari bingkai dan galat ikut Beranda.
+8. **A3 untuk Bersama solo belum ditentukan plan.** **Rekomendasi:** rute ada, tampil keadaan kosong S7-B1, tanpa memuat feed (kartu Beranda solo juga kosong walau Novanda punya entri). Mudah dibalik (tampilkan feed).
+9. **Halaman Aktivitas prototipe:** plan memberi dua opsi (halaman demo atau `notFound()`). **Rekomendasi:** `notFound()`, kartu demo tanpa `Lihat semua`; pemilik menilai layar nyata lewat tangkapan Task 12.
+10. **Setelah Farida bergabung, langkah `Undang Farida` hilang, bukan selesai.** Checklist Novanda turun dari 4 ke 3 langkah (AFD §1 mendeskripsikan 4 langkah). Informasi, bukan perubahan; layar tidak punya keadaan "selesai" untuk langkah itu.
+11. **S8-B1a belum dijawab pemilik** (pertanyaan terbuka 2 plan). Task 8 mengerjakannya hanya bila pemilik setuju.
+
+## Self-review terhadap DESIGN.md (agen)
+
+Diperiksa terhadap `DESIGN.md` dan README Panel Malam; reviewer controller menyusul.
+
+| Pemeriksaan                                                                                     | Hasil                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hanya token yang ada; tidak ada warna mentah, bayangan kartu, radius di luar skala              | Lolos; semua kartu `ListCard`/`card`, avatar penuh, tombol 12.                                                                                            |
+| Status = ikon + teks                                                                            | Lolos; batal, pulih, dipindah, perubahan ditulis sebagai kata kerja dan `dari … menjadi …`; galat memakai ikon `warning-circle` + teks.                   |
+| Satu aksen: lime hanya aksi utama dan teks aksen; violet hanya ruang Bersama dan avatar anggota | Lolos dengan catatan: avatar anggota violet = penanda ruang Bersama + peran, sudah dipakai prototipe; Kontribusi tidak memakai warna untuk menilai orang. |
+| Target ≥ 44, jarak ≥ 8, tanpa aksi hover                                                        | Lolos; baris 62 px, tautan 44 px.                                                                                                                         |
+| 320 px tanpa gulir; nominal 12 digit                                                            | Dirancang: label/nilai Kontribusi tidak membungkus, baris perubahan satu baris `Rp 12.345.678.900 → Rp 12.345.678.900` bisa turun baris (diuji Task 6).   |
+| Privasi K1: tanpa nama dompet, `account_id`, `link_id`, baris atau kanari Pribadi               | Lolos di rancangan: daftar bahan teks baris tertutup (aturan bersama); diuji pgTAP, int, unit, e2e (Task 2, 4, 6, 10).                                    |
+| Salinan: tanpa slop, kalimat pendek, kata kerja langsung                                        | Lolos; tidak ada tanda seru; keadaan kosong memberi tahu apa yang akan muncul.                                                                            |
+| Nama dari roster, bukan "Farida"/"Novanda" tetap di layar orang itu                             | Lolos dengan tabel "Salinan di layar Farida" (satu salinan salah ditemukan dan diperbaiki di Task 8).                                                     |
+| Budget JS                                                                                       | Lolos di rancangan (nyata tanpa JS baru; prototipe dimuat malas atau tidak ditambah); pembuktian angka di Task 6, 7, 10.                                  |
+| Kekhawatiran terbuka                                                                            | Kepadatan baris dengan dua baris perubahan di 320; baris tautan utuh + bidang fokus lebar kartu; nol `Rp 0` di Kontribusi tampak sepi (diterima, jujur).  |
+
+## Untuk kursi design reviewer
+
+Nilai terhadap `DESIGN.md`: (1) apakah baris tautan tiga lapis (kalimat, perubahan, waktu) tetap terbaca di 320 dan tidak menyaingi kartu Aman; (2) apakah Kontribusi netral (tanpa kesan menilai) dan label/nilai muat di 320 dengan 12 digit; (3) urutan HP (Kontribusi sebelum Aktivitas) dan laptop (Aktivitas di atas Terakhir); (4) apakah `mencatat …` terdengar wajar untuk dua orang yang saling melihat; (5) pertanyaan 1, 2, 6, 7, 11 di atas.
+
+## Ditunda (di luar S8, sudah tercatat di plan)
+
+Peristiwa keanggotaan ("Farida bergabung") di feed; notifikasi saat pasangan mencatat; filter Transaksi per pencatat; angka bersih atau "siapa berutang ke siapa" (M3); periode gajian untuk Kontribusi (S9, K3); kontrol Talangan di sheet Ubah dan chip saran bergeser (Pribadi/Catat); biaya kaki keluar Pribadi di daftar (hanya Detail, tidak berubah); tangkapan layar layar jadi dan Delivery Gate antislop (Task 12).
