@@ -103,3 +103,5 @@ Task 11: complete (commits b0d2ea0..0fb8f19, review clean)
 Task 12: implementasi commits 7d9bbf5..d7cfd9d; unit 1886, int 148, e2e 287, e2e:ledger 19; budget prototipe Beranda 161,4 / nyata 157,3. Urungkan Cocokkan saldo ada (void adjustment versi 1 diizinkan DB); "Lihat semua" tidak dibangun (filter talangan nyata belum ada).
 Task 12: review → Needs fixes (1 Important: label Menunggu reimburse "Talangan kantor" bukan kategori). Minor 1–6 ikut ronde 1.
 Task 12: minor (deferred): tes int voidEntryAction atas adjustment (Task 17); rute dompet/[id] masuk loop budget (Task 17).
+Task 12: fix round 1/5 (1 Important + 6 minor addressed, 0 open; commit 9e8e184; unit 1888, int 148, e2e 287, e2e:ledger 19; budget tidak berubah).
+Task 12: complete (commits 7d9bbf5..9e8e184, review clean)
