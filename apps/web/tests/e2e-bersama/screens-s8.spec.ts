@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import type { Browser, Page } from '@playwright/test';
 import { asUser, createWallet, spaceOf } from '../e2e-auth/helpers';
+import { expectRouteBudget } from '../e2e-ledger/helpers';
 import { expect, test } from './fixtures';
 import { OWNER, PARTNER } from './global-setup';
 
@@ -427,10 +428,7 @@ test('@screens S8-D1a biaya kaki keluar Bersama (F mengambil, biaya 2.500)', asy
   if (!leg || !pLeg) throw new Error('kaki transfer tidak ada');
   const rp = (n: string) => new RegExp(`Rp\\s*${n.replace('.', '\\.')}`);
 
-  for (const [state, who] of [
-    [ownerState, 'n'],
-    [partnerState, 'f'],
-  ] as const) {
+  for (const state of [ownerState, partnerState]) {
     const ctx = await browser.newContext({ storageState: state, baseURL: BASE });
     const page = await ctx.newPage();
     // Daftar Transaksi dan Terakhir: status ketiga, nominal kanan tetap nominal transfer.
@@ -448,7 +446,6 @@ test('@screens S8-D1a biaya kaki keluar Bersama (F mengambil, biaya 2.500)', asy
     await expect(page.locator('main')).not.toContainText('KANARI');
     await expect(page.locator('main')).not.toContainText('Catatan pribadi F');
     await ctx.close();
-    if (who === 'n') continue;
   }
   const t9 = { dir: OUT_DIR_T9, heading: '' };
   await shoot(browser, ownerState, 'transaksi-n', '/bersama/transaksi', V(390), {
@@ -459,23 +456,45 @@ test('@screens S8-D1a biaya kaki keluar Bersama (F mengambil, biaya 2.500)', asy
     ...t9,
     heading: 'Beranda',
   });
-  const detail = { ...t9, heading: 'Diambil oleh Farida' };
-  await shoot(
-    browser,
-    partnerState,
-    'detail-bersama-f',
-    `/bersama/transaksi/${leg.id}`,
-    [...V(390), ...V(320)],
-    detail,
-  );
-  await shoot(
-    browser,
-    ownerState,
-    'detail-bersama-n',
-    `/bersama/transaksi/${leg.id}`,
-    V(390, ['dark']),
-    detail,
-  );
+  // Detail kaki keluar Bersama: tangkapan viewport, digulir sampai baris Biaya terlihat.
+  await mkdir(OUT_DIR_T9, { recursive: true });
+  for (const v of [...V(320), ...V(390, ['dark', 'light'], 2)]) {
+    const c = await browser.newContext({
+      storageState: partnerState,
+      viewport: { width: v.w, height: v.h },
+      deviceScaleFactor: v.dpr,
+      reducedMotion: 'reduce',
+      baseURL: BASE,
+    });
+    try {
+      const pg2 = await c.newPage();
+      await pg2.goto(`/bersama/transaksi/${leg.id}?theme=${v.theme}`);
+      await expect(pg2.locator('html')).toHaveAttribute('data-theme', v.theme);
+      const biaya = pg2.getByText('Biaya', { exact: true });
+      await expect(biaya).toBeVisible();
+      await biaya.evaluate((el) => {
+        el.scrollIntoView({ block: 'center' });
+      });
+      await settle(pg2);
+      await expect(biaya).toBeInViewport();
+      await pg2.screenshot({
+        path: `${OUT_DIR_T9}detail-bersama-biaya-${String(v.w)}-${v.theme}.png`,
+        animations: 'disabled',
+      });
+    } finally {
+      await c.close();
+    }
+  }
+  // Anggaran JS mode nyata (rute-kB di konsol dan anotasi).
+  for (const [name, url] of [
+    ['beranda', '/bersama/beranda'],
+    ['transaksi', '/bersama/transaksi'],
+    ['detail', `/bersama/transaksi/${leg.id}`],
+    ['aktivitas', '/bersama/aktivitas'],
+  ] as const) {
+    const kb = await expectRouteBudget(browser, ownerState, url);
+    console.log(`BUDGET-NYATA ${name}: js-route ${kb.toFixed(1)} kB`);
+  }
   // Kaki Pribadi F: tidak ada baris Biaya dan tidak ada penunjuk ke kaki Bersama.
   const ctx = await browser.newContext({ storageState: partnerState, baseURL: BASE });
   const page = await ctx.newPage();

@@ -343,7 +343,10 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
       }
     }
     // Daftar Transaksi dan Terakhir membaca kolom yang sama.
-    const bulan = new Date().toISOString().slice(0, 7);
+    const { rows: bl } = await h.admin.query<{ m: string }>(
+      "select to_char(app.today(), 'YYYY-MM') as m",
+    );
+    const bulan = bl[0]?.m ?? '';
     const dariDaftar = (await listEntries(bersamaN, { month: bulan })).find(
       (e) => e.id === st.entryId,
     );
