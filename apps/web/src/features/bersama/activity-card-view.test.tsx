@@ -42,7 +42,7 @@ describe('ActivityCardView baris (S8-A1/A2)', () => {
         ]}
       />,
     );
-    const row = screen.getByRole('link', { name: /Farida · mengubah Makan siang/ });
+    const row = screen.getByRole('link', { name: /Farida\s·\s+mengubah Makan siang/ });
     expect(row.textContent).toContain('Hari ini · 09.15');
     expect(row.querySelector('[aria-hidden="true"].flex-col')?.textContent).toContain('→');
     expect(row.querySelector('.sr-only')?.textContent).toBe('dari Rp 50.000 menjadi Rp 75.000');
@@ -80,7 +80,7 @@ describe('ActivityCardView baris (S8-A1/A2)', () => {
     );
     const clamp = document.querySelector('.line-clamp-4');
     expect(clamp?.className).toContain('break-words');
-    expect(clamp?.textContent).toContain(`${nama} · mencatat pengeluaran`);
+    expect(clamp?.textContent).toContain(`${nama}\u00a0·\u00a0mencatat pengeluaran`);
   });
 
   it('baris tanpa target: li tanpa tautan; pelaku hilang: avatar netral', () => {
@@ -148,5 +148,20 @@ describe('ContributionCardView (S8-K1)', () => {
     );
     const dts = [...document.querySelectorAll('dt')].map((d) => d.textContent);
     expect(dts).toEqual(['Setor', 'Diambil', 'Setor']);
+  });
+});
+
+describe('ActivityCardView query', () => {
+  it('query tema ikut ke tautan baris', () => {
+    render(
+      <ActivityCardView
+        today="2026-11-04"
+        listHref={null}
+        emptyNames={null}
+        query="?theme=dark"
+        items={[item()]}
+      />,
+    );
+    expect(screen.getByRole('link').getAttribute('href')).toBe('/bersama/transaksi/e1?theme=dark');
   });
 });

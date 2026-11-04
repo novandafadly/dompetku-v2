@@ -10,7 +10,7 @@
       "@/*": ["./src/*"],
       "@dompetku/domain": ["../../packages/domain/src/index.ts"],
       "@dompetku/demo-data": ["../../packages/demo-data/src/index.ts"],
-      "@dompetku/demo-data/select/*": ["../../packages/demo-data/src/select/*.ts"]
+      "@dompetku/demo-data/select/kontribusi": ["../../packages/demo-data/src/select/kontribusi.ts"]
     }
   },
   "include": [

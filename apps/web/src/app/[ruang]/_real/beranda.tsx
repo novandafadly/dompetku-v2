@@ -120,6 +120,7 @@ export function BerandaReal({
         listHref={b.activity.length === 0 ? null : buildAktivitasHref(query)}
         emptyNames={b.partner?.name ?? null}
         today={today}
+        query={query}
       />
     );
   }

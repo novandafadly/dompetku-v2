@@ -3,6 +3,7 @@ import type { Route } from 'next';
 import Link from 'next/link';
 import { MoneyText } from '@/components/ui/money-text';
 import { focusRing, rowDivider } from '@/components/ui/styles';
+import { MemberAvatar } from './member-avatar';
 import type { ActivityItemVM } from './types';
 
 /**
@@ -23,9 +24,9 @@ export function activityTimeLabel(
 }
 
 const grid =
-  'max-narrow:grid max-narrow:grid-cols-tile-text max-narrow:items-center max-narrow:gap-y-0.75';
+  'max-narrow:grid max-narrow:grid-cols-[2.25rem_minmax(0,1fr)] max-narrow:items-center max-narrow:gap-y-0.75';
 
-export interface ActivityRowProps {
+export interface ActivityItemRowProps {
   actor: Pick<ActivityItemVM['actor'], 'name' | 'initial' | 'role'>;
   text: string;
   change: string[];
@@ -45,24 +46,22 @@ export function ActivityItemRow({
   time,
   amount,
   href,
-}: ActivityRowProps) {
+}: ActivityItemRowProps) {
   // Nominal sangat panjang (> 13 karakter) di bawah 360 px turun ke baris kedua kolom teks
   // (pola TxRow) agar kalimat tidak terperas jadi "menyetor ke…".
   const long = amount !== null && formatRupiah(amount).length > 13;
   const body = (
     <>
-      <span
-        data-initial=""
-        aria-hidden="true"
-        className={`flex size-9 shrink-0 items-center justify-center rounded-full border border-border text-label font-extrabold ${long ? 'max-narrow:row-span-2' : ''} ${
-          actor.role === 'member' ? 'bg-bersama-tint text-bersama' : 'bg-surface-3 text-text'
-        }`}
-      >
-        {actor.initial}
-      </span>
+      <MemberAvatar
+        role={actor.role}
+        initial={actor.initial}
+        className={long ? 'max-narrow:row-span-2' : ''}
+      />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-4 text-label font-medium break-words text-text">
-          <span className="font-bold">{actor.name}</span> · {text}
+          <span className="font-bold">{actor.name}</span>
+          {'\u00a0'}·{'\u00a0'}
+          {text}
         </span>
         {change.length > 0 ? (
           <>

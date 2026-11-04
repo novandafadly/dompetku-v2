@@ -16,11 +16,14 @@ export function ActivityCardView({
   listHref,
   emptyNames,
   today,
+  query = '',
 }: {
   items: ActivityItemVM[];
   listHref: Route | null;
   emptyNames: string | null;
   today: IsoDate;
+  /** Query yang dibawa tautan (mode nyata: `theme`), '' atau '?a=b'; ikut ke tautan baris. */
+  query?: string;
 }) {
   return (
     <ListCard
@@ -47,7 +50,7 @@ export function ActivityCardView({
               srText={a.srText}
               time={activityTimeLabel(a.at, today, a.backdate)}
               amount={a.amount}
-              href={a.href}
+              href={a.href === null ? null : (`${a.href}${query}` as Route)}
             />
           ))}
         </ul>
