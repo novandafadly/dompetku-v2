@@ -105,3 +105,7 @@ Task 12: review → Needs fixes (1 Important: label Menunggu reimburse "Talangan
 Task 12: minor (deferred): tes int voidEntryAction atas adjustment (Task 17); rute dompet/[id] masuk loop budget (Task 17).
 Task 12: fix round 1/5 (1 Important + 6 minor addressed, 0 open; commit 9e8e184; unit 1888, int 148, e2e 287, e2e:ledger 19; budget tidak berubah).
 Task 12: complete (commits 7d9bbf5..9e8e184, review clean)
+Task 13: implementasi commit 467c6db (unit 1899, int 152, e2e 287, e2e:ledger 19; Beranda prototipe 161,4 / nyata 157,3). empty = tanpa dompet operasional DAN tanpa entri hidup (saldo awal dihitung).
+Task 13: review → Approved, 0 Critical/Important.
+Task 13: minor (deferred): screenshot B1/B2 320/390/1280 belum diambil (critique T18; cek tombol turun < 360 dan email panjang); list_invitations tidak dibatasi per ruang (komentar); tanggal kedaluwarsa undangan di batas hari WIB tidak dites.
+Task 13: complete (commits 4fd06b2..467c6db, review clean)
