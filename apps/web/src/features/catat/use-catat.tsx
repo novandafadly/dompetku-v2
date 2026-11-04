@@ -1,7 +1,7 @@
 'use client';
 
 import { nowTimeWIB, type IsoDate, type Rupiah } from '@dompetku/domain';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { newClientId } from './client-id';
 import {
@@ -96,29 +96,25 @@ function enough(d: CatatDraft, account: AccountVM | undefined): boolean {
   return d.amount <= account.balance;
 }
 
+/** Layout effect di klien; `useEffect` di server (tanpa peringatan SSR). */
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
   const [hour] = useState(() => hourWIB ?? Number(nowTimeWIB().slice(0, 2)));
-  // Opsi ruang awal: sinkron di prototipe (render pertama sudah lengkap), Promise di mode nyata.
-  const [initial] = useState(() => source.options(ruang));
-  const [opts, setOpts] = useState<CatatOptions | null>(() =>
-    isPromise(initial) ? null : initial,
-  );
+  // Opsi ruang awal dimuat di efek (bukan di initializer state): sumber nyata memicu Server Action,
+  // dan initializer StrictMode berjalan dua kali. Sumber sinkron (prototipe) terisi di layout effect,
+  // sebelum cat pertama, sehingga tidak ada kedipan keadaan memuat.
+  const [opts, setOpts] = useState<CatatOptions | null>(null);
   const [draft, setDraft] = useState<CatatDraft>(() => ({
     type: 'expense',
     amount: initialAmount ?? null,
-    accountId: isPromise(initial) ? '' : defaultAccountId(initial),
+    accountId: '',
     date: today,
     dateChosen: false,
     ruang,
     clientId: newClientId(),
   }));
-  // Posisi chip tidak berubah selama sheet terbuka; diminta ulang hanya saat ruang/jenis berganti.
-  const [initialChips] = useState(() =>
-    isPromise(initial) ? null : source.chips(ruang, 'expense', hour),
-  );
-  const [chips, setChips] = useState<CategoryVM[]>(() =>
-    initialChips === null || isPromise(initialChips) ? [] : initialChips,
-  );
+  const [chips, setChips] = useState<CategoryVM[]>([]);
   const [status, setStatus] = useState<CatatStatus>('idle');
   const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
@@ -171,19 +167,18 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
     requestChips(r, typeRef.current);
   };
 
-  useEffect(() => {
-    if (initialChips !== null && isPromise(initialChips)) {
-      const seq = chipsSeq.current;
-      initialChips.then(
-        (c) => {
-          if (seq === chipsSeq.current) setChips(c);
-        },
-        () => undefined,
-      );
-    }
-    if (!isPromise(initial)) return;
+  const started = useRef(false);
+  useIsoLayoutEffect(() => {
+    // Efek ganda StrictMode (pasang, lepas, pasang) tetap satu permintaan.
+    if (started.current) return;
+    started.current = true;
+    const got = source.options(ruang);
     const seq = optsSeq.current;
-    initial.then(
+    if (!isPromise(got)) {
+      receive(ruang, got);
+      return;
+    }
+    got.then(
       (o) => {
         if (seq === optsSeq.current) receive(ruang, o);
       },
@@ -192,7 +187,6 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
       },
     );
     // Hanya sekali saat sheet dibuka.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loading = opts === null;

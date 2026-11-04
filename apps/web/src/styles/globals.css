@@ -223,6 +223,15 @@
 }
 
 /* Ruang untuk tab bar mobile (52 px + 6 px + inset aman) di bawah isi. */
+/* Baris daftar sempit (< 360 px): ubin 40 px, teks, [caret]; saldo turun ke baris kedua teks. */
+@utility grid-cols-tile-text {
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+}
+
+@utility grid-cols-tile-text-caret {
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+}
+
 @utility pb-tabbar {
   padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }

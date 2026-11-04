@@ -1,3 +1,5 @@
+import { createElement, StrictMode } from 'react';
+import { renderToString } from 'react-dom/server';
 import { createDemoStore, createSeed } from '@dompetku/demo-data';
 import type { DemoState, DemoStore, Ruang } from '@dompetku/demo-data';
 import { act, renderHook } from '@testing-library/react';
@@ -666,5 +668,39 @@ describe('useCatat perbaikan review', () => {
       await result.current.save();
     });
     expect(result.current.galatKind).toBe('network');
+  });
+});
+
+describe('useCatat: sumber tidak dipanggil di initializer state (utang S6)', () => {
+  const spySource = () => {
+    const store = createDemoStore(full());
+    const base = demoCatatSource(store.getState(), store);
+    const options = vi.fn((r: Ruang) => base.options(r));
+    const chips = vi.fn((...a: Parameters<CatatSource['chips']>) => base.chips(...a));
+    return { source: { ...base, options, chips } as CatatSource, options, chips };
+  };
+
+  it('render server (tanpa efek) memanggil source 0 kali', () => {
+    const { source, options, chips } = spySource();
+    function Probe() {
+      useCatat({ source, today: TODAY, ruang: 'pribadi', hourWIB: 12 });
+      return null;
+    }
+    renderToString(createElement(StrictMode, null, createElement(Probe)));
+    expect(options).not.toHaveBeenCalled();
+    expect(chips).not.toHaveBeenCalled();
+  });
+
+  it('StrictMode: options dan chips dipanggil tepat satu kali, di efek', () => {
+    const { source, options, chips } = spySource();
+    const { result } = renderHook(
+      () => useCatat({ source, today: TODAY, ruang: 'pribadi', hourWIB: 12 }),
+      { wrapper: StrictMode },
+    );
+    expect(options).toHaveBeenCalledTimes(1);
+    expect(chips).toHaveBeenCalledTimes(1);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.draft.accountId).toBe('acc-bca');
+    expect(result.current.chips.length).toBeGreaterThan(0);
   });
 });
