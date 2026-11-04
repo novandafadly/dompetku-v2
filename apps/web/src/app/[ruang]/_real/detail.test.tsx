@@ -1,3 +1,4 @@
+import { formatRupiah } from '@dompetku/domain';
 import { render, screen } from '@testing-library/react';
 import type { Route } from 'next';
 import { describe, expect, it, vi } from 'vitest';
@@ -301,6 +302,31 @@ describe('DetailReal antar ruang (S7-D1)', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Diambil oleh Novanda' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Batalkan transaksi' })).toBeNull();
     expect(screen.getByText('Hanya Novanda yang bisa membatalkan transfer ini.')).toBeTruthy();
+  });
+
+  it('kaki keluar Bersama dengan biaya: baris Biaya; kaki masuk tanpa biaya (S8-D1a)', () => {
+    const keluar = kakiBersama({ direction: 'out', fee: 2_500 });
+    const { container, unmount } = render(
+      <DetailReal
+        {...bersamaProps}
+        me="u-f"
+        data={data(keluar, false, { accounts: [BERSAMA_ACCOUNT] })}
+        labels={bLabels(keluar)}
+      />,
+    );
+    expect(screen.getByText('Biaya').nextElementSibling?.textContent).toBe(formatRupiah(2_500));
+    expect(container.textContent).not.toContain('BCA Pribadi');
+    unmount();
+    const masuk = kakiBersama({ direction: 'in' });
+    render(
+      <DetailReal
+        {...bersamaProps}
+        me="u-f"
+        data={data(masuk, false, { accounts: [BERSAMA_ACCOUNT] })}
+        labels={bLabels(masuk)}
+      />,
+    );
+    expect(screen.queryByText('Biaya')).toBeNull();
   });
 
   it('kaki Bersama oleh pencatat: Batalkan + catatan tidak bisa diubah', () => {

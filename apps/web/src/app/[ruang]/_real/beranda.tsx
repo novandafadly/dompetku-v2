@@ -20,7 +20,12 @@ import {
 } from '@/features/bersama/contribution-card-view';
 import { RecentEntriesView, type RecentRow } from '@/features/beranda/recent-entries-view';
 import { SafeToSpendCard, SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
-import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
+import {
+  entryKindLabelVM,
+  entryTitleVM,
+  feeNoteVM,
+  signedAmountVM,
+} from '@/features/ledger/present';
 import type { Ruang } from '@/features/ledger/types';
 import {
   buildAddWalletHref,
@@ -131,6 +136,7 @@ export function BerandaReal({
 
   const rows: RecentRow[] = data.recent.map((e) => {
     const { value, kind } = signedAmountVM(e);
+    const note = feeNoteVM(e);
     return {
       id: e.id,
       href: buildEntryHref(ruang, e.id, query),
@@ -138,6 +144,7 @@ export function BerandaReal({
       entryKind: e.kind,
       label: entryTitleVM(e),
       meta: `${entryKindLabelVM(e)} · ${e.accountName} · ${dayLabel(e.occurredOn, today)}`,
+      ...(note === undefined ? {} : { note }),
       value,
       kind,
     };

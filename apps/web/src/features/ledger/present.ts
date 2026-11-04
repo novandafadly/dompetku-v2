@@ -1,4 +1,4 @@
-import type { Rupiah } from '@dompetku/domain';
+import { formatRupiah, type Rupiah } from '@dompetku/domain';
 import type { EntryVM } from './types';
 
 /** Judul entri di daftar: deskripsi, lalu catatan bersama, lalu nama kategori. */
@@ -89,4 +89,15 @@ export function effectOnAccountVM(
     default:
       return { value: e.amount, kind: 'neutral' };
   }
+}
+
+/**
+ * Keterangan biaya di baris daftar (S8-D1a): hanya kaki keluar Bersama (`Diambil oleh {Nama}`) yang
+ * membawa biaya ke daftar; nominal kanan tetap nominal transfer tanpa biaya digabung.
+ */
+export function feeNoteVM(e: EntryVM): string | undefined {
+  if (e.kind !== 'space_transfer' || e.spaceKind !== 'shared' || e.direction !== 'out') {
+    return undefined;
+  }
+  return e.fee === undefined ? undefined : `Biaya ${formatRupiah(e.fee)}`;
 }

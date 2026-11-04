@@ -384,3 +384,111 @@ test('@screens S8-O2 Beranda Bersama pertama bagi Farida (dompet dan entri Novan
     { dir: OUT_DIR_T8, heading: 'Beranda' },
   );
 });
+
+/** Biaya kaki keluar Bersama (Task 9, S8-D1a): daftar Transaksi, Terakhir, Detail; kaki Pribadi F. */
+const OUT_DIR_T9 = fileURLToPath(
+  new URL(
+    '../../../../.superpowers/sdd/2026-11-04-dompetku-v2-s8-bersama/task-9-screens/',
+    import.meta.url,
+  ),
+);
+
+test('@screens S8-D1a biaya kaki keluar Bersama (F mengambil, biaya 2.500)', async ({
+  browser,
+  ownerState,
+  partnerState,
+  kanari,
+}) => {
+  test.setTimeout(600_000);
+  expect(kanari.f.wallet).toBeTruthy();
+  const i = await ids();
+  // F mengambil dari Kas Rumah ke dompet Pribadinya dengan biaya 2.500 (kaki keluar = Bersama).
+  await asUser(
+    i.fUid,
+    `select api.create_transfer(p_client_id => $1, p_space_id => $2, p_from_account => $3,
+       p_to_account => $4, p_amount => $5::bigint, p_fee => 2500::bigint,
+       p_description => $6, p_shared_note => $7)`,
+    [randomUUID(), i.bersama, i.accKas, i.accFKanari, 100_000, 'Catatan pribadi F', 'Ambil biaya'],
+  );
+  const [leg] = await asUser<{ id: string; sid: string }>(
+    i.fUid,
+    `select e.id::text, e.space_id::text as sid from app.entries e
+      where e.kind = 'space_transfer' and e.direction = 'out' and e.space_id = $1
+      order by e.created_at desc limit 1`,
+    [i.bersama],
+  );
+  const [pLeg] = await asUser<{ id: string }>(
+    i.fUid,
+    `select e.id::text from app.entries e
+      where e.kind = 'space_transfer' and e.direction = 'in' and e.space_id = $1
+      order by e.created_at desc limit 1`,
+    [i.fPribadi],
+  );
+  if (!leg || !pLeg) throw new Error('kaki transfer tidak ada');
+  const rp = (n: string) => new RegExp(`Rp\\s*${n.replace('.', '\\.')}`);
+
+  for (const [state, who] of [
+    [ownerState, 'n'],
+    [partnerState, 'f'],
+  ] as const) {
+    const ctx = await browser.newContext({ storageState: state, baseURL: BASE });
+    const page = await ctx.newPage();
+    // Daftar Transaksi dan Terakhir: status ketiga, nominal kanan tetap nominal transfer.
+    for (const path of ['/bersama/transaksi', '/bersama/beranda']) {
+      await page.goto(path);
+      const row = page.locator('li', { hasText: `Diambil oleh Farida` }).first();
+      await expect(row).toContainText('Antar ruang');
+      await expect(row).toContainText(rp('2.500'));
+      await expect(row).toContainText(/Biaya/);
+      await expect(row).toContainText(rp('100.000'));
+      await expect(row).not.toContainText('KANARI');
+    }
+    await page.goto(`/bersama/transaksi/${leg.id}`);
+    await expect(page.getByText('Biaya', { exact: true })).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('KANARI');
+    await expect(page.locator('main')).not.toContainText('Catatan pribadi F');
+    await ctx.close();
+    if (who === 'n') continue;
+  }
+  const t9 = { dir: OUT_DIR_T9, heading: '' };
+  await shoot(browser, ownerState, 'transaksi-n', '/bersama/transaksi', V(390), {
+    ...t9,
+    heading: 'Transaksi',
+  });
+  await shoot(browser, ownerState, 'beranda-n', '/bersama/beranda', [...V(390), ...V(320)], {
+    ...t9,
+    heading: 'Beranda',
+  });
+  const detail = { ...t9, heading: 'Diambil oleh Farida' };
+  await shoot(
+    browser,
+    partnerState,
+    'detail-bersama-f',
+    `/bersama/transaksi/${leg.id}`,
+    [...V(390), ...V(320)],
+    detail,
+  );
+  await shoot(
+    browser,
+    ownerState,
+    'detail-bersama-n',
+    `/bersama/transaksi/${leg.id}`,
+    V(390, ['dark']),
+    detail,
+  );
+  // Kaki Pribadi F: tidak ada baris Biaya dan tidak ada penunjuk ke kaki Bersama.
+  const ctx = await browser.newContext({ storageState: partnerState, baseURL: BASE });
+  const page = await ctx.newPage();
+  await page.goto(`/pribadi/transaksi/${pLeg.id}`);
+  await expect(page.getByRole('heading', { name: 'Ambil dari Bersama' }).first()).toBeVisible();
+  await expect(page.getByText('Biaya', { exact: true })).toHaveCount(0);
+  await ctx.close();
+  await shoot(
+    browser,
+    partnerState,
+    'detail-pribadi-f',
+    `/pribadi/transaksi/${pLeg.id}`,
+    V(390, ['dark', 'light']),
+    { ...t9, heading: 'Ambil dari Bersama' },
+  );
+});
