@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import pg from 'pg';
 import { formatRupiah, monthName } from '@dompetku/domain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadBeranda } from '../beranda';
@@ -84,6 +85,35 @@ async function failure(p: Promise<unknown>): Promise<unknown> {
     },
     (e: unknown) => e,
   );
+}
+
+/**
+ * Ganti teks kueri feed loader (`api.shared_activity(p_space_id => …`) di setiap klien pg selama
+ * tes: galat SQL nyata atau kolom tambahan tanpa DDL/hak global. Parameter tetap dikirim.
+ */
+function rewriteFeedQuery(rewrite: (sql: string) => string): {
+  rewritten(): number;
+  restore(): void;
+} {
+  const proto: { query: (...a: unknown[]) => unknown } = pg.Client.prototype;
+  const original = proto.query;
+  let count = 0;
+  const spy = vi.spyOn(proto, 'query').mockImplementation(function (
+    this: unknown,
+    ...args: unknown[]
+  ): unknown {
+    if (typeof args[0] === 'string' && args[0].includes('api.shared_activity(p_space_id')) {
+      count += 1;
+      args[0] = rewrite(args[0]);
+    }
+    return Reflect.apply(original, this, args);
+  });
+  return {
+    rewritten: () => count,
+    restore: () => {
+      spy.mockRestore();
+    },
+  };
 }
 
 /** Semua halaman `loadAktivitas` lewat jalur page (`encodeCursor` → `?sebelum=` → `parseCursor`). */
@@ -677,26 +707,108 @@ describe('Bersama solo dan baris rusak', () => {
     }
   });
 
-  it('galat SQL feed di Beranda: kartu error, Beranda dan Kontribusi tetap tampil', async () => {
+  it('galat SQL feed di Beranda: kartu error lewat savepoint, Beranda dan Kontribusi tetap', async () => {
     await resetLedger(h);
     const { n } = await seedPersonas(h, { farida: 'bergabung' });
     const bersama = await ctxOf(n, 'bersama');
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    // Kueri feed gagal di DB (fungsi tidak bisa dieksekusi); savepoint menahan galat ke kartu itu.
-    await h.admin.query('revoke execute on function api.shared_activity from dompetku_web');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Galat SQL nyata (22012) di kueri feed: transaksi aborted sampai `rollback to savepoint`,
+    // jadi Kontribusi sesudahnya hanya termuat bila savepoint bekerja. Tanpa DDL/hak global.
+    const q = rewriteFeedQuery(
+      () => 'select 1/0 as x, $1::text, $2::text, $3::text, $4::text, $5::text',
+    );
     try {
       const b = await loadBeranda(bersama);
       expect(b.bersama?.activity).toBe('error');
       expect(b.bersama?.contributions).toMatchObject({ allZero: true });
       expect(b.safe).toBeDefined();
-      expect(spy.mock.calls.map((c) => c.join(' ')).join('\n')).toContain(
-        '[bersama] activity gagal dimuat: 42501',
+      expect(log.mock.calls.map((c) => c.join(' ')).join('\n')).toContain(
+        '[bersama] activity gagal dimuat: 22012',
       );
       expect(toLedgerError(await failure(loadAktivitas(bersama)))).toBeNull();
+      expect(q.rewritten()).toBe(2);
     } finally {
-      await h.admin.query('grant execute on function api.shared_activity to dompetku_web');
-      spy.mockRestore();
+      q.restore();
+      log.mockRestore();
     }
     expect(Array.isArray((await loadBeranda(bersama)).bersama?.activity)).toBe(true);
+  });
+
+  it('DK404 di dalam savepoint dilempar ulang (not_found, bukan kartu galat)', async () => {
+    await resetLedger(h);
+    const { n } = await seedPersonas(h, { farida: 'bergabung' });
+    const bersama = await ctxOf(n, 'bersama');
+    const q = rewriteFeedQuery(
+      () =>
+        `select app.assert_member('00000000-0000-0000-0000-000000000000'::uuid),
+                $1::text, $2::text, $3::text, $4::text, $5::text`,
+    );
+    try {
+      expect(toLedgerError(await failure(loadBeranda(bersama)))).toEqual({ code: 'not_found' });
+    } finally {
+      q.restore();
+    }
+  });
+
+  it('semua baris halaman ditolak Zod (kolom baru): galat terlihat, bukan kosong palsu', async () => {
+    await resetLedger(h);
+    const { n } = await seedPersonas(h, { farida: 'bergabung' });
+    const bersama = await ctxOf(n, 'bersama');
+    const kas = await wallet(bersama, 'Kas Rumah', 1_000_000);
+    await createEntry(bersama, {
+      clientId: randomUUID(),
+      accountId: kas,
+      kind: 'expense',
+      amount: 10_000,
+      categoryId: await categoryOf(bersama, 'expense'),
+      description: 'KANARI-ISI',
+    });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Fungsi DB "suatu hari" menambah kolom dompet: setiap baris ditolak objek ketat.
+    const q = rewriteFeedQuery(
+      (sql) => `select f.*, 'KANARI-DOMPET'::text as account_id from (${sql}) f`,
+    );
+    try {
+      const b = await loadBeranda(bersama);
+      expect(b.bersama?.activity).toBe('error');
+      expect(b.bersama?.contributions).toMatchObject({ allZero: true });
+      expect(toLedgerError(await failure(loadAktivitas(bersama)))).toBeNull();
+      const logged = log.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
+      // Nama kunci tak dikenal dilog (nama kolom), nilainya tidak.
+      expect(logged).toContain('unrecognized_keys:[account_id]');
+      expect(logged).toContain('[bersama] activity gagal dimuat: non-sql');
+      expect(logged).not.toMatch(/KANARI|10000|10\.000/);
+    } finally {
+      q.restore();
+      log.mockRestore();
+    }
+  });
+
+  it('id non-RFC (tanpa bit versi/varian) tidak membuat baris dibuang', async () => {
+    await resetLedger(h);
+    const { n } = await seedPersonas(h, { farida: 'bergabung' });
+    const bersama = await ctxOf(n, 'bersama');
+    const kas = await wallet(bersama, 'Kas Rumah', 1_000_000);
+    const catId = '00000000-0000-0000-0000-000000000001';
+    await h.admin.query(
+      `insert into app.categories (id, space_id, type, name, icon) values ($1, $2, 'expense', 'Impor v1', 'Tag')`,
+      [catId, bersama.spaceId],
+    );
+    // Wrapper tulis memakai z.uuid() RFC; id impor dibuat lewat fungsi DB langsung.
+    await withLedger(h.pools, n.id, bersama.spaceId, (c) =>
+      c.query(
+        `select api.create_entry(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+           p_kind => 'expense', p_amount => 5000, p_category_id => $4)`,
+        [randomUUID(), bersama.spaceId, kas, catId],
+      ),
+    );
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const a = await loadAktivitas(bersama);
+      expect(a.items.map((i) => i.text)).toEqual(['mencatat pengeluaran Impor v1']);
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
   });
 });

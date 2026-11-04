@@ -135,8 +135,11 @@ export function partnerOf(
 }
 
 // ===== Feed =====
+// Id: `z.guid()` (bentuk 8-4-4-4-12 apa pun), bukan `z.uuid()` RFC ketat: kolom DB bertipe `uuid`
+// sudah menjamin bentuknya, dan id tanpa bit versi/varian (impor v1, fixture) tidak boleh membuat
+// baris dibuang.
 const activityRow = z.strictObject({
-  entry_id: z.uuid(),
+  entry_id: z.guid(),
   version: z.number().int().min(1),
   op: z.enum(['create', 'update', 'void', 'restore']),
   kind: z.enum([
@@ -149,13 +152,13 @@ const activityRow = z.strictObject({
     'reimbursement',
   ]),
   direction: z.enum(['in', 'out']).nullable(),
-  actor_id: z.uuid(),
+  actor_id: z.guid(),
   at: z.date(),
   occurred_on: z.iso.date(),
   amount: z.number().int().min(0),
   before_amount: z.number().int().min(0).nullable(),
-  category_id: z.uuid().nullable(),
-  before_category_id: z.uuid().nullable(),
+  category_id: z.guid().nullable(),
+  before_category_id: z.guid().nullable(),
   description: z.string().nullable(),
   shared_note: z.string().nullable(),
   moved: z.boolean(),
@@ -198,6 +201,15 @@ function toRow(r: z.output<typeof activityRow>): SharedActivityRow {
     sharedNote: r.shared_note,
     moved: r.moved,
   };
+}
+
+/**
+ * Label isu Zod yang aman dilog: kode + jalur, dan untuk kolom tak dikenal nama kuncinya (nama
+ * kolom DB, bukan data pengguna). Tidak pernah memuat nilai.
+ */
+function issueLabel(i: z.core.$ZodIssue): string {
+  const keys = i.code === 'unrecognized_keys' ? `[${i.keys.join('|')}]` : '';
+  return `${i.code}:${i.path.join('.')}${keys}`;
 }
 
 function logDropped(issues: string[]): void {
@@ -261,9 +273,13 @@ export async function sharedActivityTx(
   for (const raw of page) {
     const parsed = activityRow.safeParse(raw);
     if (parsed.success) valid.push(toRow(parsed.data));
-    else for (const i of parsed.error.issues) issues.push(`${i.code}:${i.path.join('.')}`);
+    else for (const i of parsed.error.issues) issues.push(issueLabel(i));
   }
   if (issues.length > 0) logDropped(issues);
+  // Semua baris halaman ditolak (mis. kolom/enum baru sesudah migrasi): galat, bukan keadaan
+  // kosong palsu "Belum ada aktivitas". Beranda: kartu 'error' lewat savepoint; halaman Aktivitas:
+  // ErrorState. Pesan tanpa isi baris.
+  if (page.length > 0 && valid.length === 0) throw new Error('feed_rows_invalid');
 
   const roster = opts.roster ?? (await rosterTx(c, ctx));
   const byId = new Map(roster.map((m) => [m.id, m]));
@@ -300,7 +316,7 @@ export async function sharedActivityTx(
 
 // ===== Kontribusi =====
 const contributionRow = z.strictObject({
-  user_id: z.uuid(),
+  user_id: z.guid(),
   setoran: z.number().int().min(0),
   diambil: z.number().int().min(0),
   setoran_count: z.number().int().min(0),
@@ -351,12 +367,16 @@ export async function contributionsTx(
 }
 
 // ===== Beranda dan halaman Aktivitas =====
-const RETRYABLE = new Set(['40001', '40P01']);
+/**
+ * Dilempar ulang dari savepoint: 40001/40P01 (ulang seluruh transaksi) dan galat otorisasi
+ * DK401/DK404 (keanggotaan dicabut di tengah muat: tetap `not_found`, bukan kartu galat).
+ */
+const RETHROW = new Set(['40001', '40P01', 'DK401', 'DK404']);
 
 /**
  * Bacaan kartu Beranda di savepoint: galat (SQL atau validasi) hanya mematikan kartu itu
  * (`'error'`, salinan "Salinan galat S8"), Beranda tetap tampil. 40001/40P01 dilempar ulang agar
- * `withLedger` mengulang seluruh transaksi; koneksi putus membuat `rollback to savepoint` gagal
+ * `withLedger` mengulang seluruh transaksi, DK401/DK404 agar tetap `not_found`; koneksi putus membuat `rollback to savepoint` gagal
  * dan galatnya ikut dilempar. Log hanya SQLSTATE (tanpa pesan, argumen, atau nominal).
  */
 async function guarded<T>(
@@ -371,7 +391,7 @@ async function guarded<T>(
     return value;
   } catch (e) {
     const code = (e as { code?: unknown } | null)?.code;
-    if (typeof code === 'string' && RETRYABLE.has(code)) throw e;
+    if (typeof code === 'string' && RETHROW.has(code)) throw e;
     await c.query(`rollback to savepoint bersama_${what}`);
     const safe = typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : 'non-sql';
     console.error(`[bersama] ${what} gagal dimuat: ${safe}`);
