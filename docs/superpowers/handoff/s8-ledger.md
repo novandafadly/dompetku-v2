@@ -71,3 +71,4 @@ Task 7: fix round 1/5 (1 addressed + M3 + bingkai, 0 open; commits 03e3e78..14c1
 Task 7: minor (deferred): bingkai baris Paginasi (±81) dan tabel target (±238) masih menulis "44 px" untuk Muat sebelumnya (kode 48 px md) → selaraskan di Task 12.
 Task 7: complete (commits 30bbb74..14c1e44, review clean)
 Task 8: dispatch implementer (sonnet) dari f33901b, salinan R4 eksplisit (keputusan pemilik S8-B1a).
+Task 8: implementasi commit 2fb4a9f (partnerName dari roster, 5 salinan R4, pendingInvite F di beranda.int; unit web 2019, test:int 171, e2e prototipe 295/296 (flaky transaksi.spec pencarian parkir), e2e:auth 22, e2e:ledger 38, e2e:bersama 6 +4 @screens). Budget prototipe Beranda 161,6 / Transaksi 160,8 / Aktivitas 155,1; nyata lulus tes budget (kB tidak dicatat). Concern: intro O2 hanya teruji unit. Review design + task (paralel) berjalan.
