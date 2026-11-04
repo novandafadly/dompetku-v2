@@ -7,7 +7,8 @@
 --   validasi argumen. Ruang Pribadi = 0 baris (pola activity_feed); opening_balance dikeluarkan.
 -- - Urut (changed_at, entry_id, version) turun. Kursor = triple baris terakhir halaman
 --   sebelumnya; ketiganya NULL atau ketiganya terisi (DK400 cursor). changed_at <= kursor
---   menjadi syarat indeks (space_id, changed_at desc); perbandingan baris memecah seri.
+--   menjadi syarat indeks (space_id, changed_at desc); perbandingan baris (pemecah seri) berjalan
+--   sebagai Filter atas hasil indeks, bukan syarat indeks.
 -- - before_amount/before_category_id dari versi version - 1 entri yang sama (PK entry_history),
 --   bukan lag atas riwayat ruang, agar kursor dan kinerja tidak bergantung halaman. NULL bila
 --   versi sebelumnya tidak ada (create).
@@ -15,8 +16,9 @@
 --   NULL untuk space_transfer (kaki Bersama memang tanpa deskripsi; pertahanan berlapis), teks
 --   bebas kaki antar ruang hanya shared_note. moved = void entri ber-moved_at (R26).
 -- - direction: kolom entri untuk space_transfer; untuk adjustment (kolom entri NULL) diturunkan
---   dari tanda line main (in = naik), sama dengan server/ledger/read.ts, agar teks S8-A2
---   "mencocokkan saldo, naik/turun" tidak butuh nominal bertanda. income/expense/transfer NULL.
+--   dari tanda line main (in = naik, out = turun, NULL bila line main tidak ada), sama dengan
+--   server/ledger/read.ts, agar teks S8-A2 "mencocokkan saldo, naik/turun" tidak butuh nominal
+--   bertanda. income/expense/transfer NULL.
 -- - amount = |line main| sesudah peristiwa (tanpa biaya).
 create function api.shared_activity(
   p_space_id       uuid,
@@ -54,7 +56,7 @@ begin
   )
   select h.entry_id, h.version, h.op, k.kind,
          case when k.kind = 'adjustment'
-              then case when m.amount > 0 then 'in' else 'out' end::app.entry_direction
+              then case when m.amount > 0 then 'in' when m.amount < 0 then 'out' end::app.entry_direction
               else (h.snapshot ->> 'direction')::app.entry_direction end,
          h.changed_by, h.changed_at, (h.snapshot ->> 'occurred_on')::date,
          abs(m.amount), abs(pm.amount),

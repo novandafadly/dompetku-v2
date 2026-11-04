@@ -8,7 +8,7 @@
 -- (kasus seri kursor); urutan menurut waktu diuji dengan dua baris riwayat sintetis milik owner.
 -- ID: B4, B8, B20
 begin;
-select plan(53);
+select plan(54);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -200,11 +200,19 @@ select ok(pg_temp.dump(tests.n(), :'sh') like '%catatan-bersama%' and pg_temp.du
   'kanari kontrol: teks Bersama sendiri (shared_note, deskripsi) memang ada di dump');
 select is(tests.web_val(tests.n(), format($$select count(*) from api.shared_activity(%L, 100) where kind = 'space_transfer' and description is not null$$, :'sh')),
   '0', 'deskripsi selalu NULL untuk space_transfer');
+-- Pertahanan berlapis: riwayat sintetis (owner) kaki Bersama setor dengan description di snapshot
+-- (CHECK entries mencegahnya di tabel, snapshot tidak dijaga CHECK) tetap keluar NULL.
+select tests.owner_exec(null, format($$insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by, changed_at)
+  select entry_id, space_id, 80, 'update', jsonb_set(snapshot, '{description}', '"KANARI-SNAPSHOT"'), %L, now()
+  from app.entry_history where entry_id = %L and version = 1$$, tests.n(), (:'setor'::jsonb) ->> 'linked_entry_id'));
+select is(tests.web_val(tests.f(), format($$select kind || ' ' || coalesce(description, 'NULL')
+  from api.shared_activity(%L, 100) where entry_id = %L and version = 80$$, :'sh', (:'setor'::jsonb) ->> 'linked_entry_id')),
+  'space_transfer NULL', 'snapshot space_transfer berdeskripsi tetap keluar description NULL');
 
 -- Void setoran oleh N: kedua kaki batal; Bersama hanya menerima baris void kaki Bersama.
 select pg_temp.call(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, (:'setor'::jsonb) ->> 'entry_id'));
 select is(tests.web_val(tests.f(), format($$select string_agg(op || ':' || direction || ':' || moved || ':' || coalesce(shared_note, '-'), ',' order by version)
-  from api.shared_activity(%L, 100) where entry_id = %L$$, :'sh', (:'setor'::jsonb) ->> 'linked_entry_id')),
+  from api.shared_activity(%L, 100) where entry_id = %L and version < 80$$, :'sh', (:'setor'::jsonb) ->> 'linked_entry_id')),
   'create:in:false:catatan-bersama,void:in:false:catatan-bersama', 'void setoran: baris void kaki Bersama, bukan moved');
 
 -- Purge: entri dan riwayatnya hilang dari feed.
