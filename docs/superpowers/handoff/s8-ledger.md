@@ -77,3 +77,4 @@ Task 8: minor (deferred): partnerName bawaan "Farida" di OnboardingChecklistView
 Task 8: minor (deferred): bingkai S8-B1a masih "menunggu jawaban pemilik" → perbarui ke keputusan R4 di Task 12.
 Task 8: design review → Approved (O1, O2, B1a lolos). Catatan: peristiwa sendiri tampil dengan nama, bukan "Kamu" (usul S9); angka uji Rp 12.345.678.900 jangan ikut screenshot portofolio; Setor Rp 0 Farida tidak terbukti di screenshot (teruji unit).
 Task 8: complete (commits f33901b..2fb4a9f, review clean)
+Task 9: dispatch implementer (sonnet) dari 5151cef; Step 1 reproduksi wajib dulu; review nanti terkuat (tampilan uang).
