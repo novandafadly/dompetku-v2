@@ -60,7 +60,7 @@ export function ActivityItemRow({
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-4 text-label font-medium break-words text-text">
           <span className="font-bold">{actor.name}</span>
-          {'\u00a0'}·{'\u00a0'}
+          {'\u00a0· '}
           {text}
         </span>
         {change.length > 0 ? (

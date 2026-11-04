@@ -42,7 +42,7 @@ describe('ActivityCardView baris (S8-A1/A2)', () => {
         ]}
       />,
     );
-    const row = screen.getByRole('link', { name: /Farida\s·\s+mengubah Makan siang/ });
+    const row = screen.getByRole('link', { name: /Farida\s· mengubah Makan siang/ });
     expect(row.textContent).toContain('Hari ini · 09.15');
     expect(row.querySelector('[aria-hidden="true"].flex-col')?.textContent).toContain('→');
     expect(row.querySelector('.sr-only')?.textContent).toBe('dari Rp 50.000 menjadi Rp 75.000');
@@ -80,7 +80,7 @@ describe('ActivityCardView baris (S8-A1/A2)', () => {
     );
     const clamp = document.querySelector('.line-clamp-4');
     expect(clamp?.className).toContain('break-words');
-    expect(clamp?.textContent).toContain(`${nama}\u00a0·\u00a0mencatat pengeluaran`);
+    expect(clamp?.textContent).toContain(`${nama}\u00a0· mencatat pengeluaran`);
   });
 
   it('baris tanpa target: li tanpa tautan; pelaku hilang: avatar netral', () => {
@@ -110,6 +110,22 @@ describe('ActivityCardView baris (S8-A1/A2)', () => {
       />,
     );
     expect(screen.getByRole('link').textContent).toContain('Rp 12.345.678.900');
+  });
+});
+
+describe('ActivityItemRow pemisah nama dan kata kerja', () => {
+  it('nama dan titik tengah dilekatkan (NBSP), kata kerja dipisah spasi biasa agar tidak terpotong', () => {
+    render(
+      <ActivityCardView
+        today="2026-11-04"
+        listHref={null}
+        emptyNames={null}
+        items={[item({ text: 'mengambil dari Bersama' })]}
+      />,
+    );
+    const t = document.querySelector('.line-clamp-4')?.textContent ?? '';
+    expect(t).toBe('Farida\u00a0· mengambil dari Bersama');
+    expect(t).not.toContain('·\u00a0');
   });
 });
 
