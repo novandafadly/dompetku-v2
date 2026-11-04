@@ -52,3 +52,4 @@ Task 6: design review → Needs fixes (1 Important: baris Aktivitas nominal panj
 Task 6: review (task + keamanan, terkuat) → Spec ✅, Approved, 0 Critical/Important; privasi (tanpa id/nama dompet di markup/RSC) dan jalur nyata tanpa klien/demo terverifikasi. Ronde 1 dikirim: D1 (design Important) + minor D2, D3, T1 (tes lazy+gerbang bersama), T3 (query di tautan baris), T4 (MemberAvatar), T5 (path tsconfig sempit), T7 (nama props).
 Task 6: minor (deferred): cek K1 e2e nama dompet hanya di tes @screens → wajib dicakup Task 10 di e2e:bersama reguler.
 Task 6: minor (deferred): context terakhir screens-s8 tanpa try/finally.
+Task 6: fix round 1 dikirim → commit 8e245d0 (D1 grid avatar shrink-0 + nominal panjang baris kedua, D2 nbsp, D3 max-w-xs, T1 view.test lazy, T3 query, T4 MemberAvatar, T5, T7; unit web 1996, e2e prototipe 290; budget Beranda prototipe 161,6 nyata 157,5, Transaksi prototipe 160,8). Re-review berjalan.
