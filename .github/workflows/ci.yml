@@ -122,6 +122,7 @@ jobs:
           mapfile -t scripts < <(grep -rlE '^#!/usr/bin/env bash|^#!/bin/(ba)?sh' infra)
           shellcheck --severity=warning "${scripts[@]}"
       - run: bash infra/db-vm/deploy/test/deploy-test.sh
+      - run: bash infra/db-vm/bin/test/dompetku-psql-test.sh
 
   db:
     # pgTAP (TRD §5 butir 1, BSD §13): role BSD, dbmate up, pg_prove sebagai dompetku_test (bukan

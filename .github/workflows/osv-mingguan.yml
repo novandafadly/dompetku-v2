@@ -1,0 +1,29 @@
+name: osv-scanner mingguan
+
+# Pemindaian ulang lockfile `main` tiap minggu (keputusan pemilik 2026-11-04, review keamanan S7 L3):
+# dependensi yang dibundel ke worker.mjs tidak terlihat SBOM/Trivy image, jadi CVE baru pada versi
+# yang sudah terkunci harus tertangkap tanpa menunggu PR berikutnya. Gagal = email bawaan GitHub
+# (notifikasi Actions pemilik). Pengecualian tetap dari osv-scanner.toml (docs/ops/ci-keamanan.md).
+
+on:
+  schedule:
+    - cron: '37 2 * * 1' # Senin 02:37 UTC = 09:37 WIB (di luar 06-09 Pacific)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      # Action dan versi sama dengan job security di ci.yml.
+      - uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml

@@ -22,3 +22,20 @@ Tidak ada komentar `nosemgrep` di kode. Temuan `react-dangerouslysetinnerhtml` d
 ## gitleaks: kredensial tiruan di tes auth
 
 `.gitleaks.toml` memakai aturan bawaan dan hanya mengecualikan `apps/web/src/server/auth/__int__/` dan `apps/web/tests/e2e-auth/`. Berkas itu memuat kata sandi dan secret contoh untuk Postgres sekali pakai di tes integrasi dan e2e auth; nilai produksi selalu dari env di VM. Pengecualian berbasis path (bukan komentar inline) karena gitleaks memindai seluruh commit PR, termasuk commit lama.
+
+## Dependensi worker yang dibundel (review keamanan S7 L3)
+
+Keputusan pemilik 2026-11-04: **opsi B**. Worker tetap dibundel esbuild ke `/app/worker/worker.mjs` (image web yang sama). Di image tidak ada `package.json`/`node_modules` untuk `pg`, `pg-boss`, `zod` dan dependensi transitifnya, sehingga SBOM yang diattest dan Trivy (rilis dan CI) tidak melihatnya.
+
+Kontrol pengganti:
+
+- osv-scanner atas `pnpm-lock.yaml` di job `security` setiap PR dan push ke `main` (`ci.yml`).
+- osv-scanner mingguan atas lockfile `main` (`.github/workflows/osv-mingguan.yml`, Senin 02:37 UTC = 09:37 WIB, juga `workflow_dispatch`): action dan SHA sama dengan `ci.yml`, `contents: read`, tanpa secret. Pengecualian tetap dari `osv-scanner.toml` (tabel di atas).
+
+Notifikasi kegagalan **belum terverifikasi**. Menurut dokumentasi GitHub, notifikasi run terjadwal dikirim ke user yang terakhir mengubah sintaks cron di workflow, jadi penerimanya bergantung pada akun yang mem-push/merge berkas ini dan setelan notifikasi Actions akun itu. Langkah pemilik sesudah merge:
+
+1. Actions → "osv-scanner mingguan" → Run workflow (`workflow_dispatch`) sekali; pastikan run selesai dan actor-nya akun pemilik.
+2. Cek Settings → Notifications → Actions: "Notify on failed workflows" aktif dengan email.
+3. Bukti email sampai: belum ada cara murah memaksa run gagal tanpa mengubah lockfile `main`; anggap terverifikasi baru setelah run gagal pertama benar-benar menghasilkan email (cek tab Actions bila ragu).
+
+Risiko sisa yang diterima: CVE yang belum punya entri OSV, dan kode yang tidak berasal dari lockfile (mis. disalin ke bundel). Bila temuan mingguan muncul: naikkan versi di lockfile lewat PR biasa (rilis = image baru), atau catat pengecualian bertanggal di tabel osv-scanner.

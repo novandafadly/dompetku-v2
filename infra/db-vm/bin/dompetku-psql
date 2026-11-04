@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# Akses DB manual DompetKu (BSD §12, TRD §3.4). Dipasang di /opt/dompetku/bin/dompetku-psql (root 755)
+# dan dijalankan root lewat sudo di VM DB. Satu-satunya jalur psql manual yang disetujui.
+#
+# Urutan: validasi alasan -> tulis audit.events `db_manual_access` (meta via=cli, target, reason, op)
+# dalam transaksi sendiri; gagal = sesi TIDAK dibuka -> ping Healthchecks `dompetku-manual-access`
+# /fail (email "down": sesi dibuka) -> psql -> ping sukses saat keluar (email "up": sesi ditutup).
+#
+# Pemakaian:
+#   sudo dompetku-psql [--as owner|postgres] [-c SQL] -- "<alasan>"
+#   sudo dompetku-psql [--as owner|postgres] -- "<alasan>" <berkas.sql
+#
+#   --as owner     (bawaan) sesi sebagai dompetku_owner (role diset saat koneksi; superuser tetap
+#                  session_user, jadi ini pagar salah ketik, bukan batas keamanan)
+#   --as postgres  superuser; hanya bila owner tidak cukup
+#   -c SQL         jalankan satu perintah lalu keluar (ON_ERROR_STOP)
+#   stdin bukan terminal: SQL dibaca dari stdin lalu keluar (ON_ERROR_STOP)
+#
+# Alasan wajib, 3-120 karakter: huruf, angka, spasi, dan . , : _ / ( ) -
+# Alasan tersimpan di audit.events: JANGAN tulis data pribadi, email, nominal, atau rahasia
+# (cukup mis. "owner_email bootstrap", "email_fix", "pemulihan faktor").
+#
+# Alert: HC_MANUAL_ACCESS_URL (https) di /opt/dompetku/env/ops.env (root 600). Tidak diatur = sesi
+# tetap dibuka dengan peringatan (alat ini juga dipakai saat bootstrap, sebelum Healthchecks ada).
+#
+# Jangan membaca objek skema pgboss sebagai owner/postgres (milik dompetku_worker; view/fungsi di
+# sana bisa berjalan dengan hak pemanggil). Pakai login dompetku_worker (runbook-s7-worker).
+#
+# Kode keluar: kode psql; 2 argumen/alasan salah atau bukan root; 3 event audit gagal ditulis.
+set -euo pipefail
+umask 077
+export LC_ALL=C # rentang huruf di regex = ASCII saja
+
+# DOMPETKU_ROOT/DOMPETKU_OPS_ENV hanya hook tes: sudo (env_reset) tidak meneruskannya dari operator.
+ROOT=${DOMPETKU_ROOT:-/opt/dompetku}
+OPS_ENV=${DOMPETKU_OPS_ENV:-$ROOT/env/ops.env}
+DB=dompetku
+
+say() { printf 'dompetku-psql: %s\n' "$*" >&2; }
+die() {
+  say "GALAT: $1"
+  exit "${2:-2}"
+}
+usage() { awk '/^# Pemakaian/,/^# Kode keluar/' "$0" | sed 's/^# \{0,1\}//'; }
+
+AS=owner
+SQL=''
+HAVE_SQL=0
+REASON=''
+HAVE_REASON=0
+while (($#)); do
+  case $1 in
+    --as)
+      (($# >= 2)) || die 'opsi --as butuh nilai owner|postgres'
+      AS=$2
+      shift 2
+      ;;
+    -c)
+      (($# >= 2)) || die 'opsi -c butuh SQL'
+      SQL=$2
+      HAVE_SQL=1
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --)
+      (($# == 2)) || die 'sesudah -- harus tepat satu alasan (dalam tanda kutip)'
+      REASON=$2
+      HAVE_REASON=1
+      shift 2
+      ;;
+    *) die "argumen tidak dikenal: $1 (lihat --help)" ;;
+  esac
+done
+
+case $AS in
+  owner) ROLE=dompetku_owner ;;
+  postgres) ROLE=postgres ;;
+  *) die '--as harus owner atau postgres' ;;
+esac
+((HAVE_REASON)) || die 'alasan wajib: dompetku-psql [opsi] -- "<alasan>"'
+REASON_RE='^[A-Za-z0-9 .,:_/()-]{3,120}$'
+[[ $REASON =~ $REASON_RE ]] ||
+  die 'alasan harus 3-120 karakter: huruf, angka, spasi, . , : _ / ( ) - (tanpa data pribadi/nominal)'
+[[ $REASON =~ [A-Za-z0-9] ]] || die 'alasan harus memuat huruf atau angka'
+((HAVE_SQL == 0)) || [[ -n $SQL ]] || die 'SQL -c kosong'
+[[ $(id -u) == 0 ]] || die 'jalankan sebagai root: sudo dompetku-psql ...'
+
+# Operator host (dari sudo), disaring agar aman di meta audit.
+OP=${SUDO_USER:-root}
+[[ $OP =~ ^[A-Za-z0-9._-]{1,32}$ ]] || OP=unknown
+
+compose() { docker compose --project-directory "$ROOT" -f "$ROOT/compose.yml" "$@"; }
+
+# URL ping dibaca tanpa men-source berkas; hanya https. Nilainya tidak pernah dicetak dan tidak
+# masuk argv (curl membacanya dari stdin lewat -K -, sama dengan token di deployer).
+HC_URL=''
+if [[ -r $OPS_ENV ]]; then
+  HC_URL=$(sed -n 's/^HC_MANUAL_ACCESS_URL=//p' "$OPS_ENV" | tail -n 1)
+  HC_URL=${HC_URL%\"}
+  HC_URL=${HC_URL#\"}
+  HC_RE='^https://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
+  if [[ -n $HC_URL && ! $HC_URL =~ $HC_RE ]]; then
+    say 'PERINGATAN: HC_MANUAL_ACCESS_URL bukan URL https; alert dimatikan'
+    HC_URL=''
+  fi
+fi
+hc() { # hc <akhiran> <isi>: gagal hanya peringatan, URL dan galat curl tidak dicetak
+  [[ -n $HC_URL ]] || return 0
+  printf 'url = "%s"\n' "$HC_URL$1" |
+    curl -fsS -m 10 --retry 2 --retry-max-time 10 -o /dev/null --data-raw "$2" -K - >/dev/null 2>&1 ||
+    say 'PERINGATAN: ping Healthchecks gagal (alert email tidak terkirim)'
+}
+
+# Status alert ikut dicatat di event (kunci meta `status` diizinkan CHECK audit.events).
+if [[ -n $HC_URL ]]; then ALERT=alert_on; else ALERT=alert_off; fi
+
+# (1) Event audit dulu, transaksi sendiri (autocommit). Nilai lewat variabel psql (:'x' = literal
+# ter-quote), bukan disisipkan ke teks SQL. Event ditulis sebagai owner (pemilik tabel, BYPASSRLS).
+EVENT_ID=$(
+  compose exec -T -e PGAPPNAME=dompetku-psql-audit postgres gosu postgres \
+    psql -X -v ON_ERROR_STOP=1 -Atq -d "$DB" \
+    -v "target=$ROLE" -v "reason=$REASON" -v "op=$OP" -v "status=$ALERT" <<'SQL'
+set role dompetku_owner;
+insert into audit.events (event, meta)
+values ('db_manual_access',
+        jsonb_build_object('via', 'cli', 'target', :'target', 'reason', :'reason', 'op', :'op',
+                           'status', :'status'))
+returning id;
+SQL
+) || die 'event audit db_manual_access gagal ditulis; sesi tidak dibuka' 3
+[[ $EVENT_ID =~ ^[0-9]+$ ]] || die 'event audit db_manual_access tidak terkonfirmasi; sesi tidak dibuka' 3
+
+# (2) Alert sesi dibuka (Healthchecks "down"), lalu "up" saat skrip keluar dengan cara apa pun.
+if [[ -n $HC_URL ]]; then
+  hc /fail "sesi manual dibuka role=$ROLE op=$OP event=$EVENT_ID"
+else
+  say 'PERINGATAN: HC_MANUAL_ACCESS_URL tidak diatur di ops.env; sesi ini TIDAK mengirim alert email'
+fi
+closed() { hc '' "sesi manual ditutup role=$ROLE event=$EVENT_ID"; }
+trap closed EXIT
+trap 'exit 129' HUP
+trap 'exit 143' TERM
+
+# (3) Sesi psql. Transaksi terbuka yang terlupa diputus setelah 10 menit agar tidak menahan kunci;
+# sesi diam diputus setelah 30 menit. Ping "ditutup" berarti klien ditutup: proses yang di-exec di
+# container bisa tetap hidup (mis. SSH putus), dan batasnya adalah kedua timeout ini.
+OPTS='-c idle_in_transaction_session_timeout=600000 -c idle_session_timeout=1800000'
+[[ $ROLE == postgres ]] || OPTS+=" -c role=$ROLE"
+run=(compose exec -e "PGOPTIONS=$OPTS" -e "PGAPPNAME=dompetku-psql-$EVENT_ID")
+psql_args=(psql -X -d "$DB")
+if ((HAVE_SQL)); then
+  run+=(-T)
+  psql_args+=(-v ON_ERROR_STOP=1 -c "$SQL")
+elif [[ ! -t 0 ]]; then
+  run+=(-T)
+  psql_args+=(-v ON_ERROR_STOP=1)
+else
+  psql_args+=(-v "PROMPT1=[$ROLE manual] %/%R%# " -v "PROMPT2=[$ROLE manual] %/%R%# ")
+  say "event audit #$EVENT_ID tercatat; sesi sebagai $ROLE (op=$OP)."
+  say 'JANGAN membaca skema pgboss di sesi ini. Setiap perintah tercatat pgaudit. Keluar: \q'
+fi
+
+rc=0
+"${run[@]}" postgres gosu postgres "${psql_args[@]}" || rc=$?
+exit "$rc"
