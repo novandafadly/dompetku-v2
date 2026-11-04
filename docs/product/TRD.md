@@ -192,7 +192,7 @@ Data entri yang dipurge (setelah 90 hari atau dari Sampah) masih ada di backup s
 
 **Audit log** append-only untuk login, 2FA, kode pemulihan, ekspor, undangan, sesi dicabut, pindah ruang, akses DB manual, purge, deploy (spec §9.2, §9.5). Retensi usulan 1 tahun (round1 security R12). Web dan worker hanya menulis lewat `audit.log()`, yang mengambil `user_id` dari konteks request; nama event dan kunci `meta` daftar tertutup, nilai skalar, maksimal 1 kB; UPDATE, DELETE, TRUNCATE ditolak di luar fungsi purge. Detail di BSD §6, §7, §10.
 
-**Akses DB manual** (spec §9.5): `log_connections`/`log_disconnections` dan `pgaudit` untuk role `postgres` dan `dompetku_owner`, log Postgres dikirim ke luar VM DB; akses hanya lewat skrip host `dompetku-psql` yang menulis `audit.events` `db_manual_access` dan mengirim alert; koneksi admin tanpa event itu = alert anomali. Detail di BSD §12.
+**Akses DB manual** (spec §9.5): `log_connections`/`log_disconnections` dan `pgaudit` untuk role `postgres` dan `dompetku_owner`, log Postgres dikirim ke luar VM DB; akses hanya lewat skrip host `dompetku-psql` yang menulis `audit.events` `db_manual_access` dan mengirim alert; koneksi admin tanpa event itu = alert anomali (ditunda sampai log dikirim ke luar VM). Detail di BSD §12; alat dan pemasangannya di `docs/ops/akses-db-manual.md`.
 
 **Rantai pasok**: gitleaks, Semgrep OSS, osv-scanner, Trivy, actionlint + zizmor; Actions dipatok SHA; `pnpm` `minimumReleaseAge` 3 hari; Renovate; patch critical ≤ 48 jam (spec §9.2; ADR 0001).
 

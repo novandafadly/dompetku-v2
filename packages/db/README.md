@@ -55,21 +55,24 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0
 - Deployer (`infra/db-vm/deploy/deploy`) menjalankan `dbmate up` dari migrasi di image rilis. Migrasi ini ikut rilis berikutnya setelah merge ke `main`.
 - Runbook VM: pastikan `app.settings.env = 'prod'` (bawaan 0001; jangan diubah) dan isi `app.settings.owner_email` dari `AUTH_OWNER_EMAIL` (dibandingkan tanpa beda huruf besar/spasi). Tanpa `owner_email` tidak ada yang bisa mendaftar (`signup_closed`). Selama `env = 'prod'`, blok `migrate:down` 0002 sampai 0008 menolak berjalan (`migrate_down_blocked_prod`); CI dan lokal mengubah `env` ke `dev` sebelum rollback.
 - Email `auth."user"` tidak bisa diganti (`email_immutable`): fitur `changeEmail` Better Auth tetap mati.
-- `audit.log` menolak event sistem (`audit_event_reserved`). `deploy` dan `db_manual_access` dari skrip host ditulis langsung sebagai owner (`insert into audit.events`). Tes katalog mendeteksi event yang ditulis langsung oleh fungsi DEFINER/owner (atau lewat `private.purge_entries`) dan gagal bila event itu tidak ada di daftar reserved `audit.log`.
+- `audit.log` menolak event sistem (`audit_event_reserved`). `db_manual_access` ditulis langsung sebagai owner (`insert into audit.events`) oleh skrip host `infra/db-vm/bin/dompetku-psql` sebelum sesi dibuka (`docs/ops/akses-db-manual.md`); `deploy` dicadangkan untuk deployer (saat ini deployer hanya menulis `deploy.log`). Tes katalog mendeteksi event yang ditulis langsung oleh fungsi DEFINER/owner (atau lewat `private.purge_entries`) dan gagal bila event itu tidak ada di daftar reserved `audit.log`.
 - pgaudit: `dompetku_auditlog` sudah punya hak di semua tabel `app`, `audit`, `auth` dan default privileges untuk tabel baru, jadi tabel Better Auth ikut teraudit.
 - Fungsi undangan pra-login (`invitation_peek`, `decline_invitation`) dan `accept_invitation` mengisi GUC `app.invite_token_hash` dengan `set_config(..., true)`: nilainya bertahan sampai akhir transaksi, bukan hanya di dalam fungsi. Panggil di transaksi sendiri, jangan digabung dengan operasi lain dalam satu `withUser`.
-- **Membetulkan email yang salah ketik** (`email_immutable` menolak dari aplikasi). Undangan yang salah alamat cukup dicabut/dikirim ulang (`api.resend_invitation`); prosedur ini hanya untuk akun yang sudah jadi. Superuser lewat `dompetku-psql` (menulis `db_manual_access` dan mengirim alert), satu transaksi:
+- **Membetulkan email yang salah ketik** (`email_immutable` menolak dari aplikasi). Undangan yang salah alamat cukup dicabut/dikirim ulang (`api.resend_invitation`); prosedur ini hanya untuk akun yang sudah jadi. Lewat `dompetku-psql` sebagai `dompetku_owner` (bawaan; pemilik tabel `auth."user"`, jadi boleh `disable trigger`). Alat itu sudah menulis `db_manual_access` dan mengirim alert sebelum sesi dibuka; baris `insert` di bawah menambah event kedua yang mengikat user yang disentuh. Satu transaksi lewat stdin (email tidak terlihat di daftar proses):
 
-  ```sql
+  ```bash
+  sudo /opt/dompetku/bin/dompetku-psql -- "email_fix" <<'SQL'
   begin;
+  select id as uid from auth."user" where email = lower(btrim('<email lama>')) \gset
   insert into audit.events (event, user_id, meta)
-    values ('db_manual_access', '<user_id>', '{"via": "cli", "reason": "email_fix"}');
+    values ('db_manual_access', :'uid', '{"via": "cli", "reason": "email_fix"}');
   alter table auth."user" disable trigger user_email_immutable;
   update auth."user" set email = lower(btrim('<email baru>')), "emailVerified" = false, "updatedAt" = now()
-   where id = '<user_id>';
+   where id = :'uid';
   alter table auth."user" enable trigger user_email_immutable;
-  delete from auth.session where "userId" = '<user_id>';  -- paksa masuk ulang
+  delete from auth.session where "userId" = :'uid';  -- paksa masuk ulang
   commit;
+  SQL
   ```
 
   Lalu minta pemilik akun memverifikasi email baru lewat alur lupa kata sandi. Bila email itu akun pemilik, samakan `app.settings.owner_email`. Trigger dimatikan hanya di dalam transaksi itu; `disable trigger` butuh pemilik tabel atau superuser.

@@ -2657,7 +2657,7 @@ pgaudit.log_parameter = off
 
 - `log_connections`/`log_disconnections` mencatat setiap sesi; `pgaudit` dengan audit objek lewat role `dompetku_auditlog` (nologin, diberi hak semua tabel `app`, `audit`, `auth`) ditambah `alter role postgres set pgaudit.log = 'all'` dan `alter role dompetku_owner set pgaudit.log = 'write, ddl, role'`. Container `migrate` **tidak** menimpa `pgaudit.log` (diubah di S2, 2026-10-31): parameter itu hanya bisa diset superuser, dan memberi `dompetku_owner` hak `SET` atasnya berarti owner bisa mematikan auditnya sendiri. Migrasi tercatat dengan setelan owner `write, ddl, role`; volumenya kecil. Image Postgres resmi tidak memuat pgaudit; image dibangun dengan paket `postgresql-17-pgaudit` (M0b).
 - Log Postgres dikirim ke luar VM DB (tujuan log di TRD §3.7), sehingga sesi admin tidak bisa menghapus jejaknya sendiri.
-- Akses manual hanya lewat skrip host `dompetku-psql`: menulis `audit.events` (`db_manual_access`, `meta.via = 'cli'`) sebelum membuka sesi dan mengirim alert ke email pemilik. Koneksi superuser atau owner yang tidak didahului event itu (dicocokkan dari log koneksi) memicu alert anomali.
+- Akses manual hanya lewat skrip host `dompetku-psql`: menulis `audit.events` (`db_manual_access`, `meta.via = 'cli'`) sebelum membuka sesi dan mengirim alert ke email pemilik. Koneksi superuser atau owner yang tidak didahului event itu (dicocokkan dari log koneksi) memicu alert anomali (ditunda, lihat §16 "Catatan pasca-S7").
 
 ## 13. Daftar tes pgTAP
 
@@ -2796,3 +2796,18 @@ Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-
 - §11/IPD infra: Postgres memakai `log_error_verbosity = terse` (DETAIL `23505`/`23514` memuat nama dompet dan keterangan); `dompetku_worker` hanya boleh dari network `worker_db` (`172.25.0.0/16`, berisi postgres + worker) lewat `pg_hba.conf`, terpisah dari network web (`172.24.0.0/16`); worker punya network egress sendiri untuk Healthchecks (URL `https` saja). Konsekuensi: image postgres wajib dibangun ulang (`pg_hba.conf`) sebelum `worker.env` dipasang, kalau tidak worker ditolak `28000` dan rilis dirollback (kode 3). Langkah: `docs/ops/runbook-s7-worker.md`.
 - Respons Server Action atas permintaan pemilik Pribadi dari rute Bersama (R27: `moveTargetsAction('bersama','pribadi')`, `catatOptions('pribadi')`) boleh memuat dompet dan kategori Pribadi miliknya; data itu dimuat malas saat sheet dibuka, tidak pernah di URL, `searchParams`, cache bersama, atau props RSC. Hasil aksi tidak pernah memuat `linkedEntryId`/`linkId` (R24); `moveEntryAction` ke Pribadi tidak mengembalikan id entri baru, jadi UI menavigasi ke `/pribadi/transaksi`. Feed Bersama memberi event void untuk entri yang dipindah Bersama→Pribadi; labelnya "{Nama} memindahkan transaksi ke ruang lain" dikerjakan saat feed nyata dirender (R26, S8/S9).
 - Pengujian: pgTAP 965 asersi (job CI `db`); `test:int` 154 (termasuk `s7.int` untuk aksi) dan worker int 8 (job `auth`); `e2e:ledger` `s7.spec` 18 tes (kanari Pribadi di 7 rute Bersama, pindah, talangan, Cocokkan saldo, arsip, axe, budget); `deploy-test.sh` 25 skenario (job `infra`).
+
+**Catatan pasca-S7 (2026-11-04, keputusan pemilik atas review keamanan S7 M2):** `infra/db-vm/bin/dompetku-psql` dibuat (§12; operasi: `docs/ops/akses-db-manual.md`). Bentuknya:
+
+- Alasan wajib, 3 sampai 120 karakter aman.
+- `db_manual_access` ditulis sebagai `dompetku_owner` dalam transaksi sendiri sebelum sesi dibuka. Gagal tulis = sesi tidak dibuka.
+- `meta` berisi `via = 'cli'`, `target` (role sesi), `reason` (alasan), dan `op` (`SUDO_USER`). Semuanya kunci yang sudah diizinkan, jadi tanpa migrasi.
+- Alert: Healthchecks `dompetku-manual-access`. `/fail` dikirim saat sesi dibuka, ping sukses saat ditutup. Tanpa URL = peringatan saja, karena alat ini juga dipakai saat bootstrap.
+- Sesi bawaan `role=dompetku_owner`; `--as postgres` harus diminta eksplisit. `application_name = dompetku-psql-<id event>`.
+
+Yang ditunda:
+
+- Alert anomali "koneksi admin tanpa event". Butuh log Postgres yang dikirim ke luar VM (TRD §3.7), dan itu belum ada.
+- Event penutup sesi di DB.
+
+Skrip cek 0109 dan pembacaan katalog di runbook S7 sengaja tidak memakai alat ini: keduanya read only dan keluarannya hanya hitungan.
