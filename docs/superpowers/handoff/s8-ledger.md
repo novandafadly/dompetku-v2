@@ -78,3 +78,4 @@ Task 8: minor (deferred): bingkai S8-B1a masih "menunggu jawaban pemilik" → pe
 Task 8: design review → Approved (O1, O2, B1a lolos). Catatan: peristiwa sendiri tampil dengan nama, bukan "Kamu" (usul S9); angka uji Rp 12.345.678.900 jangan ikut screenshot portofolio; Setor Rp 0 Farida tidak terbukti di screenshot (teruji unit).
 Task 8: complete (commits f33901b..2fb4a9f, review clean)
 Task 9: dispatch implementer (sonnet) dari 5151cef; Step 1 reproduksi wajib dulu; review nanti terkuat (tampilan uang).
+Task 9: implementasi commit 9782152 (Step 1: read.ts hanya memuat fee kaki Pribadi → kaki keluar Bersama tanpa biaya; perbaikan tanpa migrasi; unit web 2022, test:int 172, e2e prototipe 296, e2e:ledger 38, e2e:bersama 6). Budget prototipe Beranda 161,7 (headroom 0,3), Transaksi 160,9, Detail 157,6, Aktivitas 155,1. Concern: baris Biaya tertutup nav di screenshot fullPage; riwayat Dompet/[id] tanpa biaya (di luar D1a). Review terkuat + design berjalan.
