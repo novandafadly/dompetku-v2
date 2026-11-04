@@ -224,7 +224,8 @@ describe('satu transaksi baca per page', () => {
     for (const ctx of [pribadi, bersama]) {
       const { peak, result } = await peakDuring(() => loadBeranda(ctx));
       expect(peak).toBe(1);
-      expect(result).toEqual(await berandaLama(ctx));
+      // `bersama` (Task 13) tidak ada di bentuk lama; isinya diuji di beranda.int.test.
+      expect({ ...result, bersama: undefined }).toEqual(await berandaLama(ctx));
     }
     const p = await loadBeranda(pribadi);
     expect(p.recent.map((e) => e.kind)).toEqual([

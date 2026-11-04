@@ -1,4 +1,5 @@
 import 'server-only';
+import { todayWIB, type IsoDate } from '@dompetku/domain';
 import type { AccountVM, EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
 import type pg from 'pg';
 import {
@@ -34,6 +35,20 @@ export interface BerandaData {
    * "Undang Farida"). Rute Bersama selalu `false` (tidak dikueri).
    */
   invite: boolean;
+  /**
+   * Hanya rute Bersama (`null` di Pribadi): keadaan ruang untuk S7-B1 (satu anggota) dan S7-B2
+   * (kosong). `pendingInvite` hanya diisi untuk pemilik Bersama dengan satu anggota (`null` =
+   * belum ada undangan menunggu); bukan pemilik tidak pernah menerima email undangan.
+   */
+  bersama: BerandaBersama | null;
+}
+
+export interface BerandaBersama {
+  members: number;
+  isOwner: boolean;
+  /** Tanpa dompet operasional aktif dan tanpa entri hidup (saldo awal juga entri). */
+  empty: boolean;
+  pendingInvite?: { email: string; expiresOn: IsoDate } | null;
 }
 
 const RECENT = 5;
@@ -57,6 +72,47 @@ async function inviteOpenTx(c: pg.PoolClient): Promise<boolean> {
 }
 
 /**
+ * Keadaan ruang Bersama (S7-B1/B2) di transaksi baca yang sama. Anggota dari `app.space_roster`,
+ * peran dari baris keanggotaan user. `anyEntry` = ada entri hidup (saldo awal juga entri); "kosong"
+ * dihitung pemanggil bersama `hasOperasional`. Undangan menunggu dibaca lewat `api.list_invitations`
+ * (konteks user transaksi ini, hanya undangan buatannya) dan hanya untuk pemilik berisi satu orang.
+ */
+async function bersamaTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+): Promise<{
+  members: number;
+  isOwner: boolean;
+  anyEntry: boolean;
+  pendingInvite?: { email: string; expiresOn: IsoDate } | null;
+}> {
+  const { rows } = await c.query<{ role: string; members: number; any_entry: boolean }>(
+    `select m.role::text as role,
+            (select count(*) from app.space_roster($1))::int as members,
+            exists (select 1 from app.entries e
+                     where e.space_id = $1 and e.voided_at is null) as any_entry
+       from app.space_members m
+      where m.space_id = $1 and m.user_id = app.current_user_id()`,
+    [ctx.spaceId],
+  );
+  const r = rows[0];
+  const members = r?.members ?? 1;
+  const isOwner = r?.role === 'owner';
+  const anyEntry = r?.any_entry ?? false;
+  if (!isOwner || members >= 2) return { members, isOwner, anyEntry };
+  const inv = await c.query<{ email: string; expires_at: Date }>(
+    `select email, expires_at from api.list_invitations() where status = 'pending' limit 1`,
+  );
+  const row = inv.rows[0];
+  return {
+    members,
+    isOwner,
+    anyEntry,
+    pendingInvite: row ? { email: row.email, expiresOn: todayWIB(row.expires_at) } : null,
+  };
+}
+
+/**
  * Semua bacaan Beranda BERURUTAN di satu `withLedger` (satu koneksi pool per muat, bukan satu per
  * kueri; 40001/40P01 mengulang seluruh blok). `accounts`: dompet ruang ini yang sudah dimuat untuk
  * request yang sama (opsi Catat layout, di-`cache` per request; transaksinya sendiri, jadi satu
@@ -77,17 +133,25 @@ export async function loadBeranda(
       const expense = await hasExpenseTx(c, ctx);
       const recent = await recentEntriesTx(c, ctx, RECENT);
       const invite = ctx.kind === 'personal' ? await inviteOpenTx(c) : false;
-      return { safe, today, accounts, expense, recent, invite };
+      const bersama = ctx.kind === 'shared' ? await bersamaTx(c, ctx) : null;
+      return { safe, today, accounts, expense, recent, invite, bersama };
     }),
     given ?? null,
   ]);
   const accounts = givenAccounts ?? read.accounts ?? [];
+  const hasOperasional = accounts.some((a) => a.pocket === 'operasional' && !a.archived);
+  let bersama: BerandaBersama | null = null;
+  if (read.bersama) {
+    const { anyEntry, ...rest } = read.bersama;
+    bersama = { ...rest, empty: !hasOperasional && !anyEntry };
+  }
   return {
     safe: read.safe,
     today: read.today,
-    hasOperasional: accounts.some((a) => a.pocket === 'operasional' && !a.archived),
+    hasOperasional,
     hasExpense: read.expense,
     recent: read.recent,
     invite: read.invite,
+    bersama,
   };
 }

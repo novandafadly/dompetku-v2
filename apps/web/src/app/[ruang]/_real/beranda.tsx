@@ -3,6 +3,12 @@ import Link from 'next/link';
 import { buttonClass } from '@/components/ui/button';
 import { PlusIcon } from '@/components/ui/icons/plus';
 import {
+  BERSAMA_SOLO_INTRO,
+  BersamaAktivitasKosong,
+  BersamaInviteCard,
+  BersamaKosongCard,
+} from '@/features/beranda/bersama-views';
+import {
   OnboardingChecklistView,
   type ChecklistStep,
 } from '@/features/beranda/onboarding-checklist-view';
@@ -19,7 +25,7 @@ import {
 import { PageHeader } from '@/features/shell/page-header';
 import type { BerandaData } from '@/server/ledger/beranda';
 import { markNoSpendDayAction } from '../_actions/beranda';
-import { berandaSteps, type BerandaStepState } from './beranda-steps';
+import { berandaSteps, bersamaView, type BerandaStepState } from './beranda-steps';
 import { CatatStepIsland, NoSpendIsland } from './beranda-islands';
 
 /**
@@ -70,6 +76,7 @@ export function BerandaReal({
         };
     }
   };
+  const view = bersamaView(ruang, data.bersama);
   const steps = berandaSteps({
     ruang,
     hasOperasional: data.hasOperasional,
@@ -78,8 +85,21 @@ export function BerandaReal({
   });
   // Checklist hilang sesudah semua langkah selesai.
   const checklist = steps.every((s) => s.done) ? null : (
-    <OnboardingChecklistView ruang={ruang} steps={steps.map(toStep)} />
+    <OnboardingChecklistView
+      ruang={ruang}
+      steps={steps.map(toStep)}
+      {...(view.solo ? { intro: BERSAMA_SOLO_INTRO } : {})}
+    />
   );
+  // Ajakan hanya untuk pemilik: bukan pemilik tidak menerima data undangan sama sekali.
+  const invite =
+    view.invite === 'none' ? null : (
+      <BersamaInviteCard
+        href={buildAuthHref('undang', query)}
+        pending={view.invite === 'menunggu' ? (data.bersama?.pendingInvite ?? null) : null}
+      />
+    );
+  const aktivitas = view.solo ? <BersamaAktivitasKosong /> : null;
 
   const rows: RecentRow[] = data.recent.map((e) => {
     const { value, kind } = signedAmountVM(e);
@@ -105,6 +125,21 @@ export function BerandaReal({
     />
   );
 
+  // S7-B2: Bersama tanpa dompet operasional dan tanpa entri. Kosong, ajakan, checklist, Aktivitas.
+  if (view.empty) {
+    return (
+      <>
+        {header}
+        <div className="flex flex-col gap-3 laptop:max-w-180 laptop:gap-4">
+          <BersamaKosongCard addWalletHref={dompetHref} />
+          {invite}
+          {checklist}
+          {aktivitas}
+        </div>
+      </>
+    );
+  }
+
   if (!data.hasOperasional) {
     return (
       <>
@@ -120,8 +155,10 @@ export function BerandaReal({
               </Link>
             }
           />
+          {invite}
           {checklist}
           {recent}
+          {aktivitas}
         </div>
       </>
     );
@@ -134,6 +171,7 @@ export function BerandaReal({
       <div className="grid grid-cols-1 gap-3 tablet:gap-4 laptop:max-w-250 laptop:grid-cols-beranda laptop:items-start laptop:gap-5">
         <div className="flex flex-col gap-3 tablet:gap-4">
           <SafeToSpendCard ruang={ruang} today={today} vm={data.safe} showObligations={false} />
+          {invite}
           <NoSpendIsland
             hasExpense={data.today.hasExpense}
             noSpendMarked={data.today.noSpendMarked}
@@ -141,7 +179,10 @@ export function BerandaReal({
           />
           {checklist}
         </div>
-        <div className="flex flex-col gap-3 tablet:gap-4">{recent}</div>
+        <div className="flex flex-col gap-3 tablet:gap-4">
+          {recent}
+          {aktivitas}
+        </div>
       </div>
     </>
   );

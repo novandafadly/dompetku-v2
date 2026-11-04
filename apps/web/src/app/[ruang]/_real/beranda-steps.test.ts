@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { berandaSteps } from './beranda-steps';
+import { berandaSteps, bersamaView } from './beranda-steps';
 
 const base = { hasOperasional: false, hasExpense: false, invite: false };
 
@@ -36,5 +36,45 @@ describe('berandaSteps (checklist Beranda nyata)', () => {
     expect(
       berandaSteps({ ruang: 'bersama', ...base, invite: true }).some((s) => s.key === 'undang'),
     ).toBe(false);
+  });
+});
+
+describe('bersamaView (S7-B1/B2)', () => {
+  const owner = { members: 1, isOwner: true, empty: false };
+
+  it('Pribadi dan Bersama dua anggota tidak berubah dari S6', () => {
+    const none = { solo: false, empty: false, invite: 'none' };
+    expect(bersamaView('pribadi', null)).toEqual(none);
+    expect(bersamaView('bersama', { members: 2, isOwner: true, empty: false })).toEqual(none);
+    expect(bersamaView('bersama', null)).toEqual(none);
+  });
+
+  it('satu anggota: ajakan hanya untuk pemilik, dua keadaan', () => {
+    expect(bersamaView('bersama', owner)).toEqual({ solo: true, empty: false, invite: 'baru' });
+    expect(bersamaView('bersama', { ...owner, pendingInvite: null }).invite).toBe('baru');
+    expect(
+      bersamaView('bersama', {
+        ...owner,
+        pendingInvite: { email: 'f@example.test', expiresOn: '2026-11-07' },
+      }).invite,
+    ).toBe('menunggu');
+    expect(bersamaView('bersama', { ...owner, isOwner: false })).toEqual({
+      solo: true,
+      empty: false,
+      invite: 'none',
+    });
+  });
+
+  it('kosong berdiri sendiri dari solo', () => {
+    expect(bersamaView('bersama', { members: 2, isOwner: false, empty: true })).toEqual({
+      solo: false,
+      empty: true,
+      invite: 'none',
+    });
+    expect(bersamaView('bersama', { ...owner, empty: true })).toEqual({
+      solo: true,
+      empty: true,
+      invite: 'baru',
+    });
   });
 });
