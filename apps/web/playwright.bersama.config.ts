@@ -32,9 +32,21 @@ export default defineConfig({
     ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-bersama' }]]
     : 'list',
   use: { baseURL: `http://localhost:${String(port)}`, trace: 'retain-on-failure' },
+  // `bergabung.spec` harus jalan sebelum fixture `kanari` mengisi Pribadi N dan F (S8-O1: Pribadi F
+  // masih kosong), jadi proyeknya sendiri dan proyek utama bergantung padanya.
   projects: [
     {
+      name: 'bergabung',
+      testMatch: /bergabung\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(executablePath ? { launchOptions: { executablePath } } : {}),
+      },
+    },
+    {
       name: 'chromium',
+      testIgnore: /bergabung\.spec\.ts$/,
+      dependencies: ['bergabung'],
       use: {
         ...devices['Desktop Chrome'],
         ...(executablePath ? { launchOptions: { executablePath } } : {}),

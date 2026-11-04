@@ -511,3 +511,177 @@ test('@screens S8-D1a biaya kaki keluar Bersama (F mengambil, biaya 2.500)', asy
     { ...t9, heading: 'Ambil dari Bersama' },
   );
 });
+
+/**
+ * Kriteria keluar S8 (Task 10): layar portofolio dua anggota ke `docs/design/s8/`. Harus terakhir:
+ * data ledger tes sebelumnya (nominal tekanan `Rp 12.345.678.900`, nama dompet kanari) dibuang
+ * dulu (akun, ruang, kategori tetap), lalu diisi cerita realistis lewat fungsi `api.*`.
+ */
+const OUT_DIR_DOCS = fileURLToPath(new URL('../../../../docs/design/s8/', import.meta.url));
+
+async function wipeLedger(): Promise<void> {
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query(`
+    begin;
+    select set_config('dompetku.purge', 'on', true);
+    delete from app.product_events;
+    delete from app.idempotency_keys;
+    delete from app.entry_lines;
+    delete from app.entry_history;
+    delete from app.entries;
+    delete from app.entry_tombstones;
+    delete from app.accounts;
+    delete from app.no_spend_days;
+    commit;`);
+  } finally {
+    await admin.end();
+  }
+}
+
+test('@screens S8 kriteria keluar: Beranda, Aktivitas, Detail dua anggota (docs/design/s8)', async ({
+  browser,
+  ownerState,
+  partnerState,
+  kanari,
+}) => {
+  test.setTimeout(600_000);
+  expect(kanari.f.wallet).toBeTruthy();
+  await wipeLedger();
+  const n = await spaceOf(OWNER, 'shared');
+  const nP = await spaceOf(OWNER, 'personal');
+  const fP = await spaceOf(PARTNER, 'personal');
+  await asUser(
+    n.uid,
+    `select api.create_account(p_client_id => $1, p_space_id => $2, p_name => $3,
+       p_pocket => 'operasional', p_wallet_type => 'bank', p_opened_on => app.today() - 30,
+       p_opening_balance => 3000000::bigint)`,
+    [randomUUID(), n.sid, BERSAMA_WALLET],
+  );
+  await createWallet(OWNER, 'personal', 'BCA Novanda', 8_000_000);
+  await createWallet(PARTNER, 'personal', 'Jago Farida', 5_000_000);
+  const acc = async (uid: string, space: string, name: string) => {
+    const [r] = await asUser<{ id: string }>(
+      uid,
+      'select id::text from app.accounts where space_id = $1 and name = $2',
+      [space, name],
+    );
+    if (!r) throw new Error(`dompet ${name} tidak ada`);
+    return r.id;
+  };
+  const kas = await acc(n.uid, n.sid, BERSAMA_WALLET);
+  const bca = await acc(nP.uid, nP.sid, 'BCA Novanda');
+  const jago = await acc(fP.uid, fP.sid, 'Jago Farida');
+  // Kategori bawaan Bersama yang cocok dengan keterangan (layar portofolio).
+  const cat = async (name: string) => {
+    const [r] = await asUser<{ id: string }>(
+      n.uid,
+      `select id::text from app.categories
+        where space_id = $1 and type = 'expense' and parent_id is null and name = $2`,
+      [n.sid, name],
+    );
+    if (!r) throw new Error(`kategori ${name} tidak ada`);
+    return r.id;
+  };
+  const dapur = await cat('Belanja Dapur');
+  const makanLuar = await cat('Makan di Luar');
+  const parkir = await cat('Bensin & Parkir');
+  const listrik = await cat('Listrik & Air');
+  const [catP] = await asUser<{ id: string }>(
+    nP.uid,
+    `select id::text from app.categories
+      where space_id = $1 and type = 'expense' and parent_id is null order by sort_order limit 1`,
+    [nP.sid],
+  );
+
+  await spaceTransfer(n.uid, nP.sid, bca, kas, 2_000_000, 'Belanja bulanan');
+  await spaceTransfer(fP.uid, fP.sid, jago, kas, 1_500_000, 'Tambahan dapur');
+  await expense(n.uid, n.sid, kas, dapur, 285_000, 'Belanja mingguan');
+  await expense(fP.uid, n.sid, kas, parkir, 5_000, 'Parkir', 2);
+  const galon = await expense(n.uid, n.sid, kas, listrik, 45_000, 'Galon dan gas');
+  await asUser(
+    fP.uid,
+    `select api.update_entry(p_client_id => $1, p_entry_id => $2, p_expected_version => 1,
+       p_account_id => $3, p_amount => 60000::bigint, p_category_id => $4, p_occurred_on => null,
+       p_description => 'Galon dan gas', p_reimbursable => false)`,
+    [randomUUID(), galon, kas, listrik],
+  );
+  await expense(fP.uid, n.sid, kas, makanLuar, 150_000, 'Makan malam');
+  await asUser(
+    fP.uid,
+    `select api.create_transfer(p_client_id => $1, p_space_id => $2, p_from_account => $3,
+       p_to_account => $4, p_amount => 200000::bigint, p_description => 'Ongkos pribadi',
+       p_shared_note => 'Ganti ongkos')`,
+    [randomUUID(), n.sid, kas, jago],
+  );
+  const sabun = await expense(n.uid, n.sid, kas, dapur, 32_000, 'Sabun cuci');
+  await asUser(
+    n.uid,
+    `select api.move_entry_to_space(p_client_id => $1, p_entry_id => $2, p_expected_version => 1,
+       p_to_space_id => $3, p_account_id => $4, p_category_id => $5)`,
+    [randomUUID(), sabun, nP.sid, bca, catP?.id ?? ''],
+  );
+  const [setoran] = await asUser<{ id: string }>(
+    n.uid,
+    `select id::text from app.entries where space_id = $1 and kind = 'space_transfer'
+       and direction = 'in' and created_by = $2 limit 1`,
+    [n.sid, n.uid],
+  );
+  if (!setoran) throw new Error('setoran tidak ada');
+
+  const docs = (heading: string) => ({ dir: OUT_DIR_DOCS, heading });
+  await shoot(browser, ownerState, 'a1-beranda-n', '/bersama/beranda', ALL, docs('Beranda'));
+  await shoot(
+    browser,
+    partnerState,
+    'a1-beranda-f',
+    '/bersama/beranda',
+    [...V(390, ['dark', 'light'], 2), ...V(1280)],
+    docs('Beranda'),
+  );
+  await shoot(
+    browser,
+    ownerState,
+    'a3-aktivitas-n',
+    '/bersama/aktivitas',
+    [...V(390, ['dark', 'light'], 2), ...V(1280, ['dark'])],
+    docs('Aktivitas'),
+  );
+  await shoot(
+    browser,
+    partnerState,
+    'a3-aktivitas-f',
+    '/bersama/aktivitas',
+    V(390, ['dark'], 2),
+    docs('Aktivitas'),
+  );
+  await shoot(
+    browser,
+    partnerState,
+    'b5-setoran-n-dilihat-f',
+    `/bersama/transaksi/${setoran.id}`,
+    V(390, ['dark', 'light'], 2),
+    docs('Setoran dari Novanda'),
+  );
+  await shoot(
+    browser,
+    partnerState,
+    'd2-dipindah-dilihat-f',
+    `/bersama/transaksi/${sabun}`,
+    V(390, ['dark', 'light'], 2),
+    docs('Sabun cuci'),
+  );
+  // Layar yang dipotret: tanpa kanari, nominal tekanan, atau nama dompet di feed (K1).
+  const ctx = await browser.newContext({ storageState: partnerState, baseURL: BASE });
+  const page = await ctx.newPage();
+  await page.goto('/bersama/beranda');
+  for (const name of ['Aktivitas', 'Kontribusi']) {
+    const kartu = page.getByRole('region', { name: new RegExp(`^${name}`) });
+    for (const w of [BERSAMA_WALLET, 'BCA Novanda', 'Jago Farida', 'KANARI', '12.345.678.900']) {
+      await expect(kartu).not.toContainText(w);
+    }
+  }
+  await expect(page.getByRole('main')).not.toContainText('12.345.678.900');
+  await ctx.close();
+});
