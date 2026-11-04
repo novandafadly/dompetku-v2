@@ -833,7 +833,7 @@ test('pemilik: keluar lalu masuk dengan passkey', async () => {
 test('pemilik: Menu → Keluar mengakhiri sesi dan membuka /masuk', async () => {
   const page = ownerPage;
   await page.goto('/pribadi/beranda');
-  await page.getByRole('banner').getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).filter({ visible: true }).click();
   await page.getByRole('dialog', { name: 'Menu' }).getByRole('button', { name: 'Keluar' }).click();
   await expect(page).toHaveURL(/\/masuk\?status=keluar$/);
   await expect(page.getByText('Kamu sudah keluar.')).toBeVisible();
