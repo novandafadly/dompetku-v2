@@ -86,3 +86,4 @@ Task 9: minor (deferred): bingkai S8-D1a menulis kondisi `space_kind='shared'`; 
 Task 9: minor (deferred, utang): riwayat dompet (`_real/dompet-detail.tsx`, effectOnAccountVM) menampilkan -nominal tanpa biaya untuk kaki keluar (Pribadi dan Bersama); baris tidak menjumlah ke saldo dompet. Pra-S8, catat BSD §16 / S9.
 Task 9: tindak lanjut minor commit 87f00e1 (bulan WIB dari app.today() di detail.int; continue no-op dihapus; screenshot viewport baris Biaya 320/390; budget nyata diukur di @screens). Diff hanya tes; controller memeriksa diff + screenshot 320 terang (baris Biaya terlihat). Budget nyata js-route kB: Beranda 157,5, Transaksi 156,8, Detail 153,5, Aktivitas 150,9.
 Task 9: complete (commits 5151cef..87f00e1, review clean)
+Task 10: dispatch implementer (terkuat) dari 3eda2ac; membawa minor tertunda: K1 e2e reguler (Task 6), Luar 404 (Task 7), tag registry; bug produk dilaporkan, bukan diperbaiki di task ini.
