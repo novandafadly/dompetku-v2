@@ -24,10 +24,23 @@ for (const theme of ['dark', 'light'] as const) {
         'href',
         '/pribadi/sampah',
       );
-      for (const link of await daftar.getByRole('listitem').getByRole('link').all()) {
-        const box = await link.boundingBox();
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-      }
+      // Target sentuh baris ≥ 44. Diukur ulang sampai lolos (pola toPass): sesekali (±1/30 di suite
+      // penuh, tidak terulang dalam 210 putaran terpisah) boundingBox mengembalikan null (dibaca 0)
+      // karena tautan sesaat tidak terlihat/terlepas saat diukur, bukan karena tingginya kurang.
+      // Asersi tetap sama: ketiga tautan harus terlihat dan setinggi ≥ 44 pada pengukuran yang sama.
+      const links = daftar.getByRole('listitem').getByRole('link');
+      await expect(links).toHaveCount(3);
+      await expect(async () => {
+        const heights = await links.evaluateAll((els) =>
+          els.map((el) => {
+            const r = el.getBoundingClientRect();
+            const visible = el.checkVisibility();
+            return visible ? r.height : 0;
+          }),
+        );
+        expect(heights).toHaveLength(3);
+        for (const h of heights) expect(h).toBeGreaterThanOrEqual(44);
+      }).toPass();
 
       const pertama = frame('t-kosong-pertama');
       await expect(pertama.getByText('Belum ada transaksi di Bersama.')).toBeVisible();
