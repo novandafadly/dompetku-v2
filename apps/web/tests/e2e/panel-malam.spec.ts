@@ -23,8 +23,12 @@ test.describe('Beranda memuat dan galat (?state)', () => {
     const alert = page.getByRole('alert').filter({ hasText: 'Beranda belum bisa dimuat' });
     await expect(alert.getByRole('heading', { name: 'Beranda belum bisa dimuat' })).toBeVisible();
     await expect(alert).toContainText('Catatan yang sudah tersimpan tidak hilang.');
-    await alert.getByRole('button', { name: 'Catat tetap bisa' }).click();
-    await expect(page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' })).toBeVisible();
+    // Klik sebelum hidrasi tidak membuka sheet: ulangi klik sampai dialog muncul.
+    const dialog = page.getByRole('dialog', { name: 'Pengeluaran · Pribadi' });
+    await expect(async () => {
+      await alert.getByRole('button', { name: 'Catat tetap bisa' }).click();
+      await expect(dialog).toBeVisible({ timeout: 1000 });
+    }).toPass();
     await page.keyboard.press('Escape');
     await alert.getByRole('button', { name: 'Coba lagi' }).click();
     await expect(page.getByTestId('hero-amount')).toBeVisible();

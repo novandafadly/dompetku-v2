@@ -186,7 +186,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
         if (seq === optsSeq.current) setOpts({ accounts: [], categories: [] });
       },
     );
-    // Hanya sekali saat sheet dibuka.
+    // Sekali per pemasangan hook (guard `started` menahan efek ganda StrictMode); sumber dan ruang
+    // awal sengaja tidak jadi dependensi.
   }, []);
 
   const loading = opts === null;
