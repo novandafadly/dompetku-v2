@@ -830,6 +830,21 @@ test('pemilik: keluar lalu masuk dengan passkey', async () => {
   await expect(page).toHaveURL(/\/pribadi\/beranda$/);
 });
 
+test('pemilik: Menu → Keluar mengakhiri sesi dan membuka /masuk', async () => {
+  const page = ownerPage;
+  await page.goto('/pribadi/beranda');
+  await page.getByRole('banner').getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('button', { name: 'Keluar' }).click();
+  await expect(page).toHaveURL(/\/masuk\?status=keluar$/);
+  await expect(page.getByText('Kamu sudah keluar.')).toBeVisible();
+  // Sesi sudah berakhir: halaman ruang melempar kembali ke /masuk.
+  await page.goto('/pribadi/beranda');
+  await expect(page).toHaveURL(/\/masuk/);
+  // Masuk lagi dengan passkey agar tes sesudahnya tetap punya sesi.
+  await page.getByRole('button', { name: 'Masuk dengan passkey' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/beranda$/);
+});
+
 test('passkey dibatalkan: pesan jelas dan jalur kata sandi', async ({ browser }) => {
   const page = await (await browser.newContext()).newPage();
   await page.goto('/masuk');

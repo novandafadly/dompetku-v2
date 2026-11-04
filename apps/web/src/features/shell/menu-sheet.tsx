@@ -6,6 +6,7 @@ import { useId, useState } from 'react';
 import type { Icon } from '@/components/ui/icon';
 import { AddressBookIcon } from '@/components/ui/icons/address-book';
 import { AirplaneTiltIcon } from '@/components/ui/icons/airplane-tilt';
+import { SignOutIcon } from '@/components/ui/icons/sign-out';
 import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
 import { ExportIcon } from '@/components/ui/icons/export';
 import { GearSixIcon } from '@/components/ui/icons/gear-six';
@@ -16,6 +17,7 @@ import { TrashIcon } from '@/components/ui/icons/trash';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
 import { focusRing, rowDivider, tile } from '@/components/ui/styles';
+import { signOutAction } from '@/server/auth/actions';
 import { useNav } from './nav-provider';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
@@ -116,6 +118,22 @@ export function MenuSheet({
             )}
           </li>
         ))}
+        {real ? (
+          <li className={rowDivider}>
+            {/* Form + button: tetap jalan tanpa JS. Aksi mencatat audit logout lalu redirect ke /masuk?status=keluar. */}
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className={`flex min-h-13 w-full items-center gap-3 rounded-lg text-left text-body font-semibold text-text hover-pointer:bg-hover ${focusRing}`}
+              >
+                <span aria-hidden="true" className={`size-9 ${tile}`}>
+                  <SignOutIcon size={18} />
+                </span>
+                <span className="flex-1">Keluar</span>
+              </button>
+            </form>
+          </li>
+        ) : null}
       </ul>
       <div className="flex flex-col gap-1.5 pt-1">
         <span id={themeLabel} className="text-meta font-bold text-text">
