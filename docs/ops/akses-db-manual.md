@@ -9,14 +9,16 @@ Satu-satunya jalur psql manual yang disetujui di VM DB (BSD §12, TRD §3.4). Sk
    - `via = 'cli'`;
    - `target` = role sesi (`dompetku_owner` atau `postgres`);
    - `reason` = alasan;
-   - `op` = `SUDO_USER` yang sudah disaring (`[A-Za-z0-9._-]`, selain itu `unknown`).
+   - `op` = `SUDO_USER` yang sudah disaring (`[A-Za-z0-9._-]`, selain itu `unknown`);
+   - `status` = `alert_on`, atau `alert_off` bila `HC_MANUAL_ACCESS_URL` tidak diatur atau tidak valid, sehingga sesi tanpa alert terlihat di audit.
 
    Kunci-kunci ini sudah ada di daftar kunci yang diizinkan (0004), jadi tidak perlu migrasi. Bila event gagal ditulis, sesi **tidak** dibuka (kode keluar 3).
 
-3. Mengirim ping `/fail` ke check Healthchecks `dompetku-manual-access`, sehingga pemilik menerima email "down" berisi `sesi manual dibuka role=… op=… event=<id>`. Saat skrip keluar (normal, galat, HUP, TERM), alat ini mengirim ping sukses, sehingga pemilik menerima email "up" berisi `sesi manual ditutup`. Alasan tidak ikut dikirim. URL ping tidak pernah dicetak. Ping yang gagal (timeout 10 detik) hanya menghasilkan peringatan.
+3. Mengirim ping `/fail` ke check Healthchecks `dompetku-manual-access`, sehingga pemilik menerima email "down" berisi `sesi manual dibuka role=… op=… event=<id>`. Saat skrip keluar (normal, galat, HUP, TERM), alat ini mengirim ping sukses, sehingga pemilik menerima email "up" berisi `sesi manual ditutup`. "Ditutup" berarti **klien** ditutup: bila SSH putus atau klien dibunuh, proses yang di-exec di container bisa tetap hidup, dan batasnya hanya timeout di langkah 4. Alasan tidak ikut dikirim. URL ping tidak pernah dicetak dan tidak masuk argv (curl membacanya dari stdin, `-K -`). Ping yang gagal (timeout 10 detik) hanya menghasilkan peringatan.
 4. Membuka psql di container postgres (`docker compose exec postgres gosu postgres psql -d dompetku`):
    - `PGAPPNAME=dompetku-psql-<id event>`, untuk mencocokkan log koneksi dengan event;
    - `idle_in_transaction_session_timeout = 10min`, supaya transaksi yang terlupa tidak menahan kunci;
+   - `idle_session_timeout = 30min`, supaya sesi yatim (klien sudah mati) diputus. Query yang sedang berjalan tidak dibatasi; cek sesudah sesi bila ragu: `select pid, state from pg_stat_activity where application_name like 'dompetku-psql-%'`;
    - bawaannya `role=dompetku_owner`, yang diset saat koneksi.
 
    `session_user` tetap `postgres` (pgaudit `all`), dan `reset role` bisa mengembalikan sesi ke superuser. Jadi `--as owner` hanyalah pagar salah ketik, bukan batas keamanan: siapa pun yang menjalankan alat ini sudah root di VM.
@@ -30,7 +32,9 @@ sudo /opt/dompetku/bin/dompetku-psql -- "alasan" <prosedur.sql            # skri
 sudo /opt/dompetku/bin/dompetku-psql --as postgres -- "alasan"            # superuser, hanya bila owner tidak cukup
 ```
 
-SQL yang memuat email atau data lain sebaiknya dikirim lewat stdin, bukan `-c`, karena isi `-c` terlihat di daftar proses. Kedua cara tetap tercatat pgaudit di log Postgres.
+SQL yang memuat email atau data lain sebaiknya dikirim lewat stdin, bukan `-c`, karena isi `-c` terlihat di daftar proses. Heredoc yang diketik di shell masuk riwayat shell operator; untuk data sensitif pakai berkas (`</root/prosedur.sql`, hapus sesudahnya) atau sesi interaktif. Semua cara tetap tercatat pgaudit di log Postgres.
+
+**Sesi bersamaan:** Healthchecks hanya mengirim email saat status berubah. Sesi kedua yang dibuka selagi sesi pertama masih terbuka (check sudah "down") tidak menghasilkan email; sesi pertama ditutup = "up" walau sesi kedua masih terbuka. Alat ini tidak memblokir sesi kedua; event audit tetap ditulis untuk setiap sesi. Biasakan satu sesi pada satu waktu.
 
 **Jangan membaca objek skema `pgboss` lewat alat ini**, baik sebagai `dompetku_owner` maupun `postgres`. Alasannya ada di `runbook-s7-worker.md` langkah 5 (view jebakan milik `dompetku_worker`). Banner sesi interaktif mengingatkan hal ini.
 
@@ -73,4 +77,6 @@ Yang sengaja tidak memakai alat ini:
 ## Ditunda
 
 - Alert anomali untuk koneksi `postgres`/`dompetku_owner` yang tidak didahului event `db_manual_access` (BSD §12). Fitur ini butuh log Postgres yang dikirim ke luar VM dan pencocokan `application_name`/waktu dengan `audit.events`. Pengiriman log ke luar VM belum ada (TRD §3.7), jadi fitur ini belum dibangun. Sampai saat itu, jejak sesi di luar alat ini hanya `log_connections` dan pgaudit di log container lokal.
+- **Batas jejak saat ini:** root di VM DB bisa menghapus log container lokal (`log_connections`, pgaudit), dan sebagai superuser juga baris `audit.events` (mematikan trigger append-only). Satu-satunya jejak di luar jangkauan root saat ini adalah email Healthchecks (dan hanya bila `ops.env` terpasang). Pengiriman log Postgres ke luar VM belum ada (TRD §3.7).
+- Koneksi audit alat ini sendiri (`application_name = dompetku-psql-audit`, superuser) harus dikecualikan oleh pencocok anomali kelak.
 - Event penutup sesi di `audit.events`. Saat ini penutupan sesi hanya ditandai ping sukses Healthchecks; jejak di DB hanya event pembuka.

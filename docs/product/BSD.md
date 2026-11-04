@@ -2656,7 +2656,7 @@ pgaudit.log_parameter = off
 **Akses DB manual** (spec §9.5, review security): sesi `psql` sebagai superuser atau `dompetku_owner` tidak lewat `audit.log` dan bisa mengubah data. Mekanismenya:
 
 - `log_connections`/`log_disconnections` mencatat setiap sesi; `pgaudit` dengan audit objek lewat role `dompetku_auditlog` (nologin, diberi hak semua tabel `app`, `audit`, `auth`) ditambah `alter role postgres set pgaudit.log = 'all'` dan `alter role dompetku_owner set pgaudit.log = 'write, ddl, role'`. Container `migrate` **tidak** menimpa `pgaudit.log` (diubah di S2, 2026-10-31): parameter itu hanya bisa diset superuser, dan memberi `dompetku_owner` hak `SET` atasnya berarti owner bisa mematikan auditnya sendiri. Migrasi tercatat dengan setelan owner `write, ddl, role`; volumenya kecil. Image Postgres resmi tidak memuat pgaudit; image dibangun dengan paket `postgresql-17-pgaudit` (M0b).
-- Log Postgres dikirim ke luar VM DB (tujuan log di TRD §3.7), sehingga sesi admin tidak bisa menghapus jejaknya sendiri.
+- Log Postgres dikirim ke luar VM DB (tujuan log di TRD §3.7), sehingga sesi admin tidak bisa menghapus jejaknya sendiri. **Belum ada (ditunda, TRD §3.7):** sampai saat itu root di VM DB bisa menghapus log lokal dan baris `audit.events`; jejak di luar VM hanya email Healthchecks dari `dompetku-psql`.
 - Akses manual hanya lewat skrip host `dompetku-psql`: menulis `audit.events` (`db_manual_access`, `meta.via = 'cli'`) sebelum membuka sesi dan mengirim alert ke email pemilik. Koneksi superuser atau owner yang tidak didahului event itu (dicocokkan dari log koneksi) memicu alert anomali (ditunda, lihat §16 "Catatan pasca-S7").
 
 ## 13. Daftar tes pgTAP
@@ -2801,7 +2801,7 @@ Catatan review S4 lain (review backend/security branch `claude/m0b-s4-db`, 2026-
 
 - Alasan wajib, 3 sampai 120 karakter aman.
 - `db_manual_access` ditulis sebagai `dompetku_owner` dalam transaksi sendiri sebelum sesi dibuka. Gagal tulis = sesi tidak dibuka.
-- `meta` berisi `via = 'cli'`, `target` (role sesi), `reason` (alasan), dan `op` (`SUDO_USER`). Semuanya kunci yang sudah diizinkan, jadi tanpa migrasi.
+- `meta` berisi `via = 'cli'`, `target` (role sesi), `reason` (alasan), `op` (`SUDO_USER`), dan `status` (`alert_on`/`alert_off`). Semuanya kunci yang sudah diizinkan, jadi tanpa migrasi.
 - Alert: Healthchecks `dompetku-manual-access`. `/fail` dikirim saat sesi dibuka, ping sukses saat ditutup. Tanpa URL = peringatan saja, karena alat ini juga dipakai saat bootstrap.
 - Sesi bawaan `role=dompetku_owner`; `--as postgres` harus diminta eksplisit. `application_name = dompetku-psql-<id event>`.
 

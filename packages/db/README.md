@@ -62,12 +62,14 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0
 
   ```bash
   sudo /opt/dompetku/bin/dompetku-psql -- "email_fix" <<'SQL'
+  \set email '<email lama>'
+  \set email_baru '<email baru>'
   begin;
-  select id as uid from auth."user" where email = lower(btrim('<email lama>')) \gset
+  select id as uid from auth."user" where email = lower(btrim(:'email')) \gset
   insert into audit.events (event, user_id, meta)
     values ('db_manual_access', :'uid', '{"via": "cli", "reason": "email_fix"}');
   alter table auth."user" disable trigger user_email_immutable;
-  update auth."user" set email = lower(btrim('<email baru>')), "emailVerified" = false, "updatedAt" = now()
+  update auth."user" set email = lower(btrim(:'email_baru')), "emailVerified" = false, "updatedAt" = now()
    where id = :'uid';
   alter table auth."user" enable trigger user_email_immutable;
   delete from auth.session where "userId" = :'uid';  -- paksa masuk ulang

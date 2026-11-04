@@ -27,7 +27,8 @@ Validasi terjadi saat request auth pertama, bukan saat start (healthcheck `/api/
 
    ```bash
    sudo /opt/dompetku/bin/dompetku-psql -- "owner_email bootstrap" <<'SQL'
-   insert into app.settings (key, value) values ('owner_email', lower(btrim('<email pemilik>')))
+   \set email '<email pemilik>'
+   insert into app.settings (key, value) values ('owner_email', lower(btrim(:'email')))
    on conflict (key) do update set value = excluded.value;
    select value from app.settings where key = 'owner_email';
    SQL
@@ -50,8 +51,9 @@ Validasi terjadi saat request auth pertama, bukan saat start (healthcheck `/api/
 
   ```bash
   sudo /opt/dompetku/bin/dompetku-psql -- "pemulihan faktor" <<'SQL'
+  \set email '<email>'
   begin;
-  select id as uid from auth."user" where email = lower(btrim('<email>')) \gset
+  select id as uid from auth."user" where email = lower(btrim(:'email')) \gset
   delete from auth.passkey where "userId" = :'uid';
   delete from auth."twoFactor" where "userId" = :'uid';
   delete from auth.recovery_codes where user_id = :'uid';
@@ -62,7 +64,7 @@ Validasi terjadi saat request auth pertama, bukan saat start (healthcheck `/api/
   SQL
   ```
 
-  Email tidak cocok = `\gset` tidak mengisi `uid` dan skrip berhenti sebelum `commit` (ON_ERROR_STOP).
+  Email tidak cocok = `\gset` tidak mengisi `uid` dan skrip berhenti sebelum `commit` (ON_ERROR_STOP). Sesudah ini akun bisa masuk dengan kata sandi saja dan mendaftarkan faktor baru, jadi jalankan saat pengguna siap langsung ke `/amankan`; bila HP yang hilang memuat pengelola sandi, minta reset kata sandi juga.
 
 - Akun setengah jadi (daftar tanpa selesai /amankan) dihapus `jobs.purge_unfinished_users` setelah 72 jam (worker S5); sampai worker ada, hapus manual bila perlu.
 
