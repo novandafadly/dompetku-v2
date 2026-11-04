@@ -41,3 +41,8 @@ Task 5: minor (deferred): `cp -r public .next/standalone/apps/web/public` bisa b
 Task 5: fix round 1/5 (2 addressed, 0 open — seedKanari idempoten per (ruang, nama/keterangan); kerangka s8.spec dengan kontrol positif kanari F, toHaveURL tiap navigasi, heading Beranda, DB 2 anggota; commits 3081761..49cb1e2). Re-review: semua ADDRESSED, tanpa breakage baru.
 Task 5: minor (deferred): `adminRows` di e2e-bersama/fixtures.ts menduplikasi `adminQuery` e2e-ledger.
 Task 5: complete (commits 0026439..49cb1e2, review clean)
+
+## Cara melanjutkan bila sesi terputus
+Branch kerja: `ccr-48ce6bf9-qkb933` (atau branch sesi baru dari tip ini). Ledger ini = peta progres; baris terakhir = langkah berjalan. Workspace SDD (`.superpowers/sdd/`, brief/laporan) git-ignored dan hilang bila kontainer diganti: buat ulang brief dengan skrip `task-brief`, laporan implementer direkonstruksi dari pesan commit. DB lokal tanpa dbmate: `bash docs/superpowers/handoff/db-reset-psql.sh`. Pemilik: lanjut terus sampai limit, ledger di-push tiap langkah.
+
+Task 6: dispatch implementer (sonnet) dari b6d736c; menunggu laporan, lalu design reviewer (screenshot di workspace task-6-screens) + review task.
