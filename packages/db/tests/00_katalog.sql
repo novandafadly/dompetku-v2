@@ -63,7 +63,8 @@ select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
-        'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity'],
+        'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
+        'member_contributions'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -257,7 +258,8 @@ select set_eq($$
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
-                      'suggest_categories', 'open_reimbursables', 'shared_activity']) f
+                      'suggest_categories', 'open_reimbursables', 'shared_activity',
+                      'member_contributions']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
