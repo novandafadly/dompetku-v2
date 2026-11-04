@@ -35,3 +35,6 @@ Task 4: minor (deferred): DK404 dari sebab apa pun di blok guarded menjadikan se
 Task 4: minor (deferred): halaman Aktivitas galat baru bisa dicek di Task 7 (ErrorState).
 Task 4: complete (commits 8a49a59..3c6b784, review clean)
 Task 5: implementasi commit 3519298 (playwright.bersama.config port 3302, fixture ownerState/partnerState/kanari, s8.spec kerangka; e2e:bersama 1, e2e:ledger 38 + 7 dilewati). Concern: storageState kosong eksplisit untuk konteks F, timeout fixture worker 120 s, tag registry menunggu Task 11, kanari F diisi tapi belum diasersi (Task 10).
+Task 5: review (task) → Needs fixes (2 Important: fixture kanari tidak idempoten saat worker restart (nama dompet unik 0109); kerangka s8.spec bisa lulus karena hal salah (tanpa kontrol positif kanari F, tanpa bukti F login/anggota)). Port 3302 tidak bentrok (auth 3300, ledger 3301, README db).
+Task 5: minor (deferred): PASSWORD dan registerOwner diduplikasi dari fixture ledger (ekstrak helper bersama nanti).
+Task 5: minor (deferred): `cp -r public .next/standalone/apps/web/public` bisa bersarang pada run lokal berulang (pola sama dengan config ledger).
