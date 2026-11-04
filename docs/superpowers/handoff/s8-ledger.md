@@ -59,3 +59,5 @@ Task 6: fix round 2 dikirim → commit ac0eb24 (NBSP hanya sebelum `·`, spasi b
 Ruling R7: D2 ("Nama ·" menggantung di akhir baris) diterima sebagian: titik tetap lekat ke nama, tetapi kata kerja boleh turun baris — kata kerja utuh lebih penting daripada nama yang kadang berdiri sendiri (aturan bingkai A1) — biaya bila salah: sesekali "Novanda ·" sendirian di ujung baris 320/390 px; bisa ditinjau di critique Task 12.
 Task 6: fix round 2/5 (1 addressed, 0 open — N1 kata kerja tidak terpotong; commits 8e245d0..ac0eb24). Re-review bersih; screenshot 320/390 terang+gelap tanpa potongan tengah kata.
 Task 6: complete (commits 7c1f2fc..ac0eb24, review clean). Catatan: e2e:ledger/e2e:bersama tidak diulang sesudah ronde 1–2 (hanya kelas/teks Server Component) → diulang di gerbang Task 12.
+Ruling R8: Task 7 mode prototipe = halaman demo ringan dari `activityFeed(state, 100)` di rutenya sendiri (bukan notFound), sesuai K5 "Ya, ringan" yang disetujui — biaya bila salah: satu rute demo yang bisa dihapus.
+Task 7: dispatch implementer (sonnet) dari 30bbb74; termasuk koreksi kalimat basi bingkai baris 24 (NBSP hanya nama + titik, R7).
