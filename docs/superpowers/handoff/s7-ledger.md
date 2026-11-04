@@ -97,3 +97,6 @@ Task 11: implementasi (sesi ccr-8504abb0) commits b0d2ea0..a619cd0; unit 1833, i
 Task 11: review → Needs fixes (4 Important: banner pindah salah untuk bukan pencatat; "Tidak diganti" dirender saat ada reimburse hidup; salinan saldo_negatif Pindahkan menyalahkan dompet tujuan; baris Biaya kaki Pribadi tidak ada). Minor 1,2,4,5,6,7 ikut ronde 1.
 Ruling R29: catatan talangan bingkai "Batalkan reimburse di bawah dulu" → "di atas" (daftar dirender di atas tombol) — biaya: satu salinan.
 Ruling R30: salinan galat Pindahkan di luar tabel bingkai (saldo_negatif, before_opening, account_archived, conflict) disetujui controller selama netral dan tanpa nominal; saldo_negatif tidak boleh menyalahkan satu dompet — biaya: salinan bisa diubah di critique T18.
+Task 11: fix round 1/5 (4 Important + 6 minor addressed, 0 open; commit 0fb8f19; unit 1839, int 144, e2e 287, e2e:ledger 19; budget tidak berubah).
+Task 11: minor (deferred): Urungkan reimburse memakai expectedVersion 1 (aksi sebaiknya mengembalikan version); fokus ke judul sesudah navigasi pindah ke /{tujuan}/transaksi (cek e2e T17); subkueri fee per baris ENTRY_COLUMNS (hanya kaki Pribadi antar ruang); kanari '6543' substring; galeri /dev/ui tidak mengikuti prefers-color-scheme; sheet Pindahkan/reimburse belum punya frame galeri.
+Task 11: complete (commits b0d2ea0..0fb8f19, review clean)
