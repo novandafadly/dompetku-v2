@@ -155,4 +155,15 @@ describe('toLedgerError: bukan galat domain = null (pemanggil melempar ulang)', 
   ])('%s', (_name, e) => {
     expect(toLedgerError(e)).toBeNull();
   });
+
+  it('DK422 reimbursable_personal_expense_only = invalid kolom reimbursable, tanpa log', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(
+      toLedgerError(pgError('DK422', 'reimbursable_personal_expense_only', 'Rp 1 rahasia')),
+    ).toEqual({
+      code: 'invalid',
+      field: 'reimbursable',
+    });
+    expect(err).not.toHaveBeenCalled();
+  });
 });

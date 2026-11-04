@@ -100,6 +100,11 @@ export function toLedgerError(e: unknown): LedgerError | null {
         break;
       }
       case 'DK422':
+        // Talangan di luar pengeluaran Pribadi: galat input kolom `reimbursable`, sama dengan
+        // penolakan saveCatat sebelum DB (UI tidak menawarkan toggle itu di sana).
+        if (d.message === 'reimbursable_personal_expense_only') {
+          return { code: 'invalid', field: 'reimbursable' };
+        }
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         break;
     }
