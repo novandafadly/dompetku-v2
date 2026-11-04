@@ -356,6 +356,47 @@ describe('action S7 terhadap DB', () => {
       ).resolves.toEqual({ ok: false, error: { code: 'not_found' } });
     });
 
+    it('voidEntryAction atas penyesuaian: saldo kembali; dari /bersama = not_found', async () => {
+      as(ps.n);
+      const bca = await wallet('pribadi', 100_000, 'BCA');
+      const r = await reconcileAction('pribadi', {
+        clientId: randomUUID(),
+        accountId: bca,
+        actualBalance: 120_000,
+      });
+      if (!r.ok || r.value.entryId === null) throw new Error('cocokkan gagal');
+      const adjustmentId = r.value.entryId;
+      const balance = async () =>
+        (
+          await h.admin.query<{ b: string }>(
+            'select balance::text as b from app.account_balances where account_id = $1',
+            [bca],
+          )
+        ).rows[0]?.b;
+      expect(await balance()).toBe('120000');
+
+      // Ruang lain tidak bisa menyentuh penyesuaian Pribadi.
+      await expect(
+        voidEntryAction('bersama', {
+          clientId: randomUUID(),
+          entryId: adjustmentId,
+          expectedVersion: 1,
+        }),
+      ).resolves.toEqual({ ok: false, error: { code: 'not_found' } });
+      expect((await entriesOf('adjustment')).map((x) => x.voided)).toEqual([false]);
+
+      // Urungkan Cocokkan saldo = batalkan penyesuaian versi 1.
+      await expect(
+        voidEntryAction('pribadi', {
+          clientId: randomUUID(),
+          entryId: adjustmentId,
+          expectedVersion: 1,
+        }),
+      ).resolves.toEqual({ ok: true, value: { version: 2 } });
+      expect((await entriesOf('adjustment')).map((x) => x.voided)).toEqual([true]);
+      expect(await balance()).toBe('100000');
+    });
+
     it('archiveAccountAction: saldo 0 diarsip; saldo ≠ 0 = balance_not_zero', async () => {
       as(ps.n);
       const kosong = await wallet('pribadi', 0, 'Kosong');
@@ -408,6 +449,48 @@ describe('action S7 terhadap DB', () => {
       ).resolves.toEqual({ ok: false, error: { code: 'reimbursement_exceeds' } });
 
       await expect(openReimbursablesAction('bersama')).resolves.toEqual({ ok: true, value: [] });
+    });
+
+    it('reimburse lintas ruang: talangan Pribadi dari /bersama dan dompet penerima Bersama = not_found', async () => {
+      as(ps.n);
+      const bca = await wallet('pribadi', 1_000_000, 'BCA');
+      const kas = await wallet('bersama', 1_000_000, 'Kas Rumah');
+      const saved = await saveCatat('pribadi', {
+        kind: 'expense',
+        clientId: randomUUID(),
+        accountId: bca,
+        amount: 400_000,
+        categoryId: await category('pribadi'),
+        reimbursable: true,
+      });
+      if (!saved.ok) throw new Error(saved.error.code);
+
+      // Talangan Pribadi lewat rute Bersama (dompet penerima Bersama atau Pribadi): tidak ditemukan.
+      for (const accountId of [kas, bca]) {
+        await expect(
+          createReimbursementAction('bersama', {
+            clientId: randomUUID(),
+            entryId: saved.value.entryId,
+            accountId,
+            amount: 100_000,
+          }),
+        ).resolves.toEqual({ ok: false, error: { code: 'not_found' } });
+      }
+      // Rute Pribadi, dompet penerima di Bersama: tidak ditemukan.
+      await expect(
+        createReimbursementAction('pribadi', {
+          clientId: randomUUID(),
+          entryId: saved.value.entryId,
+          accountId: kas,
+          amount: 100_000,
+        }),
+      ).resolves.toEqual({ ok: false, error: { code: 'not_found' } });
+
+      expect(await entriesOf('reimbursement')).toEqual([]);
+      await expect(openReimbursablesAction('pribadi')).resolves.toMatchObject({
+        ok: true,
+        value: [{ entryId: saved.value.entryId, remaining: 400_000, reimbursed: 0 }],
+      });
     });
 
     it('talangan di Bersama = invalid reimbursable, tanpa entri', async () => {

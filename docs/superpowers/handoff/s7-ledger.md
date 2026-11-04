@@ -113,3 +113,4 @@ Task 14: implementasi commit d0fcf5b (unit 1901, int 152, e2e:ledger 19, e2e pro
 Task 14: review → Approved, 0 Critical/Important. B5 panel-malam flaky sudah ada sebelum T14 (7–9% di workers=4; klik sebelum hidrasi) → diperbaiki dengan toPass (commit 782bbcf, 40/40), plus 2 komentar dirapikan.
 Task 14: minor (deferred): slack tinggi mode keyboard Catat 360×356 tinggal 1–2 px (dijaga e2e).
 Task 14: complete (commits ab17a0a..782bbcf, review clean)
+Task 17: dimulai (sesi ccr-8504abb0), implementer terhenti batas pemakaian 5 jam sesudah menulis tes int tambahan di s7.int.test.ts (belum dijalankan). Commit WIP; sesi berikutnya: jalankan test:int dulu, lalu lanjut brief docs/superpowers/handoff/s7-task-17-brief.md.
