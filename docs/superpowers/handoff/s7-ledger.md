@@ -109,3 +109,7 @@ Task 13: implementasi commit 467c6db (unit 1899, int 152, e2e 287, e2e:ledger 19
 Task 13: review → Approved, 0 Critical/Important.
 Task 13: minor (deferred): screenshot B1/B2 320/390/1280 belum diambil (critique T18; cek tombol turun < 360 dan email panjang); list_invitations tidak dibatasi per ruang (komentar); tanggal kedaluwarsa undangan di batas hari WIB tidak dites.
 Task 13: complete (commits 4fd06b2..467c6db, review clean)
+Task 14: implementasi commit d0fcf5b (unit 1901, int 152, e2e:ledger 19, e2e prototipe 288 + B5 flaky; Beranda prototipe 161,5 / nyata 157,4).
+Task 14: review → Approved, 0 Critical/Important. B5 panel-malam flaky sudah ada sebelum T14 (7–9% di workers=4; klik sebelum hidrasi) → diperbaiki dengan toPass (commit 782bbcf, 40/40), plus 2 komentar dirapikan.
+Task 14: minor (deferred): slack tinggi mode keyboard Catat 360×356 tinggal 1–2 px (dijaga e2e).
+Task 14: complete (commits ab17a0a..782bbcf, review clean)
