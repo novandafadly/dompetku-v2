@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
+import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
 import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
 
 /** Salinan tetap S6-D3 dan S6-S1 (lewat 90 hari). */
@@ -20,6 +21,23 @@ export function VoidedBanner({ children }: { children?: ReactNode }) {
       <p className="flex min-w-0 flex-1 items-center gap-2 text-body font-semibold text-text">
         <ArrowCounterClockwiseIcon size={18} className="shrink-0 text-text-soft" />
         {VOIDED_COPY.text}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * S7-D2: banner entri asal yang sudah dipindah ke ruang lain (`moved_at`). Gaya sama dengan
+ * `VoidedBanner`; tautan ke daftar Transaksi ruang tujuan (id entri di sana tidak disimpan, R16),
+ * tanpa Pulihkan.
+ */
+export function MovedBanner({ tujuan, children }: { tujuan: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3 narrow:flex-row narrow:flex-wrap narrow:items-center">
+      <p className="flex min-w-0 flex-1 items-center gap-2 text-body font-semibold text-text">
+        <ArrowsLeftRightIcon size={18} className="shrink-0 text-text-soft" />
+        {`Transaksi ini sudah dipindahkan ke ${tujuan}.`}
       </p>
       {children}
     </div>

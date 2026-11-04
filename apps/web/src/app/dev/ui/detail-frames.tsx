@@ -8,7 +8,13 @@ import { WarningIcon } from '@/components/ui/icons/warning';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { SaldoKurangRow } from '@/features/catat/catat-status';
 import { EditSheet, type EditSource } from '@/features/catat/edit-sheet';
-import type { AccountVM, CategoryVM, EntryVM, HistoryVM } from '@/features/ledger/types';
+import type {
+  AccountVM,
+  CategoryVM,
+  EntryVM,
+  HistoryVM,
+  TalanganVM,
+} from '@/features/ledger/types';
 import { CatatProvider } from '@/features/shell/catat';
 import { VoidDialogView, voidSentenceVM } from '@/features/transaksi/void-dialog-view';
 import { VOIDED_COPY, VoidedBanner } from '@/features/transaksi/voided-banner';
@@ -108,6 +114,28 @@ const LABELS = {
 
 const listHref = '/pribadi/transaksi' as Route;
 
+// S7: kaki Bersama transfer antar ruang (dompet Bersama saja), talangan, dan entri yang dipindah.
+const KAKI_BERSAMA: EntryVM = {
+  id: 'g-kaki',
+  version: 1,
+  kind: 'space_transfer',
+  spaceKind: 'shared',
+  direction: 'in',
+  occurredOn: '2026-10-30',
+  createdAt: '2026-10-30T08:10:00+07:00',
+  createdBy: { id: 'u-n', name: 'Novanda', initial: 'N' },
+  accountId: 'a-2',
+  accountName: 'Kas Bersama',
+  amount: 1_250_000,
+  sharedNote: 'Setoran Oktober',
+};
+const TALANGAN_ENTRY: EntryVM = { ...LIVE, id: 'g-tal', reimbursable: true, amount: 500_000 };
+const SEBAGIAN: TalanganVM = {
+  items: [{ id: 'g-r1', occurredOn: '2026-10-31', amount: 300_000 }],
+  reimbursed: 300_000,
+  remaining: 200_000,
+};
+
 type SheetFrame = 'd1' | 'd2' | 'saldo' | 'galat';
 
 function fakeSource(frame: SheetFrame): EditSource {
@@ -186,7 +214,7 @@ export function DetailFrames() {
             today={TODAY}
             me={ME}
             listHref={listHref}
-            data={{ entry: LIVE, ...data, restoreClosed: false }}
+            data={{ entry: LIVE, ...data, restoreClosed: false, spaceCount: 1, talangan: null }}
             labels={LABELS}
           />
         </Frame>
@@ -196,8 +224,62 @@ export function DetailFrames() {
             today={TODAY}
             me={ME}
             listHref={listHref}
-            data={{ entry: VOIDED, ...data, restoreClosed: false }}
+            data={{ entry: VOIDED, ...data, restoreClosed: false, spaceCount: 1, talangan: null }}
             labels={LABELS}
+          />
+        </Frame>
+        <Frame id="s7-d1" title="S7-D1 Detail kaki Bersama (bukan pencatat)">
+          <DetailReal
+            ruang="bersama"
+            today={TODAY}
+            me="u-f"
+            listHref={'/bersama/transaksi' as Route}
+            data={{
+              entry: KAKI_BERSAMA,
+              history: [],
+              accounts: ACCOUNTS,
+              categories: [],
+              restoreClosed: false,
+              spaceCount: 2,
+              talangan: null,
+            }}
+            labels={{
+              title: 'Setoran dari Novanda',
+              category: 'Antar ruang',
+              amount: { value: KAKI_BERSAMA.amount, kind: 'neutral' },
+            }}
+          />
+        </Frame>
+        <Frame id="s7-d2" title="S7-D2 Entri asal yang sudah dipindah">
+          <DetailReal
+            ruang="pribadi"
+            today={TODAY}
+            me={ME}
+            listHref={listHref}
+            data={{
+              entry: { ...VOIDED, movedAt: VOIDED.voidedAt ?? '' },
+              ...data,
+              restoreClosed: false,
+              spaceCount: 2,
+              talangan: null,
+            }}
+            labels={LABELS}
+          />
+        </Frame>
+        <Frame id="s7-d3" title="S7-D3 Detail talangan sebagian diganti">
+          <DetailReal
+            ruang="pribadi"
+            today={TODAY}
+            me={ME}
+            listHref={listHref}
+            data={{
+              entry: TALANGAN_ENTRY,
+              ...data,
+              restoreClosed: false,
+              spaceCount: 2,
+              talangan: SEBAGIAN,
+            }}
+            labels={{ ...LABELS, amount: { value: -500_000, kind: 'expense' } }}
           />
         </Frame>
         <Frame id="d3-keadaan" title="S6-D3 banner: lewat 90 hari, saldo kurang, galat">

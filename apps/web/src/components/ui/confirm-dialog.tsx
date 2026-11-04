@@ -1,7 +1,7 @@
 'use client';
 
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Button } from './button';
 
 /** Dialog konfirmasi untuk aksi yang mengubah uang (role alertdialog, fokus awal di tombol aman). */
@@ -14,17 +14,36 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   onConfirm,
+  tone = 'danger',
+  holdOpen = false,
+  busy = false,
+  alert,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   icon?: ReactNode;
   title: string;
-  description: string;
+  /** Teks, atau isi bebas (mis. daftar akibat); dirender di elemen deskripsi dialog. */
+  description: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   onConfirm: () => void;
+  /** `primary`: aksi yang bukan pembatalan (ikon dan tombol tidak berwarna bahaya). */
+  tone?: 'danger' | 'primary';
+  /**
+   * Dialog tidak menutup sendiri sesudah konfirmasi: pemanggil menutupnya saat berhasil dan
+   * menampilkan `alert` bila gagal (aksi yang bisa ditolak server).
+   */
+  holdOpen?: boolean;
+  /** Selama aksi berjalan: tombol `aria-disabled`, klik diabaikan. */
+  busy?: boolean;
+  /** Pesan galat di dalam dialog (`role="alert"`); muncul = fokus kembali ke tombol aman. */
+  alert?: ReactNode;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (alert !== undefined && alert !== null) cancelRef.current?.focus();
+  }, [alert]);
   // Dialog dibuka dari luar (tanpa Trigger), jadi fokus dikembalikan manual ke pemicunya.
   const returnTo = useRef<HTMLElement | null>(null);
   return (
@@ -48,18 +67,41 @@ export function ConfirmDialog({
           {icon ? (
             <span
               aria-hidden="true"
-              className="flex size-11 items-center justify-center rounded-lg bg-danger-tint text-danger"
+              className={`flex size-11 items-center justify-center rounded-lg ${
+                tone === 'danger' ? 'bg-danger-tint text-danger' : 'bg-surface-2 text-text-soft'
+              }`}
             >
               {icon}
             </span>
           ) : null}
           <AlertDialog.Title className="text-header font-extrabold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="text-body font-medium text-text-soft">
-            {description}
+          <AlertDialog.Description asChild>
+            <div className="text-body font-medium text-text-soft">{description}</div>
           </AlertDialog.Description>
+          {alert === undefined || alert === null ? null : (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-lg bg-danger-tint p-3 text-label font-semibold text-danger"
+            >
+              {alert}
+            </p>
+          )}
           <div className="mt-1 flex flex-col gap-2">
             <AlertDialog.Action asChild>
-              <Button variant="danger-fill" className="w-full" onClick={onConfirm}>
+              <Button
+                variant={tone === 'danger' ? 'danger-fill' : 'primary'}
+                className="w-full"
+                aria-disabled={busy || undefined}
+                aria-busy={busy || undefined}
+                onClick={(e) => {
+                  if (holdOpen) e.preventDefault();
+                  if (busy) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onConfirm();
+                }}
+              >
                 {confirmLabel}
               </Button>
             </AlertDialog.Action>

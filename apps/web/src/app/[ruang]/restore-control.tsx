@@ -109,7 +109,9 @@ export function RestoreControl({
       busy.current = false;
     }
     if (res.ok) {
-      toast({ message: `Dipulihkan di ${RUANG_LABEL[ruang]} · ${formatRupiah(entry.amount)}` });
+      // Antar ruang dipulihkan berpasangan (S7-D1): kedua ruang disebut.
+      const where = entry.kind === 'space_transfer' ? 'Pribadi dan Bersama' : RUANG_LABEL[ruang];
+      toast({ message: `Dipulihkan di ${where} · ${formatRupiah(entry.amount)}` });
       // Sibuk selalu dilepas: bila muat ulang daftar/Detail gagal, tombol tidak tertahan. Klik lagi
       // memakai clientId yang sama (server mengembalikan hasil yang sama, tanpa entri ganda).
       setState('idle');
