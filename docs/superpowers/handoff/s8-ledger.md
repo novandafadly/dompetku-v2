@@ -75,3 +75,5 @@ Task 8: implementasi commit 2fb4a9f (partnerName dari roster, 5 salinan R4, pend
 Task 8: review (task) → Spec ✅, Approved, 0 Critical/Important. partnerName bawaan "Farida" tidak bocor ke mode nyata (dua anggota selalu punya partner); actions.ts hanya pesan; pendingInvite F diasersi absen di loader nyata.
 Task 8: minor (deferred): partnerName bawaan "Farida" di OnboardingChecklistView (jadikan wajib di mode nyata atau salinan netral bila nama tak ada).
 Task 8: minor (deferred): bingkai S8-B1a masih "menunggu jawaban pemilik" → perbarui ke keputusan R4 di Task 12.
+Task 8: design review → Approved (O1, O2, B1a lolos). Catatan: peristiwa sendiri tampil dengan nama, bukan "Kamu" (usul S9); angka uji Rp 12.345.678.900 jangan ikut screenshot portofolio; Setor Rp 0 Farida tidak terbukti di screenshot (teruji unit).
+Task 8: complete (commits f33901b..2fb4a9f, review clean)
