@@ -126,7 +126,7 @@ case $1 in
       exec)
         if [[ $* == *pg_stat_archiver* ]]; then echo t; fi
         if [[ $* == *pg_hba_file_rules* ]]; then
-          [[ $* == *"'dompetku_worker' = any(user_name) and address = '172.25.0.0' and error is null"* ]] || exit 9
+          [[ $* == *"'dompetku_worker' = any(user_name) and address = '172.16.25.0' and error is null"* ]] || exit 9
           [[ -e $SIM/oldhba ]] && echo f || echo t
         fi ;;
       run) echo "migrate $(cat "$SIM/remote")" >>"$SIM/calls"; [[ ! -e $SIM/migratefail ]] ;;
