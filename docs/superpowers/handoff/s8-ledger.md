@@ -67,3 +67,6 @@ Task 7: review (task + keamanan, terkuat) → Spec ✅, Needs fixes (1 Important
 Task 7: fix round 1 → commit 14c1e44 (I1 prototipe non-bersama → notFound, tes dibalik; M3 nama tes; bingkai 48 px + cakupan K1). Re-review berjalan.
 Task 7: minor (deferred): tampilan kosong demo prototipe menulis "Farida" tetap (persona demo).
 Task 7: minor (deferred): e2e Luar → 404 di /bersama/aktivitas belum ada (harness tanpa user ketiga) → wajib di Task 10 (persona Luar, Review Focus #4).
+Task 7: fix round 1/5 (1 addressed + M3 + bingkai, 0 open; commits 03e3e78..14c1e44). Re-review bersih.
+Task 7: minor (deferred): bingkai baris Paginasi (±81) dan tabel target (±238) masih menulis "44 px" untuk Muat sebelumnya (kode 48 px md) → selaraskan di Task 12.
+Task 7: complete (commits 30bbb74..14c1e44, review clean)
