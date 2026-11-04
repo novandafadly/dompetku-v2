@@ -1,7 +1,7 @@
 # Konteks bersama untuk setiap subagent S7
 
 ## Lingkungan
-- Repo: /home/user/dompetku-v2, branch `ccr-8504abb0-by0ewc` (sudah checkout; dibuat dari ujung `ccr-cc4bb7d8-gq4ggr`). Jangan pindah branch, jangan push (controller yang push).
+- Repo: /home/user/dompetku-v2, branch `ccr-93c19006-ivqnyt` (sudah checkout; dibuat dari ujung `ccr-8504abb0-by0ewc`). Jangan pindah branch, jangan push (controller yang push).
 - Deps sudah terpasang (`pnpm install` selesai). Paket baru: `pnpm add` dengan versi persis; `minimumReleaseAge` 7 hari berlaku.
 - Postgres lokal PG16 sekali pakai di 127.0.0.1:5432 (trust). Reset penuh (roles + dbmate up + setup pgTAP):
   `bash docs/superpowers/handoff/db-reset-lokal.sh` (bila container restart: `rm -f /tmp/pgdata-dk/postmaster.pid` dulu)
@@ -14,7 +14,7 @@
 ## Commit
 - Conventional Commits berbahasa Indonesia (pesan sesuai brief). Akhiri pesan dengan dua baris trailer persis:
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-  Claude-Session: https://claude.ai/code/session_01AG8bFk1nWdQSWjMEvcjPF4
+  Claude-Session: https://claude.ai/code/session_01AG8bFkTUqCZ8dSWQwVpRwx
 - Jangan menulis identitas model di kode/komentar.
 
 ## Aturan proyek

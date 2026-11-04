@@ -1,6 +1,6 @@
 # Brief Task 17 (S7): E2E mode nyata S7 + CI
 
-Repo /home/user/dompetku-v2, branch `ccr-8504abb0-by0ewc` (sudah checkout). Kamu IMPLEMENTER satu task. Jangan push, jangan dispatch subagent.
+Repo /home/user/dompetku-v2, branch `ccr-93c19006-ivqnyt` (sudah checkout). Kamu IMPLEMENTER satu task. Jangan push, jangan dispatch subagent.
 
 ## Baca dulu
 - `docs/superpowers/handoff/s7-konteks-subagent.md` — wajib (cara menjalankan test:int, e2e:ledger, e2e prototipe; Postgres lokal sudah siap).

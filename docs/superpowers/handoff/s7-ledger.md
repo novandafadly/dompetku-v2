@@ -114,3 +114,4 @@ Task 14: review → Approved, 0 Critical/Important. B5 panel-malam flaky sudah a
 Task 14: minor (deferred): slack tinggi mode keyboard Catat 360×356 tinggal 1–2 px (dijaga e2e).
 Task 14: complete (commits ab17a0a..782bbcf, review clean)
 Task 17: dimulai (sesi ccr-8504abb0), implementer terhenti batas pemakaian 5 jam sesudah menulis tes int tambahan di s7.int.test.ts (belum dijalankan). Commit WIP; sesi berikutnya: jalankan test:int dulu, lalu lanjut brief docs/superpowers/handoff/s7-task-17-brief.md.
+Task 17: WIP tes int diverifikasi (sesi ccr-93c19006): test:int 154 hijau.
