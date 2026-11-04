@@ -128,7 +128,9 @@ audit() {
 
 alert() {
   [[ -n $HC_PING_URL ]] || return 0
-  curl -fsS -m 10 --retry 3 --data-raw "$1" "$HC_PING_URL/fail" >/dev/null 2>&1 || log 'ping Healthchecks gagal'
+  # URL lewat stdin (-K -), tidak di argv (terlihat ps/proc oleh user lokal).
+  printf 'url = "%s"\n' "$HC_PING_URL/fail" |
+    curl -fsS -m 10 --retry 3 --data-raw "$1" -K - >/dev/null 2>&1 || log 'ping Healthchecks gagal'
 }
 
 fail() {

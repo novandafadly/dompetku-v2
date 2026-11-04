@@ -31,6 +31,7 @@ set -euo pipefail
 umask 077
 export LC_ALL=C # rentang huruf di regex = ASCII saja
 
+# DOMPETKU_ROOT/DOMPETKU_OPS_ENV hanya hook tes: sudo (env_reset) tidak meneruskannya dari operator.
 ROOT=${DOMPETKU_ROOT:-/opt/dompetku}
 OPS_ENV=${DOMPETKU_OPS_ENV:-$ROOT/env/ops.env}
 DB=dompetku
@@ -93,33 +94,40 @@ OP=${SUDO_USER:-root}
 
 compose() { docker compose --project-directory "$ROOT" -f "$ROOT/compose.yml" "$@"; }
 
-# URL ping dibaca tanpa men-source berkas; hanya https. Nilainya tidak pernah dicetak.
+# URL ping dibaca tanpa men-source berkas; hanya https. Nilainya tidak pernah dicetak dan tidak
+# masuk argv (curl membacanya dari stdin lewat -K -, sama dengan token di deployer).
 HC_URL=''
 if [[ -r $OPS_ENV ]]; then
   HC_URL=$(sed -n 's/^HC_MANUAL_ACCESS_URL=//p' "$OPS_ENV" | tail -n 1)
   HC_URL=${HC_URL%\"}
   HC_URL=${HC_URL#\"}
-  if [[ -n $HC_URL && ! $HC_URL =~ ^https://[^[:space:]]+$ ]]; then
+  HC_RE='^https://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$'
+  if [[ -n $HC_URL && ! $HC_URL =~ $HC_RE ]]; then
     say 'PERINGATAN: HC_MANUAL_ACCESS_URL bukan URL https; alert dimatikan'
     HC_URL=''
   fi
 fi
 hc() { # hc <akhiran> <isi>: gagal hanya peringatan, URL dan galat curl tidak dicetak
   [[ -n $HC_URL ]] || return 0
-  curl -fsS -m 10 --retry 2 --retry-max-time 10 -o /dev/null --data-raw "$2" "$HC_URL$1" >/dev/null 2>&1 ||
+  printf 'url = "%s"\n' "$HC_URL$1" |
+    curl -fsS -m 10 --retry 2 --retry-max-time 10 -o /dev/null --data-raw "$2" -K - >/dev/null 2>&1 ||
     say 'PERINGATAN: ping Healthchecks gagal (alert email tidak terkirim)'
 }
+
+# Status alert ikut dicatat di event (kunci meta `status` diizinkan CHECK audit.events).
+if [[ -n $HC_URL ]]; then ALERT=alert_on; else ALERT=alert_off; fi
 
 # (1) Event audit dulu, transaksi sendiri (autocommit). Nilai lewat variabel psql (:'x' = literal
 # ter-quote), bukan disisipkan ke teks SQL. Event ditulis sebagai owner (pemilik tabel, BYPASSRLS).
 EVENT_ID=$(
   compose exec -T -e PGAPPNAME=dompetku-psql-audit postgres gosu postgres \
     psql -X -v ON_ERROR_STOP=1 -Atq -d "$DB" \
-    -v "target=$ROLE" -v "reason=$REASON" -v "op=$OP" <<'SQL'
+    -v "target=$ROLE" -v "reason=$REASON" -v "op=$OP" -v "status=$ALERT" <<'SQL'
 set role dompetku_owner;
 insert into audit.events (event, meta)
 values ('db_manual_access',
-        jsonb_build_object('via', 'cli', 'target', :'target', 'reason', :'reason', 'op', :'op'))
+        jsonb_build_object('via', 'cli', 'target', :'target', 'reason', :'reason', 'op', :'op',
+                           'status', :'status'))
 returning id;
 SQL
 ) || die 'event audit db_manual_access gagal ditulis; sesi tidak dibuka' 3
@@ -136,8 +144,10 @@ trap closed EXIT
 trap 'exit 129' HUP
 trap 'exit 143' TERM
 
-# (3) Sesi psql. Transaksi terbuka yang terlupa diputus setelah 10 menit agar tidak menahan kunci.
-OPTS='-c idle_in_transaction_session_timeout=600000'
+# (3) Sesi psql. Transaksi terbuka yang terlupa diputus setelah 10 menit agar tidak menahan kunci;
+# sesi diam diputus setelah 30 menit. Ping "ditutup" berarti klien ditutup: proses yang di-exec di
+# container bisa tetap hidup (mis. SSH putus), dan batasnya adalah kedua timeout ini.
+OPTS='-c idle_in_transaction_session_timeout=600000 -c idle_session_timeout=1800000'
 [[ $ROLE == postgres ]] || OPTS+=" -c role=$ROLE"
 run=(compose exec -e "PGOPTIONS=$OPTS" -e "PGAPPNAME=dompetku-psql-$EVENT_ID")
 psql_args=(psql -X -d "$DB")

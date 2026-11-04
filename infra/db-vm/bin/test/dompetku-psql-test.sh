@@ -31,12 +31,16 @@ fi
 echo session >>"$SIM/order"
 printf '%s\n' "$@" >"$SIM/session-args"
 if [[ $* == *' -T '* ]]; then cat >"$SIM/session-stdin"; fi
+[[ -e $SIM/sessionsleep ]] && sleep 1
 exit "$(cat "$SIM/sessionrc" 2>/dev/null || echo 0)"
 STUB
-# Stub curl: catat akhiran URL (bukan URL) dan isi; curlfail = gagal sambil mencetak URL ke stderr.
+# Stub curl: URL wajib dari stdin (-K -, baris url = "..."), argv dicatat untuk dicek tanpa URL;
+# catat akhiran URL dan isi; curlfail = gagal sambil mencetak URL ke stderr.
 cat >"$W/bin/curl" <<'STUB'
 #!/usr/bin/env bash
-url=${*: -1}
+printf '%s\n' "$*" >>"$SIM/curl-argv"
+[[ $* == *'-K -'* ]] || exit 9
+url=$(sed -n 's/^url = "\(.*\)"$/\1/p')
 data=''
 while (($#)); do [[ $1 == --data-raw ]] && data=$2; shift; done
 case $url in
@@ -100,7 +104,7 @@ ok 'ditolak: alasan kosong'
 for c in 'tanpa alasan|' 'tanpa alasan sesudah --|--' 'alasan dua karakter|--|ab' \
   "alasan 121 karakter|--|$(printf 'a%.0s' {1..121})" "alasan dengan kutip|--|fix o'neil" \
   'alasan dengan titik koma|--|x; drop table y' 'alasan dengan @ (email)|--|email a@b.c' \
-  'alasan hanya spasi|--|     ' 'alasan dengan baris baru|--|baris1
+  'alasan hanya spasi|--|     ' 'alasan non-ASCII|--|perbaikan é' 'alasan dengan baris baru|--|baris1
 baris2' 'dua alasan|--|satu|dua' '--as salah|--as|root|--|cek' 'opsi tak dikenal|-x|--|cek' \
   '-c kosong|-c||--|cek' '-c tanpa nilai|-c'; do
   reset
@@ -138,7 +142,11 @@ has 'owner -c: audit' "$SIM/audit-args" 'op=novanda'
 has 'owner -c: audit' "$SIM/audit-args" 'ON_ERROR_STOP=1'
 has 'owner -c: sesi' "$SIM/session-args" '-T'
 has 'owner -c: sesi' "$SIM/session-args" 'role=dompetku_owner'
-has 'owner -c: sesi' "$SIM/session-args" 'idle_in_transaction_session_timeout'
+has 'owner -c: sesi' "$SIM/session-args" 'idle_in_transaction_session_timeout=600000'
+has 'owner -c: sesi' "$SIM/session-args" 'idle_session_timeout=1800000'
+has 'owner -c: audit status alert' "$SIM/audit-args" 'status=alert_on'
+hasnt 'owner -c: URL tidak di argv curl' "$SIM/curl-argv" 'rahasia-uuid'
+has 'owner -c: curl -K -' "$SIM/curl-argv" '-K -'
 has 'owner -c: sesi' "$SIM/session-args" 'PGAPPNAME=dompetku-psql-42'
 has 'owner -c: sesi' "$SIM/session-args" 'select 1'
 has 'owner -c: sesi' "$SIM/session-args" 'ON_ERROR_STOP=1'
@@ -192,6 +200,7 @@ rm -f "$W/root/env/ops.env"
 run 'tanpa ops.env' 0 -c 'select 1' -- 'owner_email bootstrap'
 order_is 'tanpa ops.env' 'audit session'
 has 'tanpa ops.env' "$W/out" 'TIDAK mengirim alert'
+has 'tanpa ops.env: audit status' "$SIM/audit-args" 'status=alert_off'
 ok 'tanpa ops.env: peringatan, sesi tetap dibuka'
 
 reset
@@ -199,6 +208,7 @@ ops 'http://hc-ping.example/rahasia-uuid-0123456789'
 run 'url http' 0 -c 'select 1' -- 'owner_email bootstrap'
 order_is 'url http' 'audit session'
 has 'url http' "$W/out" 'bukan URL https'
+has 'url http: audit status' "$SIM/audit-args" 'status=alert_off'
 ok 'URL http ditolak (alert dimatikan, URL tidak dicetak)'
 
 # --- Ping gagal: peringatan tanpa URL, sesi tetap jalan.
@@ -208,6 +218,27 @@ run 'curl gagal' 0 -c 'select 1' -- 'owner_email bootstrap'
 order_is 'curl gagal' 'audit curl /fail session curl ok'
 has 'curl gagal' "$W/out" 'ping Healthchecks gagal'
 ok 'ping gagal: peringatan tanpa URL, sesi tetap jalan'
+
+# --- ops.env berisi substitusi perintah: tidak dieksekusi (berkas tidak di-source), alert mati.
+reset
+printf 'HC_MANUAL_ACCESS_URL=$(touch %s/pwned)\n' "$SIM" >"$W/root/env/ops.env"
+run 'ops.env $(...)' 0 -c 'select 1' -- 'cek'
+[[ ! -e $SIM/pwned ]] || fail 'ops.env: isi dieksekusi'
+order_is 'ops.env $(...)' 'audit session'
+ok 'ops.env tidak dieksekusi; nilai bukan https = alert mati'
+
+# --- TERM saat sesi: ping tutup tetap dikirim.
+reset
+: >"$SIM/sessionsleep"
+rc=0
+bash "$TOOL" -c 'select 1' -- 'cek term' </dev/null >"$W/out" 2>&1 &
+pid=$!
+for _ in $(seq 50); do grep -Fx session "$SIM/order" >/dev/null 2>&1 && break; sleep 0.1; done
+kill -TERM "$pid"
+wait "$pid" || rc=$?
+[[ $rc == 143 ]] || fail "TERM: kode $rc, harapan 143"
+order_is 'TERM' 'audit curl /fail session curl ok'
+ok 'TERM saat sesi: keluar 143, alert tutup terkirim'
 
 # --- SUDO_USER aneh disaring.
 reset

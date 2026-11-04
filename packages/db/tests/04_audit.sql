@@ -67,7 +67,7 @@ from unnest(array['web', 'api', 'worker']) r;
 -- Bentuk insert infra/db-vm/bin/dompetku-psql (owner, kunci meta yang diizinkan) diterima.
 select lives_ok($$select tests.owner_exec(null, $q$insert into audit.events (event, meta)
     values ('db_manual_access', jsonb_build_object('via', 'cli', 'target', 'dompetku_owner',
-            'reason', repeat('a', 120), 'op', 'novanda'))$q$)$$,
+            'reason', repeat('a', 120), 'op', 'novanda', 'status', 'alert_off'))$q$)$$,
   'owner: db_manual_access dari dompetku-psql diterima');
 
 -- Web hanya membaca event miliknya.
