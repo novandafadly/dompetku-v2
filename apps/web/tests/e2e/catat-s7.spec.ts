@@ -44,6 +44,14 @@ async function expectFullyVisible(locator: Locator, label: string) {
   expect(clipped, label).toBeNull();
 }
 
+/**
+ * Jam dikunci ke 08:00 WIB (selaras `today=2026-10-17`): saran kategori bergantung jam WIB, dan
+ * urutan chip memengaruhi tes chip di berkas ini (mis. 11:00–13:59 WIB menggeser kolom chip).
+ */
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-17T01:00:00Z'));
+});
+
 async function toTransfer(page: Page, ruang: 'Pribadi' | 'Bersama' = 'Pribadi') {
   const sheet = page.getByRole('dialog', { name: `Pengeluaran · ${ruang}` });
   await sheet.getByRole('button', { name: `Pengeluaran · ${ruang}` }).click();
