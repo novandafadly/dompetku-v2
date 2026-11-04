@@ -24,7 +24,7 @@ import { buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { DETAIL_TITLE_ID } from '@/features/transaksi/entry-detail-view';
 import { restoreEntryAction, voidEntryAction } from '../_actions/entri';
 import { RestoreControl } from '../restore-control';
-import { focusTitle as focusTitleById } from './focus-title';
+import { focusHeadingAt, focusTitle as focusTitleById } from './focus-title';
 
 /**
  * Aksi Detail nyata (pulau klien, dimuat malas lewat `detail-islands`). Sheet Ubah (`EditSheet` +
@@ -257,8 +257,11 @@ export function DetailActions({
             toRuang={moveTo}
             entry={entry}
             onMoved={() => {
-              // Id entri baru tidak dikembalikan (R24): ke daftar Transaksi ruang tujuan.
-              router.push(buildHref(moveTo, 'transaksi', ''));
+              // Id entri baru tidak dikembalikan (R24): ke daftar Transaksi ruang tujuan, fokus ke
+              // judulnya (sheet dan tombol asal ikut tercabut; tanpa ini fokus jatuh ke <body>).
+              const href = buildHref(moveTo, 'transaksi', '');
+              router.push(href);
+              focusHeadingAt(href);
             }}
             onConflict={() => {
               router.refresh();
