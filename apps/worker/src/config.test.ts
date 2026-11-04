@@ -27,8 +27,17 @@ describe('loadConfig', () => {
     expect(() => loadConfig({})).toThrow();
   });
 
-  it('menolak URL Healthchecks yang bukan http(s)', () => {
+  it('menolak URL Healthchecks yang bukan https (termasuk http:)', () => {
     expect(() => loadConfig({ DATABASE_URL: DB, HC_DQ_URL: 'ftp://hc/x' })).toThrow();
+    expect(() => loadConfig({ DATABASE_URL: DB, HC_DQ_URL: 'http://hc-ping.com/aaa' })).toThrow();
+    expect(() => loadConfig({ DATABASE_URL: DB, HC_JOBS_URL: 'HTTP://hc-ping.com/bbb' })).toThrow();
+    expect(checkConfig({ DATABASE_URL: DB, HC_JOBS_URL: 'http://hc-ping.com/bbb' })).toEqual({
+      ok: false,
+      fields: ['HC_JOBS_URL'],
+    });
+    expect(loadConfig({ DATABASE_URL: DB, HC_DQ_URL: 'HTTPS://hc-ping.com/aaa' }).hc.dq).toBe(
+      'HTTPS://hc-ping.com/aaa',
+    );
   });
 
   it('galat hanya menyebut nama variabel, tidak pernah nilainya', () => {

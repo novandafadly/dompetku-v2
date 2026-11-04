@@ -26,6 +26,13 @@ export interface WorkerOptions {
  */
 const QUEUE = { policy: 'exclusive', retryLimit: 0, expireInSeconds: 600 } as const;
 
+/**
+ * Batas stop graceful pg-boss (menunggu handler aktif). `stop_grace_period` worker di
+ * infra/db-vm/compose.yml harus di atasnya (+ pool.end), atau Docker meng-SIGKILL di tengah job dan
+ * barisnya tertinggal `running` (ditutup closeAbandoned). Dijaga worker.test.ts.
+ */
+export const STOP_TIMEOUT_MS = 30_000;
+
 export function triggerJob(boss: PgBoss, name: JobName): Promise<string | null> {
   return boss.send(name, null, { singletonKey: name });
 }
@@ -91,7 +98,7 @@ export async function startWorker(cfg: Config, opts: WorkerOptions = {}): Promis
     boss,
     pool,
     async stop() {
-      await boss.stop({ graceful: true });
+      await boss.stop({ graceful: true, timeout: STOP_TIMEOUT_MS });
       await pool.end();
     },
   };

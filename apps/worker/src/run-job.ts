@@ -70,6 +70,15 @@ export async function runJob(
   const log = opts.log ?? defaultLog;
   await safe(alert.start());
 
+  // Sapu baris `running` yang ditinggal worker mati di tengah job. Saat start saja tidak cukup:
+  // restart < 1 jam sesudah job terputus meninggalkan barisnya sampai restart berikutnya. Galat sapu
+  // tidak menghentikan job (DB yang mati tetap tertangkap oleh insert di bawah).
+  try {
+    await closeAbandoned(pool, { log });
+  } catch (err) {
+    log('abandoned_sweep_failed', { job: job.name, code: errorCode(err) });
+  }
+
   let runId: string;
   try {
     const { rows } = await pool.query(
@@ -134,7 +143,7 @@ export async function runJob(
           [id, code],
         );
       } catch (e) {
-        // Baris tetap `running`; ditutup closeAbandoned saat worker start berikutnya.
+        // Baris tetap `running`; ditutup closeAbandoned (start worker atau job berikutnya, > 1 jam).
         log('job_runs_update_failed', { job: job.name, code: errorCode(e) });
       }
     }
@@ -144,7 +153,11 @@ export async function runJob(
   }
 }
 
-/** Baris `running` > 1 jam (worker mati/restart di tengah job) ditutup `failed`/`abandoned`. */
+/**
+ * Baris `running` > 1 jam (worker mati/restart di tengah job) ditutup `failed`/`abandoned`.
+ * Dipanggil saat worker start dan di awal setiap runJob. Ambang 1 jam jauh di atas umur job sah
+ * (expireInSeconds 600, statement_timeout role 60 s), jadi job lain yang sedang berjalan aman.
+ */
 export async function closeAbandoned(pool: Queryable, opts: RunOptions = {}): Promise<number> {
   const log = opts.log ?? defaultLog;
   const { rows } = await pool.query(

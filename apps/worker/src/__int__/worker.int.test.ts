@@ -156,6 +156,23 @@ describe('runJob terhadap Postgres', () => {
       rows.find((r) => !r.old)?.id,
     ]);
   });
+
+  it('runJob menyapu baris running > 1 jam sebelum menjalankan job (tanpa restart worker)', async () => {
+    const { rows } = await admin.query<{ id: string }>(
+      `insert into jobs.job_runs (job, status, started_at)
+       values ('dq_reconcile', 'running', now() - interval '3 hours') returning id::text`,
+    );
+    const stale = rows[0]?.id;
+    const res = await runJob(pool, jobDef('purge_audit'), healthchecks(undefined, { log: quiet }), {
+      log: quiet,
+    });
+    expect(res.status).toBe('ok');
+    const { rows: after } = await admin.query<{ status: string; error_code: string | null }>(
+      'select status, error_code from jobs.job_runs where id = $1',
+      [stale],
+    );
+    expect(after).toEqual([{ status: 'failed', error_code: 'abandoned' }]);
+  });
 });
 
 describe('pg-boss (skema pgboss, createSchema: false)', () => {

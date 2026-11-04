@@ -37,6 +37,13 @@ function capture() {
 
 const pgError = (code: string, message: string) => Object.assign(new Error(message), { code });
 
+const SWEEP = {
+  sql:
+    "update jobs.job_runs set status = 'failed', error_code = 'abandoned', finished_at = now()" +
+    " where status = 'running' and started_at < now() - interval '1 hour' returning id",
+  params: [],
+};
+
 const zeroDq = [
   'DQ01 error',
   'DQ03 error',
@@ -66,6 +73,7 @@ describe('runJob', () => {
     const res = await runJob(pool, job('purge_audit'), alert, { log: () => undefined });
     expect(res).toEqual({ job: 'purge_audit', status: 'ok', rows: 3 });
     expect(sqls).toEqual([
+      SWEEP,
       {
         sql: "insert into jobs.job_runs (job, status) values ($1, 'running') returning id",
         params: ['purge_audit'],
@@ -91,7 +99,7 @@ describe('runJob', () => {
     const { lines, log } = capture();
     const res = await runJob(pool, job('purge_voided'), alert, { log });
     expect(res).toEqual({ job: 'purge_voided', status: 'failed', code: '57014', rows: null });
-    expect(sqls[2]).toEqual({
+    expect(sqls[3]).toEqual({
       sql: "update jobs.job_runs set status = 'failed', finished_at = now(), error_code = $2 where id = $1",
       params: ['8', '57014'],
     });
@@ -106,7 +114,11 @@ describe('runJob', () => {
     const { alert, pings } = fakeAlert();
     const res = await runJob(pool, job('dq_reconcile'), alert, { log: () => undefined });
     expect(res).toEqual({ job: 'dq_reconcile', status: 'failed', code: 'unknown', rows: null });
-    expect(sqls).toHaveLength(1);
+    // Sapu lalu insert; keduanya gagal, fungsi job tidak pernah dipanggil.
+    expect(sqls.map((q) => q.sql.slice(0, 22))).toEqual([
+      'update jobs.job_runs s',
+      'insert into jobs.job_r',
+    ]);
     expect(pings).toEqual(['start', 'fail:job=dq_reconcile code=unknown']);
   });
 
@@ -117,7 +129,7 @@ describe('runJob', () => {
     const { alert, pings } = fakeAlert();
     const res = await runJob(pool, job('dq_reconcile'), alert, { log: () => undefined });
     expect(res).toMatchObject({ job: 'dq_reconcile', status: 'ok', rows: 0, dq: 'ok' });
-    expect(sqls[1]?.sql).toBe('select check_id, severity, violations from jobs.dq_reconcile()');
+    expect(sqls[2]?.sql).toBe('select check_id, severity, violations from jobs.dq_reconcile()');
     expect(pings).toEqual(['start', 'ok:']);
   });
 
@@ -130,7 +142,7 @@ describe('runJob', () => {
     const { lines, log } = capture();
     const res = await runJob(pool, job('dq_reconcile'), alert, { log });
     expect(res).toMatchObject({ status: 'ok', rows: 2, dq: 'fail' });
-    expect(sqls[2]?.params).toEqual(['1', 2]);
+    expect(sqls[3]?.params).toEqual(['1', 2]);
     expect(pings).toEqual(['start', 'fail:DQ10 warn 2']);
     expect(lines.some((l) => l.includes('DQ10 warn 2'))).toBe(true);
   });
@@ -146,6 +158,26 @@ describe('runJob', () => {
     expect(res).toMatchObject({ status: 'failed', code: 'unknown' });
     expect(pings).toEqual(['start', 'fail:job=dq_reconcile code=unknown']);
     expect(lines.join('\n')).not.toMatch(/999999|sewa/);
+  });
+
+  it('sapu abandoned jalan di awal setiap job; galatnya dicatat tanpa menghentikan job', async () => {
+    const { pool, sqls } = fakePool((sql) =>
+      sql.includes("error_code = 'abandoned'")
+        ? pgError('42501', 'permission denied')
+        : sql.includes('insert into')
+          ? [{ id: '5' }]
+          : [{ n: 1 }],
+    );
+    const { alert, pings } = fakeAlert();
+    const { lines, log } = capture();
+    const res = await runJob(pool, job('purge_audit'), alert, { log });
+    expect(res).toEqual({ job: 'purge_audit', status: 'ok', rows: 1 });
+    expect(sqls[0]).toEqual(SWEEP);
+    expect(sqls[1]?.sql).toContain('insert into jobs.job_runs');
+    expect(lines[0]).toBe(
+      JSON.stringify({ event: 'abandoned_sweep_failed', job: 'purge_audit', code: '42501' }),
+    );
+    expect(pings).toEqual(['start', 'ok:job=purge_audit']);
   });
 
   it('alert yang melempar tidak menggagalkan job', async () => {

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Env worker (`/opt/dompetku/env/worker.env`, diisi pemilik). URL Healthchecks opsional:
- * kosong = ping dilewati dengan log `alert_skipped`.
+ * Env worker (`/opt/dompetku/env/worker.env`, diisi pemilik). URL Healthchecks opsional (hanya
+ * `https:`): kosong = ping dilewati dengan log `alert_skipped`.
  */
 export interface Config {
   databaseUrl: string;
@@ -11,11 +11,13 @@ export interface Config {
 
 const blankToUndefined = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
 
-const httpUrl = z.preprocess(
+// Hanya https: URL ping adalah rahasia ringan dan body /fail memuat id cek DQ; salah ketik http:
+// akan mengirim keduanya tanpa enkripsi. (Tes integrasi memakai stub http lewat Config langsung.)
+const httpsUrl = z.preprocess(
   blankToUndefined,
   z
     .string()
-    .refine((s) => URL.canParse(s) && /^https?:$/.test(new URL(s).protocol))
+    .refine((s) => URL.canParse(s) && new URL(s).protocol === 'https:')
     .optional(),
 );
 
@@ -23,8 +25,8 @@ const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .refine((s) => URL.canParse(s) && /^postgres(ql)?:$/.test(new URL(s).protocol)),
-  HC_DQ_URL: httpUrl,
-  HC_JOBS_URL: httpUrl,
+  HC_DQ_URL: httpsUrl,
+  HC_JOBS_URL: httpsUrl,
 });
 
 type Env = Readonly<Record<string, string | undefined>>;
