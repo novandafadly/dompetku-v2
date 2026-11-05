@@ -6,14 +6,18 @@
 -- dan ubah talangan paralel reimburse tanpa deadlock (0110), pindah ruang paralel ubah entri yang
 -- sama dan paralel reimburse (0111), satu kewajiban (0117): tagihan aktif paralel anggaran wajib
 -- kategori dan bulan sama (kedua urutan) = tepat satu obligation_double; pindah induk kategori
--- paralel tagihan baru pada kategori itu tidak bisa melewati XOR.
+-- paralel tagihan baru pada kategori itu tidak bisa melewati XOR. Tagihan (0118): bayar paralel
+-- kemunculan yang sama = tepat satu berhasil (already_posted), bayar saat void entri bayar belum
+-- commit = already_posted tanpa menunggu, materialisasi paralel = satu kemunculan per bulan (on
+-- conflict do nothing), ubah tagihan paralel bayar dan arsip paralel batalkan lewati = menunggu kunci
+-- tagihan, tanpa deadlock.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
--- ID: B8, C2, C4, C9
+-- ID: B8, C2, C4, C9, T15
 begin;
-select plan(58);
+select plan(73);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -280,8 +284,10 @@ create function pg_temp.api(p_uid uuid, p_sql text) returns text
 language sql as $$ select format('select tests.api_exec(%L, %L)', p_uid, p_sql) $$;
 create function pg_temp.bill_sql(p_space uuid, p_cat uuid, p_starts date) returns text
 language sql as $$
-  select format($q$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, created_by)
-                  values (%L, 'Listrik PLN', 485000, %L, 20, %L, app.current_user_id())$q$, p_space, p_cat, p_starts)
+  select format($q$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, created_by,
+                    created_at)
+                  values (%L, 'Listrik PLN', 485000, %L, 20, %L, app.current_user_id(), '2026-01-01 00:00+07')$q$,
+                p_space, p_cat, p_starts)
 $$;
 create function pg_temp.budget_sql(p_space uuid, p_cat uuid, p_month date) returns text
 language sql as $$
@@ -289,15 +295,17 @@ language sql as $$
                   values (%L, %L, %L, 1500000, true, app.current_user_id())$q$, p_space, p_cat, p_month)
 $$;
 -- Pelanggaran XOR yang ter-commit: tagihan aktif dan anggaran wajib pada induk yang sama, dengan
--- kemunculan tagihan di periode berlabel bulan anggaran (aturan 0117). Harus selalu 0. Fixture tanpa
--- payday_rule = bulan kalender.
+-- kemunculan tagihan di periode berlabel bulan anggaran (aturan 0117, kemunculan pertama = bill_first_on
+-- 0118). Harus selalu 0. Fixture tanpa payday_rule = bulan kalender. created_at tagihan dipatok 1 Jan 2026
+-- (sebelum semua starts_on) supaya hasilnya tidak bergantung pada jam nyata.
 create function pg_temp.xor_violations(p_space uuid) returns text
 language sql as $$
   select tests.owner_val(null, format($q$select count(*) from app.bills b
     join app.categories c on c.id = b.category_id
     join app.budgets bu on bu.space_id = b.space_id and bu.wajib and bu.category_id = coalesce(c.parent_id, c.id)
     where b.space_id = %L and b.archived_at is null
-      and private.bill_due_in_label(b.space_id, b.day_of_month, b.starts_on, b.ends_on, bu.month)$q$, p_space))
+      and private.bill_due_in_label(b.space_id, b.day_of_month, private.bill_first_on(b.starts_on, b.created_at),
+                                    b.ends_on, bu.month)$q$, p_space))
 $$;
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Listrik & Air'$$, :'sh')) as k_listrik \gset
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Internet'$$, :'sh')) as k_net \gset
@@ -361,6 +369,96 @@ select matches(tests.peer_result('b'), '^ERROR: .*category_in_obligation', 'pind
 select tests.peer_exec('b', 'rollback');
 select is(tests.owner_val(null, format($$select coalesce(parent_id::text, '-') from app.categories where id = %L$$, :'k_bensin')),
   '-', 'Bensin & Parkir tetap induk');
+
+-- ===== Tagihan (S9, 0118) =====
+-- Jam nyata (env prod): tagihan jatuh tempo hari ini (tanggal = hari ini, mulai hari ini).
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Sewa Rumah'$$, :'sh')) as k_sewa \gset
+create function pg_temp.kbill_sql(p_space uuid, p_name text, p_cat uuid, p_acc uuid) returns text
+language sql as $$
+  select format($q$select api.create_bill(gen_random_uuid(), %L, %L, 5, %L, extract(day from app.today())::smallint,
+    app.today(), null, %L) ->> 'bill_id'$q$, p_space, p_name, p_cat, p_acc)
+$$;
+create function pg_temp.post_sql(p_occ uuid) returns text
+language sql as $$
+  select format($q$select api.post_bill_occurrence(gen_random_uuid(), %L) ->> 'occurrence_id'$q$, p_occ)
+$$;
+select tests.peer_val('a', pg_temp.kbill_sql(:'sh', 'Sewa Konkuren', :'k_sewa', :'acc_s')) as kbill \gset
+select tests.owner_val(null, format('select id from app.bill_occurrences where bill_id = %L and due_on = app.today()', :'kbill')) as kocc \gset
+-- Dua pembayaran paralel kemunculan yang sama: kedua menunggu kunci kemunculan lalu melihat entri hidup.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.post_sql(:'kocc'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.post_sql(:'kocc'));
+select ok(tests.peer_blocked('b'), 'bayar kedua menunggu kunci kemunculan');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*already_posted', 'bayar paralel kemunculan sama: kedua = already_posted');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select count(*) from app.entries e join app.bill_occurrences o on o.space_id = e.space_id
+  where o.id = %L and e.description = 'Sewa Konkuren' and e.voided_at is null$$, :'kocc')), '1', 'tepat satu entri bayar');
+-- Void entri bayar belum commit, bayar paralel: tidak menunggu entri (tanpa siklus dengan purge), membaca
+-- entri yang masih hidup = already_posted (tidak dobel); sesudah void commit, bayar ulang berhasil.
+select tests.owner_val(null, format('select entry_id from app.bill_occurrences where id = %L', :'kocc')) as kentry \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.void_entry(gen_random_uuid(), %L, 1) ->> 'version'$$, :'kentry'));
+select tests.peer_exec('b', $$set statement_timeout = '5s'$$);
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.post_sql(:'kocc'));
+select matches(tests.peer_result('b'), '^ERROR: .*already_posted', 'bayar saat void entri bayar belum commit = already_posted tanpa menunggu');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('b', 'reset statement_timeout');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_val('b', pg_temp.post_sql(:'kocc')), :'kocc', 'sesudah void commit, bayar ulang berhasil');
+select is(tests.owner_val(null, format($$select count(*) || ' ' || bool_and(o.entry_id = e.id) from app.entries e
+  join app.bill_occurrences o on o.id = %L where e.description = 'Sewa Konkuren' and e.voided_at is null$$, :'kocc')),
+  '1 true', 'satu entri bayar hidup, tertaut ke kemunculan');
+-- Ubah tagihan paralel bayar: ubah menunggu kunci tagihan (bayar memegang FOR SHARE), lalu kemunculan
+-- yang baru dibayar tidak disentuh dan bulan itu tidak mendapat kemunculan kedua.
+select tests.peer_val('a', pg_temp.kbill_sql(:'sh', 'Sewa Konkuren 2', :'k_sewa', :'acc_s')) as kbill2 \gset
+select tests.owner_val(null, format('select id from app.bill_occurrences where bill_id = %L and due_on = app.today()', :'kbill2')) as kocc2 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.post_sql(:'kocc2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.update_bill(%L, 'Sewa Konkuren 2', 6, %L, extract(day from app.today() + 1)::smallint,
+  %L, null) ->> 'bill_id'$$, :'kbill2', :'k_sewa', :'acc_s'));
+select ok(tests.peer_blocked('b'), 'ubah tagihan menunggu bayar paralel (kunci tagihan)');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), :'kbill2', 'ubah selesai sesudah bayar commit, tanpa deadlock');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select (count(*) filter (where id = %L and entry_id is not null and amount = 5) = 1
+    and count(*) filter (where entry_id is null and amount <> 6) = 0
+    and count(*) = count(distinct date_trunc('month', due_on)))::text
+  from app.bill_occurrences where bill_id = %L$$, :'kocc2', :'kbill2')), 'true',
+  'kemunculan dibayar tetap (5), yang terbuka bernilai baru (6), satu kemunculan per bulan');
+-- Batalkan lewati paralel arsip: batalkan lewati memegang tagihan FOR SHARE, jadi arsip menunggu lalu
+-- melewati kemunculan yang baru dibuka. Tanpa kunci tagihan, arsip tidak melihat baris itu (masih
+-- dilewati di snapshot-nya) dan tagihan terarsip menyisakan kemunculan terbuka.
+select tests.owner_val(null, format('select id from app.bill_occurrences where bill_id = %L and entry_id is null', :'kbill2')) as kocc2b \gset
+select tests.peer_val('a', format($$select api.skip_bill_occurrence(%L) ->> 'skipped'$$, :'kocc2b'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.unskip_bill_occurrence(%L) ->> 'skipped'$$, :'kocc2b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_bill(%L) ->> 'skipped'$$, :'kbill2'));
+select ok(tests.peer_blocked('b'), 'arsip menunggu batalkan lewati paralel (kunci tagihan)');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '1', 'arsip sesudah batalkan lewati commit melewati kemunculan yang baru dibuka');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select count(*) from app.bill_occurrences
+  where bill_id = %L and entry_id is null and skipped_at is null$$, :'kbill2')), '0', 'tagihan terarsip tanpa kemunculan terbuka');
+-- Materialisasi paralel (dua worker): yang kedua menunggu baris unik yang belum commit, lalu 0.
+select tests.peer_open('w1', 'dompetku_worker');
+select tests.peer_open('w2', 'dompetku_worker');
+select tests.peer_exec('w1', 'begin');
+select tests.peer_val('w1', 'select jobs.materialize_bills((app.today() + 400)::date)');
+select tests.peer_exec('w2', 'begin');
+select tests.peer_send('w2', 'select jobs.materialize_bills((app.today() + 400)::date)');
+select ok(tests.peer_blocked('w2'), 'materialisasi kedua menunggu kemunculan yang belum commit');
+select tests.peer_exec('w1', 'commit');
+select is(tests.peer_result('w2'), '0', 'materialisasi paralel kedua = 0 tanpa galat (on conflict do nothing) [T15]');
+select tests.peer_exec('w2', 'commit');
+select is(tests.owner_val(null, $$select count(*) - count(distinct (bill_id, date_trunc('month', due_on))) from app.bill_occurrences$$),
+  '0', 'satu kemunculan per tagihan per bulan sesudah materialisasi paralel');
+select tests.peer_close('w1');
+select tests.peer_close('w2');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');
