@@ -36,6 +36,7 @@ Plus Jakarta Sans 400–800 (OFL, dimuat lokal dari @fontsource). Geometris tapi
 ## Motif identitas
 
 - **Kartu utama + bilah proporsi:** satu angka besar per layar (aman dipakai, kekayaan bersih) dengan `SpaceTag` ruang; di Beranda bilah proporsi aman / tagihan bergaris / sisa wajib (`role="img"` + `aria-label` berisi angkanya).
+- **Logo "Cincin emas":** cincin dua busur lime (Pribadi) dan violet (Bersama) dengan ukuran dari rasio emas; bilah proporsi yang dilingkarkan. Geometri dan sumber SVG di [`docs/design/logo.md`](docs/design/logo.md).
 - **Ruang selalu tertulis:** judul header, pil pengalih dengan ✓ + `aria-current`, `SpaceTag`, dan judul Catat berwarna ruang tujuan.
 
 ## Aturan komponen
