@@ -64,7 +64,7 @@ select set_eq($$
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
         'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
-        'member_contributions'],
+        'member_contributions', 'pay_period'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -211,6 +211,11 @@ select set_eq($$
     ('dompetku_api', 'app.no_spend_days', 'INSERT'),
     ('dompetku_api', 'app.no_spend_days', 'DELETE'),
     ('dompetku_auditor', 'app.no_spend_days', 'SELECT'),
+    -- S9: tabel libur global (tanpa space_id; data publik SKB, bukan data pengguna); hanya dibaca.
+    ('dompetku_web', 'app.holidays', 'SELECT'),
+    ('dompetku_api', 'app.holidays', 'SELECT'),
+    ('dompetku_worker', 'app.holidays', 'SELECT'),
+    ('dompetku_auditor', 'app.holidays', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -245,6 +250,10 @@ select set_eq($$
                       unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member',
                                    'app.report_class', 'app.category_keywords']) f
      union all
+     select r, f from unnest(array['dompetku_web', 'dompetku_api']) r,
+                      unnest(array['app.effective_payday', 'app.pay_period',
+                                   'app.period_of_label']) f
+     union all
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
                                    'resend_invitation', 'invitation_peek', 'decline_invitation',
@@ -259,7 +268,7 @@ select set_eq($$
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
                       'suggest_categories', 'open_reimbursables', 'shared_activity',
-                      'member_contributions']) f
+                      'member_contributions', 'pay_period']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',

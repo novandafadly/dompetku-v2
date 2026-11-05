@@ -5,7 +5,7 @@
 -- S8: api.shared_activity dan api.member_contributions ikut daftar DK404/DK401 dan kanari Bersama (BSD §13 #12).
 -- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(183);
+select plan(185);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -163,6 +163,7 @@ from (values
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
   ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'np')),
   ('member_contributions', format($q$select api.member_contributions(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
+  ('pay_period', format($q$select api.pay_period(%L)$q$, :'np')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'np')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np')),
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np')),
@@ -204,6 +205,7 @@ from (values
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
   ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'sh')),
   ('member_contributions', format($q$select api.member_contributions(%L, '2026-03-01', '2026-03-31')$q$, :'sh')),
+  ('pay_period', format($q$select api.pay_period(%L)$q$, :'sh')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh')),
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh')),
   ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'bca')),
