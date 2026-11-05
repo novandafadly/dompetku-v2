@@ -5,12 +5,12 @@
 -- Aturan: periode = [gajian efektif bulan m, gajian efektif bulan m+1 - 1], bernama bulan m+1;
 -- aturan kosong = bulan kalender. holidays_known = ada baris app.holidays untuk setiap tahun yang
 -- disentuh periode (aturan kosong: selalu true, libur tidak dipakai). Tanggal diambil dari
--- app.today() (WIB). Data libur 2026 di bawah dicocokkan dengan SKB 3 Menteri 2026 (P4: pemilik
--- memeriksa); data 2027 TIDAK diisi migrasi (tes menghapus baris 2027 di dalam transaksi supaya
--- tidak bergantung pada isi tabel produksi).
+-- app.today() (WIB). Data libur 2026 (SKB 3 Menteri 2026) dan 2027 (daftar pemilik, SKB 15 Sep 2026)
+-- diisi migrasi; asersi 2027 asli ada sebelum baris 2027 dihapus di dalam transaksi untuk menguji
+-- "tahun tanpa data" tanpa bergantung pada isi tabel produksi.
 -- ID: Z1, Z3, Z9, Z10, T13, B13
 begin;
-select plan(86);
+select plan(94);
 select tests.fixture();
 
 select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'personal') as fp,
@@ -47,6 +47,13 @@ select is(tests.owner_val(null, $$select string_agg(p.oid::regprocedure::text ||
 select is(tests.owner_val(null, $$select count(*) filter (where kind = 'libur') || '/'
     || count(*) filter (where kind = 'cuti_bersama') from app.holidays
   where on_date between '2026-01-01' and '2026-12-31'$$), '17/8', '2026: 17 libur nasional, 8 cuti bersama');
+select is(tests.owner_val(null, $$select count(*) filter (where kind = 'libur') || '/'
+    || count(*) filter (where kind = 'cuti_bersama') from app.holidays
+  where on_date between '2027-01-01' and '2027-12-31'$$), '18/8', '2027: 18 libur nasional, 8 cuti bersama');
+select is(tests.owner_val(null, $$select string_agg(on_date || ' ' || kind, ', ' order by on_date)
+  from app.holidays where on_date in ('2027-01-01', '2027-03-10', '2027-03-26', '2027-12-24', '2027-12-26')$$),
+  '2027-01-01 libur, 2027-03-10 libur, 2027-03-26 libur, 2027-12-24 cuti_bersama, 2027-12-26 libur',
+  'tanggal kunci 2027: Tahun Baru, Idulfitri, Wafat Yesus Kristus, cuti bersama Natal, Isra Mikraj');
 select is(tests.owner_val(null, $$select string_agg(on_date || ' ' || kind, ', ' order by on_date)
   from app.holidays where on_date in ('2026-01-01', '2026-08-17', '2026-12-24', '2026-12-25')$$),
   '2026-01-01 libur, 2026-08-17 libur, 2026-12-24 cuti_bersama, 2026-12-25 libur',
@@ -114,7 +121,19 @@ create function pg_temp.inv(p_from date, p_to date) returns text language sql as
     tests.space_id(tests.n(), 'shared'), tests.space_id(tests.n(), 'shared')))
 $$;
 
--- Data 2027 belum diisi migrasi dan baris produksi tidak boleh memengaruhi tes: hapus di transaksi ini.
+-- Dengan data 2027 asli: periode yang melewati pergantian tahun diketahui, dan rantai libur Lebaran.
+select pg_temp.setrule(25);
+select is(pg_temp.pp(tests.n(), :'sh', '2026-12-23'), '2026-12-23..2027-01-24|2027-01-01|true|33',
+  'dengan data 2027: periode Jan 2027 holidays_known = true');
+select is(pg_temp.ep(5, '2027-01-10'), '2027-01-04', '5 Jan 2027 (Isra Mikraj, Selasa) -> Senin 4 Jan');
+select is(pg_temp.ep(10, '2027-03-01'), '2027-03-05',
+  '10 Mar 2027 (Idulfitri) mundur melewati cuti bersama 9 Mar, Nyepi 8 Mar, Minggu, Sabtu -> Jumat 5 Mar');
+select is(pg_temp.ep(12, '2027-03-01'), '2027-03-05',
+  '12 Mar 2027 (cuti bersama) mundur melewati Idulfitri 11 dan 10 Mar, cuti 9 Mar, Nyepi 8 Mar -> Jumat 5 Mar');
+select is(pg_temp.ep(25, '2027-03-01'), '2027-03-24', '25 Mar 2027 = cuti bersama Wafat Yesus Kristus -> Rabu 24 Mar');
+select is(pg_temp.ep(25, '2027-12-01'), '2027-12-23', '25 Des 2027 Sabtu, 24 Des cuti bersama -> Kamis 23 Des');
+
+-- Data produksi tidak boleh memengaruhi tes "tahun tanpa data": hapus baris 2027 di transaksi ini.
 select tests.owner_exec(null, $$delete from app.holidays where on_date >= '2027-01-01'$$);
 
 -- ===== effective_payday =====

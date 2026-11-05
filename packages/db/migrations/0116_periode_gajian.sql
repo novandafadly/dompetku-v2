@@ -8,9 +8,10 @@
 --   Instalasi baru (bootstrap_owner) membuat rumah tangga tanpa aturan sampai diisi pemilik.
 -- - app.holidays: tabel GLOBAL (tanpa space_id; data publik SKB 3 Menteri, bukan data pengguna;
 --   pengecualian bernama di tes katalog). RLS ENABLE + FORCE, baca untuk web/api/worker, tulis
---   hanya owner (migrasi atau dompetku-psql). Diisi libur nasional + cuti bersama 2026. Tahun
---   2027 sengaja belum diisi (SKB 2027 terbit 15 Sep 2026 tetapi belum diperiksa terhadap teks
---   resmi): sampai diisi, periode yang menyentuh 2027 memberi holidays_known = false.
+--   hanya owner (migrasi atau dompetku-psql). Diisi libur nasional + cuti bersama 2026 dan 2027
+--   (2027: daftar dari pemilik, SKB 3 Menteri 15 Sep 2026). Tahun tanpa baris (2028 dst.) tetap
+--   dihitung hanya dengan akhir pekan dan memberi holidays_known = false; isi tiap tahun lewat
+--   migrasi baru atau dompetku-psql begitu SKB-nya terbit.
 -- - app.effective_payday(p_day, p_month): least(p_day, hari terakhir bulan), mundur selama Sabtu,
 --   Minggu, atau tanggal di app.holidays. Bisa mundur ke bulan sebelumnya (mis. tanggal 1).
 -- - app.period_of_label(p_space_id, p_label_month): periode bernama bulan label = [gajian efektif
@@ -68,6 +69,35 @@ insert into app.holidays (on_date, name, kind) values
   ('2026-08-25', 'Maulid Nabi Muhammad SAW', 'libur'),
   ('2026-12-24', 'Cuti Bersama Kelahiran Yesus Kristus (Natal)', 'cuti_bersama'),
   ('2026-12-25', 'Kelahiran Yesus Kristus (Natal)', 'libur');
+
+-- SKB 3 Menteri 2027 (18 libur nasional + 8 cuti bersama, ditetapkan 15 Sep 2026; daftar dari pemilik).
+insert into app.holidays (on_date, name, kind) values
+  ('2027-01-01', 'Tahun Baru 2027 Masehi', 'libur'),
+  ('2027-01-05', 'Isra Mikraj Nabi Muhammad SAW 1448 H', 'libur'),
+  ('2027-02-05', 'Cuti Bersama Tahun Baru Imlek 2578 Kongzili', 'cuti_bersama'),
+  ('2027-02-06', 'Tahun Baru Imlek 2578 Kongzili', 'libur'),
+  ('2027-03-08', 'Hari Suci Nyepi Tahun Baru Saka 1949', 'libur'),
+  ('2027-03-09', 'Cuti Bersama Idulfitri 1448 H', 'cuti_bersama'),
+  ('2027-03-10', 'Idulfitri 1448 H', 'libur'),
+  ('2027-03-11', 'Idulfitri 1448 H', 'libur'),
+  ('2027-03-12', 'Cuti Bersama Idulfitri 1448 H', 'cuti_bersama'),
+  ('2027-03-15', 'Cuti Bersama Idulfitri 1448 H', 'cuti_bersama'),
+  ('2027-03-25', 'Cuti Bersama Wafat Yesus Kristus', 'cuti_bersama'),
+  ('2027-03-26', 'Wafat Yesus Kristus', 'libur'),
+  ('2027-03-28', 'Kebangkitan Yesus Kristus (Paskah)', 'libur'),
+  ('2027-05-01', 'Hari Buruh Internasional', 'libur'),
+  ('2027-05-06', 'Kenaikan Yesus Kristus', 'libur'),
+  ('2027-05-17', 'Iduladha 1448 H', 'libur'),
+  ('2027-05-18', 'Cuti Bersama Iduladha 1448 H', 'cuti_bersama'),
+  ('2027-05-19', 'Cuti Bersama Hari Raya Waisak 2571 BE', 'cuti_bersama'),
+  ('2027-05-20', 'Hari Raya Waisak 2571 BE', 'libur'),
+  ('2027-06-01', 'Hari Lahir Pancasila', 'libur'),
+  ('2027-06-06', '1 Muharam Tahun Baru Islam 1449 H', 'libur'),
+  ('2027-08-15', 'Maulid Nabi Muhammad SAW', 'libur'),
+  ('2027-08-17', 'Proklamasi Kemerdekaan RI', 'libur'),
+  ('2027-12-24', 'Cuti Bersama Kelahiran Yesus Kristus (Natal)', 'cuti_bersama'),
+  ('2027-12-25', 'Kelahiran Yesus Kristus (Natal)', 'libur'),
+  ('2027-12-26', 'Isra Mikraj Nabi Muhammad SAW 1449 H', 'libur');
 
 create function app.effective_payday(p_day smallint, p_month date) returns date
 language plpgsql stable set search_path = '' as $$
