@@ -104,3 +104,4 @@ Ruling R10: B19 dihitung aktif walau parsial (pemicu = masuk kode pemulihan, buk
 Task 11: minor (deferred): Lokasi B18 belum menyebut bahwa separuh "pemakaian pertama tercatat di audit" tidak diasersi → perbaiki di Task 12.
 Task 11: minor (deferred): tag Playwright huruf kecil salah ketik (`@b20`) lolos diam-diam.
 Task 11: complete (commits 65659f4..1174e73, review clean)
+Task 12: mulai dari 695e67e. Paralel: review akhir seluruh branch + keamanan (terkuat, paket review-7bc4533..695e67e), critique desain + Delivery Gate daftar periksa (sonnet), gerbang penuh oleh controller. pg_prove tidak tersedia di sandbox (pgTAP → job CI `db`).
