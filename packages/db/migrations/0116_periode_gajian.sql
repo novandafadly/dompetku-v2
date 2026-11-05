@@ -21,6 +21,9 @@
 --   batas periode hanya dihitung di satu tempat.
 -- - holidays_known: setiap tahun dari tahun batas awal sampai tahun batas akhir berikutnya punya
 --   baris di app.holidays. Aturan kosong: selalu true (libur tidak dipakai).
+-- - Ruang yang tidak terlihat pemanggil (bukan anggota, tidak ada) = DK404 space_not_found, bukan
+--   diam-diam bulan kalender: pemanggil DEFINER/loader yang lupa assert_member gagal keras, dan
+--   hasilnya sama untuk ruang tak ada dan ruang orang lain (tanpa bocoran keberadaan).
 -- - Semua STABLE (bukan IMMUTABLE: membaca tabel), SECURITY INVOKER, search_path kosong. Tanggal
 --   hanya dari parameter; api.pay_period mengisi default dari app.today() (WIB, bukan jam Node).
 -- - api.pay_period: assert_member di awal (Luar atau Pribadi pasangan = DK404), menambah days_left
@@ -134,6 +137,9 @@ begin
   select h.payday_rule into v_rule
   from app.spaces s join app.households h on h.id = s.household_id
   where s.id = p_space_id;
+  if not found then
+    raise exception using errcode = 'DK404', message = 'space_not_found';
+  end if;
   v_label := p_label_month - (extract(day from p_label_month)::int - 1);
   if v_rule is null then
     return query select v_label, ((v_label + interval '1 month')::date - 1), true;
@@ -163,6 +169,9 @@ begin
   select h.payday_rule into v_rule
   from app.spaces s join app.households h on h.id = s.household_id
   where s.id = p_space_id;
+  if not found then
+    raise exception using errcode = 'DK404', message = 'space_not_found';
+  end if;
   v_m := p_on - (extract(day from p_on)::int - 1);
   if v_rule is null then
     v_label := v_m;

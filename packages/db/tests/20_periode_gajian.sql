@@ -10,7 +10,7 @@
 -- "tahun tanpa data" tanpa bergantung pada isi tabel produksi.
 -- ID: Z1, Z3, Z9, Z10, T13, B13
 begin;
-select plan(94);
+select plan(102);
 select tests.fixture();
 
 select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'personal') as fp,
@@ -211,6 +211,14 @@ select tests.clock_at('2026-10-22 17:00+00');
 select is(pg_temp.pp(tests.n(), :'sh', null), '2026-10-23..2026-11-24|2026-11-01|true|33',
   'T13: 22 Okt 17:00 UTC = 23 Okt 00:00 WIB -> periode Nov');
 
+-- T13 / Review Focus #2: 31 Okt 23:30 WIB lewat jam tiruan.
+select tests.clock_at('2026-10-31 23:30+07');
+select is(pg_temp.pp(tests.n(), :'sh', null), '2026-10-23..2026-11-24|2026-11-01|true|25',
+  'T13: 31 Okt 23:30 WIB, aturan 25 -> periode Nov, sisa 25 hari');
+select tests.clock_at('2026-10-31 17:00+00');
+select is(pg_temp.pp(tests.n(), :'sh', null), '2026-10-23..2026-11-24|2026-11-01|true|24',
+  'T13: 31 Okt 17:00 UTC = 1 Nov 00:00 WIB, aturan 25 -> periode Nov, sisa 24 hari');
+
 -- ===== Aturan 31 dan 1 =====
 select pg_temp.setrule(31);
 select is(pg_temp.pp(tests.n(), :'sh', '2028-03-01'), '2028-02-29..2028-03-30|2028-03-01|false|30',
@@ -228,6 +236,12 @@ select is(pg_temp.pp(tests.n(), :'sh', '2028-02-10'), '2028-02-01..2028-02-29|20
   'Z3: aturan kosong, Feb kabisat 2028 = 29 hari');
 select is(pg_temp.pp(tests.n(), :'sh', '2027-02-10'), '2027-02-01..2027-02-28|2027-02-01|true|19',
   'aturan kosong, Feb 2027 = 28 hari; tahun tanpa data libur tetap holidays_known = true (libur tidak dipakai)');
+select tests.clock_at('2026-10-31 23:30+07');
+select is(pg_temp.pp(tests.n(), :'sh', null), '2026-10-01..2026-10-31|2026-10-01|true|1',
+  'T13: aturan kosong, 31 Okt 23:30 WIB -> Okt, sisa 1 hari (Z10)');
+select tests.clock_at('2026-10-31 17:00+00');
+select is(pg_temp.pp(tests.n(), :'sh', null), '2026-11-01..2026-11-30|2026-11-01|true|30',
+  'T13: aturan kosong, 31 Okt 17:00 UTC = 1 Nov WIB -> Nov, sisa 30 hari');
 select tests.clock_at('2026-12-31 23:59+07');
 select is(pg_temp.pp(tests.n(), :'sh', null), '2026-12-01..2026-12-31|2026-12-01|true|1',
   'Z9: aturan kosong, 31 Des 23:59 WIB -> Des, sisa 1 hari');
@@ -269,8 +283,18 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format($q$
   'DK404', 'space_not_found', 'ruang tidak dikenal = DK404');
 select throws_ok(format($$select tests.web_exec(null, %L)$$, format($q$select api.pay_period(%L)$q$, :'sh')),
   'DK401', 'unauthenticated', 'tanpa konteks = DK401');
-select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.x(), format($q$select api.pay_period(%L, null)$q$, :'sh')),
-  'DK404', 'space_not_found', 'assert_member lebih dulu daripada hal lain');
+-- Urutan: assert_member sebelum validasi lain. 'infinity' memicu DK400 bagi anggota, DK404 bagi Luar.
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format($q$select api.pay_period(%L, 'infinity')$q$, :'sh')),
+  'DK400', null, 'anggota dengan tanggal tak sah = DK400');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.x(), format($q$select api.pay_period(%L, 'infinity')$q$, :'sh')),
+  'DK404', 'space_not_found', 'assert_member lebih dulu: Luar dengan tanggal tak sah tetap DK404');
+-- Fungsi app.* yang bisa dipanggil web langsung: ruang tak terlihat = DK404 (bukan bulan kalender diam-diam).
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format($q$select count(*) from app.pay_period(%L, '2026-10-23')$q$, :'np')),
+  'DK404', 'space_not_found', 'app.pay_period: F -> Pribadi N = DK404');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.x(), format($q$select count(*) from app.period_of_label(%L, '2026-11-01')$q$, :'sh')),
+  'DK404', 'space_not_found', 'app.period_of_label: Luar -> Bersama = DK404');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format($q$select count(*) from app.pay_period(%L, '2026-10-23')$q$, gen_random_uuid())),
+  'DK404', 'space_not_found', 'app.pay_period: ruang tidak ada = DK404 (sama dengan ruang orang lain)');
 select throws_ok($$select tests.owner_val(null, $q$select count(*) from app.pay_period(null, null)$q$)$$,
   'DK400', 'invalid_argument', 'app.pay_period tanpa tanggal = DK400');
 select is(tests.web_val(tests.n(), format($$select count(*) from api.pay_period(%L)$$, :'sh')), '1',
