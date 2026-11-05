@@ -4,8 +4,8 @@ import type { MetadataRoute } from 'next';
  * Manifest PWA (IPD S3). Syarat instal Chrome: name/short_name, start_url, display standalone,
  * ikon 192 dan 512, HTTPS; service worker tidak wajib (Chrome 108+ mobile, 112+ desktop).
  *
- * SEMENTARA: public/icons/*.png dan src/app/icon.svg adalah placeholder (lingkaran lime di
- * latar #0F1211). Ganti dengan berkas pemilik dari docs/design/favicon-prompt.md, nama sama.
+ * Ikon: logo "Cincin emas" (docs/design/logo.md). icon.svg, favicon.ico, apple-icon.png ada di
+ * src/app; PNG PWA di public/icons. Ganti berkas dengan nama sama bila logo berubah.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
