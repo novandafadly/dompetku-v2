@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Indeks dan spesifikasi S9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.doc{--bg:#0F1211;--surface:#1A1F1D;--surface-2:#232927;--text:#EDF1EE;--soft:#C9D1CD;--muted:#9BA5A0;--hair:#262C2A;--border:#737E79;--accent:#C4EE6A;--warn:#F0B44C;box-sizing:border-box;background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:15px;line-height:1.5;padding:40px 32px 64px}
+.doc *{box-sizing:border-box}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+h1{margin:4px 0 0;font-size:28px;font-weight:800;letter-spacing:-.01em;line-height:1.2}
+h2{margin:0 0 4px;font-size:18px;font-weight:800;line-height:1.25}
+h3{margin:0;font-size:14px;font-weight:700;color:var(--soft)}
+p{margin:0}
+.lead{color:var(--soft);max-width:70ch}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.sub{font-size:13px;color:var(--muted)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+th{text-align:left;font-weight:700;color:var(--muted);padding:8px 10px 8px 0;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 10px 9px 0;border-bottom:1px solid var(--hair);vertical-align:top;color:var(--soft)}
+td.k{color:var(--text);font-weight:700;white-space:nowrap}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--surface-2);border-radius:6px;padding:1px 6px;color:var(--text)}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:var(--soft)}
+li{padding-left:2px}
+.pill{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600;color:var(--soft)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.sw{display:flex;align-items:center;gap:10px}
+.sq{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);flex:none}
+.hatch{background:repeating-linear-gradient(135deg,#8A9590 0 2px,#1A1F1D 2px 5px);border:2px solid #8A9590}
+.warn{color:var(--warn);font-weight:700}
+a{color:var(--accent)}a:hover{color:#D3F58C}
+</style>
+</helmet>
+<div class="doc">
+<div class="wrap">
+
+<header>
+<div class="eyebrow">DompetKu · S9 · Prioritas 1</div>
+<h1>Laporan: bingkai LP1–LP13 dalam Panel Malam</h1>
+<p class="lead" style="margin-top:8px">Semua angka dari <code>contoh-data.json</code> (demo Sab, 17 Okt 2026). Gaya tidak baru: token, huruf, radius, dan pola baris Panel Malam dipakai apa adanya. Yang bertambah hanya tiga token grafik. Spesifikasi lengkap per bingkai ada di <code>hasil/spesifikasi-laporan.md</code>.</p>
+</header>
+
+<section class="card">
+<h2>Cakupan</h2>
+<ul>
+<li><b>Dirancang:</b> Laporan Pribadi dan Bersama (ringkasan, Tidak termasuk, per kategori dengan subkategori, tren 6 periode, Kontribusi), semua keadaan, 320 / 390 / 768 / 1280, gelap dan terang.</li>
+<li><b>Tidak dirancang di sini:</b> Anggaran, Tagihan rutin, dan kartu "Aman dipakai" (prioritas 2 dan 3, opsional). Pola BudgetRow, BillRow, dan AmanCard yang sudah ada cukup; Laporan sudah memakai baris status anggaran yang sama.</li>
+<li><b>Dibangun tanpa JavaScript klien:</b> grafik adalah elemen statis (batang dari <code>div</code>/SVG di server), pemilih periode dan dasar periode berupa tautan, tabel data setara memakai <code>details</code>.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Indeks bingkai</h2>
+<div class="tbl">
+<table>
+<thead><tr><th>Kode</th><th>Isi</th><th>Lebar</th><th>Tema</th></tr></thead>
+<tbody>
+<tr><td class="k">LP1</td><td>Pribadi · periode gajian "Oktober 2026" (25 Sep – 22 Okt), berjalan</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP2</td><td>Pribadi · "September 2026" lengkap, tren 5 periode, tabel data terbuka, perbandingan dengan Agustus</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP3</td><td>Bersama · berjalan, Belanja Dapur terbuka (subkategori), Kontribusi per orang</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP4</td><td>Pribadi · Bulan kalender 1–31 Okt (selisih negatif, catatan gaji belum masuk), tren 6 bulan</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP5</td><td>Kosong · April 2026 (25 Mar – 23 Apr): "Belum ada transaksi di periode ini." + Catat</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP5b</td><td>Kartu tren saat baru ada 2 periode (Sep, Okt)</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP6</td><td>Memuat: kerangka berbentuk isi akhir + "Memuat laporan…" (<code>role="status"</code>)</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP7</td><td>Galat: "Laporan belum bisa dimuat" + sebab + "Coba lagi" (tautan)</td><td class="n">390</td><td>gelap</td></tr>
+<tr><td class="k">LP8a / LP8b</td><td>Laptop · Pribadi dan Bersama, dua kolom, sidebar dengan item Laporan aktif</td><td class="n">1280</td><td>gelap</td></tr>
+<tr><td class="k">LP9</td><td>Tablet · Pribadi, ringkasan dan Tidak termasuk berdampingan</td><td class="n">768</td><td>gelap</td></tr>
+<tr><td class="k">LP10</td><td>HP 320 · Pribadi (tanpa gulir ke samping, label grafik terbaca)</td><td class="n">320</td><td>gelap</td></tr>
+<tr><td class="k">LP11a / b / c</td><td>Tema terang: LP1, LP3, LP8a</td><td class="n">390 · 390 · 1280</td><td>terang</td></tr>
+<tr><td class="k">LP12a / LP12b</td><td>Angka panjang <code>Rp 12.345.678.900</code> dan nama kategori 40 karakter (data ilustrasi)</td><td class="n">320 · 390</td><td>gelap</td></tr>
+<tr><td class="k">LP13</td><td>Libur nasional belum diisi · "Januari 2028" (24 Des – 24 Jan)</td><td class="n">390</td><td>gelap</td></tr>
+</tbody>
+</table>
+</div>
+<p class="sub">Semua bingkai lahir dari satu komponen (<code>LaporanScreen</code>) dengan props ruang, basis, periode, keadaan, tema, dan lebar. Tanggal April 2026 dan Januari 2028 diturunkan dari aturan gajian (tanggal 25, maju ke hari kerja sebelumnya bila Sabtu/Minggu), bukan dari data libur.</p>
+</section>
+
+<section class="card">
+<h2>Token baru</h2>
+<p class="sub">Disalin ke <code>[data-theme="dark"]</code>, <code>[data-theme="light"]</code>, dan blok <code>[data-theme="system"]</code> di <code>tokens.css</code>. Mendaftar ke <code>@theme inline</code> sebagai <code>--color-chart-expense</code> dan seterusnya. Tambahkan ke <code>contrast.test.ts</code>.</p>
+<div class="tbl">
+<table>
+<thead><tr><th>Token</th><th>Gelap</th><th>Terang</th><th>Dipakai untuk</th><th>Rasio (gelap / terang)</th></tr></thead>
+<tbody>
+<tr><td class="k">--chart-expense</td><td class="n"><span class="sw"><span class="sq" style="background:#8A9590"></span>#8A9590</span></td><td class="n"><span class="sw"><span class="sq" style="background:#6B7670"></span>#6B7670</span></td><td>Batang pengeluaran (tren dan per kategori), arsir periode berjalan, swatch legenda</td><td class="n">vs surface 5,39 / 4,72 · vs surface-2 4,78 / 4,06 · vs surface-3 4,18 / 3,73 (syarat ≥ 3)</td></tr>
+<tr><td class="k">--chart-income</td><td class="n"><span class="sw"><span class="sq" style="background:#5FD8A4"></span>= --income</span></td><td class="n"><span class="sw"><span class="sq" style="background:#1B7A4B"></span>= --income</span></td><td>Garis tepi 2 px batang pemasukan dan swatch legenda (alias, tanpa warna baru)</td><td class="n">vs surface 9,42 / 5,34 · vs surface-2 8,35 / 4,59</td></tr>
+<tr><td class="k">--chart-income-tint</td><td class="n"><span class="sw"><span class="sq" style="background:#253D33"></span>#253D33</span></td><td class="n"><span class="sw"><span class="sq" style="background:#E4EFE9"></span>#E4EFE9</span></td><td>Isi batang pemasukan (dekoratif; informasi dibawa garis tepi, posisi, dan angka)</td><td class="n">chart-income di atas tint 6,60 / 4,53</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>Mengapa bukan warna ruang atau danger:</b> pengeluaran biasa bukan bahaya, dan lime/violet menandai ruang. Bilah dibuat netral supaya lime tetap hanya muncul di saat penting. Pemasukan dan pengeluaran dibedakan oleh <b>bentuk</b> (kotak bergaris vs padat), <b>posisi</b> (kiri vs kanan), dan <b>legenda berlabel</b>, bukan oleh hue.</p>
+<p class="sub">Dipakai ulang tanpa perubahan: <code>hairline</code> (garis bantu, dekoratif), <code>border</code> (garis nol, 3,97 / 3,71 vs surface), <code>text-muted</code> (label sumbu, 6,59 / 6,00 vs surface), <code>warning</code>, <code>danger</code>, <code>income</code>.</p>
+</section>
+
+<section class="card">
+<h2>Grafik tren (batang berpasangan)</h2>
+<div class="grid2">
+<ul>
+<li><b>Data:</b> 6 periode terakhir yang berakhir di periode berjalan (gajian: Jun–Okt = 5 karena seed mulai Mei; kalender: Mei–Okt = 6). Periode yang sedang dilihat ditandai; bila periode itu di luar 6 yang tampil, tidak ada yang ditandai.</li>
+<li><b>Sumbu nilai:</b> 0 sampai 3 × langkah "bagus" (1, 2, 2,5, 4, 5 × 10ⁿ), 4 garis bantu. Label <code>Rp 4 jt</code>, <code>Rp 12 jt</code>, <code>Rp 500 rb</code>; 11/500 <code>text-muted</code>, rata kanan, lebar 44, kolom label 50.</li>
+<li><b>Plot:</b> tinggi 150 (HP), 170 (768), 190 (1280). Garis nol memakai <code>border</code>, garis lain <code>hairline</code>.</li>
+<li><b>Batang:</b> lebar maks 20 (HP) / 28 (laptop), jarak dalam grup 3, radius atas 4. Pemasukan kiri: isi <code>chart-income-tint</code>, tepi 2 px <code>chart-income</code>. Pengeluaran kanan: padat <code>chart-expense</code>.</li>
+</ul>
+<ul>
+<li><b>Nilai 0:</b> batang setinggi 2 px di garis dasar (tidak hilang). Angkanya tetap di tabel dan pembacaan langsung.</li>
+<li><b>Periode berjalan:</b> pengeluaran berarsir diagonal 135° (2 px isi / 3 px kosong) bertepi 2 px, pemasukan bertepi putus-putus, label sumbu x diberi baris "berjalan" 11/600. Legenda menjelaskan arsir.</li>
+<li><b>Label sumbu x:</b> nama periode 12/600; yang dipilih 800 dengan garis bawah 2 px.</li>
+<li><b>Legenda:</b> tiga item bergambar (kotak bergaris = Pemasukan, padat = Pengeluaran, arsir = Periode berjalan).</li>
+<li><b>Pembacaan langsung:</b> kotak <code>surface-2</code> dengan nilai periode terpilih (Pemasukan, Pengeluaran) dalam format penuh.</li>
+<li><b>Tabel setara:</b> <code>details</code> "Tabel data" (ringkasan 44 px), kolom Periode · Pemasukan · Pengeluaran · Selisih (selisih bertanda + / −), caption "dalam rupiah". Di HP kolom tanpa "Rp" agar muat 320.</li>
+<li><b>Nama aksesibel:</b> <code>role="img"</code> + <code>aria-label</code> yang menyebut rentang periode, periode berjalan, dan "rincian ada di tabel". Tidak ada tooltip, hover, atau animasi.</li>
+</ul>
+</div>
+</section>
+
+<section class="card">
+<h2>Batang per kategori</h2>
+<ul>
+<li>Panjang batang = <b>persen dari total pengeluaran berkategori</b> (1 desimal, koma: <code>37,8%</code>), jadi batang dan angka persen selalu sama. Tinggi 8, radius 4, jalur <code>surface-2</code>, isi <code>chart-expense</code>.</li>
+<li>Kategori beranggaran menambah baris <code>dari anggaran Rp 2.000.000 · 45% terpakai</code> (13/500 <code>text-muted</code>). Mulai 80% jadi tautan ke Rencana dengan status ikon + teks: <span class="warn">85% terpakai</span> (ikon <code>warning</code> fill), <b style="color:#FF8F7D">Lewat Rp 189.000</b> (ikon <code>warning-octagon</code> fill). <b>Tepat 100%</b> (Sewa Rumah) bukan "lewat": tampil <code>Terpakai penuh</code> dengan <code>warning-octagon</code>, warna <code>warning</code>.</li>
+<li>Subkategori: baris induk adalah <code>summary</code> 44+ px dengan caret; isi indentasi 52 px, batang 6 px berskala persen terhadap induk. Total sub = induk (Belanja Dapur: 1.120.000 + 1.178.000 = 2.298.000).</li>
+<li>"Biaya transfer" (tanpa kategori) menjadi baris terakhir <b>hanya bila &gt; 0</b>; data demo tidak punya, jadi tidak digambar.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Angka panjang dan 320 px</h2>
+<ul>
+<li><b>Angka besar</b> (<code>Rp</code> 20/700 muted + digit 44/800, laptop 56): ukuran digit mengecil dengan <code>container-type: inline-size</code> pada kartu: <code>font-size: min(44px, calc((100cqw - 30px) / (digit × 0,62 + titik × 0,28)))</code>. <code>Rp 12.345.678.900</code> menjadi sekitar 30 px di 320 dan 39 px di 390. Satu baris, tanpa pemenggalan.</li>
+<li><b>Nominal baris</b> selalu <code>nowrap</code>, rata kanan. Bila nama + nominal tak muat, baris membungkus: nominal turun ke baris berikutnya, rata kanan. Nama kategori maksimum 2 baris lalu ellipsis, nama lengkap ada di <code>title</code>/teks sr-only.</li>
+<li><b>Baris Selisih</b> membungkus: label di kiri, status (ikon + kata) dan nominal di kanan; di sempit nominal turun baris.</li>
+<li><b>Header 320:</b> judul ruang disembunyikan visual (pengalih tetap menyebut ruang), tombol Catat jadi ikon 48 × 48 dengan label di bawah, sesuai handoff.</li>
+<li><b>Tren 320:</b> grup 43 px; "berjalan" 11/600 melebar sedikit melewati grupnya tapi tak menabrak (label tetangga pendek). Tabel data: kolom Periode 34 px, tiga kolom angka berbagi sisa, 12/500 tabular.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Keputusan yang menyimpang dari brief</h2>
+<ul>
+<li><b>Pemilih dasar periode</b> (Periode gajian | Bulan kalender) memakai <code>nav</code> + <code>aria-current="page"</code>, bukan <code>role="tablist"</code>. Ini tautan tanpa JavaScript, dan pola tab menuntut panel dan navigasi panah. Tampilannya sama dengan segmen Panel Malam.</li>
+<li><b>Periode berjalan tidak dibandingkan</b> dengan periode lalu (belum selesai, hasilnya menyesatkan). Kartu menulis "Periode belum selesai; angka masih bisa bertambah." dan memberi pembanding lengkap: "September (lengkap): Rp 4.178.500 pengeluaran." Periode lengkap memakai kalimat "Rp 1.628.500 lebih sedikit dari Agustus."</li>
+<li><b>Selisih positif</b> ikut ditandai kata ("Surplus", ikon <code>plus-circle</code>) agar simetris dengan "Defisit" (<code>minus-circle</code>); keduanya ikon + kata, bukan warna saja.</li>
+<li><b>Bulan kalender</b> dengan selisih negatif diberi catatan: "Gaji Oktober baru masuk 23 Okt, jadi selisih sementara negatif." (tanggal dari data periode berikutnya).</li>
+<li><b>Tab bar</b> tidak menandai halaman aktif di Laporan (Laporan diakses dari Menu dan tautan di Ringkasan Transaksi). Di sidebar laptop, item Laporan aktif.</li>
+<li><b>Kontribusi</b> yang belum ada ditulis "Belum ada setoran", bukan "Setor Rp 0". Farida di data Okt belum menyetor.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Bingkai yang dibuat dari data ilustrasi</h2>
+<ul>
+<li><b>LP12:</b> satu kategori "Perawatan kendaraan &amp; servis rutin bulan" (40 karakter) senilai <code>Rp 12.345.678.900</code> (blok <code>angka_panjang</code>); Pemasukan memakai Rp 12.000.000 dari data Pribadi, jadi Selisih = −Rp 12.333.678.900 (turunan).</li>
+<li><b>LP5, LP13:</b> keadaan kosong, tanpa angka. Periode April 2026 sebelum data demo mulai; Januari 2028 di masa depan.</li>
+</ul>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1160,"height":3300}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

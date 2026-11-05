@@ -1,0 +1,39 @@
+/* DompetKu S9 · token grafik Laporan (tambahan di atas dompetku-tokens.css / tokens.css).
+   Tambahkan ke blok [data-theme="dark"], [data-theme="light"], dan [data-theme="system"]
+   (di dalam @media prefers-color-scheme: light), lalu ke contrast.test.ts.
+   Rasio kontras dihitung dengan rumus WCAG 2.x.
+
+   Gelap
+     --chart-expense  #8A9590  vs surface 5,39 · surface-2 4,78 · surface-3 4,18   (syarat grafik >= 3)
+     --chart-income   = --income #5FD8A4  vs surface 9,42 · surface-2 8,35
+     --chart-income-tint #253D33 (dekoratif; chart-income di atasnya 6,60)
+   Terang
+     --chart-expense  #6B7670  vs surface 4,72 · surface-2 4,06 · surface-3 3,73
+     --chart-income   = --income #1B7A4B  vs surface 5,34 · surface-2 4,59
+     --chart-income-tint #E4EFE9 (dekoratif; chart-income di atasnya 4,53)
+*/
+
+:root,
+[data-theme='dark'] {
+  --chart-expense: #8a9590;
+  --chart-income: var(--income);
+  --chart-income-tint: #253d33;
+}
+[data-theme='light'] {
+  --chart-expense: #6b7670;
+  --chart-income: var(--income);
+  --chart-income-tint: #e4efe9;
+}
+@media (prefers-color-scheme: light) {
+  [data-theme='system'] {
+    --chart-expense: #6b7670;
+    --chart-income: var(--income);
+    --chart-income-tint: #e4efe9;
+  }
+}
+
+@theme inline {
+  --color-chart-expense: var(--chart-expense);
+  --color-chart-income: var(--chart-income);
+  --color-chart-income-tint: var(--chart-income-tint);
+}
