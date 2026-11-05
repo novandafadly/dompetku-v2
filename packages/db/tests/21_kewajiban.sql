@@ -7,6 +7,10 @@
 -- DK422 obligation_double, dari kedua arah); memindah induk kategori yang dipakai
 -- tagihan/anggaran = DK422 category_in_obligation. Persona N, F, Luar (tests.x(), tanpa ruang);
 -- kanari Pribadi KANARI-N-TAGIHAN + anggaran pada KANARI-N-KATEGORI (dan padanannya milik F).
+-- 0118: kemunculan pertama = greatest(starts_on, awal bulan created_at WIB) (private.bill_first_on), juga
+-- di XOR. Baris tagihan di tes ini ditulis langsung dengan created_at 1 Jan 2026 (sebelum semua starts_on),
+-- jadi aturan XOR yang diuji di sini tetap berbasis starts_on; starts_on lampau terhadap bulan dibuat
+-- diuji di 22_tagihan. 0118 juga memberi dompetku_api DELETE pada bill_occurrences (api.update_bill).
 -- ID: T17, B1, B13
 begin;
 select plan(128);
@@ -30,8 +34,8 @@ create function pg_temp.bill(p_uid uuid, p_space uuid, p_name text, p_cat uuid, 
 language sql as $$
   select tests.api_val(p_uid, format(
     $q$insert into app.bills (space_id, name, amount, category_id, account_id, day_of_month, starts_on,
-         ends_on, created_by)
-       values (%L, %L, 485000, %L, %L, 20, %L, %L, app.current_user_id()) returning id$q$,
+         ends_on, created_by, created_at)
+       values (%L, %L, 485000, %L, %L, 20, %L, %L, app.current_user_id(), '2026-01-01 00:00+07') returning id$q$,
     p_space, p_name, p_cat, p_acc, p_starts, p_ends))::uuid
 $$;
 -- SQL insert anggaran (untuk throws_ok/lives_ok).
@@ -43,8 +47,8 @@ $$;
 create function pg_temp.bill_sql(p_space uuid, p_cat uuid, p_starts date, p_ends date default null) returns text
 language sql as $$
   select format($q$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on,
-                    ends_on, created_by)
-                  values (%L, 'Listrik PLN', 485000, %L, 20, %L, %L, app.current_user_id())$q$,
+                    ends_on, created_by, created_at)
+                  values (%L, 'Listrik PLN', 485000, %L, 20, %L, %L, app.current_user_id(), '2026-01-01 00:00+07')$q$,
                 p_space, p_cat, p_starts, p_ends)
 $$;
 
@@ -83,13 +87,13 @@ select set_eq($$
             ('dompetku_web', 'budgets', 'SELECT'), ('dompetku_web', 'bill_schedule', 'SELECT'),
             ('dompetku_api', 'bills', 'SELECT'), ('dompetku_api', 'bills', 'INSERT'), ('dompetku_api', 'bills', 'UPDATE'),
             ('dompetku_api', 'bill_occurrences', 'SELECT'), ('dompetku_api', 'bill_occurrences', 'INSERT'),
-            ('dompetku_api', 'bill_occurrences', 'UPDATE'),
+            ('dompetku_api', 'bill_occurrences', 'UPDATE'), ('dompetku_api', 'bill_occurrences', 'DELETE'),
             ('dompetku_api', 'budgets', 'SELECT'), ('dompetku_api', 'budgets', 'INSERT'),
             ('dompetku_api', 'budgets', 'UPDATE'), ('dompetku_api', 'budgets', 'DELETE'),
             ('dompetku_api', 'bill_schedule', 'SELECT'),
             ('dompetku_auditor', 'bills', 'SELECT'), ('dompetku_auditor', 'bill_occurrences', 'SELECT'),
             ('dompetku_auditor', 'budgets', 'SELECT'), ('dompetku_auditor', 'bill_schedule', 'SELECT') $$,
-  'hak persis BSD §11: web SELECT, api DML terbatas (DELETE hanya budgets), worker tanpa hak, auditor SELECT');
+  'hak persis BSD §11 + 0118: web SELECT, api DML terbatas (DELETE budgets, bill_occurrences), worker tanpa hak, auditor SELECT');
 select is(tests.owner_val(null, $$select string_agg(c.relname || ':' || p.polname || ':' || p.polcmd::text || ':'
     || (select string_agg(r::regrole::text, '+' order by r::regrole::text) from unnest(p.polroles) r), ','
     order by c.relname, p.polname)
@@ -314,8 +318,8 @@ $$;
 create function pg_temp.tg(p_space uuid, p_cat uuid, p_day int, p_starts date, p_ends date default null) returns text
 language sql as $$
   select format($q$select tests.api_exec(%L, %L)$q$, tests.n(), format(
-    $i$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, ends_on, created_by)
-       values (%L, 'Cicilan', 750000, %L, %s, %L, %L, app.current_user_id())$i$, p_space, p_cat, p_day, p_starts, p_ends))
+    $i$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, ends_on, created_by, created_at)
+       values (%L, 'Cicilan', 750000, %L, %s, %L, %L, app.current_user_id(), '2026-01-01 00:00+07')$i$, p_space, p_cat, p_day, p_starts, p_ends))
 $$;
 create function pg_temp.ag(p_space uuid, p_cat uuid, p_month date, p_wajib boolean default true) returns text
 language sql as $$

@@ -5,9 +5,12 @@
 -- S8: api.shared_activity dan api.member_contributions ikut daftar DK404/DK401 dan kanari Bersama (BSD §13 #12).
 -- S9 (0117): bills, bill_occurrences, budgets, view bill_schedule ikut matriks dua user x operasi;
 -- baris ditulis sebagai dompetku_api (fungsi api tagihan/anggaran menyusul Task 5/6).
+-- S9 (0118): fungsi tagihan (create/update/archive_bill, post/skip/unskip_bill_occurrence, bill_list,
+-- bills_due) ikut daftar DK404/DK401 dan kanari Bersama; api kini boleh DELETE bill_occurrences
+-- (api.update_bill), tetap 0 baris untuk Pribadi pasangan.
 -- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(234);
+select plan(252);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -76,6 +79,8 @@ select tests.api_exec(u, format($q$insert into app.bill_occurrences (space_id, b
 select tests.api_exec(u, format($q$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
     values (%L, %L, '2026-04-01', 900000, false, app.current_user_id())$q$, sp, c))
   from (values (tests.n(), :'np'::uuid, :'ncat'::uuid), (tests.f(), :'fp'::uuid, :'fcat'::uuid)) v (u, sp, c) \g /dev/null
+select tests.owner_val(null, format('select id from app.bill_occurrences where bill_id = %L', :'bill')) as nocc,
+       tests.owner_val(null, format('select id from app.bill_occurrences where bill_id = %L', :'fbill')) as focc \gset
 
 create temp table rel as select unnest(array['app.accounts', 'app.categories', 'app.entries', 'app.entry_lines',
   'app.entry_history', 'app.entry_tombstones', 'app.account_balances', 'app.report_lines',
@@ -167,12 +172,14 @@ select is(tests.api_exec(tests.f(), format('delete from app.no_spend_days where 
           'api/F DELETE no_spend_days Pribadi N: 0 baris');
 select is(tests.api_exec(tests.f(), format('delete from app.budgets where space_id = %L', :'np')), 0::bigint,
           'api/F DELETE budgets Pribadi N: 0 baris');
+select is(tests.api_exec(tests.f(), format('delete from app.bill_occurrences where space_id = %L', :'np')), 0::bigint,
+          'api/F DELETE bill_occurrences Pribadi N: 0 baris');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), q), '42501', null, 'api tanpa hak: ' || q)
 from unnest(array['update app.entry_lines set amount = amount', 'update app.entry_history set version = version',
                   'update app.entry_tombstones set kind = kind', 'delete from app.accounts',
                   'delete from app.categories', 'delete from app.entries', 'delete from app.entry_history',
                   'delete from app.entry_tombstones', 'update app.no_spend_days set on_date = on_date',
-                  'delete from app.bills', 'delete from app.bill_occurrences']) q;
+                  'delete from app.bills']) q;
 
 -- ===== worker: tanpa akses tabel ledger =====
 select throws_ok(format($$select tests.worker_val(null, %L)$$, 'select count(*) from ' || t), '42501', null,
@@ -210,8 +217,20 @@ from (values
   ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
   ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas')),
   ('move_entry_to_space ke', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'np', :'bca')),
-  ('move_entry_to_space dompet', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'sh', :'bca'))
+  ('move_entry_to_space dompet', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'fe', :'sh', :'bca')),
+  ('create_bill', format($q$select api.create_bill(gen_random_uuid(), %L, 'X', 1, %L, 1::smallint, '2026-03-20')$q$, :'np', :'ncat')),
+  ('update_bill', format($q$select api.update_bill(%L, 'X', 1, %L, 1::smallint, null, null)$q$, :'bill', :'ncat')),
+  ('archive_bill', format($q$select api.archive_bill(%L)$q$, :'bill')),
+  ('post_bill_occurrence', format($q$select api.post_bill_occurrence(gen_random_uuid(), %L, %L)$q$, :'nocc', :'fbca')),
+  ('post_bill_occurrence dompet', format($q$select api.post_bill_occurrence(gen_random_uuid(), %L, %L)$q$, :'focc', :'bca')),
+  ('skip_bill_occurrence', format($q$select api.skip_bill_occurrence(%L)$q$, :'nocc')),
+  ('unskip_bill_occurrence', format($q$select api.unskip_bill_occurrence(%L)$q$, :'nocc')),
+  ('bill_list', format($q$select count(*) from api.bill_list(%L)$q$, :'np')),
+  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'np'))
 ) v (t, q);
+select is(tests.owner_val(null, format($$select name || ' ' || (archived_at is null) || ' '
+    || (select string_agg((entry_id is null and skipped_at is null)::text, ',') from app.bill_occurrences where bill_id = %1$L)
+  from app.bills where id = %1$L$$, :'bill')), 'KANARI-N-TAGIHAN true true', 'tagihan dan kemunculan N tidak tersentuh');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
 select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' '
@@ -248,7 +267,15 @@ from (values
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh')),
   ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'bca')),
   ('open_reimbursables', format($q$select count(*) from api.open_reimbursables(%L)$q$, :'np')),
-  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas'))
+  ('move_entry_to_space', format($q$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$q$, :'ne', :'sh', :'kas')),
+  ('create_bill', format($q$select api.create_bill(gen_random_uuid(), %L, 'X', 1, %L, 1::smallint, '2026-03-20')$q$, :'np', :'ncat')),
+  ('update_bill', format($q$select api.update_bill(%L, 'X', 1, %L, 1::smallint, null, null)$q$, :'bill', :'ncat')),
+  ('archive_bill', format($q$select api.archive_bill(%L)$q$, :'bill')),
+  ('post_bill_occurrence', format($q$select api.post_bill_occurrence(gen_random_uuid(), %L, %L)$q$, :'nocc', :'bca')),
+  ('skip_bill_occurrence', format($q$select api.skip_bill_occurrence(%L)$q$, :'nocc')),
+  ('unskip_bill_occurrence', format($q$select api.unskip_bill_occurrence(%L)$q$, :'nocc')),
+  ('bill_list', format($q$select count(*) from api.bill_list(%L)$q$, :'sh')),
+  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'sh'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====
@@ -300,9 +327,11 @@ select is(tests.web_val(tests.f(), format($$select count(*) from (
     union all select b::text from app.bills b
     union all select bu::text from app.budgets bu
     union all select s::text from app.bill_schedule s
+    union all select b::text from api.bill_list(%L) b
+    union all select d::text from api.bills_due(%L, '2026-12-31') d
   ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like '%%KANARI-N-%%'
     or x like %L$$,
-  :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
+  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
   'F: tidak ada deskripsi Pribadi N, kanari tagihan N, atau id dompet N di entri/riwayat/line/laporan/Sampah/feed/tagihan/anggaran');
 select is(tests.web_val(tests.n(), format($$select count(*) from (
     select e::text as x from app.entries e union all select h::text from app.entry_history h

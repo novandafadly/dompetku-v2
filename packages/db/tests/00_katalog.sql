@@ -56,16 +56,17 @@ select set_eq($$
         'create_account', 'create_entry', 'create_transfer', 'update_entry', 'void_entry',
         'restore_entry', 'purge_entry', 'reconcile_balance', 'archive_account',
         'create_category', 'update_category', 'archive_category', 'mark_no_spend_day',
-        'create_reimbursement', 'move_entry_to_space'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7, invitation_peek, list_invitations)');
+        'create_reimbursement', 'move_entry_to_space', 'create_bill', 'update_bill', 'archive_bill',
+        'post_bill_occurrence', 'skip_bill_occurrence', 'unskip_bill_occurrence'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan, invitation_peek, list_invitations)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile = 's' $$,
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
         'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
-        'member_contributions', 'pay_period'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8)');
+        'member_contributions', 'pay_period', 'bill_list', 'bills_due'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
@@ -83,8 +84,9 @@ select set_eq($$
         'jobs.purge_idempotency',
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
-        'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban)');
+        'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
+        'private.materialize_bill', 'jobs.materialize_bills'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan)');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -216,8 +218,9 @@ select set_eq($$
     ('dompetku_api', 'app.holidays', 'SELECT'),
     ('dompetku_worker', 'app.holidays', 'SELECT'),
     ('dompetku_auditor', 'app.holidays', 'SELECT'),
-    -- S9: tagihan, kemunculan, anggaran (BSD §11: web baca; api tulis lewat fungsi, DELETE hanya
-    -- budgets; worker hanya lewat jobs.*), view bill_schedule (security_invoker).
+    -- S9: tagihan, kemunculan, anggaran (BSD §11: web baca; api tulis lewat fungsi, DELETE budgets
+    -- dan (0118, api.update_bill) bill_occurrences; worker hanya lewat jobs.*), view bill_schedule
+    -- (security_invoker).
     ('dompetku_web', 'app.bills', 'SELECT'),
     ('dompetku_web', 'app.bill_occurrences', 'SELECT'),
     ('dompetku_web', 'app.budgets', 'SELECT'),
@@ -228,6 +231,7 @@ select set_eq($$
     ('dompetku_api', 'app.bill_occurrences', 'SELECT'),
     ('dompetku_api', 'app.bill_occurrences', 'INSERT'),
     ('dompetku_api', 'app.bill_occurrences', 'UPDATE'),
+    ('dompetku_api', 'app.bill_occurrences', 'DELETE'),
     ('dompetku_api', 'app.budgets', 'SELECT'),
     ('dompetku_api', 'app.budgets', 'INSERT'),
     ('dompetku_api', 'app.budgets', 'UPDATE'),
@@ -284,24 +288,28 @@ select set_eq($$
                                    'restore_entry', 'purge_entry', 'reconcile_balance',
                                    'archive_account', 'create_category', 'update_category',
                                    'archive_category', 'mark_no_spend_day',
-                                   'create_reimbursement', 'move_entry_to_space']) f
+                                   'create_reimbursement', 'move_entry_to_space', 'create_bill',
+                                   'update_bill', 'archive_bill', 'post_bill_occurrence',
+                                   'skip_bill_occurrence', 'unskip_bill_occurrence']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
                       'suggest_categories', 'open_reimbursables', 'shared_activity',
-                      'member_contributions', 'pay_period']) f
+                      'member_contributions', 'pay_period', 'bill_list', 'bills_due']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
                       'lock_accounts', 'get_account', 'balance', 'assert_balance',
                       'entry_snapshot', 'write_history', 'check_date', 'check_amount',
                       'clean_text', 'set_void_state', 'purge_entries', 'seed_categories',
-                      'tg_seed_categories']) f
+                      'tg_seed_categories', 'materialize_bill', 'check_bill', 'lock_occurrence',
+                      'occurrence_posted']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
-                      'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile']) f
+                      'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
+                      'materialize_bills']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');
