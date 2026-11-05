@@ -1,0 +1,984 @@
+{
+  "catatan": [
+    "Angka dihitung dari seed demo aplikasi (packages/demo-data, varian full, today 2026-10-17), sama dengan docs/design/claude-design/contoh-data.json untuk angka yang sudah ada di sana.",
+    "Dua versi periode: 'periode_gajian' (bawaan S9, gajian tanggal 25 maju ke hari kerja sebelumnya) dan 'bulan_kalender' (pilihan tampilan Laporan).",
+    "Seed demo belum punya biaya transfer, talangan, atau koreksi saldo pada periode ini; baris 'Tidak termasuk' yang bernilai 0 tidak ditampilkan.",
+    "Kategori tagihan di seed kosong; 'kategori_usulan' adalah pemetaan ke kategori yang ada, boleh dipakai di layar.",
+    "Blok bertanda ilustrasi=true bukan dari seed; hanya untuk keadaan yang disebut."
+  ],
+  "tanggal_demo": "2026-10-17",
+  "hari_demo": "Sab, 17 Okt 2026",
+  "anggota": [
+    {
+      "nama": "Novanda",
+      "inisial": "N",
+      "peran": "pemilik"
+    },
+    {
+      "nama": "Farida",
+      "inisial": "F",
+      "peran": "anggota"
+    }
+  ],
+  "periode": {
+    "gajian_tanggal": 25,
+    "aturan": "Bila tanggal 25 jatuh di Sabtu, Minggu, atau libur nasional/cuti bersama, gajian maju ke hari kerja sebelumnya.",
+    "berjalan": {
+      "nama": "Oktober 2026",
+      "mulai": "2026-09-25",
+      "selesai": "2026-10-22",
+      "sisa_hari_termasuk_hari_ini": 6,
+      "alasan_selesai": "25 Okt 2026 hari Minggu, gajian Jumat 23 Okt"
+    },
+    "berikutnya": {
+      "nama": "November 2026",
+      "mulai": "2026-10-23",
+      "selesai": "2026-11-24"
+    },
+    "sebelumnya": {
+      "nama": "September 2026",
+      "mulai": "2026-08-25",
+      "selesai": "2026-09-24"
+    },
+    "daftar_periode_gajian": [
+      {
+        "nama": "Juni 2026",
+        "mulai": "2026-05-25",
+        "selesai": "2026-06-24"
+      },
+      {
+        "nama": "Juli 2026",
+        "mulai": "2026-06-25",
+        "selesai": "2026-07-23"
+      },
+      {
+        "nama": "Agustus 2026",
+        "mulai": "2026-07-24",
+        "selesai": "2026-08-24"
+      },
+      {
+        "nama": "September 2026",
+        "mulai": "2026-08-25",
+        "selesai": "2026-09-24"
+      },
+      {
+        "nama": "Oktober 2026",
+        "mulai": "2026-09-25",
+        "selesai": "2026-10-22",
+        "berjalan": true
+      }
+    ],
+    "contoh_libur_belum_diisi": "Januari 2028"
+  },
+  "pribadi": {
+    "aman_dipakai": {
+      "periode_gajian": {
+        "sampai": "2026-10-22",
+        "saldo_operasional": 4253500,
+        "tagihan_sampai_akhir_periode": 450000,
+        "sisa_anggaran_wajib": 26000,
+        "aman_dipakai": 3777500,
+        "per_hari": 629583,
+        "sisa_hari": 6,
+        "rata_rata_belanja_harian_30_hari": 151216,
+        "tagihan_lewat": 0,
+        "keadaan": "aman"
+      },
+      "bulan_kalender": {
+        "sampai": "2026-10-31",
+        "saldo_operasional": 4253500,
+        "tagihan_sampai_akhir_periode": 1259000,
+        "sisa_anggaran_wajib": 26000,
+        "aman_dipakai": 2968500,
+        "per_hari": 197900,
+        "sisa_hari": 15,
+        "rata_rata_belanja_harian_30_hari": 151216,
+        "tagihan_lewat": 0,
+        "keadaan": "aman"
+      }
+    },
+    "dompet": [
+      {
+        "nama": "BCA",
+        "jenis": "operasional",
+        "tipe": "bank",
+        "saldo": 3105500
+      },
+      {
+        "nama": "Tunai",
+        "jenis": "operasional",
+        "tipe": "cash",
+        "saldo": 1148000
+      },
+      {
+        "nama": "Dana Darurat",
+        "jenis": "tabungan",
+        "tipe": "bank",
+        "saldo": 30000000
+      },
+      {
+        "nama": "Kas Kantor",
+        "jenis": "kantor",
+        "tipe": "cash",
+        "saldo": 3206000
+      }
+    ],
+    "laporan": {
+      "periode_gajian": {
+        "Oktober 2026 (berjalan, 25 Sep – 22 Okt)": {
+          "pemasukan": 12000000,
+          "pengeluaran": 2795000,
+          "selisih": 9205000,
+          "tidak_termasuk": {
+            "kas_kantor": 334000,
+            "transfer_antar_dompet": 4000000,
+            "setor_ke_bersama": 3000000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Belanja",
+              "nominal": 1056000
+            },
+            {
+              "kategori": "Makan Siang & Minum",
+              "nominal": 911500
+            },
+            {
+              "kategori": "Transportasi",
+              "nominal": 374000
+            },
+            {
+              "kategori": "Kopi & Camilan",
+              "nominal": 299500
+            },
+            {
+              "kategori": "Langganan",
+              "nominal": 154000
+            }
+          ],
+          "pemasukan_per_kategori": [
+            {
+              "kategori": "Gaji",
+              "nominal": 12000000
+            }
+          ]
+        },
+        "September 2026 (lengkap, 25 Agu – 24 Sep)": {
+          "pemasukan": 12000000,
+          "pengeluaran": 4178500,
+          "selisih": 7821500,
+          "tidak_termasuk": {
+            "kas_kantor": 278000,
+            "transfer_antar_dompet": 4000000,
+            "setor_ke_bersama": 3500000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Cicilan & Tagihan",
+              "nominal": 1161000
+            },
+            {
+              "kategori": "Makan Siang & Minum",
+              "nominal": 1147000
+            },
+            {
+              "kategori": "Kopi & Camilan",
+              "nominal": 593500
+            },
+            {
+              "kategori": "Transportasi",
+              "nominal": 566000
+            },
+            {
+              "kategori": "Belanja",
+              "nominal": 408000
+            },
+            {
+              "kategori": "Langganan",
+              "nominal": 154000
+            },
+            {
+              "kategori": "Hiburan",
+              "nominal": 149000
+            }
+          ],
+          "pemasukan_per_kategori": [
+            {
+              "kategori": "Gaji",
+              "nominal": 12000000
+            }
+          ]
+        },
+        "tren": [
+          {
+            "periode": "Jun",
+            "pemasukan": 12000000,
+            "pengeluaran": 4309000,
+            "selisih": 7691000
+          },
+          {
+            "periode": "Jul",
+            "pemasukan": 12000000,
+            "pengeluaran": 3251000,
+            "selisih": 8749000
+          },
+          {
+            "periode": "Agu",
+            "pemasukan": 12000000,
+            "pengeluaran": 5807000,
+            "selisih": 6193000
+          },
+          {
+            "periode": "Sep",
+            "pemasukan": 12000000,
+            "pengeluaran": 4178500,
+            "selisih": 7821500
+          },
+          {
+            "periode": "Okt",
+            "pemasukan": 12000000,
+            "pengeluaran": 2795000,
+            "selisih": 9205000,
+            "berjalan": true
+          }
+        ]
+      },
+      "bulan_kalender": {
+        "Oktober 2026 (berjalan, 1 – 31 Okt)": {
+          "pemasukan": 0,
+          "pengeluaran": 2427000,
+          "selisih": -2427000,
+          "tidak_termasuk": {
+            "kas_kantor": 334000,
+            "transfer_antar_dompet": 1000000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Belanja",
+              "nominal": 1056000
+            },
+            {
+              "kategori": "Makan Siang & Minum",
+              "nominal": 608000
+            },
+            {
+              "kategori": "Transportasi",
+              "nominal": 309500
+            },
+            {
+              "kategori": "Kopi & Camilan",
+              "nominal": 299500
+            },
+            {
+              "kategori": "Langganan",
+              "nominal": 154000
+            }
+          ],
+          "catatan": "Gaji Oktober belum masuk (tanggal 25), jadi selisih bulan kalender negatif. Ini contoh kenapa periode gajian jadi bawaan."
+        },
+        "September 2026 (1 – 30 Sep)": {
+          "pemasukan": 12000000,
+          "pengeluaran": 3627500,
+          "selisih": 8372500,
+          "tidak_termasuk": {
+            "kas_kantor": 278000,
+            "transfer_antar_dompet": 4000000,
+            "setor_ke_bersama": 3500000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Makan Siang & Minum",
+              "nominal": 1210000
+            },
+            {
+              "kategori": "Cicilan & Tagihan",
+              "nominal": 1161000
+            },
+            {
+              "kategori": "Transportasi",
+              "nominal": 465500
+            },
+            {
+              "kategori": "Kopi & Camilan",
+              "nominal": 460000
+            },
+            {
+              "kategori": "Belanja",
+              "nominal": 177000
+            },
+            {
+              "kategori": "Langganan",
+              "nominal": 154000
+            }
+          ]
+        },
+        "tren": [
+          {
+            "periode": "Mei",
+            "pemasukan": 12000000,
+            "pengeluaran": 4557500,
+            "selisih": 7442500
+          },
+          {
+            "periode": "Jun",
+            "pemasukan": 12000000,
+            "pengeluaran": 4288000,
+            "selisih": 7712000
+          },
+          {
+            "periode": "Jul",
+            "pemasukan": 12000000,
+            "pengeluaran": 4568000,
+            "selisih": 7432000
+          },
+          {
+            "periode": "Agu",
+            "pemasukan": 12000000,
+            "pengeluaran": 4778500,
+            "selisih": 7221500
+          },
+          {
+            "periode": "Sep",
+            "pemasukan": 12000000,
+            "pengeluaran": 3627500,
+            "selisih": 8372500
+          },
+          {
+            "periode": "Okt",
+            "pemasukan": 0,
+            "pengeluaran": 2427000,
+            "selisih": -2427000,
+            "berjalan": true
+          }
+        ]
+      }
+    },
+    "anggaran": {
+      "periode_gajian_oktober": [
+        {
+          "kategori": "Makan Siang & Minum",
+          "anggaran": 2000000,
+          "terpakai": 911500,
+          "persen": 45,
+          "wajib": false
+        },
+        {
+          "kategori": "Transportasi",
+          "anggaran": 700000,
+          "terpakai": 374000,
+          "persen": 53,
+          "wajib": false
+        },
+        {
+          "kategori": "Langganan",
+          "anggaran": 180000,
+          "terpakai": 154000,
+          "persen": 85,
+          "wajib": true
+        }
+      ],
+      "bulan_kalender_oktober": [
+        {
+          "kategori": "Makan Siang & Minum",
+          "anggaran": 2000000,
+          "terpakai": 608000,
+          "persen": 30,
+          "wajib": false
+        },
+        {
+          "kategori": "Transportasi",
+          "anggaran": 700000,
+          "terpakai": 309500,
+          "persen": 44,
+          "wajib": false
+        },
+        {
+          "kategori": "Langganan",
+          "anggaran": 180000,
+          "terpakai": 154000,
+          "persen": 85,
+          "wajib": true
+        }
+      ],
+      "belum_dianggarkan_periode_gajian_oktober": [
+        {
+          "kategori": "Belanja",
+          "terpakai": 1056000
+        },
+        {
+          "kategori": "Kopi & Camilan",
+          "terpakai": 299500
+        },
+        {
+          "kategori": "Hiburan",
+          "terpakai": 0
+        },
+        {
+          "kategori": "Kesehatan",
+          "terpakai": 0
+        },
+        {
+          "kategori": "Cicilan & Tagihan",
+          "terpakai": 0
+        },
+        {
+          "kategori": "Perjalanan Dinas",
+          "terpakai": 0
+        }
+      ]
+    },
+    "tagihan": [
+      {
+        "nama": "Cicilan ponsel",
+        "nominal": 450000,
+        "tanggal_tiap_bulan": 21,
+        "kategori_usulan": "Cicilan & Tagihan",
+        "dompet": "BCA",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-09-21",
+            "status": "lunas"
+          },
+          {
+            "jatuh_tempo": "2026-10-21",
+            "status": "belum",
+            "keterangan": "4 hari lagi",
+            "kelompok_periode_gajian": "Periode ini"
+          }
+        ]
+      },
+      {
+        "nama": "Tagihan kartu kredit",
+        "nominal": 809000,
+        "tanggal_tiap_bulan": 24,
+        "kategori_usulan": "Cicilan & Tagihan",
+        "dompet": "BCA",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-09-24",
+            "nominal": 711000,
+            "status": "lunas"
+          },
+          {
+            "jatuh_tempo": "2026-10-24",
+            "status": "belum",
+            "keterangan": "7 hari lagi",
+            "kelompok_periode_gajian": "Berikutnya"
+          }
+        ],
+        "catatan": "Nominal kartu kredit berubah tiap bulan (Sep Rp 711.000, Okt Rp 809.000): contoh nominal bayar yang bisa diubah di sheet Bayar."
+      }
+    ],
+    "kategori_pengeluaran": [
+      "Makan Siang & Minum",
+      "Kopi & Camilan",
+      "Transportasi",
+      "Belanja",
+      "Hiburan",
+      "Kesehatan",
+      "Langganan",
+      "Cicilan & Tagihan",
+      "Perjalanan Dinas"
+    ]
+  },
+  "bersama": {
+    "aman_dipakai": {
+      "periode_gajian": {
+        "sampai": "2026-10-22",
+        "saldo_operasional": 7762000,
+        "tagihan_sampai_akhir_periode": 1015000,
+        "sisa_anggaran_wajib": 0,
+        "aman_dipakai": 6747000,
+        "per_hari": 1124500,
+        "sisa_hari": 6,
+        "rata_rata_belanja_harian_30_hari": 355833,
+        "tagihan_lewat": 1,
+        "keadaan": "hati_hati",
+        "sebab": "Ada 1 tagihan lewat jatuh tempo (Iuran kebersihan RT, lewat 3 hari)."
+      },
+      "bulan_kalender": {
+        "sampai": "2026-10-31",
+        "saldo_operasional": 7762000,
+        "tagihan_sampai_akhir_periode": 1154000,
+        "sisa_anggaran_wajib": 0,
+        "aman_dipakai": 6608000,
+        "per_hari": 440533,
+        "sisa_hari": 15,
+        "rata_rata_belanja_harian_30_hari": 355833,
+        "tagihan_lewat": 1,
+        "keadaan": "hati_hati"
+      }
+    },
+    "dompet": [
+      {
+        "nama": "Kas Rumah",
+        "jenis": "operasional",
+        "tipe": "bank",
+        "saldo": 7762000
+      },
+      {
+        "nama": "Tabungan Liburan",
+        "jenis": "tabungan",
+        "tipe": "bank",
+        "saldo": 10500000
+      }
+    ],
+    "laporan": {
+      "periode_gajian": {
+        "Oktober 2026 (berjalan, 25 Sep – 22 Okt)": {
+          "pemasukan": 9000000,
+          "pengeluaran": 8586000,
+          "selisih": 414000,
+          "tidak_termasuk": {
+            "kontribusi_anggota": 3000000,
+            "transfer_antar_dompet": 500000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Sewa Rumah",
+              "nominal": 4500000
+            },
+            {
+              "kategori": "Belanja Dapur",
+              "nominal": 2298000,
+              "rincian": [
+                {
+                  "kategori": "Belanja Dapur (langsung)",
+                  "nominal": 1120000
+                },
+                {
+                  "kategori": "Sayur & Buah",
+                  "nominal": 1178000
+                }
+              ]
+            },
+            {
+              "kategori": "Makan di Luar",
+              "nominal": 1189000
+            },
+            {
+              "kategori": "Bensin & Parkir",
+              "nominal": 440000
+            },
+            {
+              "kategori": "Listrik & Air",
+              "nominal": 159000
+            }
+          ],
+          "pemasukan_per_kategori": [
+            {
+              "kategori": "Kontribusi Farida",
+              "nominal": 9000000
+            }
+          ],
+          "kontribusi": [
+            {
+              "nama": "Novanda",
+              "setor": 3000000,
+              "diambil": 0
+            },
+            {
+              "nama": "Farida",
+              "setor": 0,
+              "diambil": 0
+            }
+          ],
+          "catatan_kontribusi": "Pemasukan berkategori 'Kontribusi Farida' adalah pemasukan Bersama biasa, bukan setoran antar ruang, jadi tidak dihitung di Kontribusi (keputusan S8 K4)."
+        },
+        "September 2026 (lengkap, 25 Agu – 24 Sep)": {
+          "pemasukan": 9000000,
+          "pengeluaran": 9728500,
+          "selisih": -728500,
+          "tidak_termasuk": {
+            "kontribusi_anggota": 3500000,
+            "transfer_antar_dompet": 500000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Sewa Rumah",
+              "nominal": 4500000
+            },
+            {
+              "kategori": "Belanja Dapur",
+              "nominal": 2553500,
+              "rincian": [
+                {
+                  "kategori": "Belanja Dapur (langsung)",
+                  "nominal": 1083500
+                },
+                {
+                  "kategori": "Sayur & Buah",
+                  "nominal": 1470000
+                }
+              ]
+            },
+            {
+              "kategori": "Makan di Luar",
+              "nominal": 1153000
+            },
+            {
+              "kategori": "Listrik & Air",
+              "nominal": 802000
+            },
+            {
+              "kategori": "Internet",
+              "nominal": 380000
+            },
+            {
+              "kategori": "Bensin & Parkir",
+              "nominal": 190000
+            },
+            {
+              "kategori": "Iuran Lingkungan",
+              "nominal": 150000
+            }
+          ],
+          "pemasukan_per_kategori": [
+            {
+              "kategori": "Kontribusi Farida",
+              "nominal": 9000000
+            }
+          ]
+        },
+        "tren": [
+          {
+            "periode": "Jun",
+            "pemasukan": 9000000,
+            "pengeluaran": 9987000,
+            "selisih": -987000
+          },
+          {
+            "periode": "Jul",
+            "pemasukan": 9000000,
+            "pengeluaran": 9788500,
+            "selisih": -788500
+          },
+          {
+            "periode": "Agu",
+            "pemasukan": 9000000,
+            "pengeluaran": 11030500,
+            "selisih": -2030500
+          },
+          {
+            "periode": "Sep",
+            "pemasukan": 9000000,
+            "pengeluaran": 9728500,
+            "selisih": -728500
+          },
+          {
+            "periode": "Okt",
+            "pemasukan": 9000000,
+            "pengeluaran": 8586000,
+            "selisih": 414000,
+            "berjalan": true
+          }
+        ]
+      },
+      "bulan_kalender": {
+        "Oktober 2026 (berjalan, 1 – 31 Okt)": {
+          "pemasukan": 0,
+          "pengeluaran": 7175500,
+          "selisih": -7175500,
+          "tidak_termasuk": {},
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Sewa Rumah",
+              "nominal": 4500000
+            },
+            {
+              "kategori": "Belanja Dapur",
+              "nominal": 1589500,
+              "rincian": [
+                {
+                  "kategori": "Belanja Dapur (langsung)",
+                  "nominal": 1016500
+                },
+                {
+                  "kategori": "Sayur & Buah",
+                  "nominal": 573000
+                }
+              ]
+            },
+            {
+              "kategori": "Makan di Luar",
+              "nominal": 852000
+            },
+            {
+              "kategori": "Bensin & Parkir",
+              "nominal": 234000
+            }
+          ],
+          "kontribusi": [
+            {
+              "nama": "Novanda",
+              "setor": 0,
+              "diambil": 0
+            },
+            {
+              "nama": "Farida",
+              "setor": 0,
+              "diambil": 0
+            }
+          ]
+        },
+        "September 2026 (1 – 30 Sep)": {
+          "pemasukan": 9000000,
+          "pengeluaran": 9982500,
+          "selisih": -982500,
+          "tidak_termasuk": {
+            "kontribusi_anggota": 3500000,
+            "transfer_antar_dompet": 500000
+          },
+          "pengeluaran_per_kategori": [
+            {
+              "kategori": "Sewa Rumah",
+              "nominal": 4500000
+            },
+            {
+              "kategori": "Belanja Dapur",
+              "nominal": 2535500,
+              "rincian": [
+                {
+                  "kategori": "Belanja Dapur (langsung)",
+                  "nominal": 788500
+                },
+                {
+                  "kategori": "Sayur & Buah",
+                  "nominal": 1747000
+                }
+              ]
+            },
+            {
+              "kategori": "Makan di Luar",
+              "nominal": 1219000
+            },
+            {
+              "kategori": "Listrik & Air",
+              "nominal": 802000
+            },
+            {
+              "kategori": "Bensin & Parkir",
+              "nominal": 396000
+            },
+            {
+              "kategori": "Internet",
+              "nominal": 380000
+            },
+            {
+              "kategori": "Iuran Lingkungan",
+              "nominal": 150000
+            }
+          ],
+          "kontribusi": [
+            {
+              "nama": "Novanda",
+              "setor": 3500000,
+              "diambil": 0
+            },
+            {
+              "nama": "Farida",
+              "setor": 0,
+              "diambil": 0
+            }
+          ]
+        },
+        "tren": [
+          {
+            "periode": "Mei",
+            "pemasukan": 9000000,
+            "pengeluaran": 10504500,
+            "selisih": -1504500
+          },
+          {
+            "periode": "Jun",
+            "pemasukan": 9000000,
+            "pengeluaran": 9869000,
+            "selisih": -869000
+          },
+          {
+            "periode": "Jul",
+            "pemasukan": 9000000,
+            "pengeluaran": 9582500,
+            "selisih": -582500
+          },
+          {
+            "periode": "Agu",
+            "pemasukan": 9000000,
+            "pengeluaran": 11124000,
+            "selisih": -2124000
+          },
+          {
+            "periode": "Sep",
+            "pemasukan": 9000000,
+            "pengeluaran": 9982500,
+            "selisih": -982500
+          },
+          {
+            "periode": "Okt",
+            "pemasukan": 0,
+            "pengeluaran": 7175500,
+            "selisih": -7175500,
+            "berjalan": true
+          }
+        ]
+      }
+    },
+    "anggaran": {
+      "periode_gajian_oktober": [
+        {
+          "kategori": "Sewa Rumah",
+          "anggaran": 4500000,
+          "terpakai": 4500000,
+          "persen": 100,
+          "wajib": true
+        },
+        {
+          "kategori": "Listrik & Air",
+          "anggaran": 800000,
+          "terpakai": 159000,
+          "persen": 19,
+          "wajib": false
+        },
+        {
+          "kategori": "Belanja Dapur",
+          "anggaran": 3000000,
+          "terpakai": 2298000,
+          "persen": 76,
+          "wajib": false
+        },
+        {
+          "kategori": "Makan di Luar",
+          "anggaran": 1000000,
+          "terpakai": 1189000,
+          "persen": 118,
+          "wajib": false,
+          "lewat": 189000
+        }
+      ],
+      "bulan_kalender_oktober": [
+        {
+          "kategori": "Sewa Rumah",
+          "anggaran": 4500000,
+          "terpakai": 4500000,
+          "persen": 100,
+          "wajib": true
+        },
+        {
+          "kategori": "Listrik & Air",
+          "anggaran": 800000,
+          "terpakai": 0,
+          "persen": 0,
+          "wajib": false
+        },
+        {
+          "kategori": "Belanja Dapur",
+          "anggaran": 3000000,
+          "terpakai": 1589500,
+          "persen": 52,
+          "wajib": false
+        },
+        {
+          "kategori": "Makan di Luar",
+          "anggaran": 1000000,
+          "terpakai": 852000,
+          "persen": 85,
+          "wajib": false
+        }
+      ],
+      "contoh_galat_satu_kewajiban": "Menambah tagihan 'Sewa rumah' pada kategori Sewa Rumah ditolak karena Sewa Rumah sudah beranggaran wajib."
+    },
+    "tagihan": [
+      {
+        "nama": "Iuran kebersihan RT",
+        "nominal": 150000,
+        "tanggal_tiap_bulan": 14,
+        "kategori_usulan": "Iuran Lingkungan",
+        "dompet": "Kas Rumah",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-09-14",
+            "status": "lunas"
+          },
+          {
+            "jatuh_tempo": "2026-10-14",
+            "status": "belum",
+            "keterangan": "Lewat 3 hari",
+            "kelompok_periode_gajian": "Lewat jatuh tempo"
+          }
+        ]
+      },
+      {
+        "nama": "Listrik PLN",
+        "nominal": 485000,
+        "tanggal_tiap_bulan": 20,
+        "kategori_usulan": "Listrik & Air",
+        "dompet": "Kas Rumah",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-10-20",
+            "status": "belum",
+            "keterangan": "3 hari lagi",
+            "kelompok_periode_gajian": "Periode ini"
+          }
+        ]
+      },
+      {
+        "nama": "Internet rumah",
+        "nominal": 380000,
+        "tanggal_tiap_bulan": 22,
+        "kategori_usulan": "Internet",
+        "dompet": "Kas Rumah",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-10-22",
+            "status": "belum",
+            "keterangan": "5 hari lagi",
+            "kelompok_periode_gajian": "Periode ini"
+          }
+        ]
+      },
+      {
+        "nama": "Air PDAM",
+        "nominal": 139000,
+        "tanggal_tiap_bulan": 28,
+        "kategori_usulan": "Listrik & Air",
+        "dompet": "Kas Rumah",
+        "kemunculan": [
+          {
+            "jatuh_tempo": "2026-10-28",
+            "status": "belum",
+            "keterangan": "11 hari lagi",
+            "kelompok_periode_gajian": "Berikutnya"
+          }
+        ]
+      }
+    ],
+    "kategori_pengeluaran": [
+      "Sewa Rumah",
+      "Listrik & Air",
+      "Internet",
+      "Iuran Lingkungan",
+      "Belanja Dapur",
+      "Sayur & Buah (sub Belanja Dapur)",
+      "Makan di Luar",
+      "Bensin & Parkir"
+    ]
+  },
+  "skenario_lewat_batas": {
+    "ilustrasi": true,
+    "untuk": "Bingkai BR3 (kartu aman dipakai keadaan Lewat batas) saja",
+    "andaian": "Pribadi, periode gajian Oktober, saldo BCA Rp 100.000 dan Tunai Rp 200.000; tagihan dan anggaran wajib sama dengan data di atas.",
+    "saldo_operasional": 300000,
+    "tagihan_sampai_akhir_periode": 450000,
+    "sisa_anggaran_wajib": 26000,
+    "aman_dipakai": -176000,
+    "sampai": "2026-10-22",
+    "keadaan": "lewat"
+  },
+  "angka_panjang": {
+    "ilustrasi": true,
+    "untuk": "Bingkai LP12 dan uji 320 px",
+    "pengeluaran": 12345678900,
+    "nama_kategori_40_karakter": "Perawatan kendaraan & servis rutin bulan"
+  }
+}
