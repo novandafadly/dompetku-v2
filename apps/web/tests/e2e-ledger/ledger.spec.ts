@@ -489,7 +489,9 @@ test('JS mode nyata tanpa seed demo (K3)', async ({ browser, ownerState }) => {
     `/bersama/${r}`,
   ]);
   expect(detailPath).not.toBe('');
-  for (const path of [...paths, detailPath]) {
+  // /bersama/aktivitas (S8): page.tsx mengimpor view demo klien secara statis; chunk-nya harus
+  // bersih dari seed di mode nyata.
+  for (const path of [...paths, '/bersama/aktivitas', detailPath]) {
     // Konteks baru per rute: semua JS yang dimuat rute ini (muat awal, prefetch, muat malas
     // sampai jaringan diam) tidak boleh memuat seed demo.
     const context = await browser.newContext({ storageState: ownerState });

@@ -8,7 +8,8 @@ import type { ActivityItemVM } from './types';
 
 /**
  * Baris feed Aktivitas Bersama (S8-A1/A3). Server Component tanpa JS klien (budget S8): hanya
- * props tampilan, tanpa id entri atau id anggota (hanya `href` bila baris menaut). Komponen
+ * props tampilan; tidak ada id di DOM selain `href` bila baris menaut. Key React (`entryId:version`)
+ * membawa id entri Bersama ke payload RSC, tanpa id akun, tautan, atau ruang lain. Komponen
  * prototipe `ActivityRow` sengaja tidak disentuh (headroom budget Beranda prototipe).
  */
 

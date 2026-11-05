@@ -8,7 +8,8 @@ import type { ContributionVM } from './types';
 /**
  * Kartu Kontribusi Beranda Bersama dua anggota (S8-K1, K2). Server Component tanpa JS klien dan
  * tanpa modul demo; hanya `ContributionVM`. Tanpa persentase, peringkat, bilah, atau warna
- * menang/kalah; angka nol netral. Tanpa id (anggota dan baris dikenali dari urutan).
+ * menang/kalah; angka nol netral. Tidak ada id yang tampil di DOM; key React membawa id anggota
+ * (user id anggota ruang ini) ke payload RSC, tanpa id akun, tautan, atau ruang lain.
  */
 export function ContributionCardView({ vm }: { vm: ContributionVM }) {
   return (

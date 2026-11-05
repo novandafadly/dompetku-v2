@@ -51,6 +51,25 @@ async function settle(page: Page) {
   await page.waitForTimeout(300);
 }
 
+/**
+ * Persiapan tangkapan halaman penuh: bilah tab bawah (fixed) disembunyikan agar tidak menutup
+ * baris terakhir; di 1280 viewport ditinggikan setinggi dokumen agar sidebar fixed (tinggi
+ * viewport) mengisi seluruh tangkapan tanpa pita kosong di bawahnya.
+ */
+async function prepareFullPage(page: Page, v: Shot) {
+  // CSSOM (bukan tag <style>): CSP halaman melarang gaya inline.
+  await page.evaluate(() => {
+    document.querySelectorAll<HTMLElement>('nav[aria-label="Tab utama"]').forEach((el) => {
+      el.style.display = 'none';
+    });
+  });
+  if (v.w === 1280) {
+    const h = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.setViewportSize({ width: v.w, height: Math.max(v.h, h) });
+    await settle(page);
+  }
+}
+
 async function shoot(
   browser: Browser,
   state: string,
@@ -74,6 +93,7 @@ async function shoot(
       await expect(page.locator('html')).toHaveAttribute('data-theme', v.theme);
       await expect(page.getByRole('heading', { name: target.heading }).first()).toBeVisible();
       await settle(page);
+      await prepareFullPage(page, v);
       await page.screenshot({
         path: `${target.dir}${name}-${String(v.w)}-${v.theme}.png`,
         fullPage: true,
@@ -540,6 +560,64 @@ async function wipeLedger(): Promise<void> {
   }
 }
 
+/**
+ * Waktu peristiwa fixture: semua baris baru dibuat dalam satu menit, jadi feed menampilkan satu
+ * jam yang sama. Sebar urut kausal (dibuat sebelum diubah) ke kemarin dan hari ini (WIB) dengan
+ * jam yang wajar. Hanya `changed_at` (trigger dimatikan lewat replica); nilai uang tidak disentuh.
+ */
+async function spreadEventTimes(): Promise<void> {
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  try {
+    await admin.query('begin');
+    await admin.query('set local session_replication_role = replica');
+    const { rows } = await admin.query<{ entry_id: string; version: number }>(
+      "select entry_id::text, version from app.entry_history where snapshot->>'kind' <> 'opening_balance' order by changed_at, entry_id, version",
+    );
+    const kemarin = [8 * 60 + 12, 12 * 60 + 40, 19 * 60 + 4, 20 * 60 + 31];
+    // Saldo awal tidak muncul di feed dan tidak ikut disebar.
+    const hariIni = [
+      6 * 60 + 18,
+      7 * 60 + 52,
+      9 * 60 + 5,
+      10 * 60 + 47,
+      11 * 60 + 26,
+      12 * 60 + 40,
+    ];
+    const nKemarin = Math.min(kemarin.length, Math.floor(rows.length / 2));
+    for (const [idx, r] of rows.entries()) {
+      const menit =
+        idx < nKemarin
+          ? kemarin[idx]
+          : (hariIni[idx - nKemarin] ?? (hariIni.at(-1) ?? 0) + (idx - nKemarin) * 9);
+      const dayOffset = idx < nKemarin ? 1 : 0;
+      await admin.query(
+        `update app.entry_history
+            set changed_at = ((app.today() - $3::int)::timestamp + make_interval(mins => $4::int))
+                             at time zone 'Asia/Jakarta'
+          where entry_id = $1::uuid and version = $2`,
+        [r.entry_id, r.version, dayOffset, menit],
+      );
+    }
+    // Entri yang peristiwanya dipindah ke kemarin ikut bertanggal kemarin; tanpa ini feed menulis
+    // `tanggal <hari ini>` (tanggal mundur palsu) di baris Kemarin.
+    const kemarinIds = [...new Set(rows.slice(0, nKemarin).map((r) => r.entry_id))];
+    await admin.query(
+      'update app.entries set occurred_on = app.today() - 1 where id = any($1::uuid[]) and occurred_on = app.today()',
+      [kemarinIds],
+    );
+    await admin.query(
+      `update app.entry_history
+          set snapshot = jsonb_set(snapshot, '{occurred_on}', to_jsonb((app.today() - 1)::text))
+        where entry_id = any($1::uuid[]) and snapshot->>'occurred_on' = app.today()::text`,
+      [kemarinIds],
+    );
+    await admin.query('commit');
+  } finally {
+    await admin.end();
+  }
+}
+
 test('@screens S8 kriteria keluar: Beranda, Aktivitas, Detail dua anggota (docs/design/s8)', async ({
   browser,
   ownerState,
@@ -622,6 +700,7 @@ test('@screens S8 kriteria keluar: Beranda, Aktivitas, Detail dua anggota (docs/
        p_to_space_id => $3, p_account_id => $4, p_category_id => $5)`,
     [randomUUID(), sabun, nP.sid, bca, catP?.id ?? ''],
   );
+  await spreadEventTimes();
   const [setoran] = await asUser<{ id: string }>(
     n.uid,
     `select id::text from app.entries where space_id = $1 and kind = 'space_transfer'
