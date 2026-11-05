@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(40);
+select plan(41);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -83,8 +83,8 @@ select set_eq($$
         'jobs.purge_idempotency',
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
-        'private.tg_entry_shape', 'private.tg_category_depth'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5');
+        'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban)');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -216,6 +216,27 @@ select set_eq($$
     ('dompetku_api', 'app.holidays', 'SELECT'),
     ('dompetku_worker', 'app.holidays', 'SELECT'),
     ('dompetku_auditor', 'app.holidays', 'SELECT'),
+    -- S9: tagihan, kemunculan, anggaran (BSD §11: web baca; api tulis lewat fungsi, DELETE hanya
+    -- budgets; worker hanya lewat jobs.*), view bill_schedule (security_invoker).
+    ('dompetku_web', 'app.bills', 'SELECT'),
+    ('dompetku_web', 'app.bill_occurrences', 'SELECT'),
+    ('dompetku_web', 'app.budgets', 'SELECT'),
+    ('dompetku_web', 'app.bill_schedule', 'SELECT'),
+    ('dompetku_api', 'app.bills', 'SELECT'),
+    ('dompetku_api', 'app.bills', 'INSERT'),
+    ('dompetku_api', 'app.bills', 'UPDATE'),
+    ('dompetku_api', 'app.bill_occurrences', 'SELECT'),
+    ('dompetku_api', 'app.bill_occurrences', 'INSERT'),
+    ('dompetku_api', 'app.bill_occurrences', 'UPDATE'),
+    ('dompetku_api', 'app.budgets', 'SELECT'),
+    ('dompetku_api', 'app.budgets', 'INSERT'),
+    ('dompetku_api', 'app.budgets', 'UPDATE'),
+    ('dompetku_api', 'app.budgets', 'DELETE'),
+    ('dompetku_api', 'app.bill_schedule', 'SELECT'),
+    ('dompetku_auditor', 'app.bills', 'SELECT'),
+    ('dompetku_auditor', 'app.bill_occurrences', 'SELECT'),
+    ('dompetku_auditor', 'app.budgets', 'SELECT'),
+    ('dompetku_auditor', 'app.bill_schedule', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -364,6 +385,15 @@ select set_eq($$
   array['entries.entries_shape', 'entry_lines.entry_lines_shape'],
   'cek bentuk entri = constraint trigger deferred');
 select has_trigger('app', 'categories', 'category_depth', 'penjaga kedalaman kategori');
+-- S9: satu kewajiban (tagihan ATAU anggaran wajib) dijaga trigger di kedua tabel.
+select set_eq($$
+  select c.relname || '.' || g.tgname || '.' || fn.nspname || '.' || f.proname from pg_trigger g
+  join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
+  join pg_proc f on f.oid = g.tgfoid join pg_namespace fn on fn.oid = f.pronamespace
+  where n.nspname = 'app' and fn.nspname = 'private' and f.proname = 'tg_obligation_xor' $$,
+  array['bills.bills_obligation_xor.private.tg_obligation_xor',
+        'budgets.budgets_obligation_xor.private.tg_obligation_xor'],
+  'trigger satu kewajiban di bills dan budgets');
 select has_trigger('app', 'space_members', 'seed_categories', 'kategori awal saat anggota masuk ruang');
 
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).

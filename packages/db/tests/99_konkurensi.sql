@@ -4,12 +4,16 @@
 -- re-parent kategori paralel (silang A/B, atau rantai C di bawah A saat A pindah ke bawah B)
 -- ditolak category_depth, arsip induk paralel ubah anak tanpa deadlock (0109), reimburse paralel
 -- dan ubah talangan paralel reimburse tanpa deadlock (0110), pindah ruang paralel ubah entri yang
--- sama dan paralel reimburse (0111).
--- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
+-- sama dan paralel reimburse (0111), satu kewajiban (0117): tagihan aktif paralel anggaran wajib
+-- kategori dan bulan sama (kedua urutan) = tepat satu obligation_double; pindah induk kategori
+-- paralel tagihan baru pada kategori itu tidak bisa melewati XOR.
+-- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
+-- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
+-- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
--- ID: B8, C2, C4
+-- ID: B8, C2, C4, C9
 begin;
-select plan(46);
+select plan(58);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -269,6 +273,96 @@ select is(tests.owner_val(null, format($$select (select count(*) from app.entrie
   || (select count(*) from app.entries where reimburses_entry_id = %2$L and voided_at is null)$$, :'tal3', :'tal2')),
   '0 true 1', 'talangan dipindah tanpa reimburse; talangan lain tetap dengan reimburse-nya');
 
+-- ===== Satu kewajiban (S9, 0117): advisory lock per ruang menyerialkan tagihan vs anggaran wajib =====
+select tests.peer_open('ka', 'dompetku_test');
+select tests.peer_open('kb', 'dompetku_test');
+create function pg_temp.api(p_uid uuid, p_sql text) returns text
+language sql as $$ select format('select tests.api_exec(%L, %L)', p_uid, p_sql) $$;
+create function pg_temp.bill_sql(p_space uuid, p_cat uuid, p_starts date) returns text
+language sql as $$
+  select format($q$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, created_by)
+                  values (%L, 'Listrik PLN', 485000, %L, 20, %L, app.current_user_id())$q$, p_space, p_cat, p_starts)
+$$;
+create function pg_temp.budget_sql(p_space uuid, p_cat uuid, p_month date) returns text
+language sql as $$
+  select format($q$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
+                  values (%L, %L, %L, 1500000, true, app.current_user_id())$q$, p_space, p_cat, p_month)
+$$;
+-- Pelanggaran XOR yang ter-commit: tagihan aktif dan anggaran wajib pada induk yang sama, bulan
+-- yang tercakup tagihan. Harus selalu 0.
+create function pg_temp.xor_violations(p_space uuid) returns text
+language sql as $$
+  select tests.owner_val(null, format($q$select count(*) from app.bills b
+    join app.categories c on c.id = b.category_id
+    join app.budgets bu on bu.space_id = b.space_id and bu.wajib and bu.category_id = coalesce(c.parent_id, c.id)
+    where b.space_id = %L and b.archived_at is null
+      and b.starts_on < (bu.month + interval '1 month')::date and (b.ends_on is null or b.ends_on >= bu.month)$q$, p_space))
+$$;
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Listrik & Air'$$, :'sh')) as k_listrik \gset
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Internet'$$, :'sh')) as k_net \gset
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Iuran Lingkungan'$$, :'sh')) as k_iuran \gset
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Sayur & Buah'$$, :'sh')) as k_sayur \gset
+select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Bensin & Parkir'$$, :'sh')) as k_bensin \gset
+
+-- Tagihan dulu (N), anggaran wajib paralel (F): anggaran menunggu kunci kewajiban ruang, lalu melihat
+-- tagihan yang sudah commit.
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.api(tests.n(), pg_temp.bill_sql(:'sh', :'k_listrik', '2026-11-01')));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.api(tests.f(), pg_temp.budget_sql(:'sh', :'k_listrik', '2026-11-01')));
+select ok(tests.peer_blocked('kb'), 'anggaran wajib menunggu kunci kewajiban ruang selama tagihan paralel belum commit');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*obligation_double', 'anggaran wajib paralel tagihan = obligation_double');
+-- Keduanya commit: transaksi yang gagal berakhir ROLLBACK, yang lolos tersimpan.
+select tests.peer_exec('kb', 'commit');
+select is(tests.owner_val(null, format($$select (select count(*) from app.bills where category_id = %1$L) || ' '
+  || (select count(*) from app.budgets where category_id = %1$L)$$, :'k_listrik')), '1 0',
+  'tepat satu kewajiban Listrik & Air: tagihan, tanpa anggaran');
+
+-- Urutan sebaliknya: anggaran wajib dulu (F), tagihan paralel (N).
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.api(tests.f(), pg_temp.budget_sql(:'sh', :'k_net', '2026-11-01')));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.api(tests.n(), pg_temp.bill_sql(:'sh', :'k_net', '2026-10-15')));
+select ok(tests.peer_blocked('kb'), 'tagihan menunggu kunci kewajiban ruang selama anggaran wajib paralel belum commit');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*obligation_double', 'tagihan paralel anggaran wajib = obligation_double');
+-- Keduanya commit: transaksi yang gagal berakhir ROLLBACK, yang lolos tersimpan.
+select tests.peer_exec('kb', 'commit');
+select is(pg_temp.xor_violations(:'sh'), '0', 'tidak ada pelanggaran satu kewajiban yang ter-commit');
+
+-- Pindah induk paralel tagihan baru (Review Focus #1): Iuran Lingkungan punya anggaran wajib
+-- Desember. update_category (a) memindah Sayur & Buah ke bawah Iuran (kategori belum dipakai, lolos);
+-- tagihan baru pada Sayur & Buah (kb) harus menunggu pindah itu, lalu membandingkan dengan induk BARU.
+-- Tanpa kunci baris kategori di trigger XOR, tagihan membaca induk lama (Belanja Dapur), lolos, dan
+-- hanya menunggu cek FK; hasilnya tagihan aktif + anggaran wajib pada induk yang sama.
+select tests.peer_val('ka', pg_temp.api(tests.n(), pg_temp.budget_sql(:'sh', :'k_iuran', '2026-12-01')));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.update_category(%L, 'Sayur & Buah', 'Carrot', %L)$$, :'k_sayur', :'k_iuran'));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.api(tests.n(), pg_temp.bill_sql(:'sh', :'k_sayur', '2026-12-01')));
+select ok(tests.peer_blocked('kb'), 'tagihan baru menunggu pindah induk kategorinya');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*obligation_double', 'tagihan sesudah pindah induk dibandingkan dengan induk baru = obligation_double');
+-- Keduanya commit: transaksi yang gagal berakhir ROLLBACK, yang lolos tersimpan.
+select tests.peer_exec('kb', 'commit');
+select is(pg_temp.xor_violations(:'sh'), '0', 'pindah induk paralel tidak melewati satu kewajiban');
+
+-- Urutan sebaliknya: tagihan dulu (ka) pada Bensin & Parkir, pindah induk paralel (b) menunggu lalu
+-- melihat tagihan yang sudah commit.
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.api(tests.n(), pg_temp.bill_sql(:'sh', :'k_bensin', '2026-12-01')));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.update_category(%L, 'Bensin & Parkir', 'GasPump', %L)$$, :'k_bensin', :'k_iuran'));
+select ok(tests.peer_blocked('b'), 'pindah induk menunggu tagihan paralel pada kategori itu');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*category_in_obligation', 'pindah induk sesudah tagihan commit = category_in_obligation');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select coalesce(parent_id::text, '-') from app.categories where id = %L$$, :'k_bensin')),
+  '-', 'Bensin & Parkir tetap induk');
+
+select tests.peer_close('ka');
+select tests.peer_close('kb');
 select tests.peer_close('a');
 select tests.peer_close('b');
 select tests.peer_val('adm', 'select tests.wipe()');
