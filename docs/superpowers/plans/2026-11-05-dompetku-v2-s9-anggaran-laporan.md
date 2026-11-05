@@ -1,0 +1,355 @@
+# DompetKu v2 · M2 S9 (Anggaran, laporan, tagihan dasar, Beranda "aman dipakai") Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Pribadi dan Bersama punya anggaran per kategori induk, tagihan rutin dasar (tambah, ubah, bayar, lewati, arsip), dan Laporan per periode, dan Beranda mode nyata menampilkan "aman dipakai" lengkap: saldo operasional dikurangi tagihan belum dibayar dan sisa anggaran wajib, sampai sehari sebelum gajian berikutnya (BSD §8.2a), dengan keadaan aman, hati-hati, atau lewat. Angka Beranda sama dengan Laporan karena keduanya membaca `app.report_lines` + `app.report_class()` dan periode yang sama (`app.pay_period`). Satu kewajiban dihitung sekali: tagihan ATAU anggaran wajib (`obligation_double`). Sesudah S9 merge, S10 (CSV, review bulanan, salin anggaran) bisa dimulai; gerbang M2 (7 hari dua akun) dihitung sesudah S10.
+
+**Architecture:** Pola S6 sampai S8: DB dulu (migrasi `0116`–`0121` + pgTAP test-first, golden numbers dihitung manual), lalu loader server di transaksi baca yang sama (`withLedger`, satu koneksi per muat Beranda), lalu UI. **Semua angka uang dihitung SQL** (BSD §1.1); aplikasi hanya memformat. Halaman baca (Beranda, Laporan, daftar Rencana) adalah Server Component; formulir Anggaran dan Tagihan adalah pulau klien yang **dimuat malas** (pola sheet Tambah dompet S6/S7) dan menulis lewat Server Action → `api.*`. Laporan memakai grafik sesuai K6 (rekomendasi: SVG statis dari Server Component, 0 kB JS). Mode prototipe Beranda **tidak diubah** (headroom 0,3 kB); Rencana prototipe boleh berubah hanya bila dimuat malas.
+
+**Tech Stack:** tanpa dependensi baru bila K6 = SVG. Bila K6 = Recharts: `recharts` dipatok versi persis, lolos `minimumReleaseAge`, hanya diimpor lewat `lazy()` di rute Laporan. Next.js 16.4.3, React 19.3, `pg` 8.23.1, Zod 4.6.7, pg-boss (worker S7), Postgres 17.11 + dbmate 2.36.0 + pgTAP, Vitest, Playwright 1.64.1 + `@axe-core/playwright`.
+
+**Spec:** `docs/product/IPD.md` §5 S9 (+ §8 utang desain "Anggaran, tagihan, review bulanan, Rencana nyata" dan "Laporan dan grafik" lewat Claude Design); `docs/product/PRD.md` §5 M2 (cerita anggaran, tagihan dasar, Ringkasan), §6.1, §6.2 baris M2 (T17, Z1, Z3, Z9, Z10, golden, B13); `docs/product/AFD.md` §10 (tagihan rutin dasar); `docs/product/BSD.md` §2.2 butir 1, 2, 4, 6, §5 (DDL `bills`, `bill_occurrences`, `budgets`), §7 (`tg_category_depth` lengkap, `tg_obligation_xor`), §8.1 (kelas), §8.2, **§8.2a (periode gajian, disetujui 2026-10-31)**, §8 (`bill_schedule`, `budget_progress`, `safe_to_spend`), §9 (`set_budget`, `delete_budget`, `create_bill`, `post_bill_occurrence`, `archive_bill`), §10 (`jobs.materialize_bills`), §11 (hak), §13 butir 10–12, 26, 27, 29, 33, §15 butir 1, 2, 9, §16 "Catatan S5" (stub `safe_to_spend`) dan "Catatan S8"; `docs/m0a-keputusan.md` (T6 rumus aman dipakai, T8 "Tagihan 7 hari", "hampir habis" ≥ 80%, satu kewajiban); `docs/team/round1/qa.md` baris M2 dan Z1–Z10; `DESIGN.md` + `docs/design/panel-malam/README.md` (AmanCard, BillRow, BudgetRow, ListCard); `docs/design/claude-design-s9/` (pesanan Laporan); `docs/superpowers/handoff/s8.md` "Dibawa ke S9 dan sesudahnya"; `docs/superpowers/handoff/s8-ledger.md` (R1–R11). Bila beda, BSD menang untuk nama fungsi/kolom, spec induk §9 menang untuk perilaku. **Konflik yang sudah diketahui:** IPD §5 S9 menulis "tanggal gajian opsional Belum diputuskan", BSD §8.2a (lebih baru, disetujui) menjadwalkan periode gajian di S9 → K1.
+
+## Status awal (diperiksa dari repo, 2026-11-05, `main` 6cc6521 sesudah PR #20)
+
+| Bagian | Sudah ada | Dibangun S9 |
+| --- | --- | --- |
+| Klasifikasi laporan | `app.report_class()` + `app.report_lines` (0102) dengan **12 kelas** (`x_kantor`, `expense_fee`, `income`, `x_talangan`, `expense`, `x_setor_bersama`, `x_ambil_bersama`, `x_setoran_anggota`, `x_diambil_anggota`, `x_transfer`, `x_reimburse`, `x_koreksi`); `api.period_summary`, `api.month_summary` (dipakai Ringkasan Transaksi nyata, bulan kalender), `api.net_worth`, `api.member_contributions` (0115) | Tidak ada kelas baru (3 kelas sisa "15 kelas" spec §9.1 = `x_pokok_utang`, `x_pelunasan_utang`, `x_valuasi`, milik M3/M4). Fungsi baca Laporan per kategori dan tren (Task 8), tes kelengkapan kelas (Task 8) |
+| Aman dipakai | `api.safe_to_spend` versi S5 (0102): tanda tangan BSD, tetapi `bills_until_eom` dan `budget_wajib_remaining` **selalu 0**, sampai akhir bulan kalender. Beranda nyata memanggilnya (`read.ts:566`) dan merender `SafeToSpendCard … showObligations={false}` | Badan lengkap BSD + periode gajian (Task 7), keadaan aman/hati-hati/lewat (K7), rincian tagihan + wajib di kartu (Task 12) |
+| Tagihan | **Tidak ada tabel** (`0100` menunda `bills`, `bill_occurrences`, `budgets`; `0104` menunda `jobs.materialize_bills`). Prototipe: `BillsSoon` klien dari seed demo (`features/beranda/bills-soon.tsx`) | Tabel (Task 4), API + materialisasi (Task 5), job worker (Task 6, K3), UI Rencana Tagihan (Task 11), Beranda Tagihan 7 hari (Task 12) |
+| Anggaran | Tidak ada tabel maupun `api.budget_progress`. `tg_category_depth` (0101) **tanpa** cabang `category_in_obligation`. Prototipe: `BudgetsNearLimit` klien + daftar anggaran di Ringkasan Transaksi prototipe; selector `budgetProgress`/`safeToSpend` demo (bulan kalender) | Tabel + XOR + kedalaman kategori lengkap (Task 4), API (Task 6), UI Rencana Anggaran (Task 10), Beranda Anggaran hampir habis (Task 12) |
+| Periode gajian | `app.profiles.payday_day` (0004, nullable, tidak dipakai); tidak ada `households.payday_rule`, `app.holidays`, `app.pay_period` | Task 3 (K1, K2) |
+| Rencana | Prototipe: `RencanaPage` klien = keadaan kosong "Rencana segera hadir"; tab tersembunyi lewat `RencanaContext` bila ruang belum punya anggaran/tagihan. Nyata: `ruangContext` lalu `notFound()` | Rencana nyata (Task 10, 11, K8) |
+| Laporan | Tidak ada rute; tidak ada dependensi grafik (`recharts` tidak ada di `apps/web/package.json`) | Rute `/[ruang]/laporan` (Task 13) sesudah hasil Claude Design (Task 2) |
+| Kontribusi | Bulan kalender dari `app.today()` (K3 S8) | Periode gajian (K10, Task 9) |
+| Worker | 5 job (`dq_reconcile` 01:00, `purge_*` 01:15–01:30), check `dompetku-dq`/`dompetku-jobs` | `materialize_bills` 00:05 WIB, check `jobs` (Task 6, K3) |
+
+**Angka baseline (handoff S8, gerbang Task 12 S8):** pgTAP 1071 (job CI `db`), unit web 2022, demo-data 40, domain 97 + 28 (tz), worker unit 34 + int 8, `test:int` 172, `test:registry` 7, e2e prototipe 296 (1 flaky `security.spec.ts:79`), `e2e:auth` 22, `e2e:ledger` 38 (+7 screenshot dilewati), `e2e:bersama` 22 (+6 `@screens`), `deploy-test.sh` 25. Registry: 91 ID (27 aktif, 47 belum, 17 tidak bisa dipetakan). **Budget JS (js-route, batas 162 kB):** Beranda prototipe 161,7 / nyata 157,5; Transaksi 160,9 / 156,8; Detail 157,6 / 153,5; Aktivitas 155,1 / 150,9. Headroom prototipe Beranda **0,3 kB**.
+
+## Prasyarat dari pemilik
+
+| # | Prasyarat | Dibutuhkan untuk | Dokumen |
+| --- | --- | --- | --- |
+| P1 | S8 live di produksi (merge PR #20 sudah; deploy 0114–0115 jalan; worker S7 terpasang sesuai `runbook-s7-worker.md`) | Merge S9 (deploy menjalankan `0116`–`0121`; job baru butuh worker hidup) | `docs/superpowers/handoff/s8.md` |
+| P2 | Jawaban K1–K12 (default = rekomendasi) | Task 1, 3, 5, 6, 7, 10–13 | bagian berikut |
+| P3 | **Hasil Claude Design untuk Laporan** (paket `docs/design/claude-design-s9/`): bingkai LP1… + spesifikasi, disimpan di `docs/design/claude-design-s9/hasil/` | Task 13 (UI Laporan). Task lain tidak menunggu | `docs/design/claude-design-s9/README.md` |
+| P4 | Periksa daftar libur nasional + cuti bersama 2026 dan 2027 yang diisi agen di Task 3 terhadap SKB resmi (tabel di laporan Task 3) | Hari gajian efektif benar (mis. 25 Des) | BSD §8.2a |
+| P5 | Konfirmasi tanggal gajian 25 untuk Novanda dan Farida masih berlaku | Isi `payday_rule` (K2) | BSD §15 butir 9 |
+
+**Bisa dikerjakan sebelum P3 datang:** semua task kecuali Task 13 (dan bagian Laporan di Task 15–16). Bila P3 terlambat, plan memberi jalan keluar di Task 2 Step 3.
+
+## Keputusan pemilik yang dibutuhkan (rekomendasi agen = default plan ini)
+
+| # | Keputusan | Rekomendasi | Alasan | Bila pemilik memilih lain |
+| --- | --- | --- | --- | --- |
+| K1 | Periode anggaran, aman dipakai, dan Laporan | **Periode gajian BSD §8.2a di S9** (`app.pay_period`, satu sumber): periode "November 2026" = 23 Okt sampai 24 Nov. Laporan bawaan = periode gajian, dengan pilihan tampilan `Bulan kalender` (angka sama sumbernya, hanya potongan tanggal). Daftar Transaksi dan Ringkasan di Transaksi tetap bulan kalender (tidak diubah S9; Ringkasan memberi tautan `Laporan lengkap`) | Disetujui pemilik 2026-10-31 dan dijadwalkan S9; kalau ditunda, Beranda harus dihitung ulang dua kali (kalender sekarang, gajian nanti) dan angka anggaran berubah definisi di tengah pemakaian M2 | Bulan kalender: `app.pay_period` tetap dibuat tetapi mengembalikan bulan kalender selama `payday_rule` kosong (perilaku BSD "aturan kosong = kalender"); cukup K2 = kosong, tidak ada perubahan kode |
+| K2 | Mengisi aturan gajian | **Migrasi 0116 mengisi `households.payday_rule = 25`** (fakta disetujui, P5); tanpa layar Pengaturan di S9; `profiles.payday_day` (pengecualian per orang) tetap ada tetapi belum dibaca | Pengaturan adalah layar besar Claude Design (IPD §8); satu rumah tangga, satu nilai | Lewat `dompetku-psql` oleh pemilik sesudah deploy (langkah manual di handoff) atau UI Pengaturan kecil (+1 task) |
+| K3 | Materialisasi kemunculan tagihan | **`api.create_bill`/`update_bill` langsung membuat kemunculan sampai akhir periode berikutnya, dan job worker `materialize_bills` 00:05 WIB dimajukan dari S10 ke S9** | Tanpa job, mulai bulan depan Beranda kehilangan tagihan (aman dipakai terlalu besar = angka uang salah). Worker sudah live sejak S7; job baru = satu entri `JOBS` + grant | Tetap S10: S9 hanya materialisasi saat create/update + saat muat Rencana (fungsi DEFINER tambahan dipanggil loader); risiko angka basi bila Rencana tidak dibuka |
+| K4 | Tagihan yang sudah dibayar di luar alur Bayar (mis. sudah dicatat lewat Catat) | **`Lewati bulan ini`** (`api.skip_bill_occurrence`, bisa dibatalkan dengan `api.unskip_bill_occurrence` selama tagihan aktif). Menautkan ke transaksi yang sudah ada ditunda | Tanpa ini pengguna terpaksa mencatat dobel atau membiarkan tagihan "lewat" selamanya; tautan ke entri lama butuh pemilih transaksi + aturan kategori (besar) | Tautkan ke transaksi: `api.link_bill_occurrence(p_occurrence_id, p_entry_id)` + pemilih di sheet (+1 task, +1 cek DQ) |
+| K5 | Anggaran subkategori (BSD §15 butir 1, "dijadwalkan S9") | **Tunda ke S10** (bersama review bulanan + salin anggaran). S9: anggaran hanya kategori induk; realisasi induk = Σ semua anaknya (T17, sudah lewat `root_category_id`) | S9 sudah 6 migrasi; sub-anggaran mengubah CHECK `category_is_root`, XOR per leluhur, dan editor. Menunda aman: melonggarkan CHECK adalah expand | Di S9: Task 6 +1 langkah (CHECK dilepas, XOR leluhur, tes "sub tidak menambah total induk di aman dipakai"), Task 10 editor dua tingkat |
+| K6 | Teknologi grafik Laporan | **SVG statis dari Server Component** (batang + garis sederhana, `role="img"` + tabel data yang setara), tanpa dependensi, 0 kB JS rute. Recharts hanya bila hasil Claude Design menuntut interaksi (tooltip/sorot) yang tidak bisa diganti tabel | IPD menyebut "Recharts hanya di rute Laporan, dimuat malas" sebagai mitigasi, bukan keharusan; SVG server = tanpa risiko rantai pasok baru, jalan di mode nyata tanpa hidrasi, a11y lebih mudah | Recharts: dipatok versi persis, `lazy()` + `Suspense` dengan tabel sebagai fallback, js-route Laporan diukur (chunk malas masuk `js-all-kB`), +1 langkah di Task 13 |
+| K7 | Definisi keadaan kartu aman dipakai | **`Lewat`** = total < 0 (keadaan B6 yang ada). **`Hati-hati`** = total ≥ 0 dan (per hari < rata-rata pengeluaran harian 30 hari terakhir **atau** ada tagihan lewat jatuh tempo). **`Aman`** = sisanya. Status = ikon + teks (`Aman`, `Hati-hati`, `Lewat batas`), tidak warna saja; rata-rata dihitung SQL (`api.spend_pace`) | Memakai data yang sudah ada, tanpa ambang angka yang dikarang; tagihan lewat jatuh tempo adalah sinyal paling nyata | Ambang persen tetap (mis. per hari < Rp X atau < 20% saldo): hanya fungsi murni `amanStatus` dan salinan berubah |
+| K8 | Navigasi Rencana dan Laporan | **Tab Rencana selalu tampil di mode nyata** (segmen `Anggaran \| Tagihan`, kosong = ajakan). **Laporan di `/[ruang]/laporan`**, dibuka dari tautan `Laporan lengkap` di Ringkasan Transaksi dan item `Laporan` di Menu (laptop: juga di sidebar di bawah Rencana bila muat). Prototipe: perilaku "Rencana tersembunyi bila kosong" tetap | Tanpa tab, anggaran pertama tidak bisa dibuat; tab bar sudah 5 slot, jadi Laporan tidak masuk tab | Laporan sebagai segmen ketiga Rencana: rute tetap, tautan berbeda; tab tetap tersembunyi bila kosong: butuh ajakan di Beranda |
+| K9 | Apa yang dipesan ke Claude Design | **Hanya Laporan (wajib, prioritas 1).** Anggaran, Tagihan, dan kartu aman dipakai dirancang agen mengikuti Panel Malam (bingkai Task 1, design reviewer). Paket `claude-design-s9` tetap memuat semuanya agar pemilik bisa memesan lebih (prioritas 2–3) | IPD §8: "Laporan dan grafik" = layar besar baru; Anggaran/Tagihan/aman dipakai sudah punya pola (BudgetRow, BillRow, AmanCard) | Pemilik memesan juga Rencana: Task 10–12 menunggu hasil (risiko jadwal), bingkai Task 1 jadi pembanding |
+| K10 | Periode Kontribusi Bersama | **Ikut periode gajian** (loader memanggil `member_contributions` dengan batas `app.pay_period`); judul `Kontribusi {nama periode}` | K3 S8 menjanjikan pergantian ini di S9; Kontribusi dan anggaran Bersama dibaca bersama | Tetap bulan kalender: Task 9 tidak menyentuh Kontribusi |
+| K11 | Sisa keputusan S8: label `Disetor` dan kategori Bersama `Kontribusi Farida` | **Label tetap `Setor`/`Diambil`** (R2). Kategori tidak diubah kode; pemilik boleh mengganti nama lewat layar Kategori (mis. `Kontribusi anggota`) | Kategori adalah data pemilik; mengganti lewat migrasi berarti menulis data produksi tanpa perlu | `Disetor`: satu salinan + tes; ganti nama lewat migrasi: +1 langkah Task 3 (hanya bila nama persis masih bawaan) |
+| K12 | Nominal saat bayar berbeda dari nominal tagihan (listrik, kartu kredit) | **`post_bill_occurrence` menerima `p_amount bigint default null`** (nominal aktual; kosong = nominal kemunculan). Nominal kemunculan tetap "perkiraan" sampai dibayar; sesudah dibayar yang dihitung adalah entri | Tagihan Bersama `Listrik PLN` dan Pribadi `Tagihan kartu kredit` berubah tiap bulan (data demo juga); tanpa ini pengguna mencatat selisih manual. Fungsi belum ada di DB, jadi parameter bisa ditambah sejak awal tanpa melanggar expand-only | Nominal tetap: sheet Bayar tanpa isian nominal; selisih dicatat sebagai pengeluaran terpisah |
+
+Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `bills`, `bill_occurrences`, `budgets` mengikuti DDL BSD §5 apa adanya; `api.update_bill` dan `api.skip/unskip_bill_occurrence` adalah tambahan di luar BSD (dicatat di BSD §16 "Catatan S9"); perubahan nominal atau tanggal tagihan hanya berlaku untuk kemunculan yang belum dibayar, belum dilewati, dan jatuh tempo ≥ hari ini; `bills_until_eom` mempertahankan namanya walau batasnya kini akhir periode gajian (nama kolom = kontrak web, expand-only); `app.holidays` adalah tabel global tanpa `space_id` (bukan data pengguna), hanya dibaca; keadaan aman/hati-hati/lewat disusun di fungsi murni TS dari angka SQL (bukan dihitung di TS); salinan tanpa "rumah tangga" (R4 S8).
+
+## Global Constraints
+
+**Semua Global Constraints rencana S6, S7, dan S8 berlaku tanpa perubahan** (bagian Global Constraints di `docs/superpowers/plans/2026-11-01-dompetku-v2-s6-catat.md`, `2026-11-03-dompetku-v2-s7-transfer-talangan.md`, `2026-11-04-dompetku-v2-s8-bersama.md`: proses, aturan M1, kontrak `api.*`, migrasi, desain dan aksesibilitas, salinan tetap, transfer antar ruang, batas privasi Bersama). Ruling S7 R9, R24–R28 dan S8 R1–R11 tetap mengikat. Konteks subagent: salin `docs/superpowers/handoff/s8-konteks-subagent.md` menjadi `s9-konteks-subagent.md` (nomor sprint, branch, angka, baris `Claude-Session:`). Tambahan S9:
+
+- Branch kerja: `claude/m2-s9-anggaran-laporan` dari `main` terbaru, atau branch yang ditetapkan sesi. PR ke `main`; merge hanya bila CI hijau di head PR dan review task + keamanan bersih (CLAUDE.md). Merge = deploy + migrasi `0116`–`0121` di produksi.
+- Migrasi S9 bernomor `0116` ke atas; tes pgTAP baru `20_` ke atas. **Expand-only**: tabel/kolom/fungsi baru; fungsi yang sudah dipanggil web (`safe_to_spend`) hanya `create or replace` dengan tanda tangan dan kolom hasil yang sama; tanpa drop/rename. Setiap down diawali penjaga `migrate_down_blocked_prod` dan setiap up yang membuat fungsi diakhiri `select private.own_api_functions();`.
+- **Aturan M1:** setiap page `[ruang]` baru (`rencana`, `laporan`) memanggil `requireDataUser()` lewat `ruangContext`, dan setiap kueri data lewat `withUser`/`withLedger`. Server Action baru memvalidasi Zod dan memetakan galat lewat `errors.ts`.
+- **Uang:** semua penjumlahan di SQL; fungsi tulis tagihan memakai `p_client_id` (idempoten, BSD §9); `set_budget` idempoten alami (upsert). Nominal di pesan galat, log, atau `product_events` dilarang.
+- **Satu kewajiban:** tagihan aktif dan anggaran `wajib` pada kategori induk yang sama di bulan yang sama ditolak `DK422 obligation_double` dari kedua arah (trigger BSD §7, advisory lock per ruang). UI menampilkan sebab + jalan keluar, bukan kode.
+- **Privasi:** anggaran, tagihan, dan laporan per ruang (`space_id`, RLS FORCE). Laporan dan Rencana Bersama tidak memuat entri, kategori, dompet, tagihan, atau anggaran Pribadi siapa pun (B13). Fungsi baca baru `SECURITY INVOKER`, `assert_member` di awal; fungsi tulis `SECURITY DEFINER` dengan `assert_member` + FK komposit.
+- **Aturan budget S9 (setara R28 S7 + aturan budget S8):** (a) Beranda prototipe **tidak boleh bertambah satu byte** (headroom 0,3 kB): seksi baru Beranda nyata adalah Server Component tanpa `'use client'` dan tanpa impor `@dompetku/demo-data`, `features/shell/demo-context`, atau modul klien; komponen prototipe `BillsSoon`/`BudgetsNearLimit` tidak diubah. (b) Sheet Anggaran dan Tagihan dimuat malas (`lazy` + `Suspense`) di rute Rencana. (c) Grafik Laporan sesuai K6. (d) Setiap task UI melapor js-route dan js-all prototipe + nyata untuk Beranda, Transaksi, Rencana, Laporan; berhenti dan minta keputusan pemilik bila > 162 kB, jangan menaikkan konstanta.
+- Bacaan Beranda baru (tagihan 7 hari, anggaran hampir habis, `spend_pace`) masuk transaksi baca `loadBeranda` yang sudah ada (satu `withLedger`), dengan savepoint per kartu (pola Task 4 S8: kartu galat, Beranda tetap tampil). Satu muat Beranda tetap ≤ 2 koneksi bersamaan (`pool.int.test.ts`).
+- **Waktu:** semua tanggal dari `app.today()`/`app.now()` (WIB), bukan jam Node. Tes zona waktu Z1, Z3, Z9, Z10 di pgTAP (`tests.clock`) dan unit domain dengan matriks `TZ` ∈ {UTC, Asia/Jakarta, America/New_York}.
+- Persona tes: **N**, **F**, **Luar** (pgTAP/int saja, R9 S8), kanari Pribadi per orang (`KANARI-N-*`, `KANARI-F-*`) termasuk **kanari tagihan dan anggaran** (`KANARI-N-TAGIHAN`, kategori `KANARI-N-KATEGORI` beranggaran).
+- Tes baru memberi tag ID registry: pgTAP `-- ID: T17`, Vitest `it('… [T17]')`, Playwright `{ tag: ['@T17'] }`.
+
+## Review Focus
+
+1. **Kewajiban dihitung dua kali atau hilang:** tagihan `Listrik PLN` (kategori anak `Listrik & Air`) + anggaran wajib induk yang sama di bulan sama → `obligation_double` dari kedua arah; tagihan yang `ends_on` sebelum bulan anggaran tidak bentrok; tagihan diarsipkan lalu anggaran wajib dibuat → boleh; memindah induk kategori yang dipakai → `category_in_obligation`; dua transaksi paralel (tagihan dan anggaran) → satu gagal (advisory lock). Tes: Task 4 (pgTAP + `99_konkurensi`).
+2. **Periode gajian salah satu hari:** 25 Okt 2026 Minggu → 23 Okt; 25 Des 2026 libur → 24 Des (23 Des bila 24 Des cuti bersama); tahun tanpa data libur → hanya akhir pekan + tanda `holidays_known = false`; pergantian tahun (Z9); tanggal 31 Okt 23:30 WIB (Z1/T13) masuk periode yang benar; `days_left` pada hari terakhir periode = 1 tanpa bagi nol (Z10); Feb kabisat (Z3) untuk Laporan bulan kalender. Tes: Task 3, 7, 8.
+3. **Tagihan:** bayar dua kali → `already_posted`; entri bayar dibatalkan → kemunculan terbuka lagi dan dihitung lagi di aman dipakai; bayar di muka (kemunculan bulan depan, hari ini) → saldo turun hari ini, aman dipakai tidak memotong lagi (BSD §15 butir 2); `starts_on` di masa lalu → bulan sebelum bulan dibuat tidak ada; `materialize_bills` dijalankan dua kali → satu kemunculan; tanggal 31 di bulan pendek → hari terakhir; F membayar tagihan Bersama dari dompet Bersama → boleh; dari dompet Pribadi → ditolak (FK komposit/`DK404`). Tes: Task 5, 6.
+4. **Beranda ≠ Laporan:** fixture golden (dihitung manual, ditinjau dua kali) dengan talangan, Kas Kantor + fee, transfer + fee, setor/ambil Bersama, pemasukan, entri batal → `safe_to_spend`, `budget_progress`, `period_summary`, dan fungsi Laporan baru memberi angka persis `golden.json`; Beranda nyata dan halaman Laporan untuk periode sama menampilkan Pengeluaran dan realisasi anggaran yang sama (e2e). Tes: Task 7, 8, 15.
+5. **Kebocoran Pribadi lewat Laporan/Rencana Bersama (B13):** N punya tagihan `KANARI-N-TAGIHAN` dan anggaran pada `KANARI-N-KATEGORI` di Pribadi; F punya kanari Pribadi sendiri. HTML + payload RSC `/bersama/laporan`, `/bersama/rencana` untuk N dan F tidak memuat kanari mana pun; F memanggil fungsi baca baru dengan id Pribadi N → `DK404`; Luar → `DK404`. Tes: Task 4–8 (pgTAP), 9 (int), 15 (e2e dua user).
+6. **Budget JS:** Beranda prototipe tetap 161,7 kB; sheet Rencana tidak ikut js-route; grafik Laporan tidak menambah js-route. Tes: `budget.spec.ts` + anotasi e2e nyata di Task 10–13, 15.
+
+---
+
+## Peta berkas
+
+| Area | Berkas |
+| --- | --- |
+| DB | `packages/db/migrations/0116_periode_gajian.sql`, `0117_kewajiban_tabel.sql`, `0118_tagihan_api.sql`, `0119_anggaran_api.sql`, `0120_aman_dipakai.sql`, `0121_laporan.sql`; `packages/db/tests/20_periode_gajian.sql`, `21_kewajiban.sql`, `22_tagihan.sql`, `23_anggaran.sql`, `24_aman_dipakai.sql`, `25_laporan.sql`, `support/golden-s9.sql` (+ `golden-s9.json`); tambahan di `00_katalog.sql`, `03_isolasi.sql`, `08_ledger_isolasi.sql`, `99_konkurensi.sql`, `17_dq.sql` bila cek DQ baru; `packages/db/README.md`, `packages/db/tests/REGISTRY.md` |
+| Worker | `apps/worker/src/jobs.ts` (+ tes), `apps/worker/src/__int__/worker.int.test.ts` |
+| Domain | `packages/domain/src/period.ts` (+ tes, label periode, matriks TZ) bila label tidak cukup dari SQL |
+| Server | `apps/web/src/server/ledger/{rencana.ts,laporan.ts}` (baru), `beranda.ts`, `read.ts` (`safeToSpendTx` + `spend_pace`), `bersama.ts` (periode Kontribusi), `errors.ts` (kode baru + DK401), `__int__/{rencana,laporan}.int.test.ts` (baru), `__int__/{beranda,bersama,pool}.int.test.ts`; `apps/web/src/app/[ruang]/_actions/rencana.ts` (baru) |
+| Fitur (presentasional) | `apps/web/src/features/rencana/*` (baru: `budget-row-view.tsx`, `bill-row-view.tsx`, `budget-sheet.tsx`, `bill-sheet.tsx`, `types.ts`, `copy.ts`), `features/laporan/*` (baru: `summary-card-view.tsx`, `class-breakdown-view.tsx`, `category-chart-view.tsx`, `trend-chart-view.tsx`, `types.ts`), `features/beranda/{aman-status.ts,bills-due-view.tsx,budgets-near-view.tsx}` (baru, Server-safe) |
+| UI nyata | `app/[ruang]/rencana/page.tsx`, `_real/rencana.tsx` (baru), `_real/rencana-islands.tsx` (baru), `app/[ruang]/laporan/page.tsx` (baru), `_real/laporan.tsx` (baru), `_real/beranda.tsx`, `features/beranda/safe-to-spend-view.tsx` (prop keadaan), `features/shell/{nav-items.tsx,rencana-context.ts,menu-sheet.tsx,sidebar.tsx,hrefs.ts}`, `features/transaksi/summary-view-vm.tsx` (tautan Laporan) |
+| Utang S8 | `_real/dompet-detail.tsx` + `features/ledger/present.ts` (`effectOnAccountVM`), `server/ledger/errors.ts:111`, `features/beranda/onboarding-checklist-view.tsx`, `_real/detail.tsx` (label), loader `not_found` |
+| E2E | `tests/e2e-ledger/s9.spec.ts`, `tests/e2e-bersama/s9-bersama.spec.ts`, `screens-s9.spec.ts`, `tests/e2e/budget.spec.ts`, `tests/e2e/routes.ts`, `tests/e2e-ledger/vitals.spec.ts` (baru) |
+| Dokumen | `docs/design/s9-bingkai.md` + `docs/design/s9/`, `docs/design/claude-design-s9/hasil/`, BSD §16 "Catatan S9", IPD §5 status, `CLAUDE.md`, `docs/superpowers/handoff/{s9.md,s9-ledger.md,s9-konteks-subagent.md}` |
+
+---
+
+### Task 1: Bingkai desain S9 untuk Rencana dan Beranda (gerbang awal) · Model: sonnet + kursi design reviewer
+
+**Desain:** agen sendiri (K9), mengikuti pola Panel Malam. **Tidak** menunggu Claude Design.
+
+**Files:** Create `docs/design/s9-bingkai.md` (format `s8-bingkai.md`); referensi bingkai di `docs/design/claude-design-s9/layar.md` bagian 2–4.
+
+**Interfaces:** Produces salinan tetap dan keadaan yang dikutip Task 10, 11, 12 (`S9-AN*`, `S9-TG*`, `S9-BR*`).
+
+- [ ] **Step 1:** Tulis bingkai (pola `BudgetRow`, `BillRow`, `ListCard`, `AmanCard`, sheet Tambah dompet; DBD §9; aturan bersama S6–S8):
+  - `S9-AN1` daftar Anggaran per ruang (`/[ruang]/rencana`, segmen `Anggaran`): judul periode (`November 2026 · 23 Okt – 24 Nov`), total anggaran vs terpakai, baris per kategori induk (nama, tag `Wajib`, bilah 6 px, `Rp X dari Rp Y · sisa Rp Z`, status ≥ 80% `warning` + ikon, ≥ 100% `danger` + `warning-octagon`, teks `Lewat Rp …`), kategori tanpa anggaran di bawah `Belum dianggarkan` (tautan `Atur`).
+  - `S9-AN2` sheet Atur anggaran: kategori (pemilih induk pengeluaran saja, K5), nominal (parser nominal S6), sakelar `Wajib` dengan penjelasan satu kalimat (`Dipotong dari aman dipakai sampai terpakai.`), `Simpan`, `Hapus anggaran` (AlertDialog). Galat `obligation_double`: `Kategori ini sudah punya tagihan {nama}. Satu kewajiban cukup dicatat sekali: hapus tagihannya atau jadikan anggaran ini tidak wajib.`
+  - `S9-TG1` daftar Tagihan (segmen `Tagihan`): kelompok `Lewat jatuh tempo`, `Periode ini`, `Berikutnya`; `BillRow` (ubin tanggal, nama, `4 hari lagi`/`Lewat 3 hari`/`Lunas · 21 Okt`/`Dilewati`), aksi `Bayar` (44 px) per baris belum dibayar; `Tagihan diarsipkan` terlipat.
+  - `S9-TG2` sheet Tambah/Ubah tagihan: nama, nominal, kategori pengeluaran (induk atau anak), dompet bayar bawaan, tanggal tiap bulan 1–31 (keterangan `Tanggal 29–31 jatuh ke hari terakhir bulan pendek.`), mulai (bawaan hari ini; masa lalu → keterangan `Bulan sebelum {bulan ini} tidak ditagih.`), berakhir (opsional), `Simpan tagihan`; Ubah: `Berlaku untuk tagihan yang belum dibayar mulai hari ini.` + `Arsipkan tagihan` (AlertDialog).
+  - `S9-TG3` sheet Bayar tagihan: nominal terisi nominal kemunculan dan bisa diubah (K12; keterangan `Perkiraan Rp … ` bila berbeda), dompet (bawaan dompet tagihan), tanggal bayar (hari ini s.d. 13 hari lalu), peringatan saldo kurang (pola S6 `saldo_negatif` + `Tetap simpan`), `Bayar Rp …`; toast `Tagihan {nama} dibayar · Rp … dari {dompet}` + `Urungkan`. Aksi sekunder `Lewati bulan ini` (K4) + `Batalkan lewati`.
+  - `S9-BR1` kartu aman dipakai lengkap (nyata): judul `Aman dipakai sampai {hari sebelum gajian}`, status `Aman`/`Hati-hati`/`Lewat batas` (ikon + teks, K7), empat baris rincian + bilah proporsi (pola handoff), keterangan sebab hati-hati (`Rata-rata belanjamu Rp … per hari, lebih dari jatah harian.` / `Ada {n} tagihan lewat jatuh tempo.`), tanda `Libur nasional {tahun} belum diisi; hari gajian dihitung tanpa libur.` bila `holidays_known = false`.
+  - `S9-BR2` Beranda `Tagihan 7 hari` dan `Anggaran hampir habis` nyata (salinan kosong `Belum ada anggaran yang mendekati batas.`, `Tidak ada tagihan 7 hari ke depan.`), tautan `Semua` ke Rencana segmen yang sesuai; urutan HP: Aman → (S6-B1) → checklist → Tagihan → Anggaran → (Bersama) Kontribusi → Aktivitas → Terakhir.
+  - `S9-RC0` Rencana kosong (nyata): ajakan `Atur anggaran pertama` dan `Tambah tagihan`, tanpa "Rp 0".
+- [ ] **Step 2:** Tabel salinan final S9 (mengikat Task 10–12) dan peta kode galat → salinan (`obligation_double`, `already_posted`, `bill_not_found`, `category_in_obligation`, `saldo_negatif`, `bill_archived`, `invalid` per kolom), tanpa nominal di pesan galat; target sentuh, urutan fokus, nama aksesibel tiap kontrol.
+- [ ] **Step 3:** Kursi design reviewer menilai terhadap `DESIGN.md`; perbaiki; commit `docs(desain): bingkai S9 Rencana dan Beranda`.
+
+### Task 2: Gerbang Claude Design Laporan · Model: sonnet + kursi design reviewer (menunggu P3)
+
+**Desain:** **dipesan lewat Claude Design** (K9). Paket: `docs/design/claude-design-s9/`.
+
+**Files:** Create `docs/design/claude-design-s9/hasil/` (diisi pemilik), bagian `S9-LP*` di `docs/design/s9-bingkai.md`.
+
+- [ ] **Step 1:** Saat P3 datang: baca hasil, petakan bingkai `LP1…` ke komponen dan token yang ada; token baru (mis. `chart-income`, `chart-expense`, palet kategori) masuk tabel dengan rasio kontras dan dicek `contrast.test.ts` di Task 13.
+- [ ] **Step 2:** Tulis `S9-LP*` di bingkai: keadaan (kosong, memuat, galat, periode berjalan, periode lengkap, Bersama + Kontribusi), salinan final, aturan grafik (K6: bentuk, label sumbu, tabel setara), urutan fokus, 320/390/768/1280, terang/gelap. Design reviewer menilai; commit `docs(desain): bingkai Laporan dari Claude Design`.
+- [ ] **Step 3 (jalan keluar):** bila P3 belum ada saat Task 1–12 selesai, agen membuat bingkai Laporan sendiri dari `claude-design-s9/layar.md` bagian 1 dan menandainya `sementara`; pemilik memilih: tunggu hasil, atau rilis versi agen lalu diganti di S10.
+
+### Task 3: Migrasi 0116 periode gajian · Model: terkuat
+
+**Files:** Create `packages/db/migrations/0116_periode_gajian.sql`, `packages/db/tests/20_periode_gajian.sql`; Modify `00_katalog.sql`, `08_ledger_isolasi.sql` (fungsi baca baru untuk ruang Pribadi pasangan = `DK404`), `packages/db/README.md`.
+
+**Interfaces:**
+
+- `alter table app.households add column payday_rule smallint check (payday_rule between 1 and 31)`; up mengisi `25` untuk baris rumah tangga tunggal (K2, P5).
+- `create table app.holidays (on_date date primary key, name text not null check (length(btrim(name)) between 1 and 80), kind text not null check (kind in ('libur', 'cuti_bersama')))`; isi libur nasional + cuti bersama 2026 dan 2027 (P4: daftar ditulis di laporan task untuk diperiksa pemilik). RLS aktif, kebijakan baca untuk role web/worker, tulis hanya owner (migrasi). Tabel global tanpa `space_id`: dicatat di katalog sebagai pengecualian bernama.
+- `app.effective_payday(p_day smallint, p_month date) returns date` (`STABLE`, bukan `IMMUTABLE`, karena membaca `app.holidays`): `least(p_day, hari terakhir bulan)`, mundur selama Sabtu/Minggu/`app.holidays`.
+- `app.pay_period(p_space_id uuid, p_on date) returns table (starts_on date, ends_on date, label_month date, holidays_known boolean)`: aturan dari `households` ruang itu; kosong → bulan kalender (`label_month` = bulan itu); `p_on ≥ payday(bulan p_on)` → `[payday(m), payday(m+1) − 1]`, label `m+1`; selain itu `[payday(m−1), payday(m) − 1]`, label `m`. `holidays_known` = ada baris `app.holidays` untuk tahun yang disentuh periode.
+- `app.period_of_label(p_space_id uuid, p_label_month date) returns table (starts_on date, ends_on date, holidays_known boolean)` (untuk `budget_progress` dan Laporan per nama periode).
+- `api.pay_period(p_space_id uuid, p_on date default null)` INVOKER, `assert_member`, `p_on` default `app.today()`, menambah kolom `days_left int` (= `ends_on − p_on + 1`). Grant EXECUTE `dompetku_web` (+ `dompetku_api` bila dipakai fungsi DEFINER).
+
+- [ ] **Step 1: Tes gagal** `20_periode_gajian.sql` (`tests.clock`): 17 Okt 2026 → `2026-09-25..2026-10-22`, label Okt; 23 Okt 2026 → `2026-10-23..2026-11-24`, label Nov (25 Okt Minggu → 23 Okt); 24 Des 2026 dengan 25 Des libur → periode Jan mulai 24 Des, dan 23 Des bila 24 Des ditandai cuti bersama; 31 Des 23:59 → 1 Jan 00:01 WIB (Z9) periode sama atau berganti sesuai aturan; tahun 2028 tanpa libur → hanya akhir pekan, `holidays_known = false`; `payday_rule` NULL → bulan kalender (`label_month` = bulan berjalan, `days_left` 31 Okt = 1, Z10); `payday_rule = 31` di Feb 2028 (kabisat) → 29 Feb lalu mundur bila akhir pekan (Z3); `api.pay_period` ruang Pribadi pasangan → `DK404`, Luar → `DK404`; katalog: `app.holidays` RLS aktif, web hanya SELECT, worker hanya SELECT, tanpa DML untuk `dompetku_api`/`dompetku_web`.
+- [ ] **Step 2:** `pg_prove … tests/20_periode_gajian.sql tests/00_katalog.sql tests/08_ledger_isolasi.sql` → FAIL.
+- [ ] **Step 3:** Implementasi (down: drop fungsi, tabel, kolom; penjaga prod; `own_api_functions`). Laporan task memuat tabel tanggal libur yang diisi + sumbernya (P4).
+- [ ] **Step 4:** `pg_prove` seluruh suite → PASS; commit `feat(db): 0116 periode gajian dan tabel libur`.
+
+### Task 4: Migrasi 0117 tabel kewajiban (tagihan, kemunculan, anggaran) + satu kewajiban · Model: terkuat
+
+**Files:** Create `0117_kewajiban_tabel.sql`, `tests/21_kewajiban.sql`; Modify `00_katalog.sql`, `03_isolasi.sql`/`08_ledger_isolasi.sql` (dua user × tabel baru × operasi), `99_konkurensi.sql`, `README.md`.
+
+**Interfaces:**
+
+- DDL BSD §5 apa adanya: `app.bills`, `app.bill_occurrences`, `app.budgets` (+ indeks), view `app.bill_schedule` (BSD §8, `security_invoker`).
+- `private.tg_category_depth` lengkap (BSD §7, cabang `category_in_obligation`) lewat `create or replace`; `private.tg_obligation_xor` + trigger `budgets_obligation_xor`, `bills_obligation_xor` (BSD §7). Catatan: XOR membandingkan bulan kalender `month`; dengan K1 periode bernama bulan yang sama, jadi aturan tetap per `month`.
+- RLS FORCE + kebijakan (BSD §11 baris `bills`, `bill_occurrences`, `budgets`): web SELECT, api DML terbatas; grant sesuai BSD §11 (`grant insert, update, delete on app.budgets to dompetku_api`, dst.); worker hanya lewat `jobs.*`.
+- `tg_append_only` tidak berlaku (tabel bisa diubah lewat api); `updated_at` dipelihara fungsi api.
+
+- [ ] **Step 1: Tes gagal** `21_kewajiban.sql`: insert langsung sebagai web ditolak (hanya api); FK komposit: tagihan dengan kategori/dompet ruang lain → ditolak; anggaran pada subkategori → ditolak FK (BSD §13 butir 27); anggaran pada kategori pemasukan → ditolak; **XOR** dari kedua arah, kategori anak vs induk, rentang `starts_on`/`ends_on` vs `month`, tagihan terarsip tidak bentrok (butir 26) [T17 bagian kewajiban]; memindah induk kategori yang dipakai → `category_in_obligation`; isolasi: F `select count(*)` tiap tabel + view `bill_schedule` untuk Pribadi N = 0 (butir 10); Luar = 0; katalog tabel baru: RLS FORCE, pemilik `dompetku_owner`, hak per role persis.
+- [ ] **Step 2:** `99_konkurensi.sql`: dua koneksi, A membuat tagihan aktif dan B membuat anggaran wajib kategori sama bulan sama, keduanya commit → tepat satu `obligation_double` [C-kewajiban, registry baru bila belum ada ID].
+- [ ] **Step 3:** FAIL → implementasi (down = drop trigger, view, tabel urut terbalik + `create or replace` `tg_category_depth` versi 0101) → `pg_prove` seluruh suite PASS; commit `feat(db): 0117 tabel tagihan dan anggaran dengan aturan satu kewajiban`.
+
+### Task 5: Migrasi 0118 API tagihan + materialisasi · Model: terkuat
+
+**Files:** Create `0118_tagihan_api.sql`, `tests/22_tagihan.sql`; Modify `00_katalog.sql`, `08_ledger_isolasi.sql`, `17_dq.sql` bila cek baru, `README.md`.
+
+**Interfaces:**
+
+- `private.materialize_bill(p_bill_id uuid, p_through date)` (DEFINER, owner) = badan `jobs.materialize_bills` BSD §10 untuk satu tagihan (bulan sebelum bulan dibuat dilewati; tanggal 29–31 → hari terakhir bulan pendek; `on conflict do nothing`).
+- `jobs.materialize_bills(p_through date default null) returns int` (BSD §10; `p_through` bawaan = akhir periode gajian **berikutnya** dari `app.today()` per ruang, bukan `today + 1 month`: agar Beranda selalu punya kemunculan sampai batas aman dipakai dan bayar di muka mungkin). EXECUTE hanya `dompetku_worker`.
+- `api.create_bill(...)` BSD §9 + `private.materialize_bill(v_id, akhir periode berikutnya)`; `p_account_id` (bila diisi) wajib dompet ruang yang sama dan bukan Kas Kantor: pembayaran dari Kas Kantor berkelas `x_kantor` (tidak masuk pengeluaran), sehingga tagihan tidak akan pernah terbaca lunas di Laporan. Ditolak dengan kode baru `DK422 bill_account_kantor` (keputusan agen, dicatat di BSD §16; biaya bila salah: satu cabang dilepas). Pengecekan yang sama di `update_bill` dan `post_bill_occurrence`.
+- `api.update_bill(p_bill_id uuid, p_name text, p_amount bigint, p_category_id uuid, p_day_of_month smallint, p_account_id uuid, p_ends_on date) returns jsonb` (DEFINER, idempoten alami): `for update` tagihan; tagihan terarsip → `DK422 bill_archived`; kemunculan terbuka (belum dibayar, belum dilewati, `due_on ≥ app.today()`) dihapus lalu dimaterialisasi ulang dengan nilai baru; kemunculan lampau, dibayar, atau dilewati tidak disentuh; XOR diuji ulang lewat trigger.
+- `api.archive_bill(p_bill_id)` (BSD §9).
+- `api.post_bill_occurrence(p_client_id, p_occurrence_id, p_account_id, p_occurred_on, p_allow_negative)` (BSD §9) + `p_amount bigint default null` (K12; ikut hash idempotensi; dicek `check_amount`) + `assert_member` eksplisit sebelum `for update` (urutan cek M5 S7); kemunculan tagihan terarsip → `bill_archived`; bayar di muka (`due_on` di masa depan, `p_occurred_on` ≤ hari ini) boleh.
+- `api.skip_bill_occurrence(p_occurrence_id uuid)`, `api.unskip_bill_occurrence(p_occurrence_id uuid)` (K4; DEFINER; dibayar → `already_posted`; tagihan terarsip → `bill_archived`).
+- Baca (INVOKER): `api.bill_list(p_space_id) returns table (bill_id, name, amount, category_id, account_id, day_of_month, starts_on, ends_on, archived boolean, next_due_on date, next_occurrence_id uuid)`; `api.bills_due(p_space_id, p_through date) returns table (occurrence_id, bill_id, name, amount, due_on, days_until int, overdue boolean, posted boolean, skipped boolean, entry_id uuid)` (belum dibayar + belum dilewati + tagihan aktif + `due_on ≤ p_through`, termasuk lewat; plus yang dibayar/dilewati dalam periode berjalan untuk tampilan `Lunas`).
+- Grant EXECUTE: fungsi tulis ke `dompetku_web` (pola fungsi tulis S6–S8), baca ke `dompetku_web`; `jobs.*` ke worker.
+
+- [ ] **Step 1: Tes gagal** `22_tagihan.sql`: buat tagihan `starts_on` 3 bulan lalu → kemunculan pertama di bulan dibuat (BSD §13 butir 33, PRD "bulan lampau dilewati"); tanggal 31 → 30 Nov, 28 Feb 2027 (tes clamp; T14 penuh tetap M5); `clientId` sama + isi beda → `DK410`; bayar → entri `expense` kategori tagihan, deskripsi = nama, `occurrence.entry_id` terisi; bayar dengan `p_amount` 512.000 untuk kemunculan 485.000 → entri 512.000, kemunculan lunas, aman dipakai tidak memotong apa pun lagi (K12); `p_amount` 0 → `DK400`; bayar lagi → `already_posted`; void entri → `bill_schedule.posted = false` lagi, restore → `true`; bayar di muka bulan depan → entri tanggal hari ini; skip → tidak dihitung, unskip → dihitung; arsip → kemunculan terbuka `skipped_at` terisi, `bills_due` tidak memuatnya; `update_bill` nominal → hanya kemunculan terbuka mulai hari ini berubah; `jobs.materialize_bills()` dua kali → jumlah baris sama (T15 bagian idempotensi); F bayar tagihan Bersama dari dompet Bersama → OK, dari dompet Pribadinya → ditolak; F memanggil semua fungsi dengan id Pribadi N → `DK404` (BSD §13 butir 11); Luar → `DK404`; dompet Kantor → `bill_account_kantor`; keluaran `bills_due` Bersama `::text` tidak memuat kanari Pribadi.
+- [ ] **Step 2:** FAIL → implementasi → **Step 3:** `pg_prove` seluruh suite PASS; commit `feat(db): 0118 API tagihan rutin dasar dan materialisasi`.
+
+### Task 6: Migrasi 0119 API anggaran + job worker `materialize_bills` · Model: terkuat
+
+**Files:** Create `0119_anggaran_api.sql`, `tests/23_anggaran.sql`; Modify `apps/worker/src/jobs.ts` (+ `jobs.test.ts`), `apps/worker/src/__int__/worker.int.test.ts`, `00_katalog.sql`, `08_ledger_isolasi.sql`, `README.md`, `docs/ops/runbook-s7-worker.md` (baris job baru).
+
+**Interfaces:**
+
+- `api.set_budget(p_space_id, p_category_id, p_month, p_amount, p_wajib)` dan `api.delete_budget(p_space_id, p_category_id, p_month)` (BSD §9; `delete_budget` tanpa baris → no-op, bukan galat). Kategori terarsip → `DK422 category_archived`.
+- `api.budget_progress(p_space_id uuid, p_month date) returns table (category_id uuid, amount bigint, wajib boolean, spent bigint, pct int)` (BSD §8) dengan realisasi atas **rentang `app.period_of_label(p_space_id, p_month)`** (K1), hanya kelas `expense`, per `root_category_id`.
+- `api.budget_overview(p_space_id uuid, p_month date) returns table (category_id uuid, name text, icon text, budget bigint null, wajib boolean, spent bigint, pct int null)`: semua kategori induk pengeluaran aktif + realisasinya (yang belum dianggarkan juga), untuk layar Rencana.
+- Worker: `JobName` + `materialize_bills`, `cron: '5 0 * * *'` (00:05 WIB), `check: 'jobs'`, `kind: 'count'`, `sql: 'select jobs.materialize_bills() as n'` (K3). Komentar jendela waktu di `jobs.ts` diperbarui.
+
+- [ ] **Step 1: Tes gagal** `23_anggaran.sql`: `set_budget` dua kali = satu baris (upsert); `p_month` bukan tanggal 1 → `DK400 month`; nominal 0 → `DK400`; realisasi memakai periode gajian: pengeluaran 23 Okt masuk anggaran November, 22 Okt masuk Oktober; pengeluaran sub `Kopi & Camilan` menambah induk; `expense_fee`, `x_talangan`, `x_kantor`, entri batal tidak dihitung (BSD §2.2 butir 1, 2); `pct` dibulatkan ke bawah; `budget_overview` memuat kategori tanpa anggaran dengan `budget` NULL; entri 31 Okt 23:30 WIB (`tests.clock`) masuk periode berlabel benar (Z1/T13); Pribadi N oleh F → `DK404`; anggaran Pribadi dan Bersama terpisah (PRD M2).
+- [ ] **Step 2: Tes gagal worker:** unit `jobs.test.ts` (job ada, cron 00:05 WIB, tidak bentrok jendela 01:00–01:30 dan 02:00 backup); int: job dijalankan dua kali → baris `bill_occurrences` sama, `job_runs` dua `succeeded`; gagal (fungsi dicabut sementara di tes) → `/fail` tanpa nominal.
+- [ ] **Step 3:** FAIL → implementasi → PASS (`pg_prove` seluruh suite, worker unit + int); commit `feat(db,worker): 0119 API anggaran dan job materialisasi tagihan`.
+
+### Task 7: Migrasi 0120 aman dipakai lengkap + laju belanja · Model: terkuat
+
+**Files:** Create `0120_aman_dipakai.sql`, `tests/24_aman_dipakai.sql`, `tests/support/golden-s9.sql` + `golden-s9.json` (fixture kecil dihitung manual, ditinjau dua kali); Modify `00_katalog.sql`, `08_ledger_isolasi.sql`, `README.md`.
+
+**Interfaces:**
+
+- `api.safe_to_spend(p_space_id uuid, p_today date default null)` `create or replace` **dengan tanda tangan dan kolom hasil sama** (0102): `v_until` = `ends_on` dari `app.pay_period(p_space_id, v_today)`; `bills_until_eom` = Σ `bill_schedule` belum dibayar, belum dilewati, tagihan aktif, `due_on ≤ v_until` (termasuk lewat); `budget_wajib_remaining` = Σ `max(0, amount − spent)` dari `budget_progress(p_space_id, label_month)` yang `wajib`; `days_left` = `v_until − v_today + 1` (≥ 1 selama dalam periode, Z10).
+- `api.spend_pace(p_space_id uuid, p_today date default null) returns table (avg_daily bigint, days int, overdue_bills int, holidays_known boolean)`: `avg_daily` = floor(Σ |`expense`| + |`expense_fee`| 30 hari WIB terakhir sebelum hari ini / 30); `overdue_bills` = jumlah kemunculan lewat jatuh tempo belum dibayar/dilewati (K7).
+
+- [ ] **Step 1: Tes gagal** `24_aman_dipakai.sql` dengan `golden-s9` [T17]: saldo operasional (dompet terarsip bersaldo 0 tidak mengubah), tagihan lewat + jatuh tempo ≤ akhir periode dihitung, sesudah akhir periode tidak, dilewati/terarsip/dibayar tidak, bayar di muka tidak dipotong lagi; anggaran wajib sisa (terpakai melebihi → 0, bukan negatif); total negatif tetap negatif, `per_day` floor; hari terakhir periode `days_left = 1` (Z10); `payday_rule` NULL → sama dengan versi bulan kalender (regresi: hasil 0102 untuk ruang tanpa tagihan/anggaran tidak berubah); `spend_pace` dari golden; Pribadi N oleh F → `DK404`. **Semua angka dibandingkan dengan `golden-s9.json`**, bukan dihitung ulang di tes.
+- [ ] **Step 2:** FAIL → implementasi → PASS; tes web yang sudah ada (`beranda.int.test.ts`, `read` tes) tetap hijau tanpa diubah (kontrak kolom sama); commit `feat(db): 0120 aman dipakai dengan tagihan, anggaran wajib, dan periode gajian`.
+
+### Task 8: Migrasi 0121 fungsi baca Laporan · Model: terkuat
+
+**Files:** Create `0121_laporan.sql`, `tests/25_laporan.sql`; Modify `00_katalog.sql`, `08_ledger_isolasi.sql`, `07_ledger_uang.sql` (tes kelengkapan kelas), `README.md`.
+
+**Interfaces:**
+
+- `api.category_summary(p_space_id uuid, p_from date, p_to date) returns table (root_category_id uuid, category_id uuid, type app.category_type, amount bigint, entry_count int)`: kelas `expense` (keluar, positif) dan `income` per kategori anak + induk; validasi periode sama `period_summary` (`DK400 period`).
+- `api.period_trend(p_space_id uuid, p_label_month date, p_count int default 6, p_basis text default 'gajian') returns table (label_month date, starts_on date, ends_on date, pemasukan bigint, pengeluaran bigint, selisih bigint, complete boolean)`: `p_count` 1–12 (`DK400 count`), `p_basis` `gajian`/`kalender` (`DK400 basis`); definisi Pemasukan/Pengeluaran = BSD §8.1 turunan (sama `month_summary`).
+- Ringkasan per kelas memakai `api.period_summary` yang sudah ada (tanpa fungsi baru); `Tidak termasuk` di UI dikelompokkan dari kelas `x_*`.
+- Kontribusi tetap `api.member_contributions` (0115) dengan rentang periode (K10, tanpa migrasi).
+
+- [ ] **Step 1: Tes gagal** `25_laporan.sql` dengan `golden-s9` [T17]: `period_summary` + `category_summary` + `period_trend` cocok golden (fee masuk Pengeluaran tetapi tidak per kategori; talangan, kantor, transfer, setor/ambil Bersama, koreksi di luar Pemasukan/Pengeluaran); Σ kategori `expense` + `expense_fee` = Pengeluaran `period_trend` (oracle); Feb 2028 kalender = 1–29, Feb 2027 = 1–28 (Z3); periode melintasi tahun (Z9); 31 Okt 23:30 WIB (Z1); `period_trend` periode berjalan `complete = false`; **B13**: keluaran semua fungsi Laporan untuk Bersama (N dan F) `::text` tidak memuat kanari Pribadi; F → Pribadi N `DK404`; Luar `DK404`. `07_ledger_uang.sql`: `report_class` tidak NULL untuk setiap kombinasi enum yang lolos cek bentuk (BSD §13 butir 9) dan tepat 12 kelas berbeda di S9 (komentar: 3 kelas sisa milik M3/M4).
+- [ ] **Step 2:** FAIL → implementasi → PASS; commit `feat(db): 0121 fungsi baca Laporan per kategori dan tren`.
+
+### Task 9: Loader server, Server Action, dan pemetaan galat · Model: terkuat
+
+**Files:** Create `server/ledger/rencana.ts`, `server/ledger/laporan.ts`, `app/[ruang]/_actions/rencana.ts`, `server/ledger/__int__/{rencana,laporan}.int.test.ts`, `features/beranda/aman-status.ts` (+ tes), `features/rencana/types.ts`, `features/laporan/types.ts`; Modify `server/ledger/beranda.ts`, `read.ts` (`safeToSpendTx` membaca `days_left`/`until`, `spendPaceTx`), `bersama.ts` (periode Kontribusi K10), `errors.ts` (kode `obligation_double`, `already_posted`, `bill_archived`, `bill_account_kantor`, `category_in_obligation`, `category_archived`; **DK401** = utang S8, Task 14 memutuskan pemetaannya, di sini cukup tidak merusak), `__int__/{beranda,bersama,pool,harness}.int.test.ts`.
+
+**Interfaces:**
+
+- `PeriodVM = { label: string; from: IsoDate; to: IsoDate; labelMonth: IsoDate; daysLeft: number; holidaysKnown: boolean; basis: 'gajian' | 'kalender' }` dari `api.pay_period` (label `November 2026 · 23 Okt – 24 Nov`).
+- `SafeToSpendVM` ditambah `until`, `daysLeft`, `perDay`, `status: 'aman' | 'hati_hati' | 'lewat'`, `reason: 'pace' | 'overdue' | null` (fungsi murni `amanStatus(safe, pace)` = K7).
+- `BerandaData` ditambah `billsDue: BillDueVM[] | 'error' | null` (≤ 7 hari + lewat, T8 m0a), `budgetsNear: BudgetVM[] | 'error' | null` (pct ≥ 80), `period: PeriodVM`; satu `withLedger`, savepoint per kartu (pola S8 Task 4).
+- `loadRencana(ctx) → { period; budgets: BudgetOverviewVM[]; bills: BillListVM[]; due: BillDueVM[]; accounts; categories }`; `loadLaporan(ctx, { label?: string; basis?: string }) → { period; summary; classes; categories; trend; contributions | null }` (parameter URL divalidasi Zod; rusak → periode berjalan, bukan 500).
+- Server Action: `setBudgetAction`, `deleteBudgetAction`, `createBillAction`, `updateBillAction`, `archiveBillAction`, `payBillAction` (`clientId` dari klien, idempoten), `skipBillAction`, `unskipBillAction`; masing-masing `requireDataUser` → `resolveSpace` → `withLedger` → `revalidatePath` Beranda + Rencana + Laporan ruang itu; hasil `{ ok } | { error: LedgerErrorCode; field? }`.
+
+- [ ] **Step 1: Tes gagal unit** `aman-status.test.ts` (semua cabang K7, batas tepat sama, total 0, pace 0) dan pemetaan galat baru di `errors.test.ts`.
+- [ ] **Step 2: Tes gagal int** (Postgres nyata, persona N/F/Luar): golden `beranda` = golden `laporan` untuk periode sama [T17, kriteria keluar "Beranda cocok laporan"]; `loadLaporan`/`loadRencana` Bersama untuk N dan F `JSON.stringify` tanpa kanari Pribadi (tagihan, kategori, anggaran, dompet) [B13]; Server Action: `obligation_double` → `{ error: 'obligation_double' }` tanpa nominal; `payBillAction` dengan `clientId` sama dua kali → satu entri; Luar → `not_found`; pool: muat Beranda ≤ 2 koneksi; Kontribusi Bersama memakai batas periode gajian (K10).
+- [ ] **Step 3:** FAIL → implementasi → PASS (`pnpm --filter @dompetku/web test`, `test:int`); commit `feat(web): loader Rencana, Laporan, dan Beranda aman dipakai`.
+
+### Task 10: Rencana nyata: Anggaran · Model: sonnet + kursi design reviewer (review: terkuat untuk alur tulis)
+
+**Desain:** agen (bingkai `S9-AN1`, `S9-AN2`, `S9-RC0`).
+
+**Files:** Create `_real/rencana.tsx`, `_real/rencana-islands.tsx`, `features/rencana/{budget-row-view.tsx,budget-sheet.tsx,copy.ts}`; Modify `app/[ruang]/rencana/page.tsx` (nyata: `ruangContext` → `loadRencana`, `Cache-Control: no-store`), `features/shell/{nav-items.tsx,rencana-context.ts}` (K8: mode nyata selalu tampil), `_real/no-demo.test.ts`, `tests/e2e/routes.ts`, `budget.spec.ts`; Test `_real/rencana.test.tsx`, `features/rencana/*.test.tsx`.
+
+- [ ] **Step 1: Tes gagal:** daftar `S9-AN1` dari `budget_overview` (status ikon + teks per ambang, `Wajib`, `Belum dianggarkan`); sheet `S9-AN2` (dimuat malas; parser nominal; `Wajib`; simpan → `revalidate`, toast menyebut ruang); galat `obligation_double` menampilkan salinan bingkai dan fokus ke sakelar `Wajib`; hapus lewat AlertDialog (fokus awal `Kembali`); Rencana kosong `S9-RC0`; tab Rencana tampil di nyata walau kosong, prototipe tetap tersembunyi; rute nyata tidak mengimpor demo.
+- [ ] **Step 2–4:** FAIL → implementasi → PASS; budget: Rencana nyata dan prototipe ≤ 162 kB, sheet tidak ikut js-route (angka dilapor).
+- [ ] **Step 5:** Design reviewer atas screenshot 320/390/768/1280 terang/gelap Pribadi dan Bersama; commit `feat(web): Rencana nyata, anggaran per ruang`.
+
+### Task 11: Rencana nyata: Tagihan · Model: sonnet + kursi design reviewer (review: terkuat, alur bayar = uang)
+
+**Desain:** agen (bingkai `S9-TG1`–`S9-TG3`).
+
+**Files:** Create `features/rencana/{bill-row-view.tsx,bill-sheet.tsx,pay-bill-sheet.tsx}`; Modify `_real/rencana.tsx`, `_real/rencana-islands.tsx`; Test `_real/rencana.test.tsx`, `features/rencana/*.test.tsx`.
+
+- [ ] **Step 1: Tes gagal:** segmen `Tagihan` (role tablist, 44 px) dengan kelompok `Lewat jatuh tempo`/`Periode ini`/`Berikutnya`/`Diarsipkan`; tambah tagihan (`starts_on` masa lalu → keterangan bulan tidak ditagih); ubah (keterangan berlaku mulai hari ini); arsip (AlertDialog); bayar → sheet `S9-TG3`, `clientId` stabil per sheet (klik ganda = satu entri, C6), saldo kurang → peringatan + `Tetap simpan` (pola S6), toast + `Urungkan` (void entri → kemunculan terbuka lagi); `Lewati bulan ini`/`Batalkan lewati` (K4); dompet di sheet hanya dompet ruang ini (Bersama: tanpa dompet Pribadi); `obligation_double` saat menambah tagihan pada kategori beranggaran wajib.
+- [ ] **Step 2–4:** FAIL → implementasi → PASS; budget dilapor.
+- [ ] **Step 5:** Design reviewer; commit `feat(web): tagihan rutin dasar di Rencana`.
+
+### Task 12: Beranda nyata: aman dipakai lengkap, Tagihan 7 hari, Anggaran hampir habis · Model: sonnet + kursi design reviewer
+
+**Desain:** agen (bingkai `S9-BR1`, `S9-BR2`).
+
+**Files:** Create `features/beranda/{bills-due-view.tsx,budgets-near-view.tsx}` (Server-safe, props tampilan saja); Modify `_real/beranda.tsx` (`showObligations` = ada tagihan atau anggaran wajib di periode; status K7; urutan `S9-BR2`), `features/beranda/safe-to-spend-view.tsx` (prop `status`/`reason` opsional; **prototipe memanggil tanpa prop baru, perilaku dan bundel tetap**); Test `_real/beranda.test.tsx`, `features/beranda/safe-to-spend-view.test.tsx`.
+
+- [ ] **Step 1: Tes gagal:** judul `Aman dipakai sampai {until}` dari periode gajian; rincian empat baris + bilah proporsi berisi tagihan/wajib nyata; status `Aman`/`Hati-hati`/`Lewat batas` ikon + teks + sebab; tanda libur belum diisi; kartu Tagihan 7 hari (lewat `Lewat 3 hari` + ikon) dan Anggaran hampir habis dari `BerandaData`; kartu galat per seksi tanpa menjatuhkan Beranda; Bersama dua anggota: urutan dengan Kontribusi/Aktivitas S8 tetap; Pribadi F tidak memuat tagihan/anggaran N; **tes bundel**: `safe-to-spend-view` tidak mengimpor modul baru di jalur prototipe (`summary-boundary`-style test).
+- [ ] **Step 2–4:** FAIL → implementasi → PASS; e2e prototipe 296 tetap hijau tanpa mengubah tes lama; budget: Beranda prototipe **tetap 161,7 kB** (selisih 0,0 diharapkan; > 0,3 = berhenti), nyata dilapor.
+- [ ] **Step 5:** Design reviewer atas screenshot keadaan aman/hati-hati/lewat (fixture e2e), 320/390/1280, terang/gelap; commit `feat(web): Beranda aman dipakai dengan tagihan dan anggaran wajib`.
+
+### Task 13: Laporan `/[ruang]/laporan` · Model: sonnet + kursi design reviewer (review: terkuat, angka uang) · **menunggu Task 2 (Claude Design)**
+
+**Desain:** **Claude Design** (bingkai `S9-LP*` dari Task 2).
+
+**Files:** Create `app/[ruang]/laporan/page.tsx`, `_real/laporan.tsx`, `features/laporan/{summary-card-view.tsx,class-breakdown-view.tsx,category-chart-view.tsx,trend-chart-view.tsx,period-picker.tsx}`; Modify `features/shell/{menu-sheet.tsx,sidebar.tsx,hrefs.ts}` (K8), `features/transaksi/summary-view-vm.tsx` (tautan `Laporan lengkap`), `styles/tokens.css` + `contrast.test.ts` (token grafik baru bila ada), `tests/e2e/routes.ts`, `budget.spec.ts`, `_real/no-demo.test.ts`; Test `_real/laporan.test.tsx`, `features/laporan/*.test.tsx`.
+
+**Interfaces:** Page: prototipe → halaman demo ringan dari selector demo (dimuat di rutenya sendiri; atau `notFound()` bila pemilik memilih tanpa prototipe); nyata: `ruangContext` → `loadLaporan(ctx, parse(searchParams))`, `no-store`. Pemilih periode = tautan `?periode=YYYY-MM&basis=gajian|kalender` (tanpa JS). Grafik (K6): SVG server, setiap grafik punya `role="img"` + `aria-label` ringkas + tabel data setara (bisa `sr-only` atau `details`), warna tidak menjadi satu-satunya pembeda (pola garis/label langsung).
+
+- [ ] **Step 1: Tes gagal:** Ringkasan (Pemasukan, Pengeluaran, Selisih U+2212) = `period_trend` periode itu; `Tidak termasuk` dari kelas `x_*` (Kas kantor, Talangan, Transfer internal, Setor ke Bersama/Diambil dari Bersama atau Kontribusi di Bersama, Koreksi saldo) hanya yang > 0; per kategori induk terurut, sub dapat dibuka (`details`, tanpa JS); tren 6 periode dengan periode berjalan ditandai `berjalan`; Bersama: Kontribusi per anggota (K10); kosong (`Belum ada transaksi di periode ini.` + ajakan Catat), galat (pola `State`), parameter rusak → periode berjalan; Pribadi F tidak bisa membuka Laporan Pribadi N (rute selalu ruang sendiri); markup Bersama tanpa nama dompet Pribadi.
+- [ ] **Step 2–4:** FAIL → implementasi → PASS; budget Laporan ≤ 162 kB kedua mode (K6 SVG: diharapkan ≈ Aktivitas 155 / 151); axe terang/gelap.
+- [ ] **Step 5:** Design reviewer membandingkan dengan bingkai Claude Design (selisih dicatat di bingkai); commit `feat(web): Laporan per periode dengan grafik`.
+
+### Task 14: Utang S8 dan S7 yang dibawa ke S9 · Model: sonnet (review: terkuat untuk riwayat dompet dan pemetaan galat)
+
+**Files:** sesuai butir; Test di tiap berkas yang disentuh.
+
+- [ ] **Step 1 (riwayat dompet, uang):** reproduksi dulu: kaki keluar transfer/antar ruang dengan biaya di `/[ruang]/dompet/[id]` menampilkan `−nominal` tanpa biaya, sehingga baris tidak menjumlah ke saldo. Tes gagal: Σ efek baris riwayat = perubahan saldo dompet (Pribadi dan Bersama, termasuk fee Kas Kantor); baris memuat `Biaya Rp …` (pola `S8-D1a`). Perbaiki `effectOnAccountVM` / `read.ts` tanpa migrasi bila data sudah ada di kueri.
+- [ ] **Step 2 (galat):** `DK401` di `errors.ts:111`: tes gagal → petakan ke sesi habis (`requireDataUser` mengarahkan ke masuk) atau `not_found` sesuai asal (putuskan dari pemanggil, catat di laporan); loader `not_found` di tengah request → `notFound()` (404), bukan layar galat; `DK404` di blok guarded Beranda hanya untuk keanggotaan (savepoint seksi baru S9 tidak boleh menjadikan seluruh Beranda 404).
+- [ ] **Step 3 (salinan):** `partnerName` bawaan "Farida" di `OnboardingChecklistView` → prop wajib di mode nyata, salinan netral bila kosong; samakan label `Catatan` (kaki Bersama) dan `Keterangan` (kaki Pribadi) → satu label (usul `Catatan`, keputusan di laporan task); `Dicatat oleh kamu` di Detail vs nama di feed → `Kamu` (usul S8).
+- [ ] **Step 4 (critique S8 minor yang murah):** tepi kanan nilai Kontribusi di HP (`max-w-xs` < 768); `TxRow` ellipsis tengah kata di 320; Aktivitas + Terakhir menumpuk di Beranda HP (nilai ulang bersama urutan `S9-BR2`). Butir lain di `s8-bingkai.md` tetap catatan.
+- [ ] **Step 5 (tes):** duplikasi fixture `PASSWORD`/`registerOwner` ledger vs bersama dan `adminRows` vs `adminQuery` diekstrak ke helper bersama; context terakhir `screens-s8` dibungkus try/finally; tag Playwright huruf kecil (`@b20`) jadi galat di `check-test-registry.ts`.
+- [ ] **Step 6:** design reviewer untuk butir tampilan; commit per butir (`fix(web): …`, `test: …`).
+
+### Task 15: E2E kriteria keluar S9 (satu dan dua user) · Model: terkuat
+
+**Files:** Create `tests/e2e-ledger/s9.spec.ts`, `tests/e2e-bersama/s9-bersama.spec.ts`, `tests/e2e-ledger/screens-s9.spec.ts` (`SCREENS=1`, ke `docs/design/s9/`).
+
+- [ ] **Step 1: Tes** (tag ID):
+  - **Anggaran → catat → progres [T17]:** N atur anggaran `Makan Siang & Minum` Rp 2.000.000 → catat Rp 48.500 → Rencana dan Beranda (bila ≥ 80%) menampilkan realisasi baru dalam satu muat ulang; anggaran Bersama terpisah dari Pribadi.
+  - **Beranda = Laporan [kriteria keluar IPD]:** sesudah skenario campuran (pengeluaran, fee, Kas Kantor, talangan, setor Bersama), angka Pengeluaran periode berjalan di Laporan = realisasi Σ anggaran + tidak dianggarkan di Rencana, dan `Saldo operasional − Tagihan − Sisa wajib` di Beranda = angka besar.
+  - **Tagihan [AFD §10]:** tambah tagihan mulai bulan lalu → hanya bulan ini ditagih; muncul di Beranda Tagihan 7 hari; bayar → saldo dompet turun, tagihan `Lunas`, aman dipakai tidak berubah (karena tagihan sudah dipotong sebelumnya); urungkan → kembali belum dibayar; klik ganda Bayar = satu entri (C6); Lewati → hilang dari aman dipakai.
+  - **Satu kewajiban:** tagihan pada kategori yang punya anggaran wajib → salinan `obligation_double`, tanpa entri tersimpan.
+  - **Keadaan Beranda:** fixture lewat (total < 0) dan hati-hati (tagihan lewat jatuh tempo) menampilkan status ikon + teks yang benar.
+  - **Dua user [B13]:** kanari tagihan dan anggaran Pribadi N dan F; HTML + RSC `/bersama/laporan`, `/bersama/rencana`, `/bersama/beranda` untuk N dan F tanpa kanari mana pun; F membayar tagihan Bersama yang dibuat N → Aktivitas menampilkan `Farida` + pengeluaran tagihan; F tidak bisa memilih dompet Pribadi N.
+  - **A11y dan tata letak:** keyboard-only Rencana (segmen → Atur → simpan; Bayar → konfirmasi) dan Laporan (pemilih periode, buka sub kategori); axe 0 serious/critical terang/gelap 320/390/768/1280 untuk Beranda, Rencana (dua segmen), Laporan, sheet terbuka; tanpa gulir horizontal di 320 dengan `Rp 12.345.678.900` dan nama tagihan 60 karakter; anotasi `js-route-kB` semua rute ≤ 162 kB.
+- [ ] **Step 2:** Jalankan sampai hijau (perbaikan masuk task pemilik kodenya bila temuan nyata); commit `test(e2e): kriteria keluar S9`.
+
+### Task 16: Web Vitals (kriteria keluar IPD) · Model: sonnet
+
+**Files:** Create `tests/e2e-ledger/vitals.spec.ts`; Modify `.github/workflows/ci.yml` (job `auth`, laporan sebagai anotasi, tidak memblok bila runner lambat: lihat Step 2).
+
+- [ ] **Step 1:** Ukur di build produksi lokal dengan Playwright Chromium: CPU throttle 4× dan jaringan "Fast 3G"-setara lewat CDP (proksi "HP kelas menengah"), viewport 390. Metrik dari `PerformanceObserver` (`largest-contentful-paint`, `layout-shift` tanpa input) dan INP proksi dari Event Timing (`event` entries, `durationThreshold: 16`) saat membuka Catat, berpindah segmen Rencana, dan membuka sheet Bayar. Rute: Beranda, Rencana, Laporan, Transaksi (mode nyata, data golden).
+- [ ] **Step 2:** Ambang: LCP < 2,5 s, INP < 200 ms, CLS < 0,1. Tes gagal bila lewat ambang tiga kali beruntun (median dari 3 muat); di CI dijalankan dan dianotasi; ambang memblok hanya lokal di gerbang Task 17 (runner CI tidak stabil, dicatat di handoff). Commit `test(e2e): pengukuran Web Vitals rute utama`.
+
+### Task 17: Registry ID, penutup, critique, Delivery Gate, review, dokumen, PR · Model: terkuat (review), sonnet (critique)
+
+**Files:** Modify `packages/db/tests/REGISTRY.md` (T17, Z3, Z9, Z10, B13 laporan → `aktif`; T14/T15 bagian dicatat), `docs/product/BSD.md` §16 ("Catatan S9": tabel baru, `pay_period`, `update_bill`, `skip/unskip`, `spend_pace`, `bill_account_kantor`, K1–K12 yang dipakai), `docs/product/IPD.md` §5 (status S9), `CLAUDE.md` (Status, Tertunda), `docs/design/s9-bingkai.md` (keputusan penutup, temuan critique); Create `docs/superpowers/handoff/s9.md` (pola `s8.md`: status, angka, langkah pemilik, peta ID, dibawa ke S10).
+
+- [ ] **Step 1:** Design critique atas `screens-s9` + pratinjau prototipe; Delivery Gate antislop (skill bila tersedia; bila tidak, daftar periksa tertulis seperti S7/S8, dicatat).
+- [ ] **Step 2:** Gerbang penuh: `pnpm lint && pnpm typecheck && pnpm test && pnpm format:check && pnpm test:registry`, `pnpm build`, `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm e2e`, `test:int`, `e2e:auth`, `e2e:ledger`, `e2e:bersama`, `pg_prove` seluruh suite (CI `db`), worker unit + int, `deploy-test.sh`, Web Vitals lokal. Catat angka (baseline di atas).
+- [ ] **Step 3:** Review akhir seluruh branch (terkuat) + review keamanan (fokus: RLS tabel baru, DEFINER tagihan/anggaran, `obligation_double` di bawah konkurensi, payload RSC Laporan/Rencana Bersama, job worker baru, migrasi di produksi dua anggota); perbaiki temuan.
+- [ ] **Step 4:** Dokumen + handoff; commit `docs: catatan S9`; PR ke `main`. Langkah pemilik sesudah merge ditulis di `s9.md`: periksa daftar libur (P4) bila belum, cek `job_runs` `materialize_bills` sesudah 00:05 WIB pertama, isi anggaran dan tagihan nyata, smoke dua akun (F membayar tagihan Bersama).
+
+---
+
+## Kriteria keluar S9 (IPD §5) dan task yang membuktikannya
+
+| Kriteria | Bukti |
+| --- | --- |
+| Anggaran per ruang (Pribadi dan Bersama terpisah) | Task 4, 6 (pgTAP), 9 (int), 10 (UI), 15 (e2e) |
+| `app.report_lines` + `app.report_class()` satu sumber untuk laporan, anggaran, aman dipakai | Task 6, 7, 8 (semua fungsi membaca `report_lines`; tes kelengkapan kelas di `07`), 9 |
+| Ringkasan / Laporan | Task 8, 9, 13, 15 |
+| Tagihan rutin dasar (`create_bill`, `post_bill_occurrence`, UI; masa lalu hanya dari bulan berjalan) | Task 5, 6 (job), 11, 15 |
+| Aman dipakai nyata memuat jadwal tagihan dan anggaran wajib, sampai akhir periode gajian | Task 3, 7, 9, 12, 15 |
+| Satu kewajiban = tagihan atau anggaran wajib (`obligation_double`) | Task 4 (+ konkurensi), 10, 11, 15 |
+| **Angka Beranda cocok dengan laporan** | Task 7, 8 (golden T17), 9 (int), 15 (e2e) |
+| **Budget JS ≤ 162 kB** semua rute, kedua mode | Task 10–13, 15 |
+| **Web Vitals LCP < 2,5 s, INP < 200 ms, CLS < 0,1** | Task 16 (lokal memblok, CI anotasi) |
+| ID tes PRD baris M2 yang menyentuh S9: T17, Z1, Z3, Z9, Z10, golden, B13 (laporan Bersama) | Task 3–8, 15, 17 |
+| Isolasi penuh pada tabel baru (`bills`, `bill_occurrences`, `budgets`, `holidays`) | Task 3, 4 (`03`/`08`, dua user × tabel × operasi), 5–8 (`DK404`) |
+| Utang S8 yang dibawa (biaya riwayat dompet, DK401, `not_found`, `partnerName`, label) | Task 14 |
+
+**Bukan kriteria S9:** ekspor CSV, review bulanan, salin anggaran 1 ketukan, anggaran subkategori (K5) → S10; gerbang M2 7 hari dua akun → sesudah S10.
+
+## Di luar cakupan
+
+CSV dan review bulanan (S10); anggaran subkategori (K5, S10); tagihan lanjutan, kalender arus kas, deteksi langganan (M5); menautkan kemunculan tagihan ke transaksi yang sudah ada (K4); layar Pengaturan dan pengecualian gajian per orang (`profiles.payday_day`); bagi tagihan Bersama dan "siapa berutang ke siapa" (M3); notifikasi jatuh tempo; kelas laporan utang dan valuasi (M3/M4); kontrol Talangan di sheet Ubah, chip saran bergeser, `unhandledRejection` worker, DQ07 tanpa alert, DQ02 (tetap Tertunda #9, DQ02 ke S10); peristiwa keanggotaan di feed; filter Transaksi per pencatat.
+
+## Pertanyaan terbuka untuk pemilik
+
+1. K1–K12 di atas (default = rekomendasi bila tidak dijawab sebelum Task 1 selesai; K6 dan K9 sebaiknya dijawab sebelum memesan Claude Design).
+2. P3: kapan hasil Claude Design Laporan bisa dikirim? (Task 13 menunggu; jalan keluar di Task 2 Step 3.)
+3. P4: daftar libur 2026–2027 yang diisi agen benar? (Diperiksa sekali setahun; pengingat Desember = job S10 atau catatan runbook.)
+4. Kategori `Cicilan & Tagihan` (Pribadi) dan tagihan Bersama yang sudah dicatat manual sebelum S9: dibiarkan sebagai pengeluaran biasa (rekomendasi) atau ditautkan nanti (K4)?
