@@ -93,3 +93,5 @@ Task 10: review (terkuat) → Spec ✅, Approved, 0 Critical/Important. Risiko P
 Ruling R9: e2e Luar tidak dibuat — batas 2 profil (0003 tg_user_admission) dan e2e Luar tanpa profil akan menguji redirect requireDataUser, bukan 404; cakupan DK404 Luar = bersama.int.test.ts:521 + pgTAP 18/19 — biaya bila salah: regresi 404 rute untuk non-anggota hanya tertangkap di lapisan int/DB.
 Task 10: tindak lanjut minor dikirim (hapus 5 PNG F duplikat, pulihkan display_name asli, asersi isi reload, koreksi kata Luar).
 Task 10: minor (deferred): bila tes bergabung gagal, proyek chromium (semua tes privasi) dilaporkan "did not run" — catat di handoff CI.
+Task 10: tindak lanjut minor commit bdb6754 (5 PNG F duplikat dihapus, display_name asli dipulihkan, asersi R26 di reload, kata Luar dikoreksi; e2e:bersama 22, SCREENS 6). Controller memeriksa stat commit (hanya tes + hapus PNG).
+Task 10: complete (commits 3eda2ac..bdb6754, review clean)
