@@ -95,3 +95,4 @@ Task 10: tindak lanjut minor dikirim (hapus 5 PNG F duplikat, pulihkan display_n
 Task 10: minor (deferred): bila tes bergabung gagal, proyek chromium (semua tes privasi) dilaporkan "did not run" — catat di handoff CI.
 Task 10: tindak lanjut minor commit bdb6754 (5 PNG F duplikat dihapus, display_name asli dipulihkan, asersi R26 di reload, kata Luar dikoreksi; e2e:bersama 22, SCREENS 6). Controller memeriksa stat commit (hanya tes + hapus PNG).
 Task 10: complete (commits 3eda2ac..bdb6754, review clean)
+Task 11: dispatch implementer (sonnet) dari 65659f4.
