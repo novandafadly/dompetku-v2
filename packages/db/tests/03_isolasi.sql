@@ -1,6 +1,7 @@
 -- Isolasi dua user (BSD §13 #10, #14, #15; IPD S4: dua user x tabel x operasi) untuk tabel S4:
 -- households, spaces, space_members, profiles, invitations, idempotency_keys, product_events,
 -- audit.events. Semua lewat role aplikasi (web, api, worker), tidak pernah superuser.
+-- ID: B1
 begin;
 select plan(94);
 select tests.fixture();

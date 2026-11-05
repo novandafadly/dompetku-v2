@@ -387,7 +387,7 @@ describe('loader baca ledger (N dan F bergabung)', () => {
       return createPools(u.toString());
     }
 
-    it('T13: 31 Okt 23:30 WIB masuk Oktober', async () => {
+    it('31 Okt 23:30 WIB masuk Oktober [T13]', async () => {
       const prev = await h.admin.query<{ value: string }>(
         `select value from app.settings where key = 'env'`,
       );

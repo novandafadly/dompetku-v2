@@ -4,6 +4,7 @@
 -- dan batas nominal di api.update_entry, void/pulihkan reimburse dan talangan, angka ringkasan
 -- Pribadi tidak berubah oleh talangan maupun reimburse, isolasi ruang.
 -- Semua lewat api.* sebagai role web; jam dipatok 2026-03-20 WIB.
+-- ID: B10
 begin;
 select plan(67);
 select tests.fixture();

@@ -32,6 +32,7 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm test:registry
       - run: pnpm build
       # Bundel worker berdiri sendiri: validasi env contoh tanpa koneksi DB.
       - name: Worker --check-config

@@ -5,6 +5,7 @@
 -- diuji positif: data dirusak lewat tests.raw_exec (superuser, session_replication_role = replica,
 -- di dalam savepoint yang di-rollback) atau lewat api.* bila keadaannya sah (DQ07, saldo negatif
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
+-- ID: S7, T18
 begin;
 select plan(44);
 select tests.fixture();
