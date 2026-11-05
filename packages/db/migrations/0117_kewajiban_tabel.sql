@@ -9,13 +9,29 @@
 -- - bill_schedule disalin persis dari BSD §8 (security_invoker: RLS pemanggil berlaku).
 -- - private.tg_category_depth: versi lengkap BSD §7 (cabang category_in_obligation) menggantikan
 --   versi 0101 yang sengaja tanpa cabang itu (tabel belum ada di S5, BSD §16 "Catatan S5").
--- - private.tg_obligation_xor + trigger budgets_obligation_xor, bills_obligation_xor: BSD §7, dengan
---   SATU tambahan (lihat komentar di fungsi): cabang tagihan mengunci baris kategori tagihan
---   FOR SHARE sebelum membaca induknya. Tanpa itu, pindah induk kategori (update_category) yang
---   belum commit dan tagihan baru pada kategori itu bisa sama-sama lolos: trigger tagihan membaca
---   induk lama, lalu hanya menunggu cek FK; hasilnya tagihan aktif + anggaran wajib pada induk yang
---   sama (dibuktikan tests/99_konkurensi.sql). Aturan tetap per bulan kalender `month`; dengan K1
---   periode gajian bernama bulan yang sama, jadi perbandingan per `month` tetap benar.
+-- - private.tg_obligation_xor + trigger budgets_obligation_xor, bills_obligation_xor: kerangka BSD §7
+--   (advisory lock per ruang, kategori induk, tagihan terarsip dan anggaran tidak wajib diabaikan)
+--   dengan dua perubahan:
+--   1. Perbandingan per LABEL periode gajian, bukan bulan kalender (K1, BSD §8.2a): budgets.month
+--      adalah label periode (label November = 23 Okt..24 Nov bila gajian 25), dan aman dipakai
+--      memotong tagihan per periode itu. Tagihan dan anggaran wajib label M bentrok bila tagihan
+--      punya kemunculan (due = least(tanggal, hari terakhir bulan) di dalam starts_on..ends_on,
+--      aturan materialisasi BSD §10) yang jatuh di app.period_of_label(ruang, M); dihitung oleh
+--      private.bill_due_in_label. Versi BSD (starts_on/ends_on vs bulan kalender) meloloskan
+--      tagihan 25..31 Okt tanggal 25 terhadap anggaran wajib November (dihitung dua kali) dan
+--      menolak tagihan mulai 25 Nov terhadap November (palsu). Aturan gajian kosong = bulan
+--      kalender, jadi rumah tangga tanpa aturan tetap memakai bulan kalender; tagihan tanpa satu
+--      kemunculan pun di rentangnya tidak bentrok. Label yang tidak punya kemunculan karena gajian
+--      bergeser (mis. tanggal 24 dengan gajian 25: 24 Okt dan 24 Nov sama-sama label November,
+--      label Oktober kosong) juga tidak bentrok. Batas: XOR dinilai saat tulis; mengubah
+--      payday_rule atau app.holidays sesudahnya tidak menilai ulang baris lama, dan starts_on lampau
+--      dihitung walau materialisasi melewati bulan sebelum tagihan dibuat (lebih ketat, tidak
+--      pernah dobel).
+--   2. Cabang tagihan mengunci baris kategori tagihan (ruang yang sama) FOR SHARE sebelum membaca
+--      induknya. Tanpa itu, pindah induk kategori (update_category) yang belum commit dan tagihan
+--      baru pada kategori itu bisa sama-sama lolos: trigger tagihan membaca induk lama, lalu hanya
+--      menunggu cek FK; hasilnya tagihan aktif + anggaran wajib pada induk yang sama (dibuktikan
+--      tests/99_konkurensi.sql).
 -- - RLS ENABLE + FORCE, policy dan hak persis BSD §11: web SELECT; dompetku_api SELECT + INSERT,
 --   UPDATE (bills, bill_occurrences) dan + DELETE (budgets); worker tanpa hak (lewat jobs.*);
 --   auditor SELECT eksplisit (grant 0008 hanya untuk tabel saat itu); auditlog lewat default
@@ -115,9 +131,37 @@ begin
   return new;
 end $$;
 
--- ===== Satu kewajiban (BSD §7) =====
+-- ===== Satu kewajiban (BSD §7, per label periode gajian K1/§8.2a) =====
+-- true bila tagihan (tanggal p_day, rentang p_starts_on..p_ends_on) punya kemunculan di periode
+-- berlabel p_label_month ruang itu. Tanggal jatuh tempo sama dengan materialisasi BSD §10:
+-- least(tanggal, hari terakhir bulan). INVOKER, milik owner, tanpa EXECUTE untuk role login:
+-- hanya dipanggil trigger DEFINER.
+create function private.bill_due_in_label(p_space_id uuid, p_day smallint, p_starts_on date,
+                                          p_ends_on date, p_label_month date) returns boolean
+language plpgsql stable set search_path = '' as $$
+declare
+  v_from date;
+  v_to   date;
+  v_m    date;
+begin
+  select greatest(l.starts_on, p_starts_on), least(l.ends_on, coalesce(p_ends_on, l.ends_on))
+    into v_from, v_to
+  from app.period_of_label(p_space_id, p_label_month) l;
+  if v_from > v_to then
+    return false;
+  end if;
+  v_m := v_from - (extract(day from v_from)::int - 1);
+  while v_m <= v_to loop
+    if least(v_m + (p_day - 1), (v_m + interval '1 month')::date - 1) between v_from and v_to then
+      return true;
+    end if;
+    v_m := (v_m + interval '1 month')::date;
+  end loop;
+  return false;
+end $$;
+
 -- Kewajiban = tagihan ATAU anggaran wajib, tidak pernah keduanya (m0a-keputusan).
--- Dibandingkan pada kategori induk; berlaku per bulan.
+-- Dibandingkan pada kategori induk; berlaku per label periode (budgets.month).
 create function private.tg_obligation_xor() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare v_conflict boolean;
@@ -132,8 +176,7 @@ begin
       join app.categories c on c.id = b.category_id
       where b.space_id = new.space_id and b.archived_at is null
         and coalesce(c.parent_id, c.id) = new.category_id
-        and b.starts_on < (new.month + interval '1 month')::date
-        and (b.ends_on is null or b.ends_on >= new.month)
+        and private.bill_due_in_label(b.space_id, b.day_of_month, b.starts_on, b.ends_on, new.month)
     ) into v_conflict;
   else
     if new.archived_at is not null then
@@ -145,15 +188,15 @@ begin
     -- COMMITTED) membandingkan dengan induk BARU. Sebaliknya, tagihan yang belum commit menahan
     -- pindah induk sampai tg_category_depth bisa melihatnya (category_in_obligation). FOR SHARE,
     -- bukan FOR KEY SHARE: pindah anak ke induk lain tidak mengubah kolom kunci (NO KEY UPDATE).
-    -- Pemindah kategori tidak mengambil kunci kewajiban, jadi urutan ini tanpa deadlock.
-    perform 1 from app.categories c where c.id = new.category_id for share;
+    -- Pemindah kategori tidak mengambil kunci kewajiban, jadi urutan ini tanpa deadlock. Hanya
+    -- baris ruang yang sama: kategori ruang lain tidak pernah dikunci (FK komposit menolaknya).
+    perform 1 from app.categories c where c.id = new.category_id and c.space_id = new.space_id for share;
     select exists (
       select 1 from app.budgets bu
       join app.categories c on c.id = new.category_id
       where bu.space_id = new.space_id and bu.wajib
         and bu.category_id = coalesce(c.parent_id, c.id)
-        and bu.month >= (new.starts_on - (extract(day from new.starts_on)::int - 1))
-        and (new.ends_on is null or bu.month <= new.ends_on)
+        and private.bill_due_in_label(new.space_id, new.day_of_month, new.starts_on, new.ends_on, bu.month)
     ) into v_conflict;
   end if;
   if v_conflict then
@@ -216,6 +259,7 @@ end $$;
 drop trigger bills_obligation_xor on app.bills;
 drop trigger budgets_obligation_xor on app.budgets;
 drop function private.tg_obligation_xor();
+drop function private.bill_due_in_label(uuid, smallint, date, date, date);
 drop view app.bill_schedule;
 drop table app.budgets;
 drop table app.bill_occurrences;

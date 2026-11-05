@@ -288,15 +288,16 @@ language sql as $$
   select format($q$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
                   values (%L, %L, %L, 1500000, true, app.current_user_id())$q$, p_space, p_cat, p_month)
 $$;
--- Pelanggaran XOR yang ter-commit: tagihan aktif dan anggaran wajib pada induk yang sama, bulan
--- yang tercakup tagihan. Harus selalu 0.
+-- Pelanggaran XOR yang ter-commit: tagihan aktif dan anggaran wajib pada induk yang sama, dengan
+-- kemunculan tagihan di periode berlabel bulan anggaran (aturan 0117). Harus selalu 0. Fixture tanpa
+-- payday_rule = bulan kalender.
 create function pg_temp.xor_violations(p_space uuid) returns text
 language sql as $$
   select tests.owner_val(null, format($q$select count(*) from app.bills b
     join app.categories c on c.id = b.category_id
     join app.budgets bu on bu.space_id = b.space_id and bu.wajib and bu.category_id = coalesce(c.parent_id, c.id)
     where b.space_id = %L and b.archived_at is null
-      and b.starts_on < (bu.month + interval '1 month')::date and (b.ends_on is null or b.ends_on >= bu.month)$q$, p_space))
+      and private.bill_due_in_label(b.space_id, b.day_of_month, b.starts_on, b.ends_on, bu.month)$q$, p_space))
 $$;
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Listrik & Air'$$, :'sh')) as k_listrik \gset
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Internet'$$, :'sh')) as k_net \gset

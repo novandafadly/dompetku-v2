@@ -2,13 +2,14 @@
 -- tg_category_depth lengkap + tg_obligation_xor, §8 bill_schedule, §11 hak, §13 #10, #26, #27;
 -- Review Focus #1 dan #5). Fungsi api tagihan/anggaran belum ada (Task 5, 6): baris ditulis
 -- langsung sebagai dompetku_api (role pemilik fungsi api.*, tunduk RLS member_write), web hanya
--- membaca. Satu kewajiban: tagihan aktif ATAU anggaran wajib pada kategori induk yang sama di bulan
--- yang sama (DK422 obligation_double, dari kedua arah); memindah induk kategori yang dipakai
+-- membaca. Satu kewajiban: tagihan aktif ATAU anggaran wajib pada kategori induk yang sama di label
+-- periode gajian yang sama (budgets.month = label, K1/BSD §8.2a; aturan kosong = bulan kalender;
+-- DK422 obligation_double, dari kedua arah); memindah induk kategori yang dipakai
 -- tagihan/anggaran = DK422 category_in_obligation. Persona N, F, Luar (tests.x(), tanpa ruang);
 -- kanari Pribadi KANARI-N-TAGIHAN + anggaran pada KANARI-N-KATEGORI (dan padanannya milik F).
 -- ID: T17, B1, B13
 begin;
-select plan(83);
+select plan(128);
 select tests.fixture();
 select tests.clock_at('2026-11-05 10:00+07');
 
@@ -107,9 +108,10 @@ select is(tests.owner_val(null, $$select string_agg(c.relname || '.' || g.tgname
 select is(tests.owner_val(null, $$select string_agg(p.proname || ':' || p.prosecdef || ':' || p.proowner::regrole::text
     || ':' || array_to_string(p.proconfig, ','), ',' order by p.proname)
   from pg_proc p where p.pronamespace = 'private'::regnamespace
-    and p.proname in ('tg_obligation_xor', 'tg_category_depth')$$),
+    and p.proname in ('tg_obligation_xor', 'tg_category_depth', 'bill_due_in_label')$$),
+  'bill_due_in_label:false:dompetku_owner:search_path="",'
   'tg_category_depth:true:dompetku_owner:search_path="",tg_obligation_xor:true:dompetku_owner:search_path=""',
-  'fungsi trigger DEFINER milik owner (melihat semua ruang), search_path kosong');
+  'fungsi trigger DEFINER milik owner (melihat semua ruang), helper label INVOKER, search_path kosong');
 select is(tests.owner_val(null, $$select string_agg(i.indexrelid::regclass::text, ',' order by i.indexrelid::regclass::text)
   from pg_index i where i.indrelid in ('app.bills'::regclass, 'app.bill_occurrences'::regclass, 'app.budgets'::regclass)$$),
   'app.bill_occurrences_bill_id_due_on_key,app.bill_occurrences_pkey,app.bill_occurrences_space_id_bill_id_idx,'
@@ -209,8 +211,11 @@ select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), pg_temp.bi
   'DK422', 'obligation_double', 'tagihan pada anak (Token Listrik) bulan sama = obligation_double');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.bill_sql(:'sh', :'listrik', '2026-10-01')),
   'DK422', 'obligation_double', 'tagihan pada induk mulai Oktober tanpa akhir (mencakup November) = obligation_double');
-select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.bill_sql(:'sh', :'token', '2026-11-30', '2026-11-30')),
-  'DK422', 'obligation_double', 'tagihan mulai dan berakhir 30 November = obligation_double');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.bill_sql(:'sh', :'token', '2026-11-20', '2026-11-20')),
+  'DK422', 'obligation_double', 'tagihan mulai dan berakhir 20 November (satu kemunculan) = obligation_double');
+-- Rentang 30..30 Nov dengan tanggal 20 tidak memuat satu kemunculan pun: bukan kewajiban, tidak bentrok.
+select lives_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.bill_sql(:'sh', :'listrik', '2026-11-30', '2026-11-30')),
+  'tagihan tanpa kemunculan (30..30 Nov, tanggal 20) tidak bentrok');
 select lives_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.bill_sql(:'sh', :'token', '2026-06-01', '2026-10-31')),
   'tagihan Jun..31 Okt (berakhir sebelum bulan anggaran) tidak bentrok');
 select pg_temp.bill(tests.n(), :'sh', 'Token Desember', :'token', '2026-12-01', null, :'kas') as bill_des \gset
@@ -247,7 +252,8 @@ select is(tests.owner_val(null, format($$select string_agg(to_char(month, 'YYYY-
 select is(tests.owner_val(null, format($$select string_agg(to_char(starts_on, 'YYYY-MM-DD') || '/' || coalesce(to_char(ends_on, 'YYYY-MM-DD'), '-')
     || '/' || (archived_at is not null), ',' order by starts_on)
   from app.bills where space_id = %L and category_id in (%L, %L)$$, :'sh', :'listrik', :'token')),
-  '2026-06-01/2026-10-31/false,2026-12-01/-/true', 'tagihan Listrik: hanya dua yang lolos, Desember terarsip');
+  '2026-06-01/2026-10-31/false,2026-11-30/2026-11-30/false,2026-12-01/-/true',
+  'tagihan Listrik: hanya tiga yang lolos (satu tanpa kemunculan), Desember terarsip');
 
 -- ===== Memindah induk kategori yang dipakai = category_in_obligation (BSD §7, §13 #26) =====
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format(
@@ -280,6 +286,112 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format(
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format(
     $q$select api.create_category(gen_random_uuid(), %L, 'expense', 'Cucu', 'Car', %L)$q$, :'sh', :'token')),
   'DK422', 'category_depth', 'kategori level 3 tetap category_depth');
+
+-- ===== Satu kewajiban per LABEL periode gajian (K1, BSD §8.2a), payday_rule = 25 =====
+-- budgets.month = label periode; tagihan bentrok dengan anggaran wajib label M bila ada kemunculan
+-- (due = least(tanggal, hari terakhir bulan), di dalam starts_on..ends_on; BSD §10) yang jatuh di
+-- periode berlabel M. Gajian efektif, dihitung tangan dari kalender + app.holidays (2028 tanpa data
+-- libur = akhir pekan saja): 24 Agu 2026 (25 Agu Maulid), 25 Sep (Jum), 23 Okt (25 Okt Minggu),
+-- 25 Nov (Rab), 23 Des (25 Des Natal, 24 Des cuti bersama), 25 Jan 2027 (Sen), 25 Feb 2027 (Kam),
+-- 24 Mar 2027 (25 Mar cuti bersama); 25 Feb 2028 (Jum), 24 Mar 2028 (25 Mar Sabtu).
+-- Label L = [gajian L-1, gajian L - 1]: Sep [24 Agu, 24 Sep], Okt [25 Sep, 22 Okt], Nov [23 Okt, 24 Nov],
+-- Des [25 Nov, 22 Des], Jan 2027 [23 Des, 24 Jan], Feb 2027 [25 Jan, 24 Feb], Mar 2027 [25 Feb, 23 Mar],
+-- Feb 2028 [25 Jan, 24 Feb], Mar 2028 [25 Feb, 23 Mar]. Aturan diubah di dalam transaksi tes (rollback).
+select tests.owner_exec(null, 'update app.households set payday_rule = 25');
+select is(tests.owner_val(null, format($$select string_agg(to_char(l, 'YYYY-MM') || '=' || p.starts_on || '..' || p.ends_on, ',' order by l)
+  from unnest(array['2026-09-01', '2026-10-01', '2026-11-01', '2026-12-01', '2027-01-01', '2027-03-01', '2028-03-01']::date[]) l,
+       app.period_of_label(%L, l) p$$, :'sh')),
+  '2026-09=2026-08-24..2026-09-24,2026-10=2026-09-25..2026-10-22,2026-11=2026-10-23..2026-11-24,'
+  '2026-12=2026-11-25..2026-12-22,2027-01=2026-12-23..2027-01-24,2027-03=2027-02-25..2027-03-23,'
+  '2028-03=2028-02-25..2028-03-23',
+  'periode gajian acuan (hitung tangan) untuk tes label');
+
+create function pg_temp.kat(p_space uuid, p_name text) returns uuid
+language sql as $$
+  select (tests.web_val(tests.n(), format($q$select api.create_category(gen_random_uuid(), %L, 'expense', %L, 'Receipt')$q$,
+    p_space, p_name))::jsonb ->> 'category_id')::uuid
+$$;
+create function pg_temp.tg(p_space uuid, p_cat uuid, p_day int, p_starts date, p_ends date default null) returns text
+language sql as $$
+  select format($q$select tests.api_exec(%L, %L)$q$, tests.n(), format(
+    $i$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on, ends_on, created_by)
+       values (%L, 'Cicilan', 750000, %L, %s, %L, %L, app.current_user_id())$i$, p_space, p_cat, p_day, p_starts, p_ends))
+$$;
+create function pg_temp.ag(p_space uuid, p_cat uuid, p_month date, p_wajib boolean default true) returns text
+language sql as $$
+  select format($q$select tests.api_exec(%L, %L)$q$, tests.n(), pg_temp.budget_sql(p_space, p_cat, p_month, p_wajib))
+$$;
+select pg_temp.kat(:'sh', 'Label A') as ka, pg_temp.kat(:'sh', 'Label B') as kb, pg_temp.kat(:'sh', 'Label C') as kc,
+       pg_temp.kat(:'sh', 'Label D') as kd, pg_temp.kat(:'sh', 'Label E') as ke, pg_temp.kat(:'sh', 'Label F') as kf,
+       pg_temp.kat(:'sh', 'Label G') as kg, pg_temp.kat(:'sh', 'Label G2') as kg2, pg_temp.kat(:'sh', 'Label H') as kh,
+       pg_temp.kat(:'sh', 'Label H2') as kh2, pg_temp.kat(:'sh', 'Label I') as ki, pg_temp.kat(:'sh', 'Label K') as kk \gset
+
+-- (a) Satu-satunya kemunculan 25 Okt jatuh di periode berlabel November.
+select lives_ok(pg_temp.ag(:'sh', :'ka', '2026-11-01'), '(a) anggaran wajib November');
+select throws_ok(pg_temp.tg(:'sh', :'ka', 25, '2026-10-25', '2026-10-31'), 'DK422', 'obligation_double',
+  '(a) tagihan 25..31 Okt tanggal 25 vs anggaran wajib November = obligation_double (bulan kalender meloloskannya)');
+select lives_ok(pg_temp.tg(:'sh', :'kb', 25, '2026-10-25', '2026-10-31'), '(a) arah sebaliknya: tagihan 25..31 Okt dulu');
+select lives_ok(pg_temp.ag(:'sh', :'kb', '2026-10-01'), '(a) kemunculan 25 Okt bukan label Oktober: anggaran wajib Okt lolos');
+select throws_ok(pg_temp.ag(:'sh', :'kb', '2026-11-01'), 'DK422', 'obligation_double',
+  '(a) anggaran wajib November vs kemunculan 25 Okt = obligation_double');
+-- (b) Kemunculan pertama 25 Nov berlabel Desember.
+select lives_ok(pg_temp.tg(:'sh', :'kc', 25, '2026-11-25'), '(b) tagihan mulai 25 Nov tanggal 25');
+select lives_ok(pg_temp.ag(:'sh', :'kc', '2026-11-01'), '(b) anggaran wajib November lolos (bulan kalender menolaknya)');
+select throws_ok(pg_temp.ag(:'sh', :'kc', '2026-12-01'), 'DK422', 'obligation_double', '(b) anggaran wajib Desember = obligation_double');
+-- ends_on memotong kemunculan: 1 Okt..24 Nov tanggal 25 hanya punya 25 Okt (label Nov); 25 Nov terpotong.
+select lives_ok(pg_temp.tg(:'sh', :'kd', 25, '2026-10-01', '2026-11-24'), 'tagihan 1 Okt..24 Nov tanggal 25');
+select lives_ok(pg_temp.ag(:'sh', :'kd', '2026-10-01'), 'ends_on: anggaran wajib Oktober lolos');
+select lives_ok(pg_temp.ag(:'sh', :'kd', '2026-12-01'), 'ends_on: 25 Nov terpotong, anggaran wajib Desember lolos');
+select throws_ok(pg_temp.ag(:'sh', :'kd', '2026-11-01'), 'DK422', 'obligation_double', 'ends_on: anggaran wajib November = obligation_double');
+-- starts_on 10 Okt tanggal 25: kemunculan pertama 25 Okt (label Nov), arah tagihan sesudah anggaran Okt.
+select lives_ok(pg_temp.ag(:'sh', :'ke', '2026-10-01'), 'anggaran wajib Oktober dulu');
+select lives_ok(pg_temp.tg(:'sh', :'ke', 25, '2026-10-10'), 'tagihan mulai 10 Okt tanggal 25 lolos terhadap anggaran Oktober');
+select throws_ok(pg_temp.ag(:'sh', :'ke', '2026-11-01'), 'DK422', 'obligation_double', 'mulai 10 Okt: anggaran wajib November = obligation_double');
+-- Tanggal 31 di bulan pendek: 28 Feb 2027 masuk periode Maret 2027 [25 Feb, 23 Mar].
+select lives_ok(pg_temp.tg(:'sh', :'kf', 31, '2027-02-01', '2027-02-28'), 'tagihan Feb 2027 tanggal 31 (jatuh 28 Feb)');
+select lives_ok(pg_temp.ag(:'sh', :'kf', '2027-02-01'), 'tanggal 31 Feb 2027: anggaran wajib Februari lolos');
+select throws_ok(pg_temp.ag(:'sh', :'kf', '2027-03-01'), 'DK422', 'obligation_double', 'tanggal 31 Feb 2027: anggaran wajib Maret = obligation_double');
+-- Kabisat 2028: 29 Feb masuk periode Maret 2028 [25 Feb, 23 Mar]; ends_on 28 Feb memotong satu-satunya kemunculan.
+select lives_ok(pg_temp.tg(:'sh', :'kg', 31, '2028-02-01', '2028-02-29'), 'tagihan Feb 2028 tanggal 31 (jatuh 29 Feb)');
+select lives_ok(pg_temp.ag(:'sh', :'kg', '2028-02-01'), 'kabisat: anggaran wajib Februari 2028 lolos');
+select throws_ok(pg_temp.ag(:'sh', :'kg', '2028-03-01'), 'DK422', 'obligation_double', 'kabisat: anggaran wajib Maret 2028 = obligation_double');
+select lives_ok(pg_temp.tg(:'sh', :'kg2', 31, '2028-02-01', '2028-02-28'), 'tagihan 1..28 Feb 2028 tanggal 31 (tanpa kemunculan)');
+select lives_ok(pg_temp.ag(:'sh', :'kg2', '2028-03-01'), 'kabisat: tagihan tanpa kemunculan tidak bentrok dengan Maret 2028');
+-- Pergantian tahun: gajian Des = 23 Des (24 Des cuti bersama, 25 Des Natal). 22 Des = label Des, 23 Des = label Jan 2027.
+select lives_ok(pg_temp.ag(:'sh', :'kh', '2027-01-01'), 'anggaran wajib Januari 2027');
+select lives_ok(pg_temp.tg(:'sh', :'kh', 22, '2026-12-01', '2026-12-31'), 'tagihan Des tanggal 22 (label Des) lolos terhadap Januari');
+select throws_ok(pg_temp.ag(:'sh', :'kh', '2026-12-01'), 'DK422', 'obligation_double', 'tanggal 22 Des: anggaran wajib Desember = obligation_double');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+    $q$update app.bills set day_of_month = 23 where category_id = %L$q$, :'kh')), 'DK422', 'obligation_double',
+  'ubah tanggal ke 23 (23 Des = label Jan 2027) vs anggaran wajib Januari = obligation_double');
+select lives_ok(pg_temp.ag(:'sh', :'kh2', '2026-12-01'), 'anggaran wajib Desember 2026');
+select lives_ok(pg_temp.tg(:'sh', :'kh2', 23, '2026-12-01', '2026-12-31'), 'tagihan 23 Des (label Jan 2027) lolos terhadap Desember');
+-- Hari gajian bergeser: tanggal 24 jatuh 24 Sep (label Sep), 24 Okt dan 24 Nov (keduanya label Nov), 24 Des (label Jan).
+-- Label Okt dan Des tidak punya kemunculan sama sekali: anggaran wajib di sana tidak dihitung dua kali.
+select lives_ok(pg_temp.tg(:'sh', :'ki', 24, '2026-09-01', '2026-12-31'), 'tagihan Sep..Des tanggal 24');
+select lives_ok(pg_temp.ag(:'sh', :'ki', '2026-10-01'), 'tanggal 24: label Oktober tanpa kemunculan, anggaran wajib lolos');
+select lives_ok(pg_temp.ag(:'sh', :'ki', '2026-12-01'), 'tanggal 24: label Desember tanpa kemunculan, anggaran wajib lolos');
+select throws_ok(pg_temp.ag(:'sh', :'ki', '2026-09-01'), 'DK422', 'obligation_double', 'tanggal 24: label September = obligation_double');
+select throws_ok(pg_temp.ag(:'sh', :'ki', '2026-11-01'), 'DK422', 'obligation_double', 'tanggal 24: label November (dua kemunculan) = obligation_double');
+select throws_ok(pg_temp.ag(:'sh', :'ki', '2027-01-01'), 'DK422', 'obligation_double', 'tanggal 24: label Januari 2027 = obligation_double');
+-- wajib false -> true, arsip lalu buka arsip (tagihan (b): label Des).
+select lives_ok(pg_temp.ag(:'sh', :'kc', '2026-12-01', false), 'anggaran Desember tidak wajib boleh');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+    $q$update app.budgets set wajib = true where category_id = %L and month = '2026-12-01'$q$, :'kc')), 'DK422', 'obligation_double',
+  'Desember menjadi wajib = obligation_double');
+select is(tests.api_exec(tests.n(), format($$update app.bills set archived_at = now() where category_id = %L$$, :'kc')), 1::bigint,
+  'arsipkan tagihan (b)');
+select lives_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+    $q$update app.budgets set wajib = true where category_id = %L and month = '2026-12-01'$q$, :'kc')),
+  'sesudah arsip, Desember boleh wajib');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+    $q$update app.bills set archived_at = null where category_id = %L$q$, :'kc')), 'DK422', 'obligation_double',
+  'buka arsip tagihan yang kini bentrok = obligation_double');
+-- Aturan kosong = bulan kalender (perilaku lama): 25 Okt berlabel Oktober.
+select tests.owner_exec(null, 'update app.households set payday_rule = null');
+select lives_ok(pg_temp.tg(:'sh', :'kk', 25, '2026-10-25', '2026-10-31'), 'aturan kosong: tagihan 25..31 Okt tanggal 25');
+select lives_ok(pg_temp.ag(:'sh', :'kk', '2026-11-01'), 'aturan kosong: anggaran wajib November lolos (bulan kalender)');
+select throws_ok(pg_temp.ag(:'sh', :'kk', '2026-10-01'), 'DK422', 'obligation_double', 'aturan kosong: anggaran wajib Oktober = obligation_double');
 
 -- ===== bill_schedule (BSD §8): posted dari entri hidup, bill_archived =====
 select pg_temp.bill(tests.n(), :'sh', 'Internet Rumah', :'internet', '2026-01-01') as bill_net \gset
