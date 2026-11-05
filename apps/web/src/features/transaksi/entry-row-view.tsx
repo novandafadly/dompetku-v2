@@ -2,7 +2,12 @@ import type { Route } from 'next';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { ClockIcon } from '@/components/ui/icons/clock';
 import { TxRow } from '@/components/ui/rows';
-import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
+import {
+  entryKindLabelVM,
+  entryTitleVM,
+  feeNoteVM,
+  signedAmountVM,
+} from '@/features/ledger/present';
 import type { EntryVM } from '@/features/ledger/types';
 
 /**
@@ -23,6 +28,7 @@ export function EntryRowView({
     entry.kind === 'transfer' && entry.counterAccountName !== undefined
       ? `${entry.accountName} → ${entry.counterAccountName}`
       : entry.accountName;
+  const feeNote = feeNoteVM(entry);
   return (
     <TxRow
       href={href}
@@ -35,6 +41,8 @@ export function EntryRowView({
             <ClockIcon size={14} className="shrink-0" />
             Menunggu reimburse
           </span>
+        ) : feeNote !== undefined ? (
+          <span className="text-meta font-semibold text-text-muted">{feeNote}</span>
         ) : undefined
       }
       value={value}

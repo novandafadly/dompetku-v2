@@ -99,11 +99,7 @@ test('Beranda Bersama kosong (B2) dan solo (B1) sebelum ada dompet Bersama', asy
   await expect(add).toHaveAttribute('href', /^\/bersama\/dompet\?tambah=1/);
   // B1 tetap berlaku: kartu ajakan untuk pemilik, pengantar checklist satu anggota, Aktivitas kosong.
   await expect(main.getByRole('link', { name: 'Undang Farida ke Bersama' })).toBeVisible();
-  await expect(
-    main.getByText(
-      'Ruang untuk pengeluaran rumah tangga. Sekarang hanya kamu di sini; Farida belum bergabung.',
-    ),
-  ).toBeVisible();
+  await expect(main.getByText('Ruang untuk keuangan bersama.')).toBeVisible();
   await expect(main.getByText(/^Belum ada aktivitas\./)).toBeVisible();
   for (const theme of ['dark', 'light']) {
     for (const width of [320, 390, 1280]) {
@@ -275,7 +271,7 @@ test('Urungkan 6 detik mengembalikan saldo', async ({ page }) => {
   await expect(page.getByRole('main').getByText(DESC)).toHaveCount(0);
 });
 
-test('klik ganda Simpan = satu baris', async ({ page }) => {
+test('klik ganda Simpan = satu baris', { tag: ['@C6'] }, async ({ page }) => {
   const DESC = 'KLIK-GANDA-E2E';
   await page.goto('/pribadi/transaksi');
   const sheet = await openAndFill(page, { amount: 13_579, description: DESC });
@@ -287,7 +283,7 @@ test('klik ganda Simpan = satu baris', async ({ page }) => {
   expect(await entriesWith(DESC)).toBe('1');
 });
 
-test('koneksi putus lalu Coba lagi', async ({ page }) => {
+test('koneksi putus lalu Coba lagi', { tag: ['@C7'] }, async ({ page }) => {
   const DESC = 'PUTUS-E2E';
   await page.goto('/pribadi/beranda');
   // Permintaan simpan pertama sampai di server (tersimpan), lalu koneksinya putus sebelum jawaban.
@@ -342,7 +338,7 @@ test('saldo kurang: peringatan inline lalu Tetap simpan', async ({ page }) => {
   expect(await walletBalance(page, 'bersama', BERSAMA_WALLET)).toBe(-250_000);
 });
 
-test('konflik versi', async ({ page, browser, ownerState }) => {
+test('konflik versi', { tag: ['@C8'] }, async ({ page, browser, ownerState }) => {
   expect(detailPath).not.toBe('');
   const entryId = detailPath.split('/').at(-1);
   const versionOf = async () =>
@@ -493,7 +489,9 @@ test('JS mode nyata tanpa seed demo (K3)', async ({ browser, ownerState }) => {
     `/bersama/${r}`,
   ]);
   expect(detailPath).not.toBe('');
-  for (const path of [...paths, detailPath]) {
+  // /bersama/aktivitas (S8): page.tsx mengimpor view demo klien secara statis; chunk-nya harus
+  // bersih dari seed di mode nyata.
+  for (const path of [...paths, '/bersama/aktivitas', detailPath]) {
     // Konteks baru per rute: semua JS yang dimuat rute ini (muat awal, prefetch, muat malas
     // sampai jaringan diam) tidak boleh memuat seed demo.
     const context = await browser.newContext({ storageState: ownerState });

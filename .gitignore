@@ -6,6 +6,7 @@ dist/
 coverage/
 playwright-report/
 playwright-report-ledger/
+playwright-report-bersama/
 test-results/
 *.tsbuildinfo
 next-env.d.ts

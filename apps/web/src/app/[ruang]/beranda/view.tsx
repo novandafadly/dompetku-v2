@@ -21,6 +21,11 @@ const loadStates = () => import('@/features/beranda/beranda-states');
 const BerandaLoading = lazy(() => loadStates().then((m) => ({ default: m.BerandaLoading })));
 const BerandaError = lazy(() => loadStates().then((m) => ({ default: m.BerandaError })));
 
+// Kartu Kontribusi demo (S8-K1): chunk sendiri, hanya diambil untuk Bersama (budget ADR 0002).
+const ContributionDemo = lazy(() =>
+  import('./contribution-demo').then((m) => ({ default: m.ContributionDemo })),
+);
+
 const AddAccountSheet = lazy(() =>
   import('@/features/dompet/add-account-sheet').then((m) => ({ default: m.DemoAddAccountSheet })),
 );
@@ -130,6 +135,11 @@ export function BerandaPage() {
             <BillsSoon {...ctx} />
             <BudgetsNearLimit {...ctx} />
           </div>
+          {ruang === 'bersama' ? (
+            <Suspense fallback={null}>
+              <ContributionDemo state={state} today={today} />
+            </Suspense>
+          ) : null}
         </div>
         <div className="flex flex-col gap-3 tablet:gap-4">
           {ruang === 'bersama' ? <ActivityFeed {...ctx} /> : null}

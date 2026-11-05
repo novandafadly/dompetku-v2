@@ -16,8 +16,7 @@ import { card } from '@/components/ui/styles';
  */
 
 /** Pengantar checklist Bersama yang baru berisi satu orang (S7-B1). */
-export const BERSAMA_SOLO_INTRO =
-  'Ruang untuk pengeluaran rumah tangga. Sekarang hanya kamu di sini; Farida belum bergabung.';
+export const BERSAMA_SOLO_INTRO = 'Ruang untuk keuangan bersama.';
 
 /**
  * Kartu ajakan (S7-B1), hanya untuk pemilik. `pending` = undangan sudah terkirim dan menunggu;
@@ -80,7 +79,7 @@ export function BersamaKosongCard({ addWalletHref }: { addWalletHref: Route }) {
       headingLevel={2}
       icon={<WalletIcon size={24} />}
       title="Bersama belum punya dompet."
-      description="Buat dompet bersama dulu, lalu catat pengeluaran rumah tangga di sini."
+      description="Buat dompet bersama dulu, lalu catat pengeluaran bersama di sini."
       action={
         <Link href={addWalletHref} className={buttonClass('primary', 'md', 'w-full')}>
           Tambah dompet

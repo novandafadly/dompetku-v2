@@ -122,7 +122,10 @@ interface EntryRow {
 }
 
 /**
- * Kolom + join entri. `$1` = ruang konteks; setiap join memakai `space_id` entri. Baris lawan
+ * Kolom + join entri. Biaya (`fee`) hanya ada di kaki keluar `space_transfer` ruangnya sendiri:
+ * setor = kaki Pribadi, ambil = kaki Bersama (S8-D1a); kaki masuk tidak pernah punya baris biaya,
+ * dan sub-kueri dibatasi `space_id` entri sehingga biaya kaki Pribadi tak pernah tampil di Bersama.
+ * `$1` = ruang konteks; setiap join memakai `space_id` entri. Baris lawan
  * (`counter`) hanya ada di transfer satu ruang: kaki `space_transfer` tidak punya baris lawan
  * (lawannya entri lain di ruang lain, lewat `link_id`, yang tidak pernah diikuti di sini).
  */
@@ -135,7 +138,7 @@ const ENTRY_COLUMNS = `
   e.category_id, cat.name as category_name, cat.icon as category_icon,
   e.description, ${wib('e.voided_at')} as voided_at, e.direction::text as direction,
   e.shared_note, e.reimbursable, ${wib('e.moved_at')} as moved_at,
-  case when e.kind = 'space_transfer' and e.space_kind = 'personal' then
+  case when e.kind = 'space_transfer' and e.direction = 'out' then
     (select abs(sum(fl.amount))::bigint from app.entry_lines fl
       where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id`;
 

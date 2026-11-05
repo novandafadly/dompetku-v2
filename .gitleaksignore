@@ -1,3 +1,5 @@
 # Temuan gitleaks yang sudah diperiksa manual (satu fingerprint per baris; jangan pakai pola luas).
 # 15_talangan.sql:4 di 3c7a8fe = komentar SQL ("api.update_entry, void/pulihkan ..."), bukan secret.
 3c7a8fea687e9cbe2f9bd672799dd92c0ca56f1f:packages/db/tests/15_talangan.sql:generic-api-key:4
+# playwright.bersama.config.ts:49 di 3519298 = BETTER_AUTH_SECRET tiruan e2e ('e2e-bersama-bukan-rahasia-…'), hanya untuk server e2e lokal, sama dengan config auth/ledger.
+3519298e07c59d188fc7b9005de893e66c3cb2d6:apps/web/playwright.bersama.config.ts:generic-api-key:49

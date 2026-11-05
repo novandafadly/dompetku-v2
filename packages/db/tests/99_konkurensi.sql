@@ -7,6 +7,7 @@
 -- sama dan paralel reimburse (0111).
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
+-- ID: B8, C2, C4
 begin;
 select plan(46);
 

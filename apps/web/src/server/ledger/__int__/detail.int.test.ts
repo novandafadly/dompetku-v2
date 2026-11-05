@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadDetail } from '../detail';
+import { listEntries, recentEntries } from '../read';
 import { createReimbursement } from '../reimburse';
 import { resolveSpace } from '../space';
 import {
@@ -201,11 +202,14 @@ describe('loadDetail (persona N, F bergabung)', () => {
 
 describe('loadDetail S7: talangan, antar ruang, pindah', () => {
   let n: Persona;
+  let f: Persona;
 
   beforeEach(async () => {
     await resetLedger(h);
     const ps = await seedPersonas(h, { farida: 'bergabung' });
+    if (ps.f === null) throw new Error('Farida tidak ada');
     n = ps.n;
+    f = ps.f;
   });
 
   it('talangan: reimburse hidup, sisa, dan reimbursesEntryId di Detail reimburse; spaceCount 2', async () => {
@@ -305,6 +309,74 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
       direction: 'out',
     });
     expect(JSON.stringify(kakiP)).not.toContain(st.linkedEntryId);
+  });
+
+  it('ambil Bersama→Pribadi dengan biaya: biaya di kaki keluar Bersama, tidak di kaki Pribadi, tanpa bocor', async () => {
+    const pribadiF = await ctxOf(f, 'pribadi');
+    const bersamaF = await ctxOf(f, 'bersama');
+    const bersamaN = await ctxOf(n, 'bersama');
+    const dompetP = await wallet(pribadiF, KANARI_DOMPET, 0);
+    const dompetB = await wallet(bersamaN, 'Kas Rumah', 1_000_000);
+    const st = await createSpaceTransfer(bersamaF, {
+      clientId: randomUUID(),
+      fromAccountId: dompetB,
+      toSpaceId: pribadiF.spaceId,
+      toAccountId: dompetP,
+      amount: 100_000,
+      fee: 2_500,
+      allowNegative: false,
+    });
+    // Kaki keluar Bersama (id st.entryId): dilihat F dan N, biaya terbaca.
+    for (const ctx of [bersamaF, bersamaN]) {
+      const kaki = await loadDetail(ctx, st.entryId);
+      expect(kaki?.entry).toMatchObject({
+        kind: 'space_transfer',
+        spaceKind: 'shared',
+        direction: 'out',
+        amount: 100_000,
+        fee: 2_500,
+        accountName: 'Kas Rumah',
+      });
+      const json = JSON.stringify(kaki);
+      for (const bocor of [KANARI_DOMPET, st.linkedEntryId, st.linkId, dompetP]) {
+        expect(json).not.toContain(bocor);
+      }
+    }
+    // Daftar Transaksi dan Terakhir membaca kolom yang sama.
+    const { rows: bl } = await h.admin.query<{ m: string }>(
+      "select to_char(app.today(), 'YYYY-MM') as m",
+    );
+    const bulan = bl[0]?.m ?? '';
+    const dariDaftar = (await listEntries(bersamaN, { month: bulan })).find(
+      (e) => e.id === st.entryId,
+    );
+    expect(dariDaftar?.fee).toBe(2_500);
+    const dariTerakhir = (await recentEntries(bersamaN, 5)).find((e) => e.id === st.entryId);
+    expect(dariTerakhir?.fee).toBe(2_500);
+    // Saldo Bersama turun sebesar nominal + biaya; nominal bertanda tetap -100.000 (biaya tidak digabung).
+    const { rows } = await h.admin.query<{ balance: string }>(
+      'select balance from app.account_balances where account_id = $1',
+      [dompetB],
+    );
+    expect(Number(rows[0]?.balance)).toBe(1_000_000 - 100_000 - 2_500);
+    // Kaki Pribadi F (masuk): tidak ada biaya, tidak ada penunjuk ke Bersama.
+    const kakiP = await loadDetail(pribadiF, st.linkedEntryId);
+    expect(kakiP?.entry).toMatchObject({ spaceKind: 'personal', direction: 'in', amount: 100_000 });
+    expect(kakiP?.entry.fee).toBeUndefined();
+    expect(JSON.stringify(kakiP)).not.toContain(st.entryId);
+    // Setor Pribadi→Bersama: biaya Pribadi tidak muncul di Bersama.
+    const setor = await createSpaceTransfer(pribadiF, {
+      clientId: randomUUID(),
+      fromAccountId: dompetP,
+      toSpaceId: bersamaF.spaceId,
+      toAccountId: dompetB,
+      amount: 10_000,
+      fee: 777,
+      allowNegative: true,
+    });
+    const kakiBMasuk = await loadDetail(bersamaN, setor.linkedEntryId);
+    expect(kakiBMasuk?.entry.fee).toBeUndefined();
+    expect(JSON.stringify(kakiBMasuk)).not.toContain('777');
   });
 
   it('pindah ruang: entri asal bertanda movedAt (tanpa penunjuk ke tujuan), tetap terbuka', async () => {

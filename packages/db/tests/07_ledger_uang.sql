@@ -2,6 +2,7 @@
 -- dompet + saldo awal, pemasukan/pengeluaran, transfer Σ = −fee, space_transfer, kantor,
 -- idempotensi, versi, saldo negatif, saldo awal 7 hari, cocokkan saldo, arsip, angka ringkasan.
 -- Semua lewat fungsi api.* sebagai role web; jam dipatok 2026-03-20 WIB.
+-- ID: B2, B3, B7, S1, S2, S3
 begin;
 select plan(101);
 select tests.fixture();

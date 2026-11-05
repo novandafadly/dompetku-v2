@@ -1,7 +1,14 @@
 import { createSeed, entryKindLabel, entryTitle, signedAmount } from '@dompetku/demo-data';
 import type { DemoState, Entry } from '@dompetku/demo-data';
+import { formatRupiah } from '@dompetku/domain';
 import { describe, expect, it } from 'vitest';
-import { effectOnAccountVM, entryKindLabelVM, entryTitleVM, signedAmountVM } from './present';
+import {
+  effectOnAccountVM,
+  entryKindLabelVM,
+  entryTitleVM,
+  feeNoteVM,
+  signedAmountVM,
+} from './present';
 import type { EntryVM } from './types';
 
 const state: DemoState = createSeed({ today: '2026-10-17', variant: 'full' });
@@ -126,5 +133,36 @@ describe('judul kaki antar ruang (S7-D1)', () => {
     const b = { ...kaki, spaceKind: 'shared' as const, sharedNote: 'Patungan listrik' };
     expect(entryTitleVM({ ...b, direction: 'in' })).toBe('Setoran dari Novanda');
     expect(entryTitleVM({ ...b, direction: 'out' })).toBe('Diambil oleh Novanda');
+  });
+});
+
+describe('feeNoteVM: keterangan biaya di daftar (S8-D1a)', () => {
+  const kaki: EntryVM = {
+    id: 'e',
+    version: 1,
+    kind: 'space_transfer',
+    occurredOn: '2026-11-02',
+    createdAt: '2026-11-02T08:00:00+07:00',
+    createdBy: { id: 'u-f', name: 'Farida', initial: 'F' },
+    accountId: 'a',
+    accountName: 'Kas',
+    amount: 100_000,
+    spaceKind: 'shared',
+    direction: 'out',
+    fee: 2_500,
+  };
+
+  it('kaki keluar Bersama: Biaya Rp {biaya}; nominal bertanda tetap tanpa biaya', () => {
+    expect(feeNoteVM(kaki)).toBe(`Biaya ${formatRupiah(2_500)}`);
+    expect(signedAmountVM(kaki)).toEqual({ value: -100_000, kind: 'neutral' });
+  });
+
+  it('tanpa biaya, kaki masuk, kaki Pribadi, atau jenis lain: tidak ada keterangan', () => {
+    const tanpa: EntryVM = { ...kaki };
+    delete tanpa.fee;
+    expect(feeNoteVM(tanpa)).toBeUndefined();
+    expect(feeNoteVM({ ...kaki, direction: 'in' })).toBeUndefined();
+    expect(feeNoteVM({ ...kaki, spaceKind: 'personal' })).toBeUndefined();
+    expect(feeNoteVM({ ...kaki, kind: 'expense' })).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 -- Kategori S6 (0106): kategori awal ruang, api.create_category (BSD §9), api.update_category,
 -- api.archive_category, cek category_archived di create_entry/update_entry, B9 (kategori ruang
 -- lain ditolak). Semua lewat fungsi api.* sebagai role web; jam dipatok 2026-03-20 WIB.
+-- ID: B9
 begin;
 select plan(41);
 select tests.fixture();

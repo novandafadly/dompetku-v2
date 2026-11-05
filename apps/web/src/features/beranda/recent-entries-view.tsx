@@ -16,6 +16,8 @@ export interface RecentRow {
   entryKind: string;
   label: string;
   meta: string;
+  /** Keterangan biaya kaki keluar Bersama (S8-D1a); tanpa ikon. */
+  note?: string;
   value: Rupiah;
   kind: 'income' | 'expense' | 'neutral';
 }
@@ -40,6 +42,13 @@ export function RecentEntriesView({ rows, listHref }: { rows: RecentRow[]; listH
               icon={<CategoryIcon name={r.iconName} kind={r.entryKind} size={20} />}
               label={r.label}
               meta={r.meta}
+              {...(r.note === undefined
+                ? {}
+                : {
+                    status: (
+                      <span className="text-meta font-semibold text-text-muted">{r.note}</span>
+                    ),
+                  })}
               value={r.value}
               kind={r.kind}
             />

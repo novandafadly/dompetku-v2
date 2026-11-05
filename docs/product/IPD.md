@@ -159,6 +159,7 @@ Gerbang keluar: Farida bergabung; kedua akun 7 hari berturut-turut (definisi PRD
 - **Dependensi.** S7.
 - **Kriteria keluar.** Feed tidak pernah memuat nama dompet atau entri Pribadi (Playwright dua user); isolasi penuh pada tabel baru.
 - **Risiko / mitigasi.** Farida menolak alur: pantau penilaian M0a; sesuaikan.
+- **Status (2026-11-05).** Selesai di branch `ccr-48ce6bf9-qkb933` (Task 1 sampai 12; migrasi `0114`-`0115`, tanpa tabel baru); merge menunggu pemilik dan CI. Catatan teknis: BSD §16 "Catatan S8"; keputusan desain dan critique: `docs/design/s8-bingkai.md`; serah-terima dan langkah pemilik: `docs/superpowers/handoff/s8.md`.
 
 ### S9: anggaran, laporan, tagihan dasar, Beranda
 

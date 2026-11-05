@@ -304,3 +304,84 @@ describe('satu transaksi baca per page', () => {
     expect(shell.result.accounts.map((a) => a.name)).toEqual(['Kas Rumah']);
   });
 });
+
+/**
+ * S8: Beranda Bersama dua anggota menambah feed, Kontribusi, dan roster ke transaksi baca yang
+ * sama (Global Constraints S8): tetap satu koneksi sendiri, ≤ 2 bersama opsi layout.
+ */
+describe('Beranda Bersama dua anggota: feed dan Kontribusi di transaksi yang sama', () => {
+  const h = createLedgerHarness();
+  let bersama: LedgerCtx & { kind: 'personal' | 'shared' };
+
+  afterAll(async () => {
+    await h.close();
+  });
+
+  async function peakDuring<T>(fn: () => Promise<T>): Promise<{ peak: number; result: T }> {
+    let now = 0;
+    let peak = 0;
+    const onAcquire = () => {
+      now += 1;
+      peak = Math.max(peak, now);
+    };
+    const onRelease = () => {
+      now -= 1;
+    };
+    h.pools.app.on('acquire', onAcquire);
+    h.pools.app.on('release', onRelease);
+    try {
+      const result = await fn();
+      return { peak, result };
+    } finally {
+      h.pools.app.off('acquire', onAcquire);
+      h.pools.app.off('release', onRelease);
+    }
+  }
+
+  beforeAll(async () => {
+    await resetLedger(h);
+    const { n, f } = await seedPersonas(h, { farida: 'bergabung' });
+    if (!f) throw new Error('Farida tidak ada');
+    const { spaceId, kind } = await resolveSpace(h.pools, n.id, 'bersama');
+    bersama = { pools: h.pools, userId: n.id, spaceId, kind };
+    const { accountId } = await createAccount(bersama, {
+      clientId: randomUUID(),
+      name: 'Kas Rumah',
+      pocket: 'operasional',
+      walletType: 'cash',
+      openingBalance: 500_000,
+    });
+    const { rows } = await h.admin.query<{ id: string }>(
+      `select id from app.categories
+        where space_id = $1 and type = 'expense' and parent_id is null
+        order by sort_order limit 1`,
+      [spaceId],
+    );
+    const categoryId = rows[0]?.id;
+    if (!categoryId) throw new Error('kategori awal tidak ada');
+    await createEntry(
+      { ...bersama, userId: f.id },
+      { clientId: randomUUID(), accountId, kind: 'expense', amount: 25_000, categoryId },
+    );
+  });
+
+  it('loadBeranda sendiri = 1 koneksi; dengan opsi layout ≤ 2', async () => {
+    const alone = await peakDuring(() => loadBeranda(bersama));
+    expect(alone.peak).toBe(1);
+    const b = alone.result.bersama;
+    expect(b?.members).toBe(2);
+    expect(Array.isArray(b?.activity) && b.activity.length).toBe(1);
+    expect(b?.contributions).toMatchObject({ allZero: true });
+
+    const withShell = await peakDuring(async () => {
+      const shell = loadRuangShell(bersama);
+      const [, data] = await Promise.all([
+        shell,
+        loadBeranda(bersama, { accounts: shell.then((x) => x.accounts) }),
+      ]);
+      return data;
+    });
+    expect(withShell.peak).toBeLessThanOrEqual(2);
+    expect(withShell.result).toEqual(alone.result);
+  });
+});

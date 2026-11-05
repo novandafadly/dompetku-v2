@@ -54,7 +54,7 @@ export function BuatAkunReal({
           </span>
         </p>
       ) : (
-        <AuthText>Akun pertama rumah tangga. Kami mengirim tautan konfirmasi ke emailmu.</AuthText>
+        <AuthText>Akun pertama DompetKu. Kami mengirim tautan konfirmasi ke emailmu.</AuthText>
       )}
       <form action={action} noValidate className="flex flex-col gap-4">
         <input type="hidden" name="token" value={token} />

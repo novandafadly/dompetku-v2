@@ -431,7 +431,7 @@ describe('sesi tanpa faktor kuat', () => {
 });
 
 describe('kode pemulihan', () => {
-  it('masuk dengan kode: sesi lain dicabut, kode hangus, sesi hanya untuk mengamankan', async () => {
+  it('masuk dengan kode: sesi lain dicabut, kode hangus, sesi hanya untuk mengamankan [B19]', async () => {
     const { browser: first, codes, secret } = await bootstrapOwner(h);
     const second = new Browser('192.0.2.1');
     const s1 = await h.service.signInPassword(second.headers(), OWNER, PASSWORD);

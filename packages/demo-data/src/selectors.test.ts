@@ -12,6 +12,7 @@ import {
   signedAmount,
   suggestCategories,
 } from './selectors';
+import { memberContributions } from './select/kontribusi';
 import { createDemoStore } from './store';
 import type { DemoState, Entry } from './types';
 
@@ -744,5 +745,66 @@ describe('signedAmount', () => {
   it('space_transfer: in is positive, out is negative', () => {
     expect(signedAmount(mk({ kind: 'space_transfer', direction: 'in' })).value).toBe(5000);
     expect(signedAmount(mk({ kind: 'space_transfer', direction: 'out' })).value).toBe(-5000);
+  });
+});
+
+describe('memberContributions (K2 atas seed)', () => {
+  const FROM = '2026-09-01';
+  const TO = '2026-10-31';
+
+  it('satu baris per anggota, urutan anggota seed; setor = kaki masuk Bersama per pencatat', () => {
+    const s = full();
+    const rows = memberContributions(s, FROM, TO);
+    expect(rows.map((r) => r.memberId)).toEqual(s.members.map((m) => m.id));
+    const expectedIn = s.entries
+      .filter(
+        (e) =>
+          e.ruang === 'bersama' &&
+          e.kind === 'space_transfer' &&
+          e.direction === 'in' &&
+          e.voidedAt === undefined &&
+          e.occurredOn >= FROM &&
+          e.occurredOn <= TO,
+      )
+      .reduce((a, e) => a + e.amount, 0);
+    expect(expectedIn).toBeGreaterThan(0);
+    expect(rows.reduce((a, r) => a + r.setoran, 0)).toBe(expectedIn);
+    expect(rows.every((r) => r.diambil === 0)).toBe(true);
+  });
+
+  it('diambil = kaki keluar Bersama; batal dan di luar periode tidak dihitung; pemasukan biasa bukan setoran', () => {
+    const store = createDemoStore(full());
+    const s0 = store.getState();
+    const into = s0.accounts.find((a) => a.ruang === 'bersama' && a.pocket === 'operasional');
+    const novanda = s0.members[0];
+    const farida = s0.members[1];
+    if (!into || !novanda || !farida) throw new Error('seed');
+    const base = {
+      ruang: 'bersama' as const,
+      kind: 'space_transfer' as const,
+      accountId: into.id,
+      createdBy: farida.id,
+      linkId: 'k-1',
+    };
+    const before = memberContributions(store.getState(), FROM, TO);
+    store.addEntry({ ...base, direction: 'out', amount: 250_000, occurredOn: '2026-10-10' });
+    store.addEntry({ ...base, direction: 'out', amount: 999_000, occurredOn: '2026-08-31' });
+    store.addEntry({
+      ruang: 'bersama',
+      kind: 'income',
+      accountId: into.id,
+      createdBy: farida.id,
+      amount: 123_000,
+      occurredOn: '2026-10-11',
+    });
+    const after = memberContributions(store.getState(), FROM, TO);
+    const f = (rows: typeof after) => rows.find((r) => r.memberId === farida.id);
+    expect((f(after)?.diambil ?? 0) - (f(before)?.diambil ?? 0)).toBe(250_000);
+    expect(f(after)?.setoran).toBe(f(before)?.setoran);
+  });
+
+  it('periode tanpa transaksi = semua nol', () => {
+    const rows = memberContributions(full(), '2020-01-01', '2020-01-31');
+    expect(rows.every((r) => r.setoran === 0 && r.diambil === 0)).toBe(true);
   });
 });

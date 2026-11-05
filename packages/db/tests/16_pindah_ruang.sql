@@ -5,6 +5,7 @@
 -- ruang tujuan, saldo kedua dompet, talangan (reimbursable dilepas / reimbursement_exists),
 -- api.restore_entry menolak entry_moved, api.trash_list menyembunyikan asal, purge 90 hari normal,
 -- idempotensi, isolasi. Semua lewat api.* sebagai role web; jam dipatok 2026-03-20 WIB.
+-- ID: B5, B7, B10
 begin;
 select plan(79);
 select tests.fixture();

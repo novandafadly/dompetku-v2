@@ -2,8 +2,10 @@
 -- dua user x tabel/view ledger x SELECT/INSERT/UPDATE/DELETE untuk web, api, worker; fungsi api.*
 -- dengan id pasangan = DK404 (termasuk talangan, reimburse, dan pindah ruang S7); tanpa konteks = 0 baris / DK401;
 -- Bersama tidak pernah membuka data Pribadi (kaki space_transfer, riwayat, Sampah, feed, tombstone).
+-- S8: api.shared_activity dan api.member_contributions ikut daftar DK404/DK401 dan kanari Bersama (BSD §13 #12).
+-- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(179);
+select plan(183);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -159,6 +161,8 @@ from (values
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'np')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'np')),
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
+  ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'np')),
+  ('member_contributions', format($q$select api.member_contributions(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'np')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'np')),
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'np')),
@@ -198,6 +202,8 @@ from (values
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
+  ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'sh')),
+  ('member_contributions', format($q$select api.member_contributions(%L, '2026-03-01', '2026-03-31')$q$, :'sh')),
   ('suggest_categories', format($q$select count(*) from api.suggest_categories(%L, 'expense')$q$, :'sh')),
   ('mark_no_spend_day', format($q$select api.mark_no_spend_day(%L)$q$, :'sh')),
   ('create_reimbursement', format($q$select api.create_reimbursement(gen_random_uuid(), %L, %L, 1)$q$, :'nt', :'bca')),
@@ -249,8 +255,10 @@ select is(tests.web_val(tests.f(), format($$select count(*) from (
     union all select r::text from app.report_lines r
     union all select t::text from api.trash_list(%L) t
     union all select a::text from api.activity_feed(%L, 100) a
+    union all select a::text from api.shared_activity(%L, 100) a
+    union all select m::text from api.member_contributions(%L, '2026-01-01', '2026-12-31') m
   ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like %L$$,
-  :'sh', :'sh', '%' || :'bca' || '%')), '0', 'F: tidak ada deskripsi Pribadi N atau id dompet N di entri/riwayat/line/laporan/Sampah/feed');
+  :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0', 'F: tidak ada deskripsi Pribadi N atau id dompet N di entri/riwayat/line/laporan/Sampah/feed');
 select is(tests.web_val(tests.n(), format($$select count(*) from (
     select e::text as x from app.entries e union all select h::text from app.entry_history h
     union all select t::text from app.entry_tombstones t

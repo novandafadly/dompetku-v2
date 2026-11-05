@@ -1,5 +1,6 @@
 import { dayLabel, fullDateLabel, type IsoDate } from '@dompetku/domain';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { buttonClass } from '@/components/ui/button';
 import { PlusIcon } from '@/components/ui/icons/plus';
 import {
@@ -12,12 +13,23 @@ import {
   OnboardingChecklistView,
   type ChecklistStep,
 } from '@/features/beranda/onboarding-checklist-view';
+import { ActivityCardError, ActivityCardView } from '@/features/bersama/activity-card-view';
+import {
+  ContributionCardError,
+  ContributionCardView,
+} from '@/features/bersama/contribution-card-view';
 import { RecentEntriesView, type RecentRow } from '@/features/beranda/recent-entries-view';
 import { SafeToSpendCard, SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
-import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
+import {
+  entryKindLabelVM,
+  entryTitleVM,
+  feeNoteVM,
+  signedAmountVM,
+} from '@/features/ledger/present';
 import type { Ruang } from '@/features/ledger/types';
 import {
   buildAddWalletHref,
+  buildAktivitasHref,
   buildAuthHref,
   buildEntryHref,
   buildHref,
@@ -30,7 +42,8 @@ import { CatatStepIsland, NoSpendIsland } from './beranda-islands';
 
 /**
  * Beranda mode nyata (Server Component): kartu utama (`SafeToSpendVM`), S6-B1, checklist,
- * Terakhir. Seksi anggaran, tagihan, dan feed aktivitas belum dirender (S8/S9). Dirangkai di
+ * Terakhir; Bersama dua anggota juga Kontribusi dan Aktivitas (S8). Seksi anggaran dan tagihan belum
+ * dirender (S9). Dirangkai di
  * server dari data ruang ini saja; klien hanya menerima props tampilan, pulau klien = tombol
  * S6-B1 dan langkah Catat. Tanpa store demo.
  */
@@ -89,6 +102,7 @@ export function BerandaReal({
       ruang={ruang}
       steps={steps.map(toStep)}
       {...(view.solo ? { intro: BERSAMA_SOLO_INTRO } : {})}
+      {...(data.bersama?.partner ? { partnerName: data.bersama.partner.name } : {})}
     />
   );
   // Ajakan hanya untuk pemilik: bukan pemilik tidak menerima data undangan sama sekali.
@@ -99,10 +113,30 @@ export function BerandaReal({
         pending={view.invite === 'menunggu' ? (data.bersama?.pendingInvite ?? null) : null}
       />
     );
-  const aktivitas = view.solo ? <BersamaAktivitasKosong /> : null;
+  // Bersama dua anggota (S8): kartu Aktivitas dari feed dan Kontribusi bulan ini. Solo tetap S7-B1.
+  const b = ruang === 'bersama' && !view.solo ? data.bersama : null;
+  const retryHref = buildHref(ruang, 'beranda', query);
+  let aktivitas: ReactNode = null;
+  if (view.solo) aktivitas = <BersamaAktivitasKosong />;
+  else if (b?.activity === 'error') aktivitas = <ActivityCardError retryHref={retryHref} />;
+  else if (b?.activity != null) {
+    aktivitas = (
+      <ActivityCardView
+        items={b.activity}
+        listHref={b.activity.length === 0 ? null : buildAktivitasHref(query)}
+        emptyNames={b.partner?.name ?? null}
+        today={today}
+        query={query}
+      />
+    );
+  }
+  let kontribusi: ReactNode = null;
+  if (b?.contributions === 'error') kontribusi = <ContributionCardError retryHref={retryHref} />;
+  else if (b?.contributions != null) kontribusi = <ContributionCardView vm={b.contributions} />;
 
   const rows: RecentRow[] = data.recent.map((e) => {
     const { value, kind } = signedAmountVM(e);
+    const note = feeNoteVM(e);
     return {
       id: e.id,
       href: buildEntryHref(ruang, e.id, query),
@@ -110,6 +144,7 @@ export function BerandaReal({
       entryKind: e.kind,
       label: entryTitleVM(e),
       meta: `${entryKindLabelVM(e)} · ${e.accountName} · ${dayLabel(e.occurredOn, today)}`,
+      ...(note === undefined ? {} : { note }),
       value,
       kind,
     };
@@ -164,7 +199,7 @@ export function BerandaReal({
     );
   }
 
-  // HP: Aman → S6-B1 → checklist → Terakhir, satu kolom. Laptop: keputusan kiri, riwayat kanan.
+  // HP: Aman → S6-B1 → checklist → (Bersama) Kontribusi → Aktivitas → Terakhir, satu kolom. Laptop: keputusan kiri, riwayat kanan.
   return (
     <>
       {header}
@@ -178,10 +213,13 @@ export function BerandaReal({
             onMark={markNoSpendDayAction.bind(null, ruang)}
           />
           {checklist}
+          {kontribusi}
         </div>
         <div className="flex flex-col gap-3 tablet:gap-4">
+          {/* Dua anggota: Aktivitas di atas Terakhir (sama dengan prototipe); solo tetap di bawah. */}
+          {view.solo ? null : aktivitas}
           {recent}
-          {aktivitas}
+          {view.solo ? aktivitas : null}
         </div>
       </div>
     </>
