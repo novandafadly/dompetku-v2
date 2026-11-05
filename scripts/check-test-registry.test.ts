@@ -97,6 +97,19 @@ describe('check-test-registry', () => {
     assert.equal(code, 0, out);
   });
 
+  it('tag Playwright bentuk salah (@B20x) atau ID di luar registry: keluar 1', () => {
+    for (const tag of ['@B20x', '@B77', '@Z']) {
+      const root = sample({
+        'packages/db/tests/01.sql': '-- ID: B2\n',
+        'apps/web/src/x.test.ts': "it('feed [B20]', () => {});\n",
+        'apps/web/tests/e2e/a.spec.ts': `test('x', { tag: ['${tag}'] }, async () => {});\n`,
+      });
+      const { code, out } = run(root);
+      assert.equal(code, 1, tag);
+      assert.match(out, new RegExp(tag.slice(1)));
+    }
+  });
+
   it('tag di node_modules diabaikan', () => {
     const root = sample({
       'packages/db/tests/01.sql': '-- ID: B2\n',

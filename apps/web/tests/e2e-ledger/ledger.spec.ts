@@ -271,7 +271,7 @@ test('Urungkan 6 detik mengembalikan saldo', async ({ page }) => {
   await expect(page.getByRole('main').getByText(DESC)).toHaveCount(0);
 });
 
-test('klik ganda Simpan = satu baris', async ({ page }) => {
+test('klik ganda Simpan = satu baris', { tag: ['@C6'] }, async ({ page }) => {
   const DESC = 'KLIK-GANDA-E2E';
   await page.goto('/pribadi/transaksi');
   const sheet = await openAndFill(page, { amount: 13_579, description: DESC });
@@ -283,7 +283,7 @@ test('klik ganda Simpan = satu baris', async ({ page }) => {
   expect(await entriesWith(DESC)).toBe('1');
 });
 
-test('koneksi putus lalu Coba lagi', async ({ page }) => {
+test('koneksi putus lalu Coba lagi', { tag: ['@C7'] }, async ({ page }) => {
   const DESC = 'PUTUS-E2E';
   await page.goto('/pribadi/beranda');
   // Permintaan simpan pertama sampai di server (tersimpan), lalu koneksinya putus sebelum jawaban.
@@ -338,7 +338,7 @@ test('saldo kurang: peringatan inline lalu Tetap simpan', async ({ page }) => {
   expect(await walletBalance(page, 'bersama', BERSAMA_WALLET)).toBe(-250_000);
 });
 
-test('konflik versi', async ({ page, browser, ownerState }) => {
+test('konflik versi', { tag: ['@C8'] }, async ({ page, browser, ownerState }) => {
   expect(detailPath).not.toBe('');
   const entryId = detailPath.split('/').at(-1);
   const versionOf = async () =>

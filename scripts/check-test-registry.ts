@@ -77,7 +77,7 @@ export function tagsIn(file: string, text: string): string[] {
     if (file.endsWith('.spec.ts')) {
       for (const blok of text.matchAll(/\btag:\s*(\[[^\]]*\]|'[^'\n]*'|"[^"\n]*")/g)) {
         for (const m of (blok[1] ?? '').matchAll(
-          new RegExp(String.raw`(?<![\w@])@(${ID})(?![\w])`, 'g'),
+          /(?<![\w@])@([A-Z][\w-]*)/g, // semua tag berawalan huruf kapital harus ID registry (B20x = galat)
         )) {
           found.push(m[1] ?? '');
         }
