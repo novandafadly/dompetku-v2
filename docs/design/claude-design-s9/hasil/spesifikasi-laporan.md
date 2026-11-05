@@ -126,6 +126,8 @@ Semua elemen grafik yang membawa informasi (tepi pemasukan, batang pengeluaran) 
 
 ## 9. Keputusan yang menyimpang dari brief
 
+> **Disetujui pemilik 2026-11-05:** semua keputusan di bagian ini (1–9). Task 13 mengikutinya.
+
 1. **Dasar periode memakai `nav` + `aria-current="page"`, bukan `role="tablist"`.** Itu tautan tanpa JavaScript; pola tab menuntut panel dan navigasi panah. Tampilan sama dengan segmen Panel Malam.
 2. **Periode berjalan tidak dibandingkan** dengan periode lalu (belum selesai). Teks: "Periode belum selesai; angka masih bisa bertambah." + "September (lengkap): Rp 4.178.500 pengeluaran." Periode lengkap: "Rp 1.628.500 lebih sedikit dari Agustus." (`arrow-down`; "lebih banyak" memutar ikon 180°).
 3. **Selisih positif juga ditandai kata** ("Surplus") agar simetris dengan "Defisit".
