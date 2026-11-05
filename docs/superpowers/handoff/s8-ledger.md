@@ -96,3 +96,4 @@ Task 10: minor (deferred): bila tes bergabung gagal, proyek chromium (semua tes 
 Task 10: tindak lanjut minor commit bdb6754 (5 PNG F duplikat dihapus, display_name asli dipulihkan, asersi R26 di reload, kata Luar dikoreksi; e2e:bersama 22, SCREENS 6). Controller memeriksa stat commit (hanya tes + hapus PNG).
 Task 10: complete (commits 3eda2ac..bdb6754, review clean)
 Task 11: dispatch implementer (sonnet) dari 65659f4.
+Task 11: implementasi commit 66410ac (REGISTRY.md 91 ID: 19 aktif, 55 belum, 17 tidak bisa dipetakan; scripts/check-test-registry.ts + 6 tes node:test; tag pgTAP 03/07/08/11/15/16/17/99, [T13] read.int; CI check). Concern: pgTAP bertag tidak dijalankan lokal (tanpa pgtap); B11–B19, C1–C8 belum karena tak dipetakan s7.md. Review (sonnet) berjalan.
