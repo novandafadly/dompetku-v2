@@ -97,3 +97,4 @@ Task 10: tindak lanjut minor commit bdb6754 (5 PNG F duplikat dihapus, display_n
 Task 10: complete (commits 3eda2ac..bdb6754, review clean)
 Task 11: dispatch implementer (sonnet) dari 65659f4.
 Task 11: implementasi commit 66410ac (REGISTRY.md 91 ID: 19 aktif, 55 belum, 17 tidak bisa dipetakan; scripts/check-test-registry.ts + 6 tes node:test; tag pgTAP 03/07/08/11/15/16/17/99, [T13] read.int; CI check). Concern: pgTAP bertag tidak dijalankan lokal (tanpa pgtap); B11–B19, C1–C8 belum karena tak dipetakan s7.md. Review (sonnet) berjalan.
+Task 11: review (sonnet) → Spec ✅, Approved + 1 Important (B11/B12/B17–B19, C1/C2/C4/C6–C8 ≤ M2 ditandai belum tanpa alasan nyata; sebagian sudah tercakup: B18 02/10, C1/C2 99_konkurensi). Ronde 1 dikirim (petakan atau beri alasan konkret; tag Playwright salah ketik jadi galat).
