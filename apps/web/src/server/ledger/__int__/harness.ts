@@ -160,14 +160,14 @@ export async function spaceIdOf(
  */
 export function memuatNominal(value: unknown, n: number): boolean {
   const target = Math.abs(n);
-  const formatted = target.toLocaleString('id-ID');
+  const formatted = String(target).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const visit = (v: unknown): boolean => {
     if (typeof v === 'number' || typeof v === 'bigint') return Math.abs(Number(v)) === target;
     if (typeof v === 'string') {
       if (/^-?\d+$/.test(v)) return Math.abs(Number(v)) === target;
-      return (
-        target >= 1000 &&
-        new RegExp(`(^|[^\\d.])${formatted.replace(/\./g, '\\.')}($|[^\\d.])`).test(v)
+      // Angka berformat titik ribuan (`6.500`) di dalam teks.
+      return (v.match(/(?<![\d.])\d{1,3}(?:\.\d{3})+(?![\d.])/g) ?? []).some(
+        (m) => m === formatted,
       );
     }
     if (Array.isArray(v)) return v.some(visit);
