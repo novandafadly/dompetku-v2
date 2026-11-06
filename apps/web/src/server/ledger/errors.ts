@@ -31,6 +31,13 @@ const RULES = new Set<LedgerErrorCode>([
   'entry_moved',
   'kind_not_movable',
   'not_creator',
+  // S9: anggaran dan tagihan (bingkai S9 "Salinan galat S9"; pesan DB tanpa nominal).
+  'obligation_double',
+  'category_in_obligation',
+  'category_not_root',
+  'already_posted',
+  'bill_archived',
+  'bill_account_kantor',
 ]);
 
 /**

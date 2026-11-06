@@ -121,6 +121,47 @@ export interface SafeToSpendVM {
   aman: Rupiah;
 }
 
+/**
+ * Periode (S9, K1): periode gajian BSD §8.2a dari `api.pay_period` (aturan gajian kosong = bulan
+ * kalender, `basis = 'kalender'`). `label` = `November 2026 · 23 Okt – 24 Nov`; `labelMonth` =
+ * tanggal 1 bulan label (`budgets.month`); `daysLeft` = `to − hari ini + 1` (≥ 1, SQL).
+ */
+export interface PeriodVM {
+  label: string;
+  from: IsoDate;
+  to: IsoDate;
+  labelMonth: IsoDate;
+  daysLeft: number;
+  holidaysKnown: boolean;
+  basis: 'gajian' | 'kalender';
+}
+
+/** Keadaan kartu aman dipakai (K7): `lewat` = total < 0. */
+export type AmanStatus = 'aman' | 'hati_hati' | 'lewat';
+
+/**
+ * Sebab `hati_hati` (S9-BR1): tagihan lewat jatuh tempo menang atas laju belanja. `null` untuk
+ * `aman` dan `lewat` (salinan `lewat` dipilih UI dari `hasObligations`).
+ */
+export type AmanReason =
+  { kind: 'overdue'; count: number } | { kind: 'pace'; avgDaily: Rupiah } | null;
+
+/**
+ * Aman dipakai lengkap mode nyata (S9): semua angka dari `api.safe_to_spend` (sampai `until` =
+ * akhir periode gajian) dan `api.spend_pace`; `status`/`reason` dari fungsi murni `amanStatus`.
+ * Prototipe tetap memakai `SafeToSpendVM` (tipe saja, nol byte).
+ */
+export interface SafeToSpendFullVM extends SafeToSpendVM {
+  until: IsoDate;
+  daysLeft: number;
+  /** `floor(aman / daysLeft)` (SQL). */
+  perDay: Rupiah;
+  status: AmanStatus;
+  reason: AmanReason;
+  /** Ruang punya tagihan aktif atau anggaran wajib berlabel periode ini (baris rincian kartu). */
+  hasObligations: boolean;
+}
+
 export interface TodayStatusVM {
   /** Ada pengeluaran hidup hari ini (WIB server) di ruang ini; jenis lain tidak dihitung. */
   hasExpense: boolean;
@@ -146,6 +187,13 @@ export type LedgerErrorCode =
   | 'entry_moved'
   | 'kind_not_movable'
   | 'not_creator'
+  // S9: anggaran dan tagihan (bingkai S9 "Salinan galat S9").
+  | 'obligation_double'
+  | 'category_in_obligation'
+  | 'category_not_root'
+  | 'already_posted'
+  | 'bill_archived'
+  | 'bill_account_kantor'
   | 'not_found'
   | 'invalid'
   | 'network'
