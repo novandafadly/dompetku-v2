@@ -67,7 +67,7 @@ select set_eq($$
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
         'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
-        'budget_overview'],
+        'budget_overview', 'spend_pace'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -299,7 +299,7 @@ select set_eq($$
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
                       'suggest_categories', 'open_reimbursables', 'shared_activity',
                       'member_contributions', 'pay_period', 'bill_list', 'bills_due',
-                      'budget_progress', 'budget_overview']) f
+                      'budget_progress', 'budget_overview', 'spend_pace']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',

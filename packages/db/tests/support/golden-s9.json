@@ -1,0 +1,213 @@
+{
+  "_catatan": "Angka golden S9 (plan S9 Task 7, Review Focus #4). Dihitung tangan dari fixture support/golden-s9.sql (perhitungan di komentarnya), diperiksa ulang terpisah. Tes membandingkan keluaran fungsi dengan berkas ini, bukan menghitung ulang rumus. Hari ini = 2026-11-10 (Selasa) WIB, payday_rule 25: label Okt = 2026-09-25..2026-10-22, Nov = 2026-10-23..2026-11-24, Des = 2026-11-25..2026-12-22.",
+  "hari_ini": "2026-11-10",
+  "kemunculan_n": [
+    "Asuransi|2026-10-15|dilewati",
+    "Asuransi|2026-11-15|terbuka",
+    "Asuransi|2026-12-15|terbuka",
+    "Gym|2026-10-12|arsip",
+    "Gym|2026-11-12|arsip",
+    "Internet|2026-10-05|lunas",
+    "Internet|2026-11-05|terbuka",
+    "Internet|2026-12-05|terbuka",
+    "KANARI-N-TAGIHAN|2026-10-28|terbuka",
+    "KANARI-N-TAGIHAN|2026-11-28|terbuka",
+    "Listrik|2026-10-20|terbuka",
+    "Listrik|2026-11-20|terbuka",
+    "Listrik|2026-12-20|lunas"
+  ],
+  "safe_to_spend": {
+    "n_pribadi": {
+      "operasional": 9961000,
+      "bills_until_eom": 1400000,
+      "budget_wajib_remaining": 865000,
+      "total": 7696000,
+      "per_day": 513066,
+      "days_left": 15,
+      "until": "2026-11-24"
+    },
+    "n_pribadi_hari_terakhir": {
+      "operasional": 9961000,
+      "bills_until_eom": 1400000,
+      "budget_wajib_remaining": 865000,
+      "total": 7696000,
+      "per_day": 7696000,
+      "days_left": 1,
+      "until": "2026-11-24"
+    },
+    "n_pribadi_periode_berikut": {
+      "operasional": 9961000,
+      "bills_until_eom": 2000000,
+      "budget_wajib_remaining": 999000,
+      "total": 6962000,
+      "per_day": 248642,
+      "days_left": 28,
+      "until": "2026-12-22"
+    },
+    "f_pribadi": {
+      "operasional": 90000,
+      "bills_until_eom": 500000,
+      "budget_wajib_remaining": 0,
+      "total": -410000,
+      "per_day": -27334,
+      "days_left": 15,
+      "until": "2026-11-24"
+    },
+    "bersama": {
+      "operasional": 430000,
+      "bills_until_eom": 0,
+      "budget_wajib_remaining": 0,
+      "total": 430000,
+      "per_day": 28666,
+      "days_left": 15,
+      "until": "2026-11-24"
+    },
+    "n_pribadi_kalender": {
+      "operasional": 9961000,
+      "bills_until_eom": 1500000,
+      "budget_wajib_remaining": 1045000,
+      "total": 7416000,
+      "per_day": 353142,
+      "days_left": 21,
+      "until": "2026-11-30"
+    },
+    "bersama_kalender": {
+      "operasional": 430000,
+      "bills_until_eom": 0,
+      "budget_wajib_remaining": 0,
+      "total": 430000,
+      "per_day": 20476,
+      "days_left": 21,
+      "until": "2026-11-30"
+    },
+    "bersama_kalender_31okt": {
+      "operasional": 430000,
+      "bills_until_eom": 0,
+      "budget_wajib_remaining": 0,
+      "total": 430000,
+      "per_day": 430000,
+      "days_left": 1,
+      "until": "2026-10-31"
+    }
+  },
+  "spend_pace": {
+    "n_pribadi": { "avg_daily": 30633, "days": 30, "overdue_bills": 3, "holidays_known": true },
+    "f_pribadi": { "avg_daily": 333, "days": 30, "overdue_bills": 1, "holidays_known": true },
+    "bersama": { "avg_daily": 4000, "days": 30, "overdue_bills": 0, "holidays_known": true },
+    "n_pribadi_2028": { "avg_daily": 0, "days": 30, "overdue_bills": 8, "holidays_known": false },
+    "n_pribadi_kalender": {
+      "avg_daily": 30633,
+      "days": 30,
+      "overdue_bills": 3,
+      "holidays_known": true
+    }
+  },
+  "budget_progress": {
+    "n_pribadi_2026-10": [
+      {
+        "category": "Makan Siang & Minum",
+        "amount": 800000,
+        "wajib": true,
+        "spent": 370000,
+        "pct": 46,
+        "remaining": 430000
+      }
+    ],
+    "n_pribadi_2026-11": [
+      {
+        "category": "Belanja",
+        "amount": 300000,
+        "wajib": true,
+        "spent": 340000,
+        "pct": 113,
+        "remaining": -40000
+      },
+      {
+        "category": "Kopi & Camilan",
+        "amount": 200000,
+        "wajib": true,
+        "spent": 0,
+        "pct": 0,
+        "remaining": 200000
+      },
+      {
+        "category": "Makan Siang & Minum",
+        "amount": 1000000,
+        "wajib": true,
+        "spent": 335000,
+        "pct": 33,
+        "remaining": 665000
+      },
+      {
+        "category": "Transportasi",
+        "amount": 500000,
+        "wajib": false,
+        "spent": 45000,
+        "pct": 9,
+        "remaining": 455000
+      }
+    ],
+    "n_pribadi_2026-12": [
+      {
+        "category": "Kopi & Camilan",
+        "amount": 999000,
+        "wajib": true,
+        "spent": 0,
+        "pct": 0,
+        "remaining": 999000
+      }
+    ],
+    "n_pribadi_2026-11_kalender": [
+      {
+        "category": "Belanja",
+        "amount": 300000,
+        "wajib": true,
+        "spent": 340000,
+        "pct": 113,
+        "remaining": -40000
+      },
+      {
+        "category": "Kopi & Camilan",
+        "amount": 200000,
+        "wajib": true,
+        "spent": 0,
+        "pct": 0,
+        "remaining": 200000
+      },
+      {
+        "category": "Makan Siang & Minum",
+        "amount": 1000000,
+        "wajib": true,
+        "spent": 155000,
+        "pct": 15,
+        "remaining": 845000
+      },
+      {
+        "category": "Transportasi",
+        "amount": 500000,
+        "wajib": false,
+        "spent": 45000,
+        "pct": 9,
+        "remaining": 455000
+      }
+    ]
+  },
+  "period_summary": {
+    "n_pribadi_nov": [
+      { "report_class": "expense", "inflow": 0, "outflow": 1130000, "entry_count": 6 },
+      { "report_class": "expense_fee", "inflow": 0, "outflow": 6500, "entry_count": 1 },
+      { "report_class": "income", "inflow": 8000000, "outflow": 0, "entry_count": 1 },
+      { "report_class": "x_ambil_bersama", "inflow": 150000, "outflow": 0, "entry_count": 1 },
+      { "report_class": "x_kantor", "inflow": 0, "outflow": 326000, "entry_count": 2 },
+      { "report_class": "x_reimburse", "inflow": 300000, "outflow": 0, "entry_count": 1 },
+      { "report_class": "x_setor_bersama", "inflow": 0, "outflow": 700000, "entry_count": 1 },
+      { "report_class": "x_talangan", "inflow": 0, "outflow": 500000, "entry_count": 1 },
+      { "report_class": "x_transfer", "inflow": 1250000, "outflow": 1000000, "entry_count": 2 }
+    ],
+    "bersama_nov": [
+      { "report_class": "expense", "inflow": 0, "outflow": 120000, "entry_count": 1 },
+      { "report_class": "x_diambil_anggota", "inflow": 0, "outflow": 150000, "entry_count": 1 },
+      { "report_class": "x_setoran_anggota", "inflow": 700000, "outflow": 0, "entry_count": 1 }
+    ]
+  }
+}

@@ -10,9 +10,10 @@
 -- (api.update_bill), tetap 0 baris untuk Pribadi pasangan.
 -- S9 (0119): fungsi anggaran (set/delete/copy_budgets, budget_progress, budget_overview) ikut daftar
 -- DK404/DK401 dan kanari Bersama; anggaran Pribadi N tetap utuh sesudah percobaan F.
+-- S9 (0120): api.spend_pace ikut daftar DK404/DK401; safe_to_spend/spend_pace Bersama ikut kanari.
 -- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(263);
+select plan(265);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -206,6 +207,7 @@ from (values
   ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'np')),
   ('period_summary', format($q$select api.period_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'np')),
+  ('spend_pace', format($q$select api.spend_pace(%L)$q$, :'np')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'np')),
   ('activity_feed', format($q$select api.activity_feed(%L)$q$, :'np')),
   ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'np')),
@@ -267,6 +269,7 @@ from (values
   ('archive_category', format($q$select api.archive_category(%L)$q$, :'ncat')),
   ('month_summary', format($q$select api.month_summary(%L, '2026-03-01')$q$, :'sh')),
   ('safe_to_spend', format($q$select api.safe_to_spend(%L)$q$, :'sh')),
+  ('spend_pace', format($q$select api.spend_pace(%L)$q$, :'sh')),
   ('net_worth', format($q$select api.net_worth(%L)$q$, :'sh')),
   ('trash_list', format($q$select api.trash_list(%L)$q$, :'sh')),
   ('shared_activity', format($q$select api.shared_activity(%L)$q$, :'sh')),
@@ -345,9 +348,11 @@ select is(tests.web_val(tests.f(), format($$select count(*) from (
     union all select d::text from api.bills_due(%L, '2026-12-31') d
     union all select p::text from api.budget_progress(%L, '2026-04-01') p
     union all select o::text from api.budget_overview(%L, '2026-04-01') o
+    union all select s::text from api.safe_to_spend(%L) s
+    union all select p::text from api.spend_pace(%L) p
   ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like '%%KANARI-N-%%'
     or x like %L$$,
-  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
+  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
   'F: tidak ada deskripsi Pribadi N, kanari tagihan N, atau id dompet N di entri/riwayat/line/laporan/Sampah/feed/tagihan/anggaran');
 select is(tests.web_val(tests.n(), format($$select count(*) from (
     select e::text as x from app.entries e union all select h::text from app.entry_history h
