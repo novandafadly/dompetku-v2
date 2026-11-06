@@ -175,6 +175,144 @@ describe('runJob terhadap Postgres', () => {
   });
 });
 
+describe('materialize_bills (S9, K3)', () => {
+  const job = jobDef('materialize_bills');
+  const uid = '0b0b0b0b-0000-4000-8000-000000000001';
+  const email = 'worker-int@example.test';
+  let billId = '';
+  let ownerEmail: string | null = null;
+
+  async function occurrences(): Promise<number> {
+    const { rows } = await admin.query<{ n: number }>(
+      'select count(*)::int as n from app.bill_occurrences where bill_id = $1',
+      [billId],
+    );
+    return rows[0]?.n ?? -1;
+  }
+
+  beforeAll(async () => {
+    // Satu rumah tangga lewat jalan produksi (trigger pendaftaran, api.bootstrap_owner,
+    // api.create_bill), lalu kemunculan dihapus agar job yang membuatnya lagi.
+    const { rows: prev } = await admin.query<{ value: string }>(
+      "select value from app.settings where key = 'owner_email'",
+    );
+    ownerEmail = prev[0]?.value ?? null;
+    const c = await admin.connect();
+    try {
+      await c.query('begin');
+      await c.query(
+        `insert into app.settings (key, value) values ('owner_email', $1)
+         on conflict (key) do update set value = excluded.value`,
+        [email],
+      );
+      await c.query(
+        'insert into auth."user" (id, name, email, "emailVerified") values ($1, \'Tes\', $2, true)',
+        [uid, email],
+      );
+      await c.query(
+        "insert into auth.recovery_codes (user_id, code_hash) values ($1, '$argon2id$v=19$tes')",
+        [uid],
+      );
+      await c.query("select set_config('app.user_id', $1, true)", [uid]);
+      await c.query("select api.bootstrap_owner('Tes')");
+      const { rows } = await c.query<{ id: string }>(
+        `select (api.create_bill(gen_random_uuid(), s.id, 'Listrik', 485000, k.id, 28::smallint,
+                 app.today()) ->> 'bill_id') as id
+         from app.spaces s join app.categories k on k.space_id = s.id and k.name = 'Listrik & Air'
+         where s.kind = 'shared'`,
+      );
+      billId = rows[0]?.id ?? '';
+      await c.query('delete from app.bill_occurrences where bill_id = $1', [billId]);
+      await c.query('commit');
+    } catch (err) {
+      await c.query('rollback');
+      throw err;
+    } finally {
+      c.release();
+    }
+  });
+
+  afterAll(async () => {
+    // DB kembali bersih untuk tes integrasi web (pola wipe() di harness web).
+    await admin.query(`
+      begin;
+      select set_config('dompetku.purge', 'on', true);
+      delete from app.idempotency_keys;
+      delete from app.bill_occurrences;
+      delete from app.bills;
+      delete from app.budgets;
+      delete from app.categories;
+      delete from app.space_members;
+      delete from app.profiles;
+      delete from app.spaces;
+      delete from app.households;
+      delete from audit.events;
+      delete from auth."user";
+      commit;`);
+    if (ownerEmail === null) {
+      await admin.query("delete from app.settings where key = 'owner_email'");
+    } else {
+      await admin.query("update app.settings set value = $1 where key = 'owner_email'", [
+        ownerEmail,
+      ]);
+    }
+  });
+
+  it('dua kali jalan → baris bill_occurrences sama, job_runs dua ok', async () => {
+    expect(billId).not.toBe('');
+    expect(await occurrences()).toBe(0);
+    const before = await lastRunId();
+    const hc = healthchecks(`${hcBase}/jobs`, { log: quiet });
+    const first = await runJob(pool, job, hc, { log: quiet });
+    const afterFirst = await occurrences();
+    const second = await runJob(pool, job, hc, { log: quiet });
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(first).toEqual({ job: 'materialize_bills', status: 'ok', rows: afterFirst });
+    expect(second).toEqual({ job: 'materialize_bills', status: 'ok', rows: 0 });
+    expect(await occurrences()).toBe(afterFirst);
+    expect(await runsSince(before, 'materialize_bills')).toEqual([
+      { status: 'ok', error_code: null, rows: afterFirst },
+      { status: 'ok', error_code: null, rows: 0 },
+    ]);
+    expect(pings.map((p) => `${p.path} ${p.body}`)).toEqual([
+      '/jobs/start ',
+      '/jobs job=materialize_bills',
+      '/jobs/start ',
+      '/jobs job=materialize_bills',
+    ]);
+  });
+
+  it('gagal (EXECUTE dicabut sementara) → job_runs failed 42501, /fail tanpa nominal', async () => {
+    const before = await lastRunId();
+    await admin.query(
+      'revoke execute on function jobs.materialize_bills(date) from dompetku_worker',
+    );
+    try {
+      const res = await runJob(pool, job, healthchecks(`${hcBase}/jobs`, { log: quiet }), {
+        log: quiet,
+      });
+      expect(res).toEqual({
+        job: 'materialize_bills',
+        status: 'failed',
+        code: '42501',
+        rows: null,
+      });
+    } finally {
+      await admin.query(
+        'grant execute on function jobs.materialize_bills(date) to dompetku_worker',
+      );
+    }
+    expect(await runsSince(before, 'materialize_bills')).toEqual([
+      { status: 'failed', error_code: '42501', rows: null },
+    ]);
+    expect(pings).toEqual([
+      { path: '/jobs/start', body: '' },
+      { path: '/jobs/fail', body: 'job=materialize_bills code=42501' },
+    ]);
+    expect(pings.some((p) => p.body.includes('485'))).toBe(false);
+  });
+});
+
 describe('pg-boss (skema pgboss, createSchema: false)', () => {
   let w: WorkerHandle | undefined;
 

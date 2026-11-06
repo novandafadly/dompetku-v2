@@ -8,9 +8,11 @@
 -- S9 (0118): fungsi tagihan (create/update/archive_bill, post/skip/unskip_bill_occurrence, bill_list,
 -- bills_due) ikut daftar DK404/DK401 dan kanari Bersama; api kini boleh DELETE bill_occurrences
 -- (api.update_bill), tetap 0 baris untuk Pribadi pasangan.
+-- S9 (0119): fungsi anggaran (set/delete/copy_budgets, budget_progress, budget_overview) ikut daftar
+-- DK404/DK401 dan kanari Bersama; anggaran Pribadi N tetap utuh sesudah percobaan F.
 -- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(252);
+select plan(263);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -226,11 +228,18 @@ from (values
   ('skip_bill_occurrence', format($q$select api.skip_bill_occurrence(%L)$q$, :'nocc')),
   ('unskip_bill_occurrence', format($q$select api.unskip_bill_occurrence(%L)$q$, :'nocc')),
   ('bill_list', format($q$select count(*) from api.bill_list(%L)$q$, :'np')),
-  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'np'))
+  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'np')),
+  ('set_budget', format($q$select api.set_budget(%L, %L, '2026-04-01', 1, true)$q$, :'np', :'ncat')),
+  ('delete_budget', format($q$select api.delete_budget(%L, %L, '2026-04-01')$q$, :'np', :'ncat')),
+  ('copy_budgets', format($q$select count(*) from api.copy_budgets(%L, '2026-04-01', '2026-05-01')$q$, :'np')),
+  ('budget_progress', format($q$select count(*) from api.budget_progress(%L, '2026-04-01')$q$, :'np')),
+  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'np'))
 ) v (t, q);
 select is(tests.owner_val(null, format($$select name || ' ' || (archived_at is null) || ' '
     || (select string_agg((entry_id is null and skipped_at is null)::text, ',') from app.bill_occurrences where bill_id = %1$L)
   from app.bills where id = %1$L$$, :'bill')), 'KANARI-N-TAGIHAN true true', 'tagihan dan kemunculan N tidak tersentuh');
+select is(tests.owner_val(null, format($$select string_agg(month || ':' || amount || ':' || wajib, ',' order by month)
+  from app.budgets where space_id = %L$$, :'np')), '2026-04-01:900000:false', 'anggaran N tidak tersentuh (set/hapus/salin F)');
 select is(tests.web_val(tests.n(), format($$select count(*) from app.entries where id = %L and voided_at is null$$, :'ne')), '1',
   'entri N tidak tersentuh');
 select is(tests.owner_val(null, format($$select version || ' ' || (voided_at is null) || ' '
@@ -275,7 +284,12 @@ from (values
   ('skip_bill_occurrence', format($q$select api.skip_bill_occurrence(%L)$q$, :'nocc')),
   ('unskip_bill_occurrence', format($q$select api.unskip_bill_occurrence(%L)$q$, :'nocc')),
   ('bill_list', format($q$select count(*) from api.bill_list(%L)$q$, :'sh')),
-  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'sh'))
+  ('bills_due', format($q$select count(*) from api.bills_due(%L)$q$, :'sh')),
+  ('set_budget', format($q$select api.set_budget(%L, %L, '2026-04-01', 1)$q$, :'np', :'ncat')),
+  ('delete_budget', format($q$select api.delete_budget(%L, %L, '2026-04-01')$q$, :'np', :'ncat')),
+  ('copy_budgets', format($q$select count(*) from api.copy_budgets(%L, '2026-04-01', '2026-05-01')$q$, :'sh')),
+  ('budget_progress', format($q$select count(*) from api.budget_progress(%L, '2026-04-01')$q$, :'sh')),
+  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'sh'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====
@@ -329,9 +343,11 @@ select is(tests.web_val(tests.f(), format($$select count(*) from (
     union all select s::text from app.bill_schedule s
     union all select b::text from api.bill_list(%L) b
     union all select d::text from api.bills_due(%L, '2026-12-31') d
+    union all select p::text from api.budget_progress(%L, '2026-04-01') p
+    union all select o::text from api.budget_overview(%L, '2026-04-01') o
   ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like '%%KANARI-N-%%'
     or x like %L$$,
-  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
+  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
   'F: tidak ada deskripsi Pribadi N, kanari tagihan N, atau id dompet N di entri/riwayat/line/laporan/Sampah/feed/tagihan/anggaran');
 select is(tests.web_val(tests.n(), format($$select count(*) from (
     select e::text as x from app.entries e union all select h::text from app.entry_history h

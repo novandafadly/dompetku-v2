@@ -1,10 +1,17 @@
 /**
  * Job terjadwal worker (AFD §5, BSD §10). Semua WIB; jendela 01:00–01:30 WIB tidak bentrok
- * dengan base backup 02:00 dan uji restore Minggu 04:00 (runbook S2). statement_timeout role
- * worker 60 s, jadi tiap job selesai jauh sebelum 02:00.
+ * dengan base backup 02:00 dan uji restore Minggu 04:00 (runbook S2). materialize_bills (S9, K3)
+ * jalan 00:05 WIB, sesudah pergantian hari WIB dan sebelum jendela itu, supaya dq_reconcile 01:00
+ * melihat kemunculan hari ini. statement_timeout role worker 60 s, jadi tiap job selesai jauh
+ * sebelum job berikutnya dan sebelum 02:00.
  */
 export type JobName =
-  'dq_reconcile' | 'purge_idempotency' | 'purge_unfinished_users' | 'purge_audit' | 'purge_voided';
+  | 'dq_reconcile'
+  | 'purge_idempotency'
+  | 'purge_unfinished_users'
+  | 'purge_audit'
+  | 'purge_voided'
+  | 'materialize_bills';
 
 export interface JobDef {
   name: JobName;
@@ -12,7 +19,7 @@ export interface JobDef {
   tz: 'Asia/Jakarta';
   /** Check Healthchecks: `dq` (dompetku-dq) atau `jobs` (dompetku-jobs). */
   check: 'dq' | 'jobs';
-  /** `count`: fungsi mengembalikan int (baris terhapus); `dq`: tabel cek DQ. */
+  /** `count`: fungsi mengembalikan int (baris terhapus/dibuat); `dq`: tabel cek DQ. */
   kind: 'count' | 'dq';
   sql: string;
 }
@@ -60,6 +67,15 @@ export const JOBS: readonly JobDef[] = [
     check: 'jobs',
     kind: 'count',
     sql: 'select jobs.purge_voided() as n',
+  },
+  {
+    // S9 (K3): kemunculan tagihan aktif sampai akhir periode gajian berikutnya (idempoten).
+    name: 'materialize_bills',
+    cron: '5 0 * * *',
+    tz: TZ,
+    check: 'jobs',
+    kind: 'count',
+    sql: 'select jobs.materialize_bills() as n',
   },
 ];
 
