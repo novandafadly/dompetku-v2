@@ -22,7 +22,7 @@ Bila `worker.env` ada tetapi ditolak `--check-config` (mis. `DATABASE_URL` koson
 
 Urutan langkah di bawah boleh sebelum atau sesudah PR S7 di-merge. Deployer di VM adalah salinan manual: sampai langkah 2 dikerjakan, deployer lama hanya mengganti web dan worker tidak pernah berjalan.
 
-Job (semua WIB, `apps/worker/src/jobs.ts`): `dq_reconcile` 01:00 (check `dompetku-dq`); `purge_voided` Senin 01:15, `purge_idempotency` 01:20, `purge_unfinished_users` 01:25, `purge_audit` 01:30 (keempatnya **berbagi** check `dompetku-jobs`). Isi ping hanya nama job, SQLSTATE, id cek DQ, severity, dan jumlah pelanggaran.
+Job (semua WIB, `apps/worker/src/jobs.ts`): `materialize_bills` 00:05 (S9: kemunculan tagihan sampai akhir periode gajian berikutnya); `dq_reconcile` 01:00 (check `dompetku-dq`, 11 cek sejak S9: DQ13 satu kewajiban); `purge_voided` Senin 01:15, `purge_idempotency` 01:20, `purge_unfinished_users` 01:25, `purge_audit` 01:30 (`materialize_bills` dan keempat job purge **berbagi** check `dompetku-jobs`). Isi ping hanya nama job, SQLSTATE, id cek DQ, severity, dan jumlah pelanggaran.
 
 Semua perintah manual yang memanggil `docker compose` untuk worker dibungkus `flock /run/lock/dompetku-deploy.lock` (kunci yang sama dengan deployer), supaya tidak bertabrakan dengan deploy yang sedang berjalan; perintah menunggu sampai deploy selesai.
 
@@ -34,14 +34,14 @@ Isi `infra/db-vm/deploy/` disalin ke `/tmp/dompetku-s7/`, `infra/db-vm/compose.y
 
 Buat 2 check di project yang sama dengan `dompetku-backup` (alert ke email pemilik):
 
-| Check           | Schedule (Cron) | Time zone      | Grace | Catatan                                                                        |
-| --------------- | --------------- | -------------- | ----- | ------------------------------------------------------------------------------ |
-| `dompetku-dq`   | `0 1 * * *`     | `Asia/Jakarta` | 2 jam | `dq_reconcile` harian                                                          |
-| `dompetku-jobs` | `20 1 * * *`    | `Asia/Jakarta` | 2 jam | 4 job purge berbagi check ini; ping pertama tiap hari 01:20 (Senin juga 01:15) |
+| Check           | Schedule (Cron) | Time zone      | Grace | Catatan                                                                                                                                                              |
+| --------------- | --------------- | -------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dompetku-dq`   | `0 1 * * *`     | `Asia/Jakarta` | 2 jam | `dq_reconcile` harian                                                                                                                                                |
+| `dompetku-jobs` | `20 1 * * *`    | `Asia/Jakarta` | 2 jam | 4 job purge + `materialize_bills` (S9) berbagi check ini; ping pertama tiap hari 00:05 (lebih awal dari jadwal check, tetap dihitung), lalu 01:20 (Senin juga 01:15) |
 
 Salin URL ping masing-masing (bentuk `https://hc-ping.com/<uuid>`) untuk langkah 3. URL ini rahasia ringan (siapa pun yang tahu bisa memalsukan ping): jangan tempel di chat atau repo.
 
-Karena 4 job berbagi `dompetku-jobs`, satu job gagal mengirim `/fail` (email "down" langsung), lalu job berikutnya yang sukses mengembalikannya ke "up" (email kedua). Email "down" tetap berarti ada job yang gagal malam itu; cek `jobs.job_runs` (langkah 5).
+Karena 5 job berbagi `dompetku-jobs` (`materialize_bills` sejak S9; jadwal check tidak perlu diubah), satu job gagal mengirim `/fail` (email "down" langsung), lalu job berikutnya yang sukses mengembalikannya ke "up" (email kedua). Email "down" tetap berarti ada job yang gagal malam itu; cek `jobs.job_runs` (langkah 5).
 
 ### 2. Berkas (sesi VM)
 
@@ -196,7 +196,7 @@ sudo docker compose exec -T postgres gosu postgres psql -X -d dompetku -Atc \
   "select job, status, coalesce(error_code, '-'), started_at from jobs.job_runs order by started_at desc limit 6"
 ```
 
-Harapan: `dq_reconcile`, `purge_idempotency`, `purge_unfinished_users`, `purge_audit` berstatus `ok`; kedua check Healthchecks hijau. `dompetku-dq` merah dengan isi `DQxx error n` = pelanggaran data nyata (BSD §10), bukan gangguan worker.
+Harapan: `materialize_bills` (S9), `dq_reconcile`, `purge_idempotency`, `purge_unfinished_users`, `purge_audit` berstatus `ok`; kedua check Healthchecks hijau. `dompetku-dq` merah dengan isi `DQxx error n` = pelanggaran data nyata (BSD §10), bukan gangguan worker.
 
 ### 6. Latihan gagal
 
