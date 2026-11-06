@@ -209,5 +209,410 @@
       { "report_class": "x_diambil_anggota", "inflow": 0, "outflow": 150000, "entry_count": 1 },
       { "report_class": "x_setoran_anggota", "inflow": 700000, "outflow": 0, "entry_count": 1 }
     ]
+  },
+  "laporan": {
+    "_catatan": "Task 8 (0121). Hari ini 2026-11-10 kecuali kunci *_pada_26nov (jam 2026-11-26) dan *_pada_1des (jam 2026-12-01); fixture tidak berubah. Perhitungan di komentar support/golden-s9.sql bagian Laporan.",
+    "category_summary": {
+      "n_pribadi_nov": [
+        {
+          "kind": "category",
+          "root": "Cicilan & Tagihan",
+          "name": "Cicilan & Tagihan",
+          "type": "expense",
+          "amount": 410000,
+          "entry_count": 1,
+          "type_total": 1136500,
+          "pct10": 360,
+          "root_total": 410000,
+          "root_pct10": 360,
+          "pct10_in_root": 1000,
+          "archived": false
+        },
+        {
+          "kind": "category",
+          "root": "Belanja",
+          "name": "Belanja",
+          "type": "expense",
+          "amount": 340000,
+          "entry_count": 1,
+          "type_total": 1136500,
+          "pct10": 299,
+          "root_total": 340000,
+          "root_pct10": 299,
+          "pct10_in_root": 1000,
+          "archived": false
+        },
+        {
+          "kind": "category",
+          "root": "Makan Siang & Minum",
+          "name": "Makan Siang & Minum",
+          "type": "expense",
+          "amount": 335000,
+          "entry_count": 3,
+          "type_total": 1136500,
+          "pct10": 294,
+          "root_total": 335000,
+          "root_pct10": 294,
+          "pct10_in_root": 1000,
+          "archived": false
+        },
+        {
+          "kind": "category",
+          "root": "Transportasi",
+          "name": "Transportasi",
+          "type": "expense",
+          "amount": 0,
+          "entry_count": 0,
+          "type_total": 1136500,
+          "pct10": 0,
+          "root_total": 45000,
+          "root_pct10": 39,
+          "pct10_in_root": 0,
+          "archived": false
+        },
+        {
+          "kind": "category",
+          "root": "Transportasi",
+          "name": "Ojek",
+          "type": "expense",
+          "amount": 45000,
+          "entry_count": 1,
+          "type_total": 1136500,
+          "pct10": 39,
+          "root_total": 45000,
+          "root_pct10": 39,
+          "pct10_in_root": 1000,
+          "archived": false
+        },
+        {
+          "kind": "fee",
+          "root": null,
+          "name": null,
+          "type": "expense",
+          "amount": 6500,
+          "entry_count": 1,
+          "type_total": 1136500,
+          "pct10": 5,
+          "root_total": 6500,
+          "root_pct10": 5,
+          "pct10_in_root": null,
+          "archived": null
+        },
+        {
+          "kind": "category",
+          "root": "Gaji",
+          "name": "Gaji",
+          "type": "income",
+          "amount": 8000000,
+          "entry_count": 1,
+          "type_total": 8000000,
+          "pct10": 1000,
+          "root_total": 8000000,
+          "root_pct10": 1000,
+          "pct10_in_root": 1000,
+          "archived": false
+        }
+      ],
+      "bersama_nov": [
+        {
+          "kind": "category",
+          "root": "Belanja Dapur",
+          "name": "Belanja Dapur",
+          "type": "expense",
+          "amount": 120000,
+          "entry_count": 1,
+          "type_total": 120000,
+          "pct10": 1000,
+          "root_total": 120000,
+          "root_pct10": 1000,
+          "pct10_in_root": 1000,
+          "archived": false
+        }
+      ]
+    },
+    "excluded_summary": {
+      "n_pribadi_nov": [
+        {
+          "report_class": "x_ambil_bersama",
+          "direction": "in",
+          "amount": 150000,
+          "entry_count": 1
+        },
+        {
+          "report_class": "x_kantor",
+          "direction": "out",
+          "amount": 326000,
+          "entry_count": 2
+        },
+        {
+          "report_class": "x_reimburse",
+          "direction": "in",
+          "amount": 300000,
+          "entry_count": 1
+        },
+        {
+          "report_class": "x_setor_bersama",
+          "direction": "out",
+          "amount": 700000,
+          "entry_count": 1
+        },
+        {
+          "report_class": "x_talangan",
+          "direction": "out",
+          "amount": 500000,
+          "entry_count": 1
+        },
+        {
+          "report_class": "x_transfer",
+          "direction": "in",
+          "amount": 1250000,
+          "entry_count": 2
+        },
+        {
+          "report_class": "x_transfer",
+          "direction": "out",
+          "amount": 1000000,
+          "entry_count": 1
+        }
+      ],
+      "bersama_nov": [
+        {
+          "report_class": "x_diambil_anggota",
+          "direction": "out",
+          "amount": 150000,
+          "entry_count": 1
+        },
+        {
+          "report_class": "x_setoran_anggota",
+          "direction": "in",
+          "amount": 700000,
+          "entry_count": 1
+        }
+      ]
+    },
+    "period_trend": {
+      "n_pribadi_gajian_nov_3": [
+        {
+          "label_month": "2026-09-01",
+          "starts_on": "2026-08-24",
+          "ends_on": "2026-09-24",
+          "pemasukan": 0,
+          "pengeluaran": 0,
+          "selisih": 0,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-09-25",
+          "ends_on": "2026-10-22",
+          "pemasukan": 0,
+          "pengeluaran": 752500,
+          "selisih": -752500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-10-23",
+          "ends_on": "2026-11-24",
+          "pemasukan": 8000000,
+          "pengeluaran": 1136500,
+          "selisih": 6863500,
+          "complete": false,
+          "is_current": true,
+          "days_left": 15,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        }
+      ],
+      "n_pribadi_kalender_nov_3": [
+        {
+          "label_month": "2026-09-01",
+          "starts_on": "2026-09-01",
+          "ends_on": "2026-09-30",
+          "pemasukan": 0,
+          "pengeluaran": 0,
+          "selisih": 0,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-10-01",
+          "ends_on": "2026-10-31",
+          "pemasukan": 8000000,
+          "pengeluaran": 932500,
+          "selisih": 7067500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-11-01",
+          "ends_on": "2026-11-30",
+          "pemasukan": 0,
+          "pengeluaran": 956500,
+          "selisih": -956500,
+          "complete": false,
+          "is_current": true,
+          "days_left": 21,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        }
+      ],
+      "bersama_gajian_nov_2": [
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-09-25",
+          "ends_on": "2026-10-22",
+          "pemasukan": 0,
+          "pengeluaran": 0,
+          "selisih": 0,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-10-23",
+          "ends_on": "2026-11-24",
+          "pemasukan": 0,
+          "pengeluaran": 120000,
+          "selisih": -120000,
+          "complete": false,
+          "is_current": true,
+          "days_left": 15,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        }
+      ],
+      "n_pribadi_gajian_des_3_pada_26nov": [
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-09-25",
+          "ends_on": "2026-10-22",
+          "pemasukan": 0,
+          "pengeluaran": 752500,
+          "selisih": -752500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-10-23",
+          "ends_on": "2026-11-24",
+          "pemasukan": 8000000,
+          "pengeluaran": 1136500,
+          "selisih": 6863500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": 384000,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-12-01",
+          "starts_on": "2026-11-25",
+          "ends_on": "2026-12-22",
+          "pemasukan": 0,
+          "pengeluaran": 0,
+          "selisih": 0,
+          "complete": false,
+          "is_current": true,
+          "days_left": 27,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        }
+      ],
+      "n_pribadi_gajian_nov_1_pada_26nov": [
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-10-23",
+          "ends_on": "2026-11-24",
+          "pemasukan": 8000000,
+          "pengeluaran": 1136500,
+          "selisih": 6863500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": 384000,
+          "holidays_known": true
+        }
+      ],
+      "f_pribadi_gajian_nov_2_pada_26nov": [
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-09-25",
+          "ends_on": "2026-10-22",
+          "pemasukan": 0,
+          "pengeluaran": 0,
+          "selisih": 0,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-10-23",
+          "ends_on": "2026-11-24",
+          "pemasukan": 0,
+          "pengeluaran": 10000,
+          "selisih": -10000,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        }
+      ],
+      "n_pribadi_kalender_nov_2_pada_1des": [
+        {
+          "label_month": "2026-10-01",
+          "starts_on": "2026-10-01",
+          "ends_on": "2026-10-31",
+          "pemasukan": 8000000,
+          "pengeluaran": 932500,
+          "selisih": 7067500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": null,
+          "holidays_known": true
+        },
+        {
+          "label_month": "2026-11-01",
+          "starts_on": "2026-11-01",
+          "ends_on": "2026-11-30",
+          "pemasukan": 0,
+          "pengeluaran": 956500,
+          "selisih": -956500,
+          "complete": true,
+          "is_current": false,
+          "days_left": null,
+          "delta_pengeluaran": 24000,
+          "holidays_known": true
+        }
+      ]
+    }
   }
 }

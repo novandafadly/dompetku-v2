@@ -11,9 +11,11 @@
 -- S9 (0119): fungsi anggaran (set/delete/copy_budgets, budget_progress, budget_overview) ikut daftar
 -- DK404/DK401 dan kanari Bersama; anggaran Pribadi N tetap utuh sesudah percobaan F.
 -- S9 (0120): api.spend_pace ikut daftar DK404/DK401; safe_to_spend/spend_pace Bersama ikut kanari.
+-- S9 (0121): fungsi Laporan (category_summary, period_trend, excluded_summary) ikut daftar DK404/DK401
+-- dan kanari Bersama (B13).
 -- ID: B1, B2, B5, B6, B11, S6
 begin;
-select plan(265);
+select plan(271);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -235,7 +237,10 @@ from (values
   ('delete_budget', format($q$select api.delete_budget(%L, %L, '2026-04-01')$q$, :'np', :'ncat')),
   ('copy_budgets', format($q$select count(*) from api.copy_budgets(%L, '2026-04-01', '2026-05-01')$q$, :'np')),
   ('budget_progress', format($q$select count(*) from api.budget_progress(%L, '2026-04-01')$q$, :'np')),
-  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'np'))
+  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'np')),
+  ('category_summary', format($q$select count(*) from api.category_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np')),
+  ('period_trend', format($q$select count(*) from api.period_trend(%L, '2026-03-01')$q$, :'np')),
+  ('excluded_summary', format($q$select count(*) from api.excluded_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np'))
 ) v (t, q);
 select is(tests.owner_val(null, format($$select name || ' ' || (archived_at is null) || ' '
     || (select string_agg((entry_id is null and skipped_at is null)::text, ',') from app.bill_occurrences where bill_id = %1$L)
@@ -292,7 +297,10 @@ from (values
   ('delete_budget', format($q$select api.delete_budget(%L, %L, '2026-04-01')$q$, :'np', :'ncat')),
   ('copy_budgets', format($q$select count(*) from api.copy_budgets(%L, '2026-04-01', '2026-05-01')$q$, :'sh')),
   ('budget_progress', format($q$select count(*) from api.budget_progress(%L, '2026-04-01')$q$, :'sh')),
-  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'sh'))
+  ('budget_overview', format($q$select count(*) from api.budget_overview(%L, '2026-04-01')$q$, :'sh')),
+  ('category_summary', format($q$select count(*) from api.category_summary(%L, '2026-03-01', '2026-03-31')$q$, :'sh')),
+  ('period_trend', format($q$select count(*) from api.period_trend(%L, '2026-03-01')$q$, :'sh')),
+  ('excluded_summary', format($q$select count(*) from api.excluded_summary(%L, '2026-03-01', '2026-03-31')$q$, :'sh'))
 ) v (t, q);
 
 -- ===== Bersama tidak pernah membuka Pribadi (BSD §13 #13, keputusan pemilik #9) =====
@@ -350,10 +358,15 @@ select is(tests.web_val(tests.f(), format($$select count(*) from (
     union all select o::text from api.budget_overview(%L, '2026-04-01') o
     union all select s::text from api.safe_to_spend(%L) s
     union all select p::text from api.spend_pace(%L) p
+    union all select c::text from api.category_summary(%L, '2026-01-01', '2026-12-31') c
+    union all select t::text from api.period_trend(%L, '2026-12-01', 12) t
+    union all select t::text from api.period_trend(%L, '2026-12-01', 12, 'kalender') t
+    union all select x::text from api.excluded_summary(%L, '2026-01-01', '2026-12-31') x
   ) s where x like '%%rahasia setor%%' or x like '%%rahasia ambil%%' or x like '%%rahasia N%%' or x like '%%KANARI-N-%%'
     or x like %L$$,
-  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', '%' || :'bca' || '%')), '0',
-  'F: tidak ada deskripsi Pribadi N, kanari tagihan N, atau id dompet N di entri/riwayat/line/laporan/Sampah/feed/tagihan/anggaran');
+  :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh', :'sh',
+  '%' || :'bca' || '%')), '0',
+  'F: tidak ada deskripsi Pribadi N, kanari tagihan N, atau id dompet N di entri/riwayat/line/laporan/Sampah/feed/tagihan/anggaran/Laporan');
 select is(tests.web_val(tests.n(), format($$select count(*) from (
     select e::text as x from app.entries e union all select h::text from app.entry_history h
     union all select t::text from app.entry_tombstones t

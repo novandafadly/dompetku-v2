@@ -145,6 +145,36 @@
 --   Makan 335.000 + Belanja 340.000 + Transportasi 45.000 + Cicilan & Tagihan 410.000 = 1.130.000.
 -- period_summary Bersama 23 Okt..24 Nov: expense 0 / 120.000 / 1 (e22); x_diambil_anggota 0 / 150.000 / 1
 --   (e17); x_setoran_anggota 700.000 / 0 / 1 (e16).
+--
+-- ===== Laporan (Task 8, 0121; golden-s9.json kunci "laporan"; fixture di atas tidak diubah) =====
+-- category_summary N 23 Okt..24 Nov: Pengeluaran penuh (penyebut expense) = 1.130.000 + fee e16 6.500 =
+--   1.136.500; Pemasukan = 8.000.000. pct10 = floor(1000 x amount / penyebut):
+--   Cicilan & Tagihan e21 410.000 -> floor(360,75) = 360; Belanja e07 340.000 -> floor(299,16) = 299;
+--   Makan e04 + e05 + e06 = 335.000 (3 entri) -> floor(294,76) = 294; Transportasi: induk langsung 0
+--   (e09 10 Okt = periode Okt), anak Ojek e08 45.000 -> root_total 45.000, floor(39,59) = 39, induk
+--   pct10_in_root 0, Ojek 1000; fee e16 6.500 -> floor(5,71) = 5 (fee e15 dari kantor = x_kantor);
+--   Gaji e01 8.000.000 -> 1000. Σ pct10 expense = 360 + 299 + 294 + 0 + 39 + 5 = 997 (<= 1000, selisih
+--   3 < 6 baris). Urutan: root_total terbesar dulu, fee terakhir, lalu income.
+--   Bersama: Belanja Dapur e22 120.000 -> 1000.
+-- excluded_summary N (dari period_summary per arah): x_ambil_bersama in 150.000 (e17); x_kantor out
+--   75.000 + 250.000 + 1.000 = 326.000 (e12, e15); x_reimburse in 300.000; x_setor_bersama out 700.000;
+--   x_talangan out 500.000; x_transfer in 1.000.000 (e14 Celengan) + 250.000 (e15 BCA) = 1.250.000 / 2
+--   entri, out 1.000.000 (e14; main e15 = x_kantor) / 1. Bersama: x_diambil_anggota out 150.000,
+--   x_setoran_anggota in 700.000.
+-- period_trend (Pengeluaran = expense + expense_fee; entri hidup tertua N dan F = saldo awal 1 Sep):
+--   gajian label Sep = 24 Agu (25 Agu libur Maulid) .. 24 Sep: hanya saldo awal + pindah Lama (x_*) ->
+--   0 / 0; periode sebelumnya (Agu) kosong -> delta NULL.
+--   gajian Okt 25 Sep..22 Okt: e02 120.000 + e03 250.000 + e09 30.000 + e19 350.000 + fee e13 2.500 =
+--   752.500 (e20 batal); lengkap; Sep memuat entri tertua -> delta NULL.
+--   gajian Nov: 8.000.000 / 1.136.500 / 6.863.500; berjalan, sisa 15 hari, delta NULL (belum lengkap).
+--   kalender Okt 1..31 Okt: 930.000 (+ e04 23 Okt) + 2.500 = 932.500, pemasukan e01 8.000.000;
+--   kalender Nov 1..30 Nov: e05 95.000 + e06 60.000 + e07 340.000 + e08 45.000 + e21 410.000 + fee e16
+--   6.500 = 956.500, sisa 21 hari. Periksa: 932.500 + 956.500 = 1.889.000 = 752.500 + 1.136.500.
+--   Bersama gajian Okt 0 / 0 (Kas Rumah tanpa saldo awal), Nov 0 / 120.000.
+--   Jam 26 Nov: gajian Nov lengkap, delta = 1.136.500 - 752.500 = 384.000 (juga bila jendela 1 periode);
+--   Des 25 Nov..22 Des berjalan, sisa 27 hari. F: Okt kosong (Sep memuat saldo awal F), Nov 10.000
+--   lengkap, delta NULL karena Okt tanpa transaksi.
+--   Jam 1 Des: kalender Nov lengkap, delta = 956.500 - 932.500 = 24.000.
 
 \set golden `for f in /db/tests/support/golden-s9.json packages/db/tests/support/golden-s9.json tests/support/golden-s9.json support/golden-s9.json; do if [ -f "$f" ]; then cat "$f"; exit 0; fi; done; echo golden-s9.json tidak ditemukan`
 
