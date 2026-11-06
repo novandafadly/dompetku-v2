@@ -313,7 +313,7 @@ select set_eq($$
      union all
      -- S9 (0119): DQ13 satu kewajiban di dq_run memakai fungsi periode (INVOKER).
      select 'dompetku_auditor', f from unnest(array['private.bill_due_in_label', 'private.bill_first_on',
-                      'app.period_of_label', 'app.effective_payday']) f
+                      'app.period_of_label', 'app.effective_payday', 'app.pay_period']) f
      union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',

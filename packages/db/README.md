@@ -85,7 +85,7 @@ Akibatnya untuk migrasi Better Auth (S4 sisi server, diterapkan di `0009`, ADR 0
 
   Lalu minta pemilik akun memverifikasi email baru lewat alur lupa kata sandi. Bila email itu akun pemilik, samakan `app.settings.owner_email`. Trigger dimatikan hanya di dalam transaksi itu; `disable trigger` butuh pemilik tabel atau superuser.
 
-- **Sesudah mengubah `households.payday_rule` atau mengisi `app.holidays`** (libur tahunan, cuti bersama baru): aturan satu kewajiban hanya dinilai saat tulis, jadi label periode kemunculan tagihan bisa bergeser tanpa penolakan. DQ13 di `jobs.dq_reconcile` (01:00 WIB berikutnya, alert `dompetku-dq`) menangkapnya; perbaiki dengan menghapus atau melepas `wajib` anggaran yang bentrok, atau mengarsipkan tagihannya.
+- **Sesudah mengubah `households.payday_rule` atau mengisi `app.holidays`** (libur tahunan, cuti bersama baru): aturan satu kewajiban hanya dinilai saat tulis, jadi label periode kemunculan tagihan bisa bergeser tanpa penolakan. DQ13 di `jobs.dq_reconcile` (01:00 WIB berikutnya, alert `dompetku-dq`) menangkapnya untuk label periode berjalan ke depan (label lampau tidak dinilai lagi); perbaiki dengan menghapus atau melepas `wajib` anggaran yang bentrok, atau mengarsipkan tagihannya.
 - Pembanding email di trigger memakai `lower(btrim(email))`, tetapi `unique` di `auth."user".email` peka huruf besar. Better Auth harus menormalkan email ke huruf kecil sebelum insert.
 - Role `dompetku_test`, skema `tap`/`tests`, dan ekstensi pgTAP hanya ada di cluster CI/lokal (`tests/support/setup.sql`), tidak pernah di VM.
 

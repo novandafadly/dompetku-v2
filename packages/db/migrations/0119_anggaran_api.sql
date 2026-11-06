@@ -321,12 +321,15 @@ language sql stable security definer set search_path = '' as $$
   ) x
   union all
   -- DQ13 satu kewajiban: tagihan aktif + anggaran wajib, kategori induk sama, kemunculan tagihan
-  -- (mulai bill_first_on) di periode berlabel bulan anggaran. Dihitung per pasangan.
+  -- (mulai bill_first_on) di periode berlabel bulan anggaran. Dihitung per pasangan. Hanya label
+  -- periode berjalan ke depan: label lampau yang bergeser karena payday_rule/app.holidays berubah
+  -- tidak lagi memengaruhi aman dipakai, jadi tidak membuat alert merah selamanya.
   select 'DQ13', 'error', count(*)::int from app.bills b
   join app.categories c on c.id = b.category_id
   join app.budgets bu on bu.space_id = b.space_id and bu.wajib
                      and bu.category_id = coalesce(c.parent_id, c.id)
   where b.archived_at is null
+    and bu.month >= (select pp.label_month from app.pay_period(b.space_id, app.today()) pp)
     and private.bill_due_in_label(b.space_id, b.day_of_month,
           private.bill_first_on(b.starts_on, b.created_at), b.ends_on, bu.month)
 $$;
@@ -335,7 +338,7 @@ $$;
 -- dq_run (DQ13) berjalan sebagai dompetku_auditor: fungsi periode yang dipanggilnya (INVOKER).
 grant execute on function private.bill_due_in_label(uuid, smallint, date, date, date),
   private.bill_first_on(date, timestamptz), app.period_of_label(uuid, date),
-  app.effective_payday(smallint, date) to dompetku_auditor;
+  app.effective_payday(smallint, date), app.pay_period(uuid, date) to dompetku_auditor;
 
 select private.own_api_functions();
 
@@ -350,7 +353,7 @@ begin
 end $$;
 revoke execute on function private.bill_due_in_label(uuid, smallint, date, date, date),
   private.bill_first_on(date, timestamptz), app.period_of_label(uuid, date),
-  app.effective_payday(smallint, date) from dompetku_auditor;
+  app.effective_payday(smallint, date), app.pay_period(uuid, date) from dompetku_auditor;
 drop function api.budget_overview(uuid, date);
 drop function api.budget_progress(uuid, date);
 drop function api.copy_budgets(uuid, date, date);

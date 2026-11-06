@@ -212,6 +212,8 @@ Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `
 - [ ] **Step 2: Tes gagal worker:** unit `jobs.test.ts` (job ada, cron 00:05 WIB, tidak bentrok jendela 01:00–01:30 dan 02:00 backup); int: job dijalankan dua kali → baris `bill_occurrences` sama, `job_runs` dua `succeeded`; gagal (fungsi dicabut sementara di tes) → `/fail` tanpa nominal.
 - [ ] **Step 3:** FAIL → implementasi → PASS (`pg_prove` seluruh suite, worker unit + int); commit `feat(db,worker): 0119 API anggaran dan job materialisasi tagihan`.
 
+**Catatan dari review Task 6 (migrasi 0119, commit dea68ef + 6fd1e1a + perbaikan; wajib dibaca Task 7–11):** review task + keamanan bersih (0 Critical/Important). Diperbaiki: wipe e2e (`tests/e2e-auth/helpers.ts`) menghapus `bill_occurrences`, `bills`, `budgets` (logika wipe kini tiga salinan: harness int, helpers e2e, afterAll worker; satukan bila disentuh lagi); DQ13 hanya menilai anggaran berlabel periode berjalan ke depan (auditor +EXECUTE `app.pay_period`). **Task 9:** petakan `DK422 category_not_root` dan galat `DK400` `copy_budgets` dengan `detail` `from_month`/`to_month` (bukan `month`) ke salinan. Diketahui, tidak diubah: tanpa tes konkurensi `copy_budgets` paralel `update_category`/`archive_category` (urutan kunci hanya dianalisis); baris tujuan yang disisipkan paralel dan bentrok wajib dihitung `skipped_conflict`, bukan `skipped_existing` (kosmetik).
+
 ### Task 7: Migrasi 0120 aman dipakai lengkap + laju belanja · Model: terkuat
 
 **Files:** Create `0120_aman_dipakai.sql`, `tests/24_aman_dipakai.sql`, `tests/support/golden-s9.sql` + `golden-s9.json` (fixture kecil dihitung manual, ditinjau dua kali); Modify `00_katalog.sql`, `08_ledger_isolasi.sql`, `README.md`.

@@ -8,7 +8,7 @@
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
 -- ID: S7, T18
 begin;
-select plan(49);
+select plan(50);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -230,6 +230,14 @@ select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, m
 select is(pg_temp.dq(), pg_temp.expect('DQ13=2'), 'DQ13: trigger dilewati, dua label wajib bentrok tagihan = dihitung per pasangan');
 select tests.raw_exec(format($$update app.bills set archived_at = now() where category_id = %L$$, :'k_listrik'));
 select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: tagihan terarsip tidak dihitung');
+rollback to savepoint s;
+-- Label lampau (Februari; hari ini 20 Mar = label Maret) yang bentrok tidak dihitung.
+select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Listrik', 300000, %L, 10::smallint, '2026-02-01')$$,
+  :'sh', :'k_listrik')) is not null as x \gset
+select tests.raw_exec(format($$update app.bills set created_at = '2026-02-01 10:00+07' where category_id = %L$$, :'k_listrik'));
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
+  values (%L, %L, '2026-02-01', 1, true, %L)$$, :'sh', :'k_listrik', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: bentrok di label lampau tidak dihitung (hanya label berjalan ke depan)');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.
