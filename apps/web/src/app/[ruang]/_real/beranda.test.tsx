@@ -20,8 +20,35 @@ vi.mock('@/features/shell/page-header', () => ({
   ),
 }));
 
+/** Bagian S9 aman dipakai (loader Task 9; tampilannya Task 12). */
+const S9_SAFE = {
+  until: '2026-11-30',
+  daysLeft: 27,
+  perDay: 37_037,
+  status: 'aman',
+  reason: null,
+  hasObligations: false,
+} as const;
+
 const base: BerandaData = {
-  safe: { operasional: 1_000_000, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 1_000_000 },
+  period: {
+    label: 'November 2026 · 1 Nov – 30 Nov',
+    from: '2026-11-01',
+    to: '2026-11-30',
+    labelMonth: '2026-11-01',
+    daysLeft: 27,
+    holidaysKnown: true,
+    basis: 'kalender',
+  },
+  safe: {
+    operasional: 1_000_000,
+    billsUntilEom: 0,
+    budgetWajibRemaining: 0,
+    aman: 1_000_000,
+    ...S9_SAFE,
+  },
+  billsDue: { items: [], hasBills: false },
+  budgetsNear: { items: [], hasBudgets: false },
   today: { hasExpense: false, noSpendMarked: false },
   hasOperasional: true,
   hasExpense: false,
@@ -93,7 +120,7 @@ describe('BerandaReal Bersama solo (S7-B1)', () => {
 describe('BerandaReal Bersama kosong (S7-B2)', () => {
   const kosong = {
     hasOperasional: false,
-    safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0 },
+    safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0, ...S9_SAFE },
   };
 
   it('State kosong menggantikan Aman; tanpa Tanpa pengeluaran dan Terbaru', () => {
@@ -291,7 +318,7 @@ describe('BerandaReal Bersama dua anggota: Aktivitas (S8-A1)', () => {
   it('cabang kosong dan tanpa operasional: Aktivitas ada, Kontribusi tidak', () => {
     const kosong = {
       hasOperasional: false,
-      safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0 },
+      safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0, ...S9_SAFE },
     };
     const { unmount } = render(view({ ...kosong, bersama: dua({ empty: true, activity: [] }) }));
     expect(screen.getByRole('region', { name: 'Aktivitas' })).toBeTruthy();

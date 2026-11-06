@@ -1,7 +1,7 @@
 import 'server-only';
 import type pg from 'pg';
 import { z } from 'zod';
-import { endOfMonth, monthName, type IsoDate } from '@dompetku/domain';
+import { monthName, type IsoDate } from '@dompetku/domain';
 import {
   activityText,
   amountChanged,
@@ -14,6 +14,7 @@ import type {
   SharedActivityRow,
 } from '@/features/bersama/types';
 import { buildEntryHref } from '@/features/shell/hrefs';
+import { guarded } from './guarded';
 import { withLedger } from './retry';
 import { SpaceNotFoundError } from './space';
 import type { LedgerCtx } from './write';
@@ -326,17 +327,14 @@ const contributionRow = z.strictObject({
 export interface Period {
   from: IsoDate;
   to: IsoDate;
+  /** Tanggal 1 bulan label periode (K10: periode gajian); kosong = bulan `from`. */
+  labelMonth?: IsoDate;
 }
 
-/** Bulan kalender WIB berjalan (K3) menurut `app.today()` (WIB server, bukan jam Node). */
-export async function currentMonthTx(c: pg.PoolClient): Promise<Period> {
-  const { rows } = await c.query<{ today: string }>('select app.today() as today');
-  const today = rows[0]?.today;
-  if (today === undefined) throw new Error('app.today kosong');
-  return { from: `${today.slice(0, 7)}-01`, to: endOfMonth(today) };
-}
-
-/** `api.member_contributions` per anggota roster, pemilik dulu. Periode = satu bulan kalender. */
+/**
+ * `api.member_contributions` per anggota roster, pemilik dulu. Periode = periode gajian berjalan
+ * (K10, Beranda) atau periode yang dilihat di Laporan; label = nama bulan label periode.
+ */
 export async function contributionsTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
@@ -360,45 +358,17 @@ export async function contributionsTx(
     return { member, setoran: r?.setoran ?? 0, diambil: r?.diambil ?? 0 };
   });
   return {
-    period: { from: period.from, to: period.to, label: monthName(period.from.slice(0, 7)) },
+    period: {
+      from: period.from,
+      to: period.to,
+      label: monthName((period.labelMonth ?? period.from).slice(0, 7)),
+    },
     rows: result,
     allZero: result.every((r) => r.setoran === 0 && r.diambil === 0),
   };
 }
 
 // ===== Beranda dan halaman Aktivitas =====
-/**
- * Dilempar ulang dari savepoint: 40001/40P01 (ulang seluruh transaksi) dan galat otorisasi
- * DK401/DK404 (keanggotaan dicabut di tengah muat: tetap `not_found`, bukan kartu galat).
- */
-const RETHROW = new Set(['40001', '40P01', 'DK401', 'DK404']);
-
-/**
- * Bacaan kartu Beranda di savepoint: galat (SQL atau validasi) hanya mematikan kartu itu
- * (`'error'`, salinan "Salinan galat S8"), Beranda tetap tampil. 40001/40P01 dilempar ulang agar
- * `withLedger` mengulang seluruh transaksi, DK401/DK404 agar tetap `not_found`; koneksi putus membuat `rollback to savepoint` gagal
- * dan galatnya ikut dilempar. Log hanya SQLSTATE (tanpa pesan, argumen, atau nominal).
- */
-async function guarded<T>(
-  c: pg.PoolClient,
-  what: 'activity' | 'contributions',
-  fn: () => Promise<T>,
-): Promise<T | 'error'> {
-  await c.query(`savepoint bersama_${what}`);
-  try {
-    const value = await fn();
-    await c.query(`release savepoint bersama_${what}`);
-    return value;
-  } catch (e) {
-    const code = (e as { code?: unknown } | null)?.code;
-    if (typeof code === 'string' && RETHROW.has(code)) throw e;
-    await c.query(`rollback to savepoint bersama_${what}`);
-    const safe = typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : 'non-sql';
-    console.error(`[bersama] ${what} gagal dimuat: ${safe}`);
-    return 'error';
-  }
-}
-
 export const BERANDA_ACTIVITY = 5;
 
 export interface BersamaBerandaExtra {
@@ -409,11 +379,13 @@ export interface BersamaBerandaExtra {
 
 /**
  * Tambahan Beranda Bersama di transaksi pemanggil. Hanya ruang Bersama berisi ≥ 2 anggota yang
- * memuat feed dan Kontribusi; solo = semuanya `null` (kartu S7-B1 tetap).
+ * memuat feed dan Kontribusi; solo = semuanya `null` (kartu S7-B1 tetap). Kontribusi atas
+ * `period` = periode gajian berjalan (K10; aturan kosong = bulan kalender).
  */
 export async function bersamaBerandaTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
+  period: Period,
 ): Promise<BersamaBerandaExtra> {
   const roster = await rosterTx(c, ctx);
   if (roster.length < 2) return { partner: null, activity: null, contributions: null };
@@ -422,7 +394,7 @@ export async function bersamaBerandaTx(
     return page.items;
   });
   const contributions = await guarded(c, 'contributions', async () =>
-    contributionsTx(c, ctx, await currentMonthTx(c), roster),
+    contributionsTx(c, ctx, period, roster),
   );
   return { partner: partnerOf(roster, ctx.userId), activity, contributions };
 }

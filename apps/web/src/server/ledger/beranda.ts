@@ -1,16 +1,28 @@
 import 'server-only';
 import { todayWIB, type IsoDate } from '@dompetku/domain';
-import type { AccountVM, EntryVM, SafeToSpendVM, TodayStatusVM } from '@/features/ledger/types';
+import type {
+  AccountVM,
+  EntryVM,
+  PeriodVM,
+  SafeToSpendFullVM,
+  TodayStatusVM,
+} from '@/features/ledger/types';
 import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
+import { amanStatus } from '@/features/beranda/aman-status';
+import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
 import type pg from 'pg';
 import { bersamaBerandaTx } from './bersama';
+import { guarded } from './guarded';
 import {
   hasExpenseTx,
   listAccountsTx,
+  payPeriodTx,
   recentEntriesTx,
   safeToSpendTx,
+  spendPaceTx,
   todayStatusTx,
 } from './read';
+import { billsDueTx, budgetOverviewTx } from './rencana';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
 
@@ -19,10 +31,13 @@ import type { LedgerCtx } from './write';
  * `resolveSpace`). Hanya data ruang ini, ditambah satu boolean rumah tangga (`invite`): hasilnya
  * diserialisasi ke payload RSC, jadi rute Bersama tidak pernah membawa data Pribadi.
  * Bersama berisi dua anggota juga memuat feed Aktivitas dan Kontribusi (S8) di transaksi yang sama.
- * Anggaran dan tagihan belum dimuat (S9).
+ * S9: aman dipakai lengkap sampai akhir periode gajian, `Tagihan 7 hari`, `Anggaran hampir habis`
+ * (masing-masing di savepoint sendiri: galat = kartu `'error'`, Beranda tetap).
  */
 export interface BerandaData {
-  safe: SafeToSpendVM;
+  /** Periode gajian berjalan (K1; aturan kosong = bulan kalender). */
+  period: PeriodVM;
+  safe: SafeToSpendFullVM;
   today: TodayStatusVM;
   /**
    * Ada dompet operasional aktif: tanpa itu kartu utama tidak menampilkan angka (B3), dan
@@ -44,6 +59,24 @@ export interface BerandaData {
    * belum ada undangan menunggu); bukan pemilik tidak pernah menerima email undangan.
    */
   bersama: BerandaBersama | null;
+  /** S9-BR2 `Tagihan 7 hari`; `'error'` = gagal dimuat (savepoint). */
+  billsDue: BerandaBillsVM | 'error';
+  /** S9-BR2 `Anggaran hampir habis`; `'error'` = gagal dimuat (savepoint). */
+  budgetsNear: BerandaBudgetsVM | 'error';
+}
+
+export interface BerandaBillsVM {
+  /** Kemunculan terbuka jatuh tempo ≤ hari ini + 7 (termasuk lewat), urut jatuh tempo. */
+  items: BillDueVM[];
+  /** Ruang punya tagihan (aktif) sama sekali: membedakan dua salinan kosong. */
+  hasBills: boolean;
+}
+
+export interface BerandaBudgetsVM {
+  /** Anggaran periode ini dengan pct ≥ 80, urut pct turun (lalu urutan Rencana). */
+  items: BudgetOverviewVM[];
+  /** Ruang punya anggaran di periode ini: membedakan dua salinan kosong. */
+  hasBudgets: boolean;
 }
 
 export interface BerandaBersama {
@@ -59,11 +92,56 @@ export interface BerandaBersama {
    * kartu S7-B1). `'error'` = bacaan feed gagal (savepoint): kartu menampilkan galat, Beranda tetap.
    */
   activity: ActivityItemVM[] | 'error' | null;
-  /** S8-K1: Kontribusi bulan kalender WIB berjalan (K3); `null` = solo, `'error'` = gagal dimuat. */
+  /** S8-K1: Kontribusi periode gajian berjalan (K10); `null` = solo, `'error'` = gagal dimuat. */
   contributions: ContributionVM | 'error' | null;
 }
 
 const RECENT = 5;
+/** T8 m0a: `Tagihan 7 hari` = jatuh tempo ≤ hari ini + 7 (WIB server). */
+const BILLS_WITHIN_DAYS = 7;
+/** m0a: "hampir habis" = terpakai ≥ 80%. */
+const NEAR_PCT = 80;
+
+/**
+ * Ada tagihan aktif atau anggaran wajib berlabel periode ini (`showObligations` kartu Aman).
+ * Kueri `exists` dengan `space_id` eksplisit.
+ */
+async function hasObligationsTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  labelMonth: IsoDate,
+): Promise<boolean> {
+  const { rows } = await c.query<{ any: boolean }>(
+    `select exists (select 1 from app.bills b where b.space_id = $1 and b.archived_at is null)
+            or exists (select 1 from app.budgets b
+                        where b.space_id = $1 and b.month = $2::date and b.wajib) as any`,
+    [ctx.spaceId, labelMonth],
+  );
+  return rows[0]?.any === true;
+}
+
+async function billsCardTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<BerandaBillsVM> {
+  const items = await billsDueTx(c, ctx, { withinDays: BILLS_WITHIN_DAYS });
+  const { rows } = await c.query<{ any: boolean }>(
+    `select exists (select 1 from app.bills b where b.space_id = $1 and b.archived_at is null)
+              as any`,
+    [ctx.spaceId],
+  );
+  return { items, hasBills: rows[0]?.any === true };
+}
+
+async function budgetsCardTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  labelMonth: IsoDate,
+): Promise<BerandaBudgetsVM> {
+  const all = await budgetOverviewTx(c, ctx, labelMonth);
+  const budgeted = all.filter((b) => b.budget !== null);
+  const items = budgeted
+    .filter((b) => b.pct !== null && b.pct >= NEAR_PCT)
+    .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
+  return { items, hasBudgets: budgeted.length > 0 };
+}
 
 /**
  * Pemilik Bersama dan anggota Bersama < 2 (`app.space_roster`, konteks user). Tanpa fungsi SQL
@@ -139,7 +217,14 @@ export async function loadBeranda(
   const given = opts.accounts;
   const [read, givenAccounts] = await Promise.all([
     withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-      const safe = await safeToSpendTx(c, ctx);
+      const period = await payPeriodTx(c, ctx);
+      const raw = await safeToSpendTx(c, ctx);
+      const pace = await spendPaceTx(c, ctx);
+      const safe: SafeToSpendFullVM = {
+        ...raw,
+        ...amanStatus(raw, pace),
+        hasObligations: await hasObligationsTx(c, ctx, period.labelMonth),
+      };
       const today = await todayStatusTx(c, ctx);
       const accounts = given === undefined ? await listAccountsTx(c, ctx) : null;
       const expense = await hasExpenseTx(c, ctx);
@@ -149,9 +234,29 @@ export async function loadBeranda(
       // Feed dan Kontribusi hanya untuk Bersama berisi ≥ 2 anggota (S8); koneksi yang sama.
       const extra =
         bersama && bersama.members >= 2
-          ? await bersamaBerandaTx(c, ctx)
+          ? await bersamaBerandaTx(c, ctx, {
+              from: period.from,
+              to: period.to,
+              labelMonth: period.labelMonth,
+            })
           : { partner: null, activity: null, contributions: null };
-      return { safe, today, accounts, expense, recent, invite, bersama, extra };
+      const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx));
+      const budgetsNear = await guarded(c, 'budgets', () =>
+        budgetsCardTx(c, ctx, period.labelMonth),
+      );
+      return {
+        period,
+        safe,
+        today,
+        accounts,
+        expense,
+        recent,
+        invite,
+        bersama,
+        extra,
+        billsDue,
+        budgetsNear,
+      };
     }),
     given ?? null,
   ]);
@@ -163,6 +268,7 @@ export async function loadBeranda(
     bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra };
   }
   return {
+    period: read.period,
     safe: read.safe,
     today: read.today,
     hasOperasional,
@@ -170,5 +276,7 @@ export async function loadBeranda(
     recent: read.recent,
     invite: read.invite,
     bersama,
+    billsDue: read.billsDue,
+    budgetsNear: read.budgetsNear,
   };
 }

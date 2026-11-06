@@ -494,12 +494,19 @@ describe('loader baca ledger (N dan F bergabung)', () => {
     it('safeToSpend = saldo operasional ruang', async () => {
       await wallet(nPribadi, 400_000, 'BCA');
       await wallet(nBersama, 1_000_000, 'Kas Rumah');
-      expect(await safeToSpend(nPribadi)).toEqual({
+      const s = await safeToSpend(nPribadi);
+      expect(s).toEqual({
         operasional: 400_000,
         billsUntilEom: 0,
         budgetWajibRemaining: 0,
         aman: 400_000,
+        until: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as string,
+        daysLeft: expect.any(Number) as number,
+        perDay: expect.any(Number) as number,
       });
+      // Gajian kosong (bootstrap): sampai akhir bulan kalender; per hari floor (SQL).
+      expect(s.daysLeft).toBeGreaterThanOrEqual(1);
+      expect(s.perDay).toBe(Math.floor(400_000 / s.daysLeft));
     });
   });
 

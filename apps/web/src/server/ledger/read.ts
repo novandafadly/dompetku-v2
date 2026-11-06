@@ -1,13 +1,14 @@
 import 'server-only';
 import type pg from 'pg';
 import { z } from 'zod';
-import type { Rupiah } from '@dompetku/domain';
+import { monthYearLabel, shortDateLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
 import type {
   AccountVM,
   CategoryVM,
   EntryVM,
   HistoryVM,
   MonthSummaryVM,
+  PeriodVM,
   Pocket,
   SafeToSpendVM,
   TodayStatusVM,
@@ -563,15 +564,22 @@ export async function monthSummary(ctx: LedgerCtx, m: string): Promise<MonthSumm
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => monthSummaryTx(c, ctx, m));
 }
 
+/** Hasil mentah `api.safe_to_spend` (S9: sampai akhir periode gajian; semua angka SQL). */
+export type SafeToSpendRaw = SafeToSpendVM & { until: IsoDate; daysLeft: number; perDay: Rupiah };
+
 /** `api.safe_to_spend` dengan hari ini = `app.today()` (p_today kosong). */
-export async function safeToSpendTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<SafeToSpendVM> {
+export async function safeToSpendTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<SafeToSpendRaw> {
   const { rows } = await c.query<{
     operasional: number;
     bills_until_eom: number;
     budget_wajib_remaining: number;
     total: number;
+    per_day: number;
+    days_left: number;
+    until: string;
   }>(
-    `select s.operasional, s.bills_until_eom, s.budget_wajib_remaining, s.total
+    `select s.operasional, s.bills_until_eom, s.budget_wajib_remaining, s.total, s.per_day,
+            s.days_left, s.until
        from api.safe_to_spend(p_space_id => $1) s`,
     [ctx.spaceId],
   );
@@ -582,11 +590,77 @@ export async function safeToSpendTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<S
     billsUntilEom: r.bills_until_eom,
     budgetWajibRemaining: r.budget_wajib_remaining,
     aman: r.total,
+    until: r.until,
+    daysLeft: r.days_left,
+    perDay: r.per_day,
   };
 }
 
-export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendVM> {
+export async function safeToSpend(ctx: LedgerCtx): Promise<SafeToSpendRaw> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => safeToSpendTx(c, ctx));
+}
+
+/** Laju belanja (K7, `api.spend_pace`): rata-rata harian 30 hari dan tagihan lewat jatuh tempo. */
+export interface SpendPace {
+  avgDaily: Rupiah;
+  overdueBills: number;
+}
+
+export async function spendPaceTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<SpendPace> {
+  const { rows } = await c.query<{ avg_daily: number; overdue_bills: number }>(
+    `select p.avg_daily, p.overdue_bills from api.spend_pace(p_space_id => $1) p`,
+    [ctx.spaceId],
+  );
+  const r = rows[0];
+  if (!r) throw new Error('spend_pace kosong');
+  return { avgDaily: r.avg_daily, overdueBills: r.overdue_bills };
+}
+
+// ===== Periode gajian (S9, K1) =====
+/**
+ * `November 2026 · 23 Okt – 24 Nov` (label bulan + rentang). Hanya memformat tanggal SQL.
+ */
+export function periodLabel(labelMonth: IsoDate, from: IsoDate, to: IsoDate): string {
+  return `${monthYearLabel(labelMonth.slice(0, 7))} · ${shortDateLabel(from)} – ${shortDateLabel(to)}`;
+}
+
+/**
+ * Dasar periode dari bentuknya: bulan kalender (aturan gajian kosong) selalu mulai tanggal 1 bulan
+ * label; periode gajian berlabel bulan SESUDAH gajian efektif yang memulainya, jadi `starts_on`
+ * tidak pernah sama dengan `label_month` (gajian tanggal 1 = label bulan berikutnya).
+ */
+export function periodBasis(labelMonth: IsoDate, from: IsoDate): 'gajian' | 'kalender' {
+  return from === labelMonth ? 'kalender' : 'gajian';
+}
+
+/** Periode yang memuat hari ini (`api.pay_period`, tanggal dari `app.today()`). */
+export async function payPeriodTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<PeriodVM> {
+  const { rows } = await c.query<{
+    starts_on: string;
+    ends_on: string;
+    label_month: string;
+    holidays_known: boolean;
+    days_left: number;
+  }>(
+    `select p.starts_on, p.ends_on, p.label_month, p.holidays_known, p.days_left
+       from api.pay_period(p_space_id => $1) p`,
+    [ctx.spaceId],
+  );
+  const r = rows[0];
+  if (!r) throw new Error('pay_period kosong');
+  return {
+    label: periodLabel(r.label_month, r.starts_on, r.ends_on),
+    from: r.starts_on,
+    to: r.ends_on,
+    labelMonth: r.label_month,
+    daysLeft: r.days_left,
+    holidaysKnown: r.holidays_known,
+    basis: periodBasis(r.label_month, r.starts_on),
+  };
+}
+
+export async function payPeriod(ctx: LedgerCtx): Promise<PeriodVM> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => payPeriodTx(c, ctx));
 }
 
 /**
