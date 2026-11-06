@@ -32,13 +32,17 @@ import { callApi, NotInSpaceError, type LedgerCtx } from './write';
 
 // ===== Skema input (diekspor untuk server action: satu sumber batas) =====
 const id = z.uuid();
-const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+/**
+ * Label periode `YYYY-MM` dan tanggal dalam rentang wajar (2000–2099): tahun ekstrem ditolak Zod
+ * sebelum DB (bukan galat non-DK400 dari `::date`, catatan review Task 8).
+ */
+const month = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/);
 const amount = z
   .number()
   .int()
   .positive()
   .max(10 ** 13);
-const isoDate = z.iso.date();
+const isoDate = z.iso.date().regex(/^20\d{2}-/);
 const billName = z.string().trim().min(1).max(60);
 const dayOfMonth = z.number().int().min(1).max(31);
 

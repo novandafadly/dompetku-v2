@@ -638,6 +638,8 @@ describe('Rencana (S9)', () => {
       ['setBudgetAction', { categoryId: A, month: '2026-11-01', amount: 1, wajib: false }, 'month'],
       ['setBudgetAction', { categoryId: A, month: '2026-11', amount: 0, wajib: true }, 'amount'],
       ['copyBudgetsAction', { toMonth: '2026-13' }, 'toMonth'],
+      ['copyBudgetsAction', { toMonth: '0000-01' }, 'toMonth'],
+      ['setBudgetAction', { categoryId: A, month: '9999-12', amount: 1, wajib: false }, 'month'],
       [
         'createBillAction',
         {
@@ -664,6 +666,7 @@ describe('Rencana (S9)', () => {
         'endsOn',
       ],
       ['payBillAction', { clientId: A, occurrenceId: B, amount: 0 }, 'amount'],
+      ['payBillAction', { clientId: A, occurrenceId: B, occurredOn: '0001-01-01' }, 'occurredOn'],
     ] as const) {
       await expect(call(name, 'pribadi', input)).resolves.toEqual({
         ok: false,
