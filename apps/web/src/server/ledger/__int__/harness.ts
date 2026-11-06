@@ -152,3 +152,27 @@ export async function spaceIdOf(
   if (!id) throw new Error(`ruang ${kind} tidak ada`);
   return id;
 }
+
+/**
+ * true bila nominal `n` muncul sebagai nilai di `value` (angka, string digit, atau teks berformat
+ * `6.500`). Pengganti `JSON.stringify(x).not.toContain('6500')`, yang gagal palsu saat UUID atau
+ * stempel waktu acak kebetulan memuat digit yang sama.
+ */
+export function memuatNominal(value: unknown, n: number): boolean {
+  const target = Math.abs(n);
+  const formatted = target.toLocaleString('id-ID');
+  const visit = (v: unknown): boolean => {
+    if (typeof v === 'number' || typeof v === 'bigint') return Math.abs(Number(v)) === target;
+    if (typeof v === 'string') {
+      if (/^-?\d+$/.test(v)) return Math.abs(Number(v)) === target;
+      return (
+        target >= 1000 &&
+        new RegExp(`(^|[^\\d.])${formatted.replace(/\./g, '\\.')}($|[^\\d.])`).test(v)
+      );
+    }
+    if (Array.isArray(v)) return v.some(visit);
+    if (v && typeof v === 'object') return Object.values(v).some(visit);
+    return false;
+  };
+  return visit(value);
+}

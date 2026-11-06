@@ -28,6 +28,7 @@ import {
 } from '../write';
 import {
   createLedgerHarness,
+  memuatNominal,
   resetLedger,
   seedPersonas,
   spaceIdOf,
@@ -352,18 +353,19 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         sharedNote: 'Setoran November',
       });
 
-      const blob = JSON.stringify({
+      const data = {
         list,
         perAccount: await listEntries(fBersama, { month, accountId: kas }),
         detail: await getEntry(fBersama, setor.linkedEntryId),
         foreign: await getEntry(fBersama, setor.entryId),
         foreignAccount: await listEntries(fBersama, { month, accountId: bca }),
-      });
+      };
+      const blob = JSON.stringify(data);
       for (const kanari of [KANARI_DESC, KANARI_DOMPET, bca, setor.entryId, nPribadi.spaceId]) {
         expect(blob).not.toContain(kanari);
       }
       // Biaya hanya di kaki Pribadi: tidak ada nominal biaya di Bersama.
-      expect(blob).not.toContain('6500');
+      expect(memuatNominal(data, 6_500)).toBe(false);
 
       // Sisi Pribadi N: kaki keluar membawa deskripsi, tanpa catatan Bersama.
       const keluar = must(
