@@ -260,6 +260,8 @@ Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `
 - [ ] **Step 2: Tes gagal int** (Postgres nyata, persona N/F/Luar): golden `beranda` = golden `laporan` untuk periode sama [T17, kriteria keluar "Beranda cocok laporan"]; `loadLaporan`/`loadRencana` Bersama untuk N dan F `JSON.stringify` tanpa kanari Pribadi (tagihan, kategori, anggaran, dompet) [B13]; Server Action: `obligation_double` → `{ error: 'obligation_double' }` tanpa nominal; `payBillAction` dengan `clientId` sama dua kali → satu entri; Luar → `not_found`; pool: muat Beranda ≤ 2 koneksi; Kontribusi Bersama memakai batas periode gajian (K10).
 - [ ] **Step 3:** FAIL → implementasi → PASS (`pnpm --filter @dompetku/web test`, `test:int`); commit `feat(web): loader Rencana, Laporan, dan Beranda aman dipakai`.
 
+**Catatan dari review Task 9 (loader + action, commit d80dc17..15597c1 + perbaikan; wajib dibaca Task 10–15):** review task + keamanan bersih (0 Critical/Important); golden `__int__/s9.ts` dihitung ulang reviewer, cocok; action: ruang dari konteks, Zod ketat, `assertRowInSpace` untuk fungsi ber-id (tanpa oracle). Basis periode yang diturunkan dari bentuk periode terbukti benar juga untuk `payday_rule = 1`. Diperbaiki: tes cek ruang `updateBillAction` dari rute lain, batas hampir habis tepat 80%, `avgDaily` dari `spend_pace` (mutan tertangkap). **Ruling:** `spend_pace` dan `hasObligationsTx` di luar savepoint, sama dengan `safe_to_spend` (kartu Aman tidak di-guard sejak S6): bila gagal, Beranda gagal; diterima, bukan degradasi diam-diam angka aman dipakai.
+
 ### Task 10: Rencana nyata: Anggaran · Model: sonnet + kursi design reviewer (review: terkuat untuk alur tulis)
 
 **Desain:** agen (bingkai `S9-AN1`, `S9-AN2`, `S9-RC0`).

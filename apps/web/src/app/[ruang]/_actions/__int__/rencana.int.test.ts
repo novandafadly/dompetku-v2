@@ -116,6 +116,17 @@ describe('action Rencana terhadap DB', () => {
       nf,
     );
     expect(await a.archiveBillAction('bersama', fx.ids.bill)).toEqual(nf);
+    expect(
+      await a.updateBillAction('bersama', {
+        billId: fx.ids.bill,
+        name: 'Ubah dari Bersama',
+        amount: 1_000,
+        categoryId: fx.ids.tagihanCat,
+        dayOfMonth: 10,
+        endsOn: null,
+        accountId: null,
+      }),
+    ).toEqual(nf);
     expect(await a.skipBillAction('bersama', occ)).toEqual(nf);
     session.userId = fx.f.id;
     expect(await a.payBillAction('bersama', { clientId: randomUUID(), occurrenceId: occ })).toEqual(

@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { loadBeranda } from '../beranda';
 import { toLedgerError } from '../errors';
 import { loadLaporan } from '../laporan';
-import { payBill, loadRencana, setOccurrenceSkipped } from '../rencana';
+import { spendPaceTx } from '../read';
+import { payBill, loadRencana, setBudget, setOccurrenceSkipped } from '../rencana';
+import { withLedger } from '../retry';
 import { createLedgerHarness, memuatNominal, resetLedger } from './harness';
 import { clockEnv, ctxAt, GOLDEN, KANARI, seedS9, TODAY, type Clock, type S9Fixture } from './s9';
 
@@ -88,6 +90,22 @@ describe('Beranda S9 (periode gajian, aman dipakai lengkap)', () => {
     expect(b.budgetsNear.items.map((x) => [x.categoryId, x.pct, x.spent, x.remaining])).toEqual([
       [fx.ids.makan, 85, 1_700_000, 300_000],
     ]);
+  });
+
+  it('laju belanja dari SQL dan batas hampir habis tepat 80% (review Task 9)', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const pace = await withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => spendPaceTx(c, ctx));
+    expect(pace.avgDaily).toBe(GOLDEN.avgDaily);
+    // Makan terpakai 1.700.000; anggaran 2.125.000 = tepat 80% (masih hampir habis).
+    await setBudget(ctx, {
+      categoryId: fx.ids.makan,
+      month: GOLDEN.labelMonth.slice(0, 7),
+      amount: 2_125_000,
+      wajib: false,
+    });
+    const b = await loadBeranda(ctx);
+    if (b.budgetsNear === 'error') throw new Error('anggaran gagal');
+    expect(b.budgetsNear.items.map((x) => [x.categoryId, x.pct])).toEqual([[fx.ids.makan, 80]]);
   });
 
   it('tagihan lewat jatuh tempo: hati-hati sebab overdue, kartu menandai lewat', async () => {
