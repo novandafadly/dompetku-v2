@@ -4,7 +4,8 @@ import { CalendarCheckIcon } from '@/components/ui/icons/calendar-check';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
 import { EmptyState, ErrorState } from '@/components/ui/state';
-import { focusRing, rowDivider, segmentItem, segmentTrack } from '@/components/ui/styles';
+import { segmentItem, segmentTrack } from '@/components/ui/segment-styles';
+import { focusRing, rowDivider } from '@/components/ui/styles';
 import type { Ruang } from '@/features/ledger/types';
 import { PageHeader } from '@/features/shell/page-header';
 import {
