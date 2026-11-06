@@ -182,7 +182,7 @@ begin
   where r.space_id = p_space_id and r.occurred_on between p_from and p_to
     and r.report_class like 'x\_%' and r.amount <> 0
   group by r.report_class, (r.amount > 0)
-  order by r.report_class, (r.amount > 0) desc;
+  order by r.report_class collate "C", (r.amount > 0) desc;
 end $$;
 
 select private.own_api_functions();

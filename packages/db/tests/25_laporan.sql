@@ -10,7 +10,7 @@
 -- Persona N, F, Luar (tests.x(), tanpa ruang).
 -- ID: T17, B13, Z1, Z3, Z9, Z10
 begin;
-select plan(50);
+select plan(54);
 \ir support/golden-s9.sql
 
 create function pg_temp.g(p_path text[]) returns jsonb
@@ -237,6 +237,25 @@ select is(tests.web_val(tests.n(), format($$select string_agg(label_month || ' '
   'gajian Jan 2028 mulai 23 Des 2027 (25 Sab, 24 cuti bersama), 2028 tanpa data libur = holidays_known false; '
   || 'periode masa depan tidak lengkap dan bukan berjalan');
 
+-- ===== Pembulatan dan urutan (review Task 8) =====
+-- Rentang tanpa pengeluaran di golden (5 Sep 2026, sesudah saldo awal 1 Sep). Transportasi langsung 10.000 + Ojek 20.000 = 30.000; biaya
+-- transfer 40.000 (lebih besar dari kelompok kategori mana pun). Pengeluaran penuh = 70.000.
+-- pct10: Transportasi floor(142,85) = 142, Ojek floor(285,71) = 285, biaya floor(571,42) = 571.
+-- root_pct10 Transportasi floor(428,57) = 428 (round 429). pct10_in_root: induk floor(333,3) = 333,
+-- Ojek floor(666,6) = 666 (round 667). Biaya tetap terakhir walau nominalnya terbesar.
+savepoint bulat;
+select pg_temp.g_entry(tests.n(), :'g_bca', 'expense', 10000, :'c_trans', '2026-09-05') is not null as x \gset
+select pg_temp.g_entry(tests.n(), :'g_bca', 'expense', 20000, :'c_ojek', '2026-09-05') is not null as x \gset
+select pg_temp.g_trf(tests.n(), :'g_bca', :'g_gopay', 1000, 40000, '2026-09-05') is not null as x \gset
+select is(pg_temp.cats_line(tests.n(), :'np', '2026-09-05', '2026-09-05'),
+  'expense/category:Transportasi:10000:142:false,expense/category:Ojek:20000:285:false,expense/fee:-:40000:571:-',
+  'pct10 floor; biaya terakhir per jenis walau nominal terbesar');
+select is(tests.web_val(tests.n(), format($$select string_agg(coalesce(name, '-') || ':' || root_pct10 || ':'
+    || coalesce(pct10_in_root::text, '-'), ',' order by o) from (select c.*, row_number() over () as o
+    from api.category_summary(%L, '2026-09-05', '2026-09-05') c) s$$, :'np')),
+  'Transportasi:428:333,Ojek:428:666,-:571:-', 'root_pct10 dan pct10_in_root dibulatkan ke bawah (bukan round)');
+rollback to savepoint bulat;
+
 -- ===== Validasi argumen =====
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
     format($q$select count(*) from api.period_trend(%L, '2026-11-02')$q$, :'np')),
@@ -256,6 +275,13 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
     format($q$select count(*) from api.excluded_summary(%L, null, '2026-10-23')$q$, :'np')),
   'DK400', 'invalid_argument', 'excluded_summary: rentang kosong = DK400');
+
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
+    format($q$select count(*) from api.category_summary(%L, '2016-01-01', '2026-01-09')$q$, :'np')),
+  'DK400', 'invalid_argument', 'category_summary: selisih 3661 hari = DK400');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(),
+    format($q$select count(*) from api.excluded_summary(%L, '2016-01-01', '2026-01-09')$q$, :'np')),
+  'DK400', 'invalid_argument', 'excluded_summary: selisih 3661 hari = DK400');
 
 -- ===== Ruang orang lain dan Luar = DK404 (B13) =====
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), q), 'DK404', 'space_not_found', t)
