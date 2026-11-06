@@ -32,7 +32,8 @@
 --     from_month/to_month; asal = tujuan = DK400 to_month.
 -- - Baca (INVOKER milik owner, EXECUTE web, assert_member di awal, RLS pemanggil):
 --   * api.budget_progress (BSD §8 + kolom remaining = amount - spent, negatif bila lewat; pct
---     dibulatkan ke bawah, dibatasi ke batas int).
+--     dibulatkan ke bawah, dibatasi ke batas int). Anggaran wajib: realisasi tanpa entri bayar tagihan
+--     yang kemunculannya jatuh tempo di luar periode (review Task 7; tidak wajib = realisasi penuh).
 --   * api.budget_overview (layar Rencana): semua kategori induk pengeluaran aktif + kategori induk
 --     terarsip yang punya anggaran di label itu (supaya jumlah Rencana = budget_progress = aman
 --     dipakai), dengan realisasinya; tanpa anggaran = budget, pct, remaining NULL dan wajib false.
@@ -159,18 +160,26 @@ begin
   end if;
   select l.starts_on, l.ends_on into v_from, v_to from app.period_of_label(p_space_id, p_month) l;
   return query
+  -- amt = realisasi penuh; amt_wajib (untuk anggaran wajib) tanpa entri bayar tagihan yang
+  -- kemunculannya jatuh tempo di luar periode ini (review Task 7: bayar tagihan lewat periode lalu
+  -- atau bayar di muka tidak boleh memakan cadangan wajib periode ini dan menaikkan aman dipakai).
   with spent as (
-    select r.root_category_id, (-sum(r.amount))::bigint as amt
+    select r.root_category_id, (-sum(r.amount))::bigint as amt,
+           (-coalesce(sum(r.amount) filter (where not exists (
+              select 1 from app.bill_occurrences o
+              where o.space_id = r.space_id and o.entry_id = r.entry_id
+                and o.due_on not between v_from and v_to)), 0))::bigint as amt_wajib
     from app.report_lines r
     where r.space_id = p_space_id and r.report_class = 'expense'
       and r.occurred_on between v_from and v_to
     group by r.root_category_id
   )
-  select b.category_id, b.amount, b.wajib, coalesce(s.amt, 0)::bigint,
-         least(floor(coalesce(s.amt, 0) * 100.0 / b.amount), 2147483647)::int,
-         (b.amount - coalesce(s.amt, 0))::bigint
+  select b.category_id, b.amount, b.wajib, x.amt,
+         least(floor(x.amt * 100.0 / b.amount), 2147483647)::int,
+         (b.amount - x.amt)::bigint
   from app.budgets b
   left join spent s on s.root_category_id = b.category_id
+  cross join lateral (select coalesce(case when b.wajib then s.amt_wajib else s.amt end, 0)::bigint as amt) x
   where b.space_id = p_space_id and b.month = p_month
   order by b.category_id;
 end $$;
@@ -190,21 +199,29 @@ begin
   end if;
   select l.starts_on, l.ends_on into v_from, v_to from app.period_of_label(p_space_id, p_month) l;
   return query
+  -- amt = realisasi penuh; amt_wajib (untuk anggaran wajib) tanpa entri bayar tagihan yang
+  -- kemunculannya jatuh tempo di luar periode ini (review Task 7: bayar tagihan lewat periode lalu
+  -- atau bayar di muka tidak boleh memakan cadangan wajib periode ini dan menaikkan aman dipakai).
   with spent as (
-    select r.root_category_id, (-sum(r.amount))::bigint as amt
+    select r.root_category_id, (-sum(r.amount))::bigint as amt,
+           (-coalesce(sum(r.amount) filter (where not exists (
+              select 1 from app.bill_occurrences o
+              where o.space_id = r.space_id and o.entry_id = r.entry_id
+                and o.due_on not between v_from and v_to)), 0))::bigint as amt_wajib
     from app.report_lines r
     where r.space_id = p_space_id and r.report_class = 'expense'
       and r.occurred_on between v_from and v_to
     group by r.root_category_id
   )
-  select c.id, c.name, c.icon, b.amount, coalesce(b.wajib, false), coalesce(s.amt, 0)::bigint,
+  select c.id, c.name, c.icon, b.amount, coalesce(b.wajib, false), x.amt,
          case when b.amount is not null
-              then least(floor(coalesce(s.amt, 0) * 100.0 / b.amount), 2147483647)::int end,
-         (b.amount - coalesce(s.amt, 0))::bigint,
+              then least(floor(x.amt * 100.0 / b.amount), 2147483647)::int end,
+         (b.amount - x.amt)::bigint,
          c.archived_at is not null
   from app.categories c
   left join app.budgets b on b.space_id = c.space_id and b.category_id = c.id and b.month = p_month
   left join spent s on s.root_category_id = c.id
+  cross join lateral (select coalesce(case when b.wajib then s.amt_wajib else s.amt end, 0)::bigint as amt) x
   where c.space_id = p_space_id and c.type = 'expense' and c.parent_id is null
     and (c.archived_at is null or b.category_id is not null)
   order by c.archived_at is not null, c.sort_order, c.name, c.id;

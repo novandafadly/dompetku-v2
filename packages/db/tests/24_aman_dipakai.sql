@@ -8,7 +8,7 @@
 -- Persona N, F, Luar (tests.x(), tanpa ruang).
 -- ID: T17, Z10
 begin;
-select plan(36);
+select plan(41);
 \ir support/golden-s9.sql
 
 create function pg_temp.g(p_path text[]) returns jsonb
@@ -71,8 +71,6 @@ select is(tests.web_val(tests.n(), format($$select to_jsonb(s)::text from api.sa
   'N Pribadi hari ini (p_today bawaan = app.today()): tagihan lewat + jatuh tempo <= 24 Nov, wajib Nov [T17]');
 select is(pg_temp.sts(tests.n(), :'np', '2026-11-10'), pg_temp.g('{safe_to_spend,n_pribadi}'),
   'p_today eksplisit 10 Nov = bawaan');
-select is((pg_temp.g('{safe_to_spend,n_pribadi,bills_until_eom}'))::bigint, 1400000::bigint,
-  'golden: tagihan yang dipotong 1.400.000 (lewat periode lalu + periode ini, tanpa lunas/lewati/arsip/sesudah 24 Nov)');
 select is(pg_temp.sts(tests.n(), :'np', '2026-11-24'), pg_temp.g('{safe_to_spend,n_pribadi_hari_terakhir}'),
   'hari terakhir periode (24 Nov): days_left = 1, per_day = total, tanpa bagi nol [Z10]');
 select is(pg_temp.sts(tests.n(), :'np', '2026-11-25'), pg_temp.g('{safe_to_spend,n_pribadi_periode_berikut}'),
@@ -118,6 +116,47 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.x(),
     format($q$select api.spend_pace(%L)$q$, :'sh')), 'DK404', 'space_not_found', 'Luar -> spend_pace Bersama = DK404');
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.x(),
     format($q$select api.spend_pace(%L)$q$, :'np')), 'DK404', 'space_not_found', 'Luar -> spend_pace Pribadi N = DK404');
+
+-- ===== Bayar tagihan periode lain tidak memakan anggaran wajib periode ini (review Task 7) =====
+-- Angka dihitung tangan dari golden N 10 Nov (total 7.696.000): tagihan TV 300.000 tgl 20, 1..31 Okt
+-- (kemunculan 20 Okt terbuka, lewat), anggaran wajib Hiburan Nov 500.000 (sah: TV tanpa kemunculan
+-- berlabel Nov). Sebelum bayar: 7.696.000 - 300.000 - 500.000 = 6.896.000. Bayar hari ini dari BCA:
+-- operasional -300.000, tagihan -300.000, wajib Hiburan tetap 500.000 -> total tetap 6.896.000.
+savepoint tagihan_lampau;
+select tests.clock_at('2026-10-01 11:00+07');
+select tests.web_val(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'TV', 300000, %L, 20::smallint,
+  '2026-10-01', '2026-10-31') ->> 'bill_id'$$, :'np', :'c_hiburan')) as g_tv \gset
+select tests.clock_at('2026-11-10 10:00+07');
+select tests.web_val(tests.n(), format($$select api.set_budget(%L, %L, '2026-11-01', 500000, true)$$, :'np', :'c_hiburan'))
+  is null as x \gset
+select is(pg_temp.sts(tests.n(), :'np', null) ->> 'total', '6896000', 'sebelum bayar TV (lewat, label Okt): total 6.896.000');
+select tests.web_val(tests.n(), format($$select api.post_bill_occurrence(gen_random_uuid(), %L, %L)$$,
+  pg_temp.g_occ(:'g_tv', '2026-10-20'), :'g_bca')) is not null as x \gset
+select is(pg_temp.sts(tests.n(), :'np', null) ->> 'total', '6896000',
+  'sesudah bayar TV hari ini: total tetap 6.896.000 (bukan 7.196.000)');
+select is(tests.web_val(tests.n(), format($$select p.spent || ' ' || p.remaining from api.budget_progress(%L, '2026-11-01') p
+    where p.category_id = %L$$, :'np', :'c_hiburan')) || ' ' || tests.web_val(tests.n(), format($$select o.spent || ' '
+    || o.remaining from api.budget_overview(%L, '2026-11-01') o where o.category_id = %L$$, :'np', :'c_hiburan')),
+  '0 500000 0 500000', 'anggaran wajib: entri bayar tagihan label Okt tidak dihitung (budget_progress = budget_overview)');
+select tests.web_val(tests.n(), format($$select api.set_budget(%L, %L, '2026-11-01', 500000, false)$$, :'np', :'c_hiburan'))
+  is null as x \gset
+select is(tests.web_val(tests.n(), format($$select p.spent || ' ' || p.remaining from api.budget_progress(%L, '2026-11-01') p
+    where p.category_id = %L$$, :'np', :'c_hiburan')), '300000 200000',
+  'anggaran tidak wajib: realisasi penuh (entri bayar TV ikut)');
+rollback to savepoint tagihan_lampau;
+
+-- ===== Batas tanggal (review Task 7): jatuh tempo tepat akhir periode masuk, tepat hari ini belum lewat =====
+-- Dua tagihan Hiburan baru (tanpa anggaran wajib Hiburan): 70.000 tgl 24 (= ends_on 24 Nov) dan 30.000
+-- tgl 10 (= hari ini). Tagihan 1.400.000 + 70.000 + 30.000 = 1.500.000; tagihan lewat tetap 3.
+savepoint batas;
+select tests.web_val(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Batas 24', 70000, %L, 24::smallint,
+  '2026-11-10') ->> 'bill_id'$$, :'np', :'c_hiburan')) is not null as x \gset
+select tests.web_val(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Batas 10', 30000, %L, 10::smallint,
+  '2026-11-10') ->> 'bill_id'$$, :'np', :'c_hiburan')) is not null as x \gset
+select is(pg_temp.sts(tests.n(), :'np', null) ->> 'bills_until_eom', '1500000',
+  'kemunculan jatuh tempo tepat 24 Nov (akhir periode) dan hari ini ikut dipotong');
+select is(pg_temp.pace(tests.n(), :'np', null) ->> 'overdue_bills', '3', 'jatuh tempo hari ini belum lewat jatuh tempo');
+rollback to savepoint batas;
 
 -- ===== Aturan gajian kosong = bulan kalender (BSD §8.2a; regresi 0102) =====
 select tests.owner_exec(null, 'update app.households set payday_rule = null');
