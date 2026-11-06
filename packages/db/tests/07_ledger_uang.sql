@@ -355,7 +355,7 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format($q$do $d$
 select is(tests.owner_val(null, format($$select count(*) filter (where c is null) || '/' || count(*) || ' '
     || count(distinct c) from (%s) t$$, :'valid_combo')),
   '0/53 12', 'report_class tidak NULL untuk 53 kombinasi yang lolos cek bentuk; tepat 12 kelas [BSD §13 #9]');
-select is(tests.owner_val(null, format($$select string_agg(distinct c, ',' order by c) from (%s) t$$, :'valid_combo')),
+select is(tests.owner_val(null, format($$select string_agg(distinct c collate "C", ',' order by c collate "C") from (%s) t$$, :'valid_combo')),
   'expense,expense_fee,income,x_ambil_bersama,x_diambil_anggota,x_kantor,x_koreksi,x_reimburse,'
   || 'x_setor_bersama,x_setoran_anggota,x_talangan,x_transfer',
   '12 kelas BSD §8.1 tercapai dari kombinasi yang sah (tidak ada kelas mati, tidak ada kelas baru)');
