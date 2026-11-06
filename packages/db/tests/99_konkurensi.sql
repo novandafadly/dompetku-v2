@@ -372,6 +372,8 @@ select is(tests.owner_val(null, format($$select coalesce(parent_id::text, '-') f
 
 -- ===== Tagihan (S9, 0118) =====
 -- Jam nyata (env prod): tagihan jatuh tempo hari ini (tanggal = hari ini, mulai hari ini).
+-- Risiko diketahui: peer memakai jam nyata, jadi tes yang berjalan tepat melewati 00:00 WIB bisa
+-- membaca hari berbeda antar-koneksi (gagal palsu; ulangi). tests.clock tidak menular ke koneksi dblink.
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Sewa Rumah'$$, :'sh')) as k_sewa \gset
 create function pg_temp.kbill_sql(p_space uuid, p_name text, p_cat uuid, p_acc uuid) returns text
 language sql as $$

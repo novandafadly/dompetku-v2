@@ -12,7 +12,7 @@
 -- Persona N, F, Luar (tests.x(), tanpa ruang); kanari KANARI-N-TAGIHAN dan KANARI-F-TAGIHAN.
 -- ID: B1, B2, B13, T13, T14, T15, Z4
 begin;
-select plan(127);
+select plan(133);
 select tests.fixture();
 select tests.clock_at('2026-11-05 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -312,6 +312,34 @@ from (values
   ('batalkan lewati', format('select api.unskip_bill_occurrence(%L)', :'b_des')),
   ('ubah', pg_temp.update_sql(:'bill_b', 'Internet Rumah', 400000, :'internet', 10, :'kas', null))
 ) v (t, q);
+
+-- ===== Kemunculan tertaut entri bayar yang dibatalkan = terbuka (review Task 5 Minor 1, 2, 3, 5) =====
+-- Di dalam savepoint: tagihan ini tidak ikut daftar dan jumlah di bagian sesudahnya.
+savepoint tertaut_batal;
+select pg_temp.bill(tests.n(), :'sh', 'Air PDAM', 100000, :'internet', 20, '2026-11-01', null, :'kas') as bill_d \gset
+select pg_temp.call(tests.n(), pg_temp.post_sql(pg_temp.occ_id(:'bill_d', '2026-11-20'))) ->> 'entry_id' as d_entry \gset
+select pg_temp.call(tests.n(), format('select api.void_entry(gen_random_uuid(), %L, 1)', :'d_entry'));
+select pg_temp.call(tests.n(), pg_temp.update_sql(:'bill_d', 'Air PDAM', 200000, :'internet', 20, :'kas', null));
+select is(pg_temp.occ(:'bill_d'), '2026-11-20:200000:buka,2026-12-20:200000:buka',
+  'ubah nominal: kemunculan yang entri bayarnya batal ikut diganti (terbuka), bukan tertinggal nominal lama');
+select pg_temp.call(tests.n(), format('select api.restore_entry(gen_random_uuid(), %L, 2)', :'d_entry'));
+select is(pg_temp.occ(:'bill_d'), '2026-11-20:200000:buka,2026-12-20:200000:buka',
+  'entri lama dipulihkan sesudah ubah: tidak lagi tertaut (perilaku diterima, BSD §16 Catatan S9)');
+select pg_temp.call(tests.n(), format('select api.void_entry(gen_random_uuid(), %L, 3)', :'d_entry'));
+-- Tanggal dimajukan sebelum hari ini (5 Nov, sesudah starts_on 1 Nov): 20 Nov terbuka diganti 3 Nov,
+-- langsung lewat jatuh tempo (perilaku diterima; UI menampilkannya di Lewat jatuh tempo).
+select pg_temp.call(tests.n(), pg_temp.update_sql(:'bill_d', 'Air PDAM', 200000, :'internet', 3, :'kas', null));
+select is(pg_temp.occ(:'bill_d'), '2026-11-03:200000:buka,2026-12-03:200000:buka',
+  'tanggal 20 -> 3 pada 5 Nov: kemunculan Nov jadi 3 Nov (lewat jatuh tempo), Des 3 Des');
+select pg_temp.occ_id(:'bill_d', '2026-11-03') as d_nov \gset
+select pg_temp.call(tests.n(), pg_temp.post_sql(:'d_nov')) ->> 'entry_id' as d_entry2 \gset
+select pg_temp.call(tests.n(), format('select api.void_entry(gen_random_uuid(), %L, 1)', :'d_entry2'));
+select is(pg_temp.call(tests.n(), format('select api.archive_bill(%L)', :'bill_d')) ->> 'skipped', '2',
+  'arsip: kemunculan yang entri bayarnya batal ikut dilewati');
+select is(pg_temp.occ(:'bill_d'), '2026-11-03:200000:lewat,2026-12-03:200000:lewat', 'arsip: tidak ada kemunculan terbuka');
+select is(tests.owner_val(null, format('select entry_id is null from app.bill_occurrences where id = %L', :'d_nov')),
+  'true', 'arsip melepas tautan ke entri batal (CHECK entry_id XOR skipped_at)');
+rollback to savepoint tertaut_batal;
 
 -- ===== Ubah tagihan (kemunculan lampau, dibayar, dilewati tidak disentuh) =====
 select pg_temp.bill(tests.n(), :'sh', 'Iuran RT', 100000, :'iuran', 3, '2026-09-01', null, :'kas') as bill_c \gset

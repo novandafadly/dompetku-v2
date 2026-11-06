@@ -249,8 +249,11 @@ begin
   end if;
   perform private.check_bill(v_b.space_id, p_name, p_amount, p_category_id, p_day_of_month,
                              v_b.starts_on, p_ends_on, p_account_id);
-  delete from app.bill_occurrences
-   where bill_id = v_b.id and entry_id is null and skipped_at is null and due_on >= v_today;
+  -- Terbuka = belum dibayar (tanpa entri hidup; entri bayar yang dibatalkan dihitung terbuka) dan
+  -- belum dilewati.
+  delete from app.bill_occurrences o
+   where o.bill_id = v_b.id and o.skipped_at is null and o.due_on >= v_today
+     and not private.occurrence_posted(o);
   update app.bills
      set name = btrim(p_name), amount = p_amount, category_id = p_category_id,
          day_of_month = p_day_of_month, account_id = p_account_id, ends_on = p_ends_on,
@@ -277,8 +280,9 @@ begin
   if v_b.archived_at is null then
     update app.bills set archived_at = app.now(), updated_at = app.now() where id = v_b.id;
   end if;
-  update app.bill_occurrences set skipped_at = app.now()
-   where bill_id = v_b.id and entry_id is null and skipped_at is null;
+  -- Tautan ke entri bayar yang dibatalkan dilepas (CHECK entry_id XOR skipped_at).
+  update app.bill_occurrences o set skipped_at = app.now(), entry_id = null
+   where o.bill_id = v_b.id and o.skipped_at is null and not private.occurrence_posted(o);
   get diagnostics v_n = row_count;
   return jsonb_build_object('bill_id', v_b.id, 'skipped', v_n);
 end $$;
