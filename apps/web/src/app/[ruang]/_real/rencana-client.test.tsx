@@ -751,7 +751,7 @@ describe('RencanaHost: Tagihan', () => {
         billNameByRoot={{}}
         bill={{
           ...DATA,
-          accounts: [{ ...DATA.accounts[0]!, archived: true }],
+          accounts: DATA.accounts.map((a) => ({ ...a, archived: true })),
         }}
       >
         <BillBodyTrigger billId="b1" className="flex">
