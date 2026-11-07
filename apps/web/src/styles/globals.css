@@ -174,6 +174,16 @@
   }
 }
 
+/* Angka besar Laporan (S9-LP12): ukuran = min(maks, (lebar kartu - 30px) / --em); --em dihitung server. */
+@utility laporan-angka {
+  --max: 2.75rem;
+  font-size: max(1.25rem, min(var(--max), calc((100cqw - 30px) / var(--em))));
+  letter-spacing: -0.025em;
+  @media (width >= 64rem) {
+    --max: 3.5rem;
+  }
+}
+
 @layer base {
   html {
     background-color: var(--bg);
