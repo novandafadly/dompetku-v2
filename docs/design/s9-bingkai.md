@@ -413,3 +413,18 @@ Anggaran subkategori, review bulanan, salin anggaran lanjutan (ke periode yang s
 - **Dompet bawaan terarsip** di Ubah: isian kosong dengan keterangan `Dompet bawaan {nama} sudah diarsipkan…`.
 - **Fokus sesudah simpan/bayar** kembali ke baris kemunculan yang diketuk (`data-occ-row`); sesudah Ubah id kemunculan terbuka berganti, jadi jatuh ke baris pertama tagihan itu.
 - **Wrap kolom nominal + Bayar**: basis badan 15rem; di 320 semua baris bertumpuk dua tingkat, di 390 hanya nominal panjang.
+
+## Penyimpangan Task 13 dari bingkai Claude Design (diputuskan agen, 2026-11-07)
+
+Perbandingan visual dilakukan terhadap screenshot nyata (`docs/design/s9/laporan-*`), bukan kanvas (tidak bisa dirender agen). Selisih:
+
+1. **Judul halaman HP** memakai pola shell (`PageHeader`: `h1` hanya `sr-only` di HP, tampil di laptop); SPEC §3 menulis `h1` 26/800 terlihat di HP. `SpaceTag` tetap di kartu Ringkasan. Biaya bila ditolak: satu kelas di `PageHeader` khusus Laporan.
+2. **Grafik tren dari elemen berpersen (`div`), bukan `<svg>`** (SPEC §6.1 membolehkan; K6 menyebut SVG): teks sumbu, arsir 135°, dan tepi konstan 2 px tidak terdistorsi saat lebar kartu berubah; `role="img"` + `aria-label` + `<table>` setara tetap. Biaya bila ditolak: ganti `Bar` dan sumbu dengan `<svg>` ber-`viewBox` tetap (teks sumbu ikut menskala).
+3. **Lebar kolom label sumbu 48 px dan jarak batang 2 px** (SPEC 50 dan 3) karena skala spasi 4 px; ukuran angka besar lewat `@utility laporan-angka` (CSS container query `cqw`, maks 44 px, laptop 56 px) karena lint melarang nilai arbitrer.
+4. **Penyebut persen kategori = Pengeluaran penuh** (termasuk biaya dan tanpa kategori), bukan "berkategori" (SPEC §6.2): `pct10`/`root_pct10`/`pct10_in_root` dipakai apa adanya (catatan review Task 8).
+5. **Prototipe**: `/{ruang}/laporan` adalah keadaan jujur `Laporan segera hadir` (tanpa data demo); item Laporan di sidebar dan Menu hanya di mode nyata (Menu prototipe tetap `Analisis · Segera`).
+6. **Sidebar**: item Laporan di bawah Rencana (K8); tab bar tidak menandai tab apa pun di Laporan (`tabFromPathname` = `null`); pindah ruang dari Laporan tetap di Laporan.
+7. **Tabel data di bawah 360 px** = daftar `dl` bertumpuk (dua representasi di DOM, satu `display:none`).
+8. **Tidak diuji e2e:** LP6 (memuat) dan LP7 (galat) tidak bisa dipicu tanpa merusak server; keadaannya dicakup tes unit dan bingkai. Bar tren dengan nilai ekstrem (Rp 12 M) terlihat benar di screenshot LP12.
+9. **Label `Transfer antar dompet`** menggantikan `Transfer internal` di Ringkasan Transaksi (prototipe juga; tes e2e prototipe dan auth disesuaikan).
+10. **Budget JS**: sidebar nyata menambah ±0,1 kB ke shell bersama sehingga Beranda prototipe 161,7 → 161,8 kB (bukan identik; kode shell tidak bisa dipisah dari rute prototipe).
