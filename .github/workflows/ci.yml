@@ -328,6 +328,7 @@ jobs:
           TAR_DIR: ${{ runner.temp }}
         run: >-
           docker run --rm -v "$TAR_DIR:/scan:ro"
+          -v "$GITHUB_WORKSPACE/.trivyignore.yaml:/trivyignore.yaml:ro"
           ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
           image --input /scan/image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
-          --scanners vuln --no-progress
+          --ignorefile /trivyignore.yaml --scanners vuln --no-progress
