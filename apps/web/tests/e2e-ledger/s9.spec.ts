@@ -2,7 +2,15 @@ import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations, WCAG_TAGS } from '../e2e/axe';
 import { noHorizontalScroll } from '../e2e-auth/helpers';
 import { adminQuery, expect, test } from './fixtures';
-import { addWallet, chipsOf, expectRouteBudget, openCatat, spaceId, toasts } from './helpers';
+import {
+  addWallet,
+  chipsOf,
+  digits,
+  expectRouteBudget,
+  openCatat,
+  spaceId,
+  toasts,
+} from './helpers';
 
 /**
  * S9 Task 10 mode nyata: Rencana > Anggaran. Tab Rencana selalu ada, kosong = ajakan, atur, ubah,
@@ -216,25 +224,34 @@ test('realisasi nyata: 85% terpakai dengan ikon, lalu Lewat Rp … di baris dan 
   };
   const kategori = await expense(850_000);
   await page.goto('/pribadi/rencana');
+  // Pengeluaran kategori itu sampai sekarang (spec lain bisa sudah memakainya), lalu anggaran
+  // dipilih supaya terpakai ~85% (80–99%).
+  const [sum] = await adminQuery<{ spent: string }>(
+    `select coalesce(-sum(amount), 0)::text as spent from app.report_lines
+      where space_id = $1 and root_category_id = $2 and report_class = 'expense'`,
+    [await spaceId('personal'), await categoryId('personal', kategori)],
+  );
+  const spent0 = Number(sum?.spent ?? 0);
+  expect(spent0).toBeGreaterThanOrEqual(850_000);
+  const budget = Math.ceil(spent0 / 0.85 / 1000) * 1000;
   const sheet = await openSheet(page, () =>
-    main(page).getByRole('button', { name: 'Atur anggaran pertama' }),
+    main(page).getByRole('button', { name: 'Atur anggaran' }).first(),
   );
   await sheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: kategori });
-  await sheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('1000000');
+  await sheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill(String(budget));
   await save(page, sheet, `Anggaran ${kategori} disimpan · Pribadi`);
-  // 85%: ikon peringatan (selain caret) + teks, sisa di sub dan kartu total.
-  await expect(row(page, kategori)).toContainText('85% terpakai');
+  // ≥ 80%: ikon peringatan (selain caret) + teks, sisa di sub dan kartu total.
+  await expect(row(page, kategori)).toContainText(/[89]\d% terpakai/);
   await expect(row(page, kategori).locator('svg')).toHaveCount(2);
   await expect(main(page).getByRole('region', { name: /Terpakai/ })).toContainText(
-    'sisa Rp 150.000',
+    `sisa Rp ${digits(budget - spent0)}`,
   );
   await expense(300_000);
   await page.goto('/pribadi/rencana');
-  await expect(row(page, kategori)).toContainText('Lewat Rp 150.000');
+  const over = `Lewat Rp ${digits(spent0 + 300_000 - budget)}`;
+  await expect(row(page, kategori)).toContainText(over);
   await expect(row(page, kategori).locator('svg')).toHaveCount(2);
-  await expect(main(page).getByRole('region', { name: /Terpakai/ })).toContainText(
-    'Lewat Rp 150.000',
-  );
+  await expect(main(page).getByRole('region', { name: /Terpakai/ })).toContainText(over);
   // Pulihkan keadaan kosong untuk tes berikutnya.
   const edit = await openSheet(page, () => row(page, kategori));
   await edit.getByRole('button', { name: 'Hapus anggaran' }).click();
