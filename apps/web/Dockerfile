@@ -34,7 +34,7 @@ RUN test -z "${NEXT_PUBLIC_PROTOTYPE:-}" \
 RUN pnpm --filter @dompetku/worker build \
     && test -s apps/worker/dist/worker.mjs
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:a6c34457f6da4295807e051411c7783739c65b997a324fed14e4fa292615ae91 AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:b8cec4b2f2126ff7bd034ec9ac207ffb3272667dfdc48376e3b035d3270549ba AS runtime
 ARG BUILD_SHA=""
 LABEL org.opencontainers.image.source="https://github.com/novandafadly/dompetku-v2" \
       org.opencontainers.image.title="dompetku-web" \
