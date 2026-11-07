@@ -1,5 +1,9 @@
 import { formatRupiah, monthYearLabel, type Rupiah } from '@dompetku/domain';
+import type { Route } from 'next';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { CaretRightIcon } from '@/components/ui/icons/caret-right';
+import { focusRing } from '@/components/ui/styles';
 import { ChartBarIcon } from '@/components/ui/icons/chart-bar';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { ListCard } from '@/components/ui/list-card';
@@ -18,16 +22,19 @@ export function SummaryViewVM({
   month,
   summary: s,
   kantor,
+  laporanHref,
   children,
 }: {
   month: string;
   summary: MonthSummaryVM;
   kantor?: Rupiah;
+  /** Mode nyata: tautan `Laporan lengkap` (bulan kalender yang sama). */
+  laporanHref?: Route;
   children?: ReactNode;
 }) {
   const excluded = [
     kantor === undefined ? null : `Kas kantor ${formatRupiah(kantor)}`,
-    `Transfer internal ${formatRupiah(s.transfer)}`,
+    `Transfer antar dompet ${formatRupiah(s.transfer)}`,
   ]
     .filter((t) => t !== null)
     .join(', ');
@@ -71,6 +78,15 @@ export function SummaryViewVM({
           <InfoIcon size={18} className="mt-px shrink-0" />
           <span>{`Tidak termasuk: ${excluded}`}</span>
         </p>
+        {laporanHref ? (
+          <Link
+            href={laporanHref}
+            className={`mt-1 flex min-h-11 items-center justify-between gap-2 rounded-lg text-label font-bold text-accent-text ${focusRing}`}
+          >
+            Laporan lengkap
+            <CaretRightIcon size={16} weight="bold" />
+          </Link>
+        ) : null}
       </ListCard>
       {children}
     </div>

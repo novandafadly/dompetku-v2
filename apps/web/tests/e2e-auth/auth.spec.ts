@@ -287,7 +287,7 @@ test('pemilik: Transaksi nyata: entri dan ringkasan Pribadi, tidak terbawa ke Be
   // Laptop: ringkasan bulan di kolom kanan, dari api.month_summary.
   const summary = page.getByRole('complementary', { name: 'Ringkasan bulan' });
   await expect(summary.getByRole('row', { name: /Pengeluaran/ })).toContainText('37.500');
-  await expect(summary.getByText(/Tidak termasuk: Transfer internal/)).toBeVisible();
+  await expect(summary.getByText(/Tidak termasuk: Transfer antar dompet/)).toBeVisible();
   await expect(main.getByRole('link', { name: 'Sampah' })).toHaveAttribute(
     'href',
     '/pribadi/sampah',

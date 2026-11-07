@@ -84,11 +84,7 @@ export function buildAccountHref(ruang: Ruang, id: string, query: string): Route
 }
 
 /** Layar ruang di luar tab: `/{ruang}/sampah`, `/{ruang}/kategori` (rutenya menyusul). */
-export function buildSectionHref(
-  ruang: Ruang,
-  section: 'sampah' | 'kategori',
-  query: string,
-): Route {
+export function buildSectionHref(ruang: Ruang, section: Section, query: string): Route {
   return `/${ruang}/${section}${query}` as Route;
 }
 
@@ -104,20 +100,22 @@ export function buildAuthHref(page: AuthPage, query: string): Route {
   return `/${page}${query}` as Route;
 }
 
-export type Section = 'sampah' | 'kategori';
+export type Section = 'sampah' | 'kategori' | 'laporan';
 
 /** Layar di luar tab (`/{ruang}/sampah`, `/{ruang}/kategori`); `null` untuk tab dan rute lain. */
 export function sectionFromPathname(pathname: string): Section | null {
   const seg = pathname.split('/')[2];
-  return seg === 'sampah' || seg === 'kategori' ? seg : null;
+  return seg === 'sampah' || seg === 'kategori' || seg === 'laporan' ? seg : null;
 }
 
 /**
  * Tab yang tampak aktif untuk sebuah alamat. Sampah dan Kategori bukan tab: dibuka dari Transaksi
  * atau Menu, jadi Transaksi yang tampak aktif (bukan Beranda). Alamat tak dikenal = Beranda.
  */
-export function tabFromPathname(pathname: string): Tab {
+export function tabFromPathname(pathname: string): Tab | null {
   const seg = pathname.split('/')[2];
+  // Laporan dibuka dari Menu/sidebar/Ringkasan Transaksi: tidak ada tab yang tampak aktif (K8).
+  if (seg === 'laporan') return null;
   if (seg === 'sampah' || seg === 'kategori') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }

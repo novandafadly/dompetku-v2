@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { ChartBarIcon } from '@/components/ui/icons/chart-bar';
 import { DotsThreeCircleIcon } from '@/components/ui/icons/dots-three-circle';
 import { PlusIcon } from '@/components/ui/icons/plus';
 import { focusRing } from '@/components/ui/styles';
 import { DemoMark } from './app-header';
 import { useOpenCatat, usePreloadCatat } from './catat';
-import { tabFromPathname } from './hrefs';
+import { buildSectionHref, tabFromPathname } from './hrefs';
 import { useNavItems } from './nav-items';
 import { useNav } from './nav-provider';
 import { SpaceSwitcher } from './space-switcher';
@@ -26,8 +27,10 @@ export function Wordmark({ className = 'text-headline' }: { className?: string }
 }
 
 export function Sidebar({ onMenu, demo }: { onMenu: () => void; demo: boolean }) {
-  const { ruang, href } = useNav();
-  const active = tabFromPathname(usePathname());
+  const { ruang, href, query } = useNav();
+  const pathname = usePathname();
+  const active = tabFromPathname(pathname);
+  const onLaporan = pathname.split('/')[2] === 'laporan';
   const items = useNavItems();
   const openCatat = useOpenCatat();
   const preloadCatat = usePreloadCatat();
@@ -79,6 +82,20 @@ export function Sidebar({ onMenu, demo }: { onMenu: () => void; demo: boolean })
             </Link>
           );
         })}
+        {demo ? null : (
+          <Link
+            href={buildSectionHref(ruang, 'laporan', query)}
+            aria-current={onLaporan ? 'page' : undefined}
+            className={`${row} ${onLaporan ? 'bg-surface-2 font-extrabold text-text shadow-rail' : idle}`}
+          >
+            <ChartBarIcon
+              size={20}
+              weight={onLaporan ? 'fill' : 'regular'}
+              className={onLaporan ? 'text-accent-text' : ''}
+            />
+            Laporan
+          </Link>
+        )}
         <button type="button" onClick={onMenu} className={`${row} ${idle}`}>
           <DotsThreeCircleIcon size={20} />
           Menu
