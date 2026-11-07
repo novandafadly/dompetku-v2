@@ -15,9 +15,12 @@ import {
 
 /**
  * S9 Task 12 mode nyata: Beranda. Kartu Aman dipakai lengkap (periode gajian, status ikon + teks,
- * rincian tagihan + wajib), Tagihan 7 hari (termasuk lewat), Anggaran hampir habis (≥ 80%),
- * Beranda = Rencana untuk periode yang sama, Bersama tanpa data Pribadi, axe, dan budget JS. Satu
- * urutan serial dengan data sendiri (nama unik); berjalan sesudah spec ledger/s7/s9 (urutan berkas: nama berawalan `t-` supaya data Beranda ini tidak mengotori asumsi keadaan kosong spec lain).
+ * rincian tagihan + wajib), Tagihan 7 hari (termasuk lewat), Anggaran hampir habis (>= 80%),
+ * Beranda = Rencana untuk periode yang sama, Bersama tanpa data Pribadi, axe, dan budget JS.
+ * Spec ini MENGISI data (pengeluaran, anggaran, tagihan) dan tidak membersihkannya, jadi ia ada di
+ * project `data` (`playwright.ledger.config.ts`) yang bergantung pada project `kosong`: spec yang
+ * berasumsi ruang kosong (ledger, s7, s9) selalu selesai lebih dulu. Satu urutan serial dengan data
+ * sendiri (nama unik; kategori anggaran wajib tetap `Kopi & Camilan`, tidak dipakai spec lain).
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -38,7 +41,7 @@ const billsCard = (page: Page) => main(page).getByRole('region', { name: 'Tagiha
 const budgetsCard = (page: Page) =>
   main(page).getByRole('region', { name: 'Anggaran hampir habis' });
 
-let kategori = '';
+const kategori = 'Kopi & Camilan';
 let spent = 0;
 let budget = 0;
 
@@ -75,14 +78,12 @@ async function addBill(page: Page, name: string, amount: number, tanggal: number
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-/** Satu pengeluaran lewat Catat (chip pertama); mengembalikan nama kategori chip itu. */
-async function expense(page: Page, amount: number): Promise<string> {
+/** Satu pengeluaran lewat Catat pada kategori bernama `kategori` (chip). */
+async function expense(page: Page, amount: number, kategori: string): Promise<void> {
   await page.goto('/pribadi/beranda');
   const sheet = await openCatat(page);
   await page.keyboard.type(String(amount));
-  const chip = chipsOf(sheet).first();
-  const name = ((await chip.innerText()) || '').trim().split('\n')[0] ?? '';
-  await chip.click();
+  await chipsOf(sheet).filter({ hasText: kategori }).first().click();
   await sheet.getByRole('button', { name: 'Simpan', exact: true }).click();
   await expect(
     toasts(page)
@@ -90,15 +91,13 @@ async function expense(page: Page, amount: number): Promise<string> {
       .last(),
   ).toBeVisible();
   await expect(sheet).toHaveCount(0);
-  return name;
 }
 
 test('anggaran wajib 85%: Anggaran hampir habis dan rincian Aman dipakai memuat sisa wajib', async ({
   page,
 }) => {
   await addWallet(page, 'pribadi', WALLET, 5_000_000);
-  kategori = await expense(page, 850_000);
-  expect(kategori).not.toBe(KAT_BILL);
+  await expense(page, 850_000, kategori);
   const [sum] = await adminQuery<{ spent: string }>(
     `select coalesce(-sum(amount), 0)::text as spent from app.report_lines
       where space_id = $1 and root_category_id = (
@@ -240,7 +239,9 @@ test('Bersama: kartu ada, tanpa data Pribadi (B13), kosong sesuai bingkai', asyn
     `select (select count(*) from app.bills where space_id = $1)::int as n`,
     [await spaceId('shared')],
   );
-  if (shared?.n === 0) {
+  // Keadaan dijamin urutan project (`kosong` lebih dulu, tidak ada tagihan Bersama).
+  expect(shared?.n, 'ruang Bersama harus belum punya tagihan').toBe(0);
+  {
     await expect(billsCard(page)).toContainText('Belum ada tagihan.');
     await expect(billsCard(page).getByRole('link', { name: 'Tambah tagihan' })).toHaveAttribute(
       'href',

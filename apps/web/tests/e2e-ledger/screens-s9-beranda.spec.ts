@@ -40,9 +40,16 @@ async function shoot(
         await ready(page);
         await page.evaluate(() => document.fonts.ready);
         await page.waitForTimeout(300);
+        // Halaman penuh tanpa artefak: viewport disetel setinggi dokumen (dua kali, karena tinggi
+        // bisa berubah sesudah ukuran berubah) sehingga bilah tab bawah (fixed) berada di dasar
+        // halaman dan sidebar laptop setinggi halaman, bukan terpotong di tengah gambar.
+        for (let i = 0; i < 2; i += 1) {
+          const h = await page.evaluate(() => document.documentElement.scrollHeight);
+          await page.setViewportSize({ width: w, height: h });
+          await page.waitForTimeout(250);
+        }
         await page.screenshot({
           path: `${OUT_DIR}${name}-${String(w)}-${theme}.png`,
-          fullPage: true,
           animations: 'disabled',
         });
         const overflow = await page.evaluate(
