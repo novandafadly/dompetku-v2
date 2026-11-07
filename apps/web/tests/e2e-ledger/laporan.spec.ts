@@ -67,10 +67,18 @@ async function catatTipe(page: Page, ruang: 'Pribadi' | 'Bersama', tipe: string)
   await page.getByRole('menuitemradio', { name: tipe }).click();
 }
 
-async function expense(page: Page, ruang: 'pribadi' | 'bersama', amount: number, kat: string) {
+async function expense(
+  page: Page,
+  ruang: 'pribadi' | 'bersama',
+  amount: number,
+  kat: string,
+  wallet: string,
+) {
   await page.goto(`/${ruang}/beranda`);
   const sheet = await openCatat(page);
   await sheet.getByRole('textbox', { name: 'Nominal' }).fill(String(amount));
+  // Dompet eksplisit: dompet bawaan bisa milik spec lain (saldo minus menahan Simpan).
+  await sheet.getByLabel('Dari dompet').selectOption({ label: wallet });
   await chipsOf(sheet).filter({ hasText: kat }).first().click();
   await sheet.getByRole('button', { name: 'Simpan', exact: true }).click();
   await expect(
@@ -86,8 +94,8 @@ test('siapkan data: dua dompet, dua pengeluaran, satu pemasukan, satu transfer',
 }) => {
   await addWallet(page, 'pribadi', W_A, 5_000_000);
   await addWallet(page, 'pribadi', W_B, 100_000);
-  await expense(page, 'pribadi', 85_000, KAT_MAKAN);
-  await expense(page, 'pribadi', 40_000, KAT_TRANSPORT);
+  await expense(page, 'pribadi', 85_000, KAT_MAKAN, W_A);
+  await expense(page, 'pribadi', 40_000, KAT_TRANSPORT, W_A);
 
   await page.goto('/pribadi/beranda');
   let sheet = await openCatat(page);
@@ -231,7 +239,7 @@ test('periode lalu (lengkap): pembanding dari SQL dan ringkasan = SQL periode it
   expect(r).toContain(rp(Number(t?.exp)));
   expect(r).toContain(`+${rp(Number(t?.inc))}`);
   // p2 punya Rp 200.000, p1 Rp 500.000, p3 (entri tertua) bukan p2: pembanding sah.
-  expect(r).toContain('Rp 300.000 lebih banyak dari');
+  expect(r).toMatch(/Rp 300\.000[\s\S]*lebih banyak dari/);
   await expect(page.getByText('Periode belum selesai')).toHaveCount(0);
 });
 
@@ -267,7 +275,7 @@ test('pemilih periode: sebelumnya, dasar kalender, tautan Laporan lengkap', asyn
 
 test('parameter rusak atau di luar jangkauan = periode berjalan', async ({ page }) => {
   await page.goto('/pribadi/laporan');
-  const base = await txt(page.getByTestId('laporan-ringkasan'));
+  const base = await page.getByTestId('laporan-ringkasan').textContent();
   for (const q of [
     '?periode=abc&basis=xyz',
     '?periode=2999-01',
@@ -279,7 +287,7 @@ test('parameter rusak atau di luar jangkauan = periode berjalan', async ({ page 
     const res = await page.goto(`/pribadi/laporan${q}`);
     expect(res?.status(), q).toBe(200);
     if (!q.includes('kalender')) {
-      expect(await txt(page.getByTestId('laporan-ringkasan')), q).toBe(base);
+      expect(await page.getByTestId('laporan-ringkasan').textContent(), q).toBe(base);
     }
   }
 });
@@ -370,7 +378,7 @@ test('navigasi: sidebar laptop di bawah Rencana, Menu, ganti ruang tetap di Lapo
 
 test('Bersama: Laporan tanpa data Pribadi (B13) dan tanpa "rumah tangga"', async ({ page }) => {
   await addWallet(page, 'bersama', W_BERSAMA, 1_000_000);
-  await expense(page, 'bersama', 60_000, KAT_DAPUR);
+  await expense(page, 'bersama', 60_000, KAT_DAPUR, W_BERSAMA);
   const { bodies, unread } = await bersamaResponses(page, async () => {
     await page.goto('/bersama/laporan');
     await expect(page.getByTestId('laporan-ringkasan')).toContainText('Bersama');
@@ -389,6 +397,8 @@ test('Bersama: Laporan tanpa data Pribadi (B13) dan tanpa "rumah tangga"', async
 test('axe, 320 tanpa gulir samping, dua tema (Pribadi, kalender, Bersama, kosong)', async ({
   page,
 }) => {
+  test.setTimeout(150_000); // 3 lebar x 2 tema x 4 alamat + axe
+
   const urls = [
     '/pribadi/laporan',
     '/pribadi/laporan?basis=kalender',
