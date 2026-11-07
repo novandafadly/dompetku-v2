@@ -57,7 +57,7 @@ export function LaporanReal({
         ) : (
           <>
             <div className="flex flex-col gap-3 tablet:gap-4 laptop:grid laptop:grid-cols-2 laptop:items-start">
-              <div className="flex flex-col gap-3 tablet:grid tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:flex laptop:flex-col">
+              <div className="flex flex-col gap-3 tablet:grid tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:flex laptop:flex-col laptop:items-stretch">
                 <SummaryCardView
                   ruang={ruang}
                   period={period}
