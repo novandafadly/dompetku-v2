@@ -262,6 +262,10 @@ const C = 'Uji Undo N';
 
 test('Urungkan bayar: entri batal, baris kembali punya tombol Bayar', async ({ page }) => {
   await addBill(page, C, 50_000, KAT_A);
+  // Hitung tombol Bayar sebelum sheet dibuka (sheet modal membuat daftar inert) dan sebelum bayar
+  // (sesudah toast, daftar bisa belum dimuat ulang).
+  await expect(payBtn(page, C).first()).toBeVisible();
+  const before = await payBtn(page, C).count();
   const sheet = paySheet(page);
   await openUntil(
     () => payBtn(page, C).first(),
@@ -271,15 +275,12 @@ test('Urungkan bayar: entri batal, baris kembali punya tombol Bayar', async ({ p
   await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
   await sheet.getByRole('button', { name: /^Bayar Rp/ }).click();
   await expect(toasts(page).getByText(new RegExp(`^Tagihan ${C} dibayar`))).toBeVisible();
-  await expect(
-    main(page)
-      .getByText(/^Lunas · /)
-      .first(),
-  ).toBeVisible();
-  const before = await payBtn(page, C).count();
+  await expect(async () => {
+    expect(await payBtn(page, C).count()).toBe(before - 1);
+  }).toPass();
   await toasts(page).getByRole('button', { name: 'Urungkan' }).first().click();
   await expect(async () => {
-    expect(await payBtn(page, C).count()).toBe(before + 1);
+    expect(await payBtn(page, C).count()).toBe(before);
   }).toPass();
   const n = await adminQuery<{ n: number }>(
     `select count(*)::int as n from app.entries where description = $1 and voided_at is null`,
