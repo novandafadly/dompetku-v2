@@ -199,6 +199,10 @@ describe('CategoryChartView', () => {
     expect(items[1]?.textContent).toContain('Biaya transfer');
     expect(items[1]?.textContent).toContain('25% dari pengeluaran');
   });
+  it('basis kalender (budgets null): catatan bahwa status anggaran hanya di Periode gajian (D3)', () => {
+    render(<CategoryChartView rows={ROWS} budgets={null} rencanaHref={null} labelledBy="k" />);
+    expect(screen.getByText(/Anggaran mengikuti periode gajian/)).toBeTruthy();
+  });
   it('anggaran 85% = tautan 44 px ke Rencana dengan nama aksesibel memuat teks terlihat', () => {
     render(
       <CategoryChartView
@@ -293,6 +297,13 @@ describe('TrendChartView', () => {
     const table = screen.getByTestId('laporan-tabel-tren');
     expect(within(table).getAllByRole('row')).toHaveLength(3);
     expect(norm(table.textContent)).toContain('+Rp 7.000.000');
+  });
+  it('pembacaan langsung periode yang dilihat dari nilai SQL (D2)', () => {
+    render(<TrendChartView rows={TREND} viewed="2026-10" labelledBy="t" />);
+    const t = norm(screen.getByTestId('laporan-tren-langsung').textContent);
+    expect(t).toContain('Okt · berjalan: Pemasukan');
+    expect(t).toContain('Rp 12.000.000');
+    expect(t).toContain('Rp 5.000.000');
   });
   it('satu periode: tanpa grafik, tabel langsung terbuka', () => {
     render(<TrendChartView rows={TREND.slice(1)} viewed="2026-10" labelledBy="t" />);

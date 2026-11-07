@@ -30,6 +30,8 @@ const W_BERSAMA = 'Kas Patungan Laporan';
 const KAT_MAKAN = 'Hiburan';
 const KAT_TRANSPORT = 'Langganan';
 const KAT_DAPUR = 'Belanja Dapur';
+/** Kanari B13: kategori Pribadi unik yang tidak boleh bocor ke Laporan Bersama. */
+const KANARI_KAT = 'KANARI-N-LAPORAN';
 
 const txt = async (l: Locator) => (await l.innerText()).replaceAll(' ', ' ');
 const rp = (n: number) => `Rp ${digits(n)}`;
@@ -173,6 +175,19 @@ test('siapkan riwayat: pengeluaran di tiga periode lalu (lewat api.create_entry,
   await add('expense', 200_000, p2, ids.expense);
   await add('expense', 500_000, p1, ids.expense);
   await add('income', 3_000_000, p1, ids.income);
+  await asUser(
+    uid,
+    `select api.create_category(p_client_id => $1, p_space_id => $2, p_type => 'expense'::app.category_type,
+       p_name => $3, p_icon => 'Receipt')`,
+    [randomUUID(), sid, KANARI_KAT],
+  );
+  const [k] = await asUser<{ id: string }>(
+    uid,
+    `select id from app.categories where space_id = $1 and name = $2`,
+    [sid, KANARI_KAT],
+  );
+  if (!k) throw new Error('kanari');
+  await add('expense', 11_111, p1, k.id);
 });
 
 test('Laporan Pribadi: Ringkasan = SQL, Tidak termasuk, kategori terurut, tren', async ({
@@ -238,9 +253,10 @@ test('periode lalu (lengkap): pembanding dari SQL dan ringkasan = SQL periode it
   const r = await txt(page.getByTestId('laporan-ringkasan'));
   expect(r).toContain(rp(Number(t?.exp)));
   expect(r).toContain(`+${rp(Number(t?.inc))}`);
-  // p2 punya Rp 200.000, p1 Rp 500.000, p3 (entri tertua) bukan p2: pembanding sah.
-  expect(r).toMatch(/Rp 300\.000[\s\S]*lebih banyak dari/);
+  // p2 punya Rp 200.000, p1 Rp 511.111 (500.000 + kanari 11.111), p3 (entri tertua) bukan p2: pembanding sah.
+  expect(r).toMatch(/Rp 311\.111[\s\S]*lebih banyak dari/);
   await expect(page.getByText('Periode belum selesai')).toHaveCount(0);
+  await expect(page.getByTestId('laporan-kategori').filter({ hasText: KANARI_KAT })).toBeVisible();
 });
 
 test('pemilih periode: sebelumnya, dasar kalender, tautan Laporan lengkap', async ({ page }) => {
@@ -384,7 +400,7 @@ test('Bersama: Laporan tanpa data Pribadi (B13) dan tanpa "rumah tangga"', async
   });
   expect(unread).toEqual([]);
   const all = bodies.join('\n');
-  for (const secret of [W_A, W_B, 'Dompet Laporan Lama', 'Pindah antar dompetmu']) {
+  for (const secret of [W_A, W_B, 'Dompet Laporan Lama', KANARI_KAT, 'Pindah antar dompetmu']) {
     expect(all).not.toContain(secret);
   }
   expect(all.toLowerCase()).not.toContain('rumah tangga');
