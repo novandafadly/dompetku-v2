@@ -83,6 +83,7 @@ describe('Beranda S9 (periode gajian, aman dipakai lengkap)', () => {
           posted: false,
           skipped: false,
           entryId: null,
+          paidOn: null,
         },
       ],
     });

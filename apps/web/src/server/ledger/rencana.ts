@@ -274,6 +274,7 @@ interface BillDueRow {
   posted: boolean;
   skipped: boolean;
   entry_id: string | null;
+  paid_on: string | null;
 }
 
 function toBillDue(r: BillDueRow): BillDueVM {
@@ -288,6 +289,7 @@ function toBillDue(r: BillDueRow): BillDueVM {
     posted: r.posted,
     skipped: r.skipped,
     entryId: r.entry_id,
+    paidOn: r.paid_on,
   };
 }
 
@@ -305,17 +307,50 @@ export async function billsDueTx(
     opts.withinDays === undefined ? null : z.number().int().min(0).max(62).parse(opts.withinDays);
   const { rows } = await c.query<BillDueRow>(
     `select d.occurrence_id, d.bill_id, d.name, d.amount, d.due_on, d.days_until, d.overdue,
-            d.posted, d.skipped, d.entry_id
+            d.posted, d.skipped, d.entry_id, e.occurred_on as paid_on
        from api.bills_due(p_space_id => $1,
                           p_through => case when $2::int is null then null
                                             else app.today() + $2::int end) with ordinality
             as d (occurrence_id, bill_id, name, amount, due_on, days_until, overdue, posted,
                   skipped, entry_id, n)
+       left join app.entries e on e.space_id = $1 and e.id = d.entry_id and d.posted
       where $2::int is null or (not d.posted and not d.skipped)
       order by d.n`,
     [ctx.spaceId, within],
   );
   return rows.map(toBillDue);
+}
+
+/**
+ * Kemunculan SESUDAH akhir periode berjalan (kelompok `Berikutnya`): `api.bills_due` sampai
+ * `ends_on + 62` hari (materialisasi paling jauh akhir periode berikutnya), hanya yang jatuh
+ * tempo setelah `ends_on`. Tanggal dihitung SQL dari `api.pay_period`, bukan jam Node.
+ */
+export async function billsUpcomingTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<BillDueVM[]> {
+  const { rows } = await c.query<BillDueRow>(
+    `with p as (select ends_on from api.pay_period(p_space_id => $1))
+     select d.occurrence_id, d.bill_id, d.name, d.amount, d.due_on, d.days_until, d.overdue,
+            d.posted, d.skipped, d.entry_id, e.occurred_on as paid_on
+       from p,
+            lateral api.bills_due(p_space_id => $1, p_through => p.ends_on + 62) with ordinality
+            as d (occurrence_id, bill_id, name, amount, due_on, days_until, overdue, posted,
+                  skipped, entry_id, n)
+       left join app.entries e on e.space_id = $1 and e.id = d.entry_id and d.posted
+      where d.due_on > p.ends_on
+      order by d.n`,
+    [ctx.spaceId],
+  );
+  return rows.map(toBillDue);
+}
+
+/** Hari ini WIB (`app.today()`), sebagai YYYY-MM-DD. */
+async function todayTx(c: pg.PoolClient): Promise<IsoDate> {
+  const { rows } = await c.query<{ today: string }>(
+    "select to_char(app.today(), 'YYYY-MM-DD') as today",
+  );
+  const r = rows[0];
+  if (!r) throw new Error('today kosong');
+  return r.today;
 }
 
 /** Ringkasan anggaran periode lalu dari baris `budget_overview` (hanya yang dianggarkan). */
@@ -351,6 +386,8 @@ export async function loadRencana(
       const previous = previousOf(prevMonth, await budgetOverviewTx(c, ctx, prevMonth));
       const bills = await billListTx(c, ctx);
       const due = await billsDueTx(c, ctx);
+      const upcoming = await billsUpcomingTx(c, ctx);
+      const today = await todayTx(c);
       let own: { accounts: AccountVM[]; categories: CategoryVM[] } | null = null;
       if (given === undefined) {
         own = {
@@ -358,7 +395,7 @@ export async function loadRencana(
           categories: await listCategoriesTx(c, ctx),
         };
       }
-      return { period, budgets, totals, previous, bills, due, own };
+      return { period, budgets, totals, previous, bills, due, upcoming, today, own };
     }),
     given ?? null,
   ]);

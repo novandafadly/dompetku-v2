@@ -1,11 +1,15 @@
+import { formatRupiah } from '@dompetku/domain';
 import type { Route } from 'next';
 import Link from 'next/link';
 import { CalendarCheckIcon } from '@/components/ui/icons/calendar-check';
+import { CalendarDotsIcon } from '@/components/ui/icons/calendar-dots';
+import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { InfoIcon } from '@/components/ui/icons/info';
+import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
 import { EmptyState, ErrorState } from '@/components/ui/state';
 import { segmentItem, segmentTrack } from '@/components/ui/segment-styles';
-import { focusRing, rowDivider } from '@/components/ui/styles';
+import { card, focusRing, rowDivider } from '@/components/ui/styles';
 import type { Ruang } from '@/features/ledger/types';
 import { PageHeader } from '@/features/shell/page-header';
 import {
@@ -13,15 +17,22 @@ import {
   BudgetTotalCard,
   UnbudgetedItemView,
 } from '@/features/rencana/budget-row-view';
+import { ArchivedBillView, BillAmountColumn, BillBodyView } from '@/features/rencana/bill-row-view';
+import { groupBills, rowAction, type BillItem } from '@/features/rencana/bills';
 import {
   budgetedRows,
   periodSubtitle,
   RENCANA_COPY,
   splitPeriodLabel,
+  TAGIHAN_COPY,
   unbudgetedRows,
 } from '@/features/rencana/copy';
 import type { RencanaData } from '@/features/rencana/types';
 import {
+  AddBillIsland,
+  BillBodyIsland,
+  PayIsland,
+  UnskipIsland,
   BudgetRowIsland,
   CopyBudgetsIsland,
   CopyConflictIsland,
@@ -46,6 +57,8 @@ const ROW =
   focusRing;
 const BUDGET_ROW = `${ROW} min-h-19 py-3`;
 const UNBUDGETED_ROW = `${ROW} min-h-15.5`;
+// Badan baris tagihan: ubin + nama + sub; kolom kanan (nominal + Bayar) di luar tombol.
+const BILL_BODY = `flex min-h-18 min-w-0 flex-1 items-center gap-3 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 
 function bagianHref(ruang: Ruang, bagian: Bagian, query: string): Route {
   const params = new URLSearchParams(query);
@@ -165,6 +178,110 @@ function Anggaran({ data }: { data: RencanaData }) {
   );
 }
 
+
+function BillRowItem({ item }: { item: BillItem }) {
+  const { occ, bill } = item;
+  const action = rowAction(occ);
+  const amount = occ?.amount ?? bill.amount;
+  return (
+    <li className={rowDivider}>
+      <div className="-mx-4 flex items-stretch">
+        <BillBodyIsland billId={bill.billId} className={BILL_BODY}>
+          <BillBodyView item={item} caret />
+        </BillBodyIsland>
+        <BillAmountColumn amount={amount}>
+          {occ !== null && action === 'bayar' ? (
+            <PayIsland
+              occurrenceId={occ.occurrenceId}
+              billName={bill.name}
+              amountText={formatRupiah(occ.amount)}
+            />
+          ) : null}
+          {occ !== null && action === 'batalkan' ? (
+            <UnskipIsland occurrenceId={occ.occurrenceId} billName={bill.name} />
+          ) : null}
+        </BillAmountColumn>
+      </div>
+    </li>
+  );
+}
+
+function BillGroup({
+  title,
+  icon,
+  items,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: BillItem[];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <ListCard title={title} icon={icon}>
+      <ul>
+        {items.map((item) => (
+          <BillRowItem key={item.occ?.occurrenceId ?? item.bill.billId} item={item} />
+        ))}
+      </ul>
+    </ListCard>
+  );
+}
+
+function Tagihan({ data }: { data: RencanaData }) {
+  const g = groupBills(data);
+  const active = g.overdue.length + g.period.length + g.next.length;
+  return (
+    <>
+      {active === 0 ? (
+        <EmptyState
+          tone="accent"
+          icon={<CalendarCheckIcon size={28} />}
+          title={RENCANA_COPY.emptyBillTitle}
+          headingLevel={2}
+          description={RENCANA_COPY.emptyBillDescription}
+          action={<AddBillIsland label={TAGIHAN_COPY.add} variant="primary" />}
+        />
+      ) : null}
+      <BillGroup
+        title={TAGIHAN_COPY.overdue}
+        icon={<WarningCircleIcon size={18} weight="fill" className="text-danger" />}
+        items={g.overdue}
+      />
+      <BillGroup
+        title={TAGIHAN_COPY.thisPeriod}
+        icon={<CalendarDotsIcon size={18} />}
+        items={g.period}
+      />
+      <BillGroup title={TAGIHAN_COPY.next} icon={<CalendarDotsIcon size={18} />} items={g.next} />
+      {active > 0 ? (
+        <AddBillIsland
+          label={TAGIHAN_COPY.add}
+          variant="secondary"
+          plus
+          className="w-full laptop:hidden"
+        />
+      ) : null}
+      {g.archived.length > 0 ? (
+        <details className={`group ${card} px-4`}>
+          <summary
+            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg text-label font-bold text-text-soft ${focusRing}`}
+          >
+            {TAGIHAN_COPY.archived(g.archived.length)}
+            <CaretDownIcon size={16} weight="bold" className="shrink-0 group-open:rotate-180" />
+          </summary>
+          <ul className="pb-1">
+            {g.archived.map((bill) => (
+              <li key={bill.billId} className={rowDivider}>
+                <ArchivedBillView bill={bill} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </>
+  );
+}
+
 export function RencanaReal({
   ruang,
   bagian,
@@ -182,6 +299,8 @@ export function RencanaReal({
   const empty = !hasBudgets && !hasBills && data.previous.budgetCount === 0;
   const billNameByRoot: Record<string, string> = {};
   for (const b of data.bills) if (!b.archived) billNameByRoot[b.rootCategoryId] = b.name;
+  const wajibRoots: Record<string, true> = {};
+  for (const b of data.budgets) if (b.budget !== null && b.wajib) wajibRoots[b.categoryId] = true;
   return (
     <RencanaHostIsland
       ruang={ruang}
@@ -190,12 +309,22 @@ export function RencanaReal({
       rows={data.budgets}
       previous={data.previous.amounts}
       billNameByRoot={billNameByRoot}
+      bill={{
+        bills: data.bills,
+        occurrences: [...data.due, ...data.upcoming],
+        accounts: data.accounts,
+        categories: data.categories,
+        today: data.today,
+        wajibRoots,
+      }}
     >
       <PageHeader
         title="Rencana"
         action={
           bagian === 'anggaran' && hasBudgets && unbudgetedRows(data.budgets).length > 0 ? (
             <SetBudgetIsland label={RENCANA_COPY.set} variant="secondary" plus />
+          ) : bagian === 'tagihan' && hasBills ? (
+            <AddBillIsland label={TAGIHAN_COPY.add} variant="secondary" plus />
           ) : undefined
         }
       />
@@ -208,18 +337,17 @@ export function RencanaReal({
             title={RENCANA_COPY.emptyTitle(ruang)}
             headingLevel={2}
             description={RENCANA_COPY.emptyDescription}
-            action={<SetBudgetIsland label={RENCANA_COPY.setFirst} variant="primary" />}
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <SetBudgetIsland label={RENCANA_COPY.setFirst} variant="primary" />
+                <AddBillIsland label={TAGIHAN_COPY.add} variant="secondary" />
+              </div>
+            }
           />
         ) : bagian === 'anggaran' ? (
           <Anggaran data={data} />
         ) : (
-          <EmptyState
-            tone="accent"
-            icon={<CalendarCheckIcon size={28} />}
-            title={RENCANA_COPY.emptyBillTitle}
-            headingLevel={2}
-            description={RENCANA_COPY.emptyBillDescription}
-          />
+          <Tagihan data={data} />
         )}
       </div>
     </RencanaHostIsland>

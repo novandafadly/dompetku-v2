@@ -14,6 +14,10 @@ const RowLazy = lazy(() => load().then((m) => ({ default: m.BudgetRowTrigger }))
 const SetLazy = lazy(() => load().then((m) => ({ default: m.SetBudgetButton })));
 const CopyLazy = lazy(() => load().then((m) => ({ default: m.CopyBudgetsButton })));
 const NoteLazy = lazy(() => load().then((m) => ({ default: m.CopyConflictNote })));
+const BillBodyLazy = lazy(() => load().then((m) => ({ default: m.BillBodyTrigger })));
+const AddBillLazy = lazy(() => load().then((m) => ({ default: m.AddBillButton })));
+const PayLazy = lazy(() => load().then((m) => ({ default: m.PayButton })));
+const UnskipLazy = lazy(() => load().then((m) => ({ default: m.UnskipButton })));
 
 export function RencanaHostIsland(props: ComponentProps<typeof HostLazy>) {
   return (
@@ -51,6 +55,38 @@ export function CopyConflictIsland() {
   return (
     <Suspense fallback={null}>
       <NoteLazy />
+    </Suspense>
+  );
+}
+
+export function BillBodyIsland(props: ComponentProps<typeof BillBodyLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <BillBodyLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function AddBillIsland(props: ComponentProps<typeof AddBillLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <AddBillLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function PayIsland(props: ComponentProps<typeof PayLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <PayLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function UnskipIsland(props: ComponentProps<typeof UnskipLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <UnskipLazy {...props} />
     </Suspense>
   );
 }

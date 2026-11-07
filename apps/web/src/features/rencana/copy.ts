@@ -121,3 +121,108 @@ export function budgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewV
 export function unbudgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewVM[] {
   return rows.filter((r) => r.budget === null && !r.archived);
 }
+
+/**
+ * Salinan Tagihan (S9-TG1…TG3; bingkai "Salinan final S9" dan "Salinan galat S9"). Nominal tidak
+ * pernah ada di pesan galat; nama tagihan/kategori/dompet berasal dari data ruang itu sendiri.
+ */
+export const TAGIHAN_COPY = {
+  overdue: 'Lewat jatuh tempo',
+  thisPeriod: 'Periode ini',
+  next: 'Berikutnya',
+  archived: (n: number) => `Tagihan diarsipkan (${String(n)})`,
+  add: 'Tambah tagihan',
+  pay: 'Bayar',
+  unskip: 'Batalkan lewati',
+  /** Tagihan aktif tanpa kemunculan terlihat: sub baris. */
+  everyMonth: (day: number) => `Tiap tanggal ${String(day)}`,
+  // Sheet Tambah/Ubah (TG2)
+  sheetTitle: (ruang: Ruang) => `Tagihan · ${RUANG_NAME[ruang]}`,
+  sheetEditTitle: (ruang: Ruang) => `Ubah tagihan · ${RUANG_NAME[ruang]}`,
+  name: 'Nama',
+  amount: 'Perkiraan nominal',
+  amountHint: 'Bisa diubah saat membayar.',
+  category: 'Kategori',
+  pickCategory: 'Pilih kategori',
+  account: 'Dompet bayar bawaan',
+  pickAtPay: 'Pilih saat membayar',
+  day: 'Tanggal tiap bulan',
+  dayHint: 'Tanggal 29–31 jatuh ke hari terakhir bulan pendek.',
+  startsOn: 'Mulai',
+  startsOnPast: (bulan: string) => `Bulan sebelum ${bulan} tidak ditagih.`,
+  startedOn: (tgl: string) => `Mulai ${tgl}`,
+  endsOn: 'Berakhir',
+  endsOnHint: 'Kosongkan bila tidak ada batas.',
+  editNote: 'Berlaku untuk tagihan yang belum dibayar mulai hari ini.',
+  save: 'Simpan tagihan',
+  archive: 'Arsipkan tagihan',
+  back: 'Kembali',
+  archiveTitle: (nama: string) => `Arsipkan tagihan ${nama}?`,
+  archiveBody: 'Tagihan berhenti ditagih mulai sekarang. Yang sudah dibayar tetap tercatat.',
+  saved: (nama: string, ruang: Ruang) => `Tagihan ${nama} disimpan · ${RUANG_NAME[ruang]}`,
+  archivedToast: (nama: string, ruang: Ruang) =>
+    `Tagihan ${nama} diarsipkan · ${RUANG_NAME[ruang]}`,
+  // Sheet Bayar (TG3)
+  payTitle: (nama: string, ruang: Ruang) => `Bayar ${nama} · ${RUANG_NAME[ruang]}`,
+  dueOn: (tgl: string) => `Jatuh tempo ${tgl}`,
+  lateDays: (n: number) => `Lewat ${String(n)} hari`,
+  payAmount: 'Nominal',
+  estimate: (rp: string) => `Perkiraan ${rp}`,
+  payAccount: 'Dompet',
+  payDate: 'Tanggal bayar',
+  payButton: (rp: string | null) => (rp === null ? 'Bayar' : `Bayar ${rp}`),
+  payAnyway: 'Tetap bayar',
+  skip: 'Lewati tagihan ini',
+  skipHint: 'Pilih ini bila tagihan sudah dibayar di luar aplikasi.',
+  paid: (nama: string, ruang: Ruang, rp: string, dompet: string) =>
+    `Tagihan ${nama} dibayar di ${RUANG_NAME[ruang]} · ${rp} dari ${dompet}`,
+  skipped: (nama: string, ruang: Ruang) => `${nama} dilewati · ${RUANG_NAME[ruang]}`,
+  unskipped: (nama: string, ruang: Ruang) => `${nama} kembali ditagih · ${RUANG_NAME[ruang]}`,
+  undo: 'Urungkan',
+  undoFailed: 'Belum bisa diurungkan. Buka Transaksi untuk membatalkan pembayarannya.',
+  undoSkipFailed: 'Belum bisa diurungkan. Coba lagi dari Rencana.',
+  noAccount: (ruang: Ruang) =>
+    `Belum ada dompet di ${RUANG_NAME[ruang]}. Tambah dompet dulu untuk membayar.`,
+  addAccount: 'Tambah dompet',
+  // Galat
+  errName: 'Nama tagihan wajib diisi, paling banyak 60 huruf.',
+  errAmount: 'Nominal harus lebih dari nol.',
+  errDay: 'Pilih tanggal 1 sampai 31.',
+  errEndsOn: 'Tanggal berakhir tidak boleh sebelum tanggal mulai.',
+  errStartsOn: 'Isi tanggal mulai.',
+  errCategory: 'Pilih kategori pengeluaran.',
+  errKantor: 'Dompet Kantor tidak bisa dipakai untuk tagihan. Pilih dompet lain.',
+  errPickAccount: 'Pilih dompet.',
+  errAlreadyPosted: 'Tagihan ini sudah dibayar.',
+  reload: 'Muat ulang',
+  errBillGone: 'Tagihan ini sudah tidak ada. Tutup lalu buka Rencana lagi.',
+  errBillArchived: 'Tagihan ini sudah diarsipkan.',
+  errIdem:
+    'Pembayaran ini sudah pernah terkirim dengan isi berbeda. Periksa riwayat Transaksi sebelum membayar lagi.',
+  errInvalid: 'Isian belum lengkap. Periksa lagi lalu simpan.',
+  errNetwork:
+    'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan mencatat dua kali.',
+  errServer: 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.',
+  errArchiveNetwork: 'Belum diarsipkan. Koneksi terputus saat mengirim. Coba lagi.',
+  errArchiveServer: 'Belum diarsipkan. Ada kendala di server. Coba lagi.',
+  errUnskip: 'Belum bisa dibatalkan. Coba lagi.',
+  errSkipNetwork: 'Belum terlewati. Koneksi terputus saat mengirim. Coba lagi.',
+  errSkipServer: 'Belum terlewati. Ada kendala di server. Coba lagi.',
+} as const;
+
+/** `obligation_double` di sheet Tagihan: kategori (atau induknya) sudah punya anggaran wajib. */
+export function obligationDoubleBillText(kategori: string, wajibRoot: string | null): string {
+  const tail = 'Satu kewajiban cukup dicatat sekali: jadikan anggarannya tidak wajib atau pilih kategori lain.';
+  return wajibRoot === null || wajibRoot === kategori
+    ? `Kategori ${kategori} sudah punya anggaran wajib. ${tail}`
+    : `Anggaran wajib ${wajibRoot} sudah mencakup ${kategori}. ${tail}`;
+}
+
+export function accountArchivedBillText(dompet: string): string {
+  return `${dompet} sudah diarsipkan. Pilih dompet lain.`;
+}
+
+/** Peringatan saldo kurang sebelum bayar (S9-TG3; nominal sah: bukan pesan galat server). */
+export function saldoKurangBayarText(dompet: string, balance: string, after: string): string {
+  return `Saldo ${dompet} tinggal ${balance}. Kalau dibayar, saldonya jadi ${after}.`;
+}

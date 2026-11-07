@@ -72,6 +72,8 @@ export interface BillDueVM {
   posted: boolean;
   skipped: boolean;
   entryId: string | null;
+  /** Tanggal entri bayar (`occurred_on`); `null` bila belum dibayar. */
+  paidOn: IsoDate | null;
 }
 
 /** Anggaran periode lalu (K13: tombol `Salin anggaran periode lalu`). */
@@ -93,6 +95,10 @@ export interface RencanaData {
   bills: BillListVM[];
   /** Kemunculan sampai akhir periode berjalan (termasuk lewat; lunas/dilewati di periode ini). */
   due: BillDueVM[];
+  /** Kemunculan sesudah akhir periode berjalan yang sudah dimaterialisasi (kelompok Berikutnya). */
+  upcoming: BillDueVM[];
+  /** Hari ini WIB dari server (`app.today()`): bawaan tanggal Mulai/Bayar, bukan jam Node. */
+  today: IsoDate;
   /** Dompet ruang ini (sheet Bayar/Tagihan): Bersama tanpa dompet Pribadi. */
   accounts: AccountVM[];
   /** Kategori aktif ruang ini. */

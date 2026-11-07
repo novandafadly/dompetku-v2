@@ -75,6 +75,8 @@ const data = (over: Partial<RencanaData> = {}): RencanaData => ({
   totals: { budget: 0, spent: 0, remaining: 0, pct: 0 },
   bills: [],
   due: [],
+  upcoming: [],
+  today: '2026-11-05',
   accounts: [],
   categories: [],
   ...over,
