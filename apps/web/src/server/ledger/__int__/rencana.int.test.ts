@@ -248,6 +248,22 @@ describe('Rencana dan Laporan: angka sama dengan Beranda [T17]', () => {
     );
     expect(l.contributions).toBeNull();
 
+    // Total kartu dari SQL = Σ baris beranggaran (golden: makan 2.000.000 / 1.700.000, kesehatan
+    // wajib 500.000 / 100.000, kanari 300.000); kategori tanpa anggaran tidak ikut.
+    const budgeted = r.budgets.filter((x) => x.budget !== null);
+    const sumBudget = budgeted.reduce((a, x) => a + (x.budget ?? 0), 0);
+    const sumSpent = budgeted.reduce((a, x) => a + x.spent, 0);
+    expect(r.totals).toEqual({
+      budget: sumBudget,
+      spent: sumSpent,
+      remaining: sumBudget - sumSpent,
+      pct: Math.floor((sumSpent * 100) / sumBudget),
+    });
+    expect(r.totals.budget).toBe(2_800_000);
+    expect(r.totals.spent).toBe(
+      1_800_000 + (r.budgets.find((x) => x.categoryId === fx.ids.kanariCat)?.spent ?? 0),
+    );
+
     // Rencana: periode lalu kosong (K13), tagihan + kemunculan, dompet dan kategori ruang ini.
     expect(r.previous).toEqual({
       labelMonth: '2026-10-01',
@@ -301,7 +317,26 @@ describe('Rencana dan Laporan: angka sama dengan Beranda [T17]', () => {
       },
     });
     expect(r.budgets.every((x) => x.budget === null)).toBe(true);
+    // Periode tanpa anggaran: total nol (bukan galat bagi nol).
+    expect(r.totals).toEqual({ budget: 0, spent: 0, remaining: 0, pct: 0 });
     expect(r.accounts).toEqual([]);
+  });
+
+  it('total kartu menyertakan kategori terarsip yang masih beranggaran dan realisasinya', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const before = (await loadRencana(ctx)).totals;
+    // Arsip kategori beranggaran (Kesehatan, wajib, 500.000 / terpakai 100.000): tetap di total.
+    await h.admin.query('update app.categories set archived_at = now() where id = $1', [
+      fx.ids.kesehatan,
+    ]);
+    const r = await loadRencana(ctx);
+    expect(r.budgets.find((x) => x.categoryId === fx.ids.kesehatan)).toMatchObject({
+      archived: true,
+      budget: 500_000,
+      spent: 100_000,
+    });
+    expect(r.totals).toEqual(before);
+    expect(r.totals.budget).toBe(2_800_000);
   });
 });
 

@@ -118,7 +118,7 @@ function Anggaran({ data }: { data: RencanaData }) {
       ) : null}
       {budgeted.length > 0 ? (
         <>
-          <BudgetTotalCard rows={budgeted} labelledBy="rencana-total" />
+          <BudgetTotalCard totals={data.totals} labelledBy="rencana-total" />
           <ListCard title={RENCANA_COPY.budgeted} icon={<CalendarCheckIcon size={18} />}>
             <ul>
               {budgeted.map((row) => (

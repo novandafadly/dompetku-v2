@@ -1,4 +1,3 @@
-import type { Rupiah } from '@dompetku/domain';
 import type { PeriodVM, Ruang } from '@/features/ledger/types';
 import type { BudgetOverviewVM } from './types';
 
@@ -118,26 +117,4 @@ export function budgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewV
 /** Kategori induk aktif tanpa anggaran (urutan SQL). */
 export function unbudgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewVM[] {
   return rows.filter((r) => r.budget === null && !r.archived);
-}
-
-/** Total hanya dari kategori yang dianggarkan (bukan total pengeluaran; itu milik Laporan). */
-export function budgetTotals(rows: readonly BudgetOverviewVM[]): {
-  budget: Rupiah;
-  spent: Rupiah;
-  remaining: Rupiah;
-  pct: number;
-} {
-  let budget = 0;
-  let spent = 0;
-  for (const r of rows) {
-    if (r.budget === null) continue;
-    budget += r.budget;
-    spent += r.spent;
-  }
-  return {
-    budget,
-    spent,
-    remaining: budget - spent,
-    pct: budget === 0 ? 0 : Math.floor((spent * 100) / budget),
-  };
 }

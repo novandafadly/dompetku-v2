@@ -3,7 +3,6 @@ import type { PeriodVM } from '@/features/ledger/types';
 import {
   budgetedRows,
   budgetLevel,
-  budgetTotals,
   obligationDoubleBudgetText,
   periodSubtitle,
   RENCANA_COPY,
@@ -101,16 +100,6 @@ describe('daftar dan total', () => {
 
   it('Belum dianggarkan hanya kategori aktif tanpa anggaran', () => {
     expect(unbudgetedRows(rows).map((r) => r.name)).toEqual(['Hiburan']);
-  });
-
-  it('total hanya menjumlahkan yang dianggarkan', () => {
-    expect(budgetTotals(rows)).toEqual({ budget: 2_600, spent: 1_860, remaining: 740, pct: 71 });
-    expect(budgetTotals([row({ categoryId: 'c', name: 'Hiburan', spent: 900 })])).toEqual({
-      budget: 0,
-      spent: 0,
-      remaining: 0,
-      pct: 0,
-    });
   });
 });
 

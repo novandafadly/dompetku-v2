@@ -3,8 +3,8 @@ import { CaretRightIcon } from '@/components/ui/icons/caret-right';
 import { WarningIcon } from '@/components/ui/icons/warning';
 import { WarningOctagonIcon } from '@/components/ui/icons/warning-octagon';
 import { MoneyText } from '@/components/ui/money-text';
-import { budgetLevel, budgetTotals, RENCANA_COPY, type BudgetLevel } from './copy';
-import type { BudgetOverviewVM } from './types';
+import { budgetLevel, RENCANA_COPY, type BudgetLevel } from './copy';
+import type { BudgetOverviewVM, BudgetTotalsVM } from './types';
 
 /**
  * Tampilan baris dan kartu total Anggaran (S9-AN1). Server Component, tanpa `'use client'`: tombol
@@ -129,13 +129,12 @@ export function UnbudgetedItemView({ row }: { row: BudgetOverviewVM }) {
  * sebagai total pengeluaran (itu milik Laporan). Tidak dipanggil bila belum ada anggaran.
  */
 export function BudgetTotalCard({
-  rows,
+  totals: t,
   labelledBy,
 }: {
-  rows: readonly BudgetOverviewVM[];
+  totals: BudgetTotalsVM;
   labelledBy: string;
 }) {
-  const t = budgetTotals(rows);
   const level = budgetLevel({ pct: t.pct, remaining: t.remaining });
   return (
     <section

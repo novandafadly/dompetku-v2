@@ -7,6 +7,7 @@ import type {
   BillDueVM,
   BillListVM,
   BudgetOverviewVM,
+  BudgetTotalsVM,
   PreviousBudgetsVM,
   RencanaData,
 } from '@/features/rencana/types';
@@ -174,6 +175,44 @@ export async function budgetOverviewTx(
   });
 }
 
+const totalsRow = z.object({
+  total_budget: z.number().int(),
+  total_spent: z.number().int(),
+  total_remaining: z.number().int(),
+  total_pct: z.number().int(),
+});
+
+/**
+ * Total kartu Anggaran, dijumlah di SQL (BSD §1.1) dari baris `api.budget_overview` yang sama:
+ * hanya kategori beranggaran (wajib dan terarsip yang masih beranggaran ikut); realisasi = kolom
+ * `spent` per baris (wajib: tanpa bayar tagihan periode lain). `pct` = floor(Σ spent × 100 / Σ
+ * budget), 0 bila tanpa anggaran.
+ */
+export async function budgetTotalsTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  labelMonth: IsoDate,
+): Promise<BudgetTotalsVM> {
+  const { rows } = await c.query<Record<string, unknown>>(
+    `select coalesce(sum(b.budget), 0)::bigint as total_budget,
+            coalesce(sum(b.spent), 0)::bigint as total_spent,
+            (coalesce(sum(b.budget), 0) - coalesce(sum(b.spent), 0))::bigint as total_remaining,
+            case when coalesce(sum(b.budget), 0) > 0
+                 then least(floor(sum(b.spent) * 100.0 / sum(b.budget)), 2147483647)::int
+                 else 0 end as total_pct
+       from api.budget_overview(p_space_id => $1, p_month => $2::date) b
+      where b.budget is not null`,
+    [ctx.spaceId, labelMonth],
+  );
+  const r = totalsRow.parse(rows[0]);
+  return {
+    budget: r.total_budget,
+    spent: r.total_spent,
+    remaining: r.total_remaining,
+    pct: r.total_pct,
+  };
+}
+
 interface BillListRow {
   bill_id: string;
   name: string;
@@ -307,6 +346,7 @@ export async function loadRencana(
     withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
       const period = await payPeriodTx(c, ctx);
       const budgets = await budgetOverviewTx(c, ctx, period.labelMonth);
+      const totals = await budgetTotalsTx(c, ctx, period.labelMonth);
       const prevMonth = first(addMonths(period.labelMonth.slice(0, 7), -1));
       const previous = previousOf(prevMonth, await budgetOverviewTx(c, ctx, prevMonth));
       const bills = await billListTx(c, ctx);
@@ -318,7 +358,7 @@ export async function loadRencana(
           categories: await listCategoriesTx(c, ctx),
         };
       }
-      return { period, budgets, previous, bills, due, own };
+      return { period, budgets, totals, previous, bills, due, own };
     }),
     given ?? null,
   ]);

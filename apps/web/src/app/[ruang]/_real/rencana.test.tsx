@@ -68,6 +68,7 @@ const data = (over: Partial<RencanaData> = {}): RencanaData => ({
   period: PERIOD,
   previous: { labelMonth: '2026-10-01', budgetCount: 0, wajibCount: 0, amounts: {} },
   budgets: [],
+  totals: { budget: 0, spent: 0, remaining: 0, pct: 0 },
   bills: [],
   due: [],
   accounts: [],

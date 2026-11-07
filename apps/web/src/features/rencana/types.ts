@@ -47,6 +47,17 @@ export interface BillListVM {
   nextOccurrenceId: string | null;
 }
 
+/**
+ * Total kartu Anggaran (`budgetTotalsTx`, dijumlah di SQL): hanya kategori beranggaran;
+ * `pct` = floor(spent × 100 / budget), 0 bila tanpa anggaran.
+ */
+export interface BudgetTotalsVM {
+  budget: Rupiah;
+  spent: Rupiah;
+  remaining: Rupiah;
+  pct: number;
+}
+
 /** Satu kemunculan tagihan (`api.bills_due`). */
 export interface BillDueVM {
   occurrenceId: string;
@@ -77,6 +88,8 @@ export interface RencanaData {
   period: PeriodVM;
   previous: PreviousBudgetsVM;
   budgets: BudgetOverviewVM[];
+  /** Total kartu Anggaran, dari SQL. */
+  totals: BudgetTotalsVM;
   bills: BillListVM[];
   /** Kemunculan sampai akhir periode berjalan (termasuk lewat; lunas/dilewati di periode ini). */
   due: BillDueVM[];

@@ -97,28 +97,25 @@ describe('UnbudgetedItemView', () => {
 });
 
 describe('BudgetTotalCard', () => {
-  it('menjumlahkan hanya yang dianggarkan; sr-only "dari anggaran"', () => {
+  it('menampilkan total dari SQL; sr-only "dari anggaran"', () => {
     render(
       <BudgetTotalCard
         labelledBy="t"
-        rows={[
-          row({ budget: 2_000_000, spent: 1_000_000, pct: 50, remaining: 1_000_000 }),
-          row({ categoryId: 'k2', budget: null, spent: 999_999, pct: null, remaining: null }),
-        ]}
+        totals={{ budget: 2_000_000, spent: 1_000_000, remaining: 1_000_000, pct: 50 }}
       />,
     );
     const card = screen.getByRole('region', { name: /Terpakai/ });
     expect(within(card).getByText('dari anggaran')).toBeTruthy();
+    expect(text(card)).toContain('Rp 1.000.000');
     expect(text(card)).toContain('dari Rp 2.000.000');
     expect(text(card)).toContain('sisa Rp 1.000.000');
-    expect(text(card)).not.toContain('999.999');
   });
 
   it('total lewat: Lewat Rp …', () => {
     render(
       <BudgetTotalCard
         labelledBy="t"
-        rows={[row({ budget: 100_000, spent: 150_000, pct: 150, remaining: -50_000 })]}
+        totals={{ budget: 100_000, spent: 150_000, remaining: -50_000, pct: 150 }}
       />,
     );
     expect(text(screen.getByRole('region'))).toContain('Lewat Rp 50.000');
