@@ -476,9 +476,10 @@ describe('RencanaHost: Tagihan', () => {
       expect(actions.payBillAction).toHaveBeenCalledTimes(2);
     });
     expect(actions.payBillAction.mock.calls[1]?.[1]).toMatchObject({ allowNegative: true });
-    expect(actions.payBillAction.mock.calls[1]?.[1].clientId).toBe(
-      actions.payBillAction.mock.calls[0]?.[1].clientId,
+    const ids = actions.payBillAction.mock.calls.map(
+      (c) => (c[1] as { clientId: string }).clientId,
     );
+    expect(ids[1]).toBe(ids[0]);
   });
 
   it('already_posted: kotak galat tanpa nominal, Muat ulang menutup sheet dan refresh', async () => {
