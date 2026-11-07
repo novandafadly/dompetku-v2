@@ -1,13 +1,19 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BudgetOverviewVM } from '@/features/rencana/types';
 import {
   BudgetRowTrigger,
   CopyBudgetsButton,
   CopyConflictNote,
+  AddBillButton,
+  BillBodyTrigger,
+  PayButton,
   RencanaHost,
   SetBudgetButton,
+  UnskipButton,
+  type BillHostData,
 } from './rencana-client';
 
 afterEach(cleanup);
@@ -16,8 +22,18 @@ const actions = vi.hoisted(() => ({
   setBudgetAction: vi.fn(),
   deleteBudgetAction: vi.fn(),
   copyBudgetsAction: vi.fn(),
+  createBillAction: vi.fn(),
+  updateBillAction: vi.fn(),
+  archiveBillAction: vi.fn(),
+  payBillAction: vi.fn(),
+  skipBillAction: vi.fn(),
+  unskipBillAction: vi.fn(),
 }));
 vi.mock('../_actions/rencana', () => actions);
+const entri = vi.hoisted(() => ({ voidEntryAction: vi.fn() }));
+vi.mock('../_actions/entri', () => entri);
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 const toastSpy = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/toast', () => ({ toast: toastSpy }));
 
@@ -73,6 +89,55 @@ function setup(ruang: 'pribadi' | 'bersama' = 'pribadi') {
     </RencanaHost>,
   );
 }
+
+// Paling awal: timer restoreFocus tes lain (300/900 ms) tidak boleh bocor ke tes fokus ini.
+describe('fokus sesudah perubahan (I2)', () => {
+  /** Pemicu benar-benar lepas saat simpan berhasil (daftar dimuat ulang): tanpa restoreFocus fokus jatuh ke <body>. */
+  function Harness({ withRow }: { withRow: boolean }) {
+    const [gone, setGone] = useState(false);
+    actions.setBudgetAction.mockImplementation(() => {
+      setGone(true);
+      return Promise.resolve({ ok: true, value: undefined });
+    });
+    return (
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={ROWS}
+        previous={{}}
+        billNameByRoot={{}}
+      >
+        <h1>Rencana</h1>
+        {gone ? null : <SetBudgetButton label="Atur anggaran pertama" variant="primary" />}
+        {withRow ? (
+          <BudgetRowTrigger categoryId="k-internet" className="flex">
+            Baris Internet
+          </BudgetRowTrigger>
+        ) : null}
+      </RencanaHost>
+    );
+  }
+
+  async function saveFromEmpty(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Atur anggaran pertama' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-internet');
+    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
+  }
+
+  it('pemicu lepas dan baris kategori ada: fokus ke baris', async () => {
+    const user = userEvent.setup();
+    render(<Harness withRow />);
+    await saveFromEmpty(user);
+    await waitFor(
+      () => {
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Baris Internet' }));
+      },
+      { timeout: 3000 },
+    );
+  });
+});
 
 describe('RencanaHost: sheet Anggaran', () => {
   it('sheet tidak dipasang sebelum dibuka; baris Belum dianggarkan membuka sheet dengan kategorinya', async () => {
@@ -141,53 +206,6 @@ describe('RencanaHost: sheet Anggaran', () => {
     setup();
     await user.click(screen.getByRole('button', { name: 'Atur anggaran' }));
     expect(await screen.findByRole('combobox', { name: 'Kategori' })).toHaveValue('');
-  });
-});
-
-describe('fokus sesudah perubahan (I2)', () => {
-  it('simpan dari baris: fokus tidak jatuh ke <body> (kembali ke baris)', async () => {
-    const user = userEvent.setup();
-    setup();
-    await user.click(screen.getByRole('button', { name: 'Baris Internet' }));
-    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
-    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
-    await waitFor(
-      () => {
-        expect(document.activeElement).not.toBe(document.body);
-      },
-      { timeout: 3000 },
-    );
-  });
-
-  it('pemicu hilang (EmptyState) dan baris ada: fokus ke baris; baris tidak ada: ke judul halaman', async () => {
-    const user = userEvent.setup();
-    render(
-      <RencanaHost
-        ruang="pribadi"
-        month="2026-11"
-        range="23 Okt – 24 Nov"
-        rows={ROWS}
-        previous={{}}
-        billNameByRoot={{}}
-      >
-        <h1>Rencana</h1>
-        <SetBudgetButton label="Atur anggaran pertama" variant="primary" />
-        <BudgetRowTrigger categoryId="k-internet" className="flex">
-          Baris Internet
-        </BudgetRowTrigger>
-      </RencanaHost>,
-    );
-    await user.click(screen.getByRole('button', { name: 'Atur anggaran pertama' }));
-    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-internet');
-    (document.activeElement as HTMLElement | null)?.blur();
-    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
-    await waitFor(
-      () => {
-        expect(document.activeElement).not.toBe(document.body);
-      },
-      { timeout: 3000 },
-    );
   });
 });
 
@@ -285,6 +303,308 @@ describe('CopyBudgetsButton (K13)', () => {
     });
     await waitFor(() => {
       expect(toastSpy).toHaveBeenCalled();
+    });
+  });
+});
+
+describe('RencanaHost: Tagihan', () => {
+  const BILL: BillHostData['bills'][number] = {
+    billId: 'b1',
+    name: 'Listrik PLN',
+    amount: 485_000,
+    categoryId: 'k-listrik',
+    categoryName: 'Listrik & Air',
+    rootCategoryId: 'k-listrik',
+    accountId: 'a1',
+    accountName: 'BCA',
+    dayOfMonth: 10,
+    startsOn: '2026-01-01',
+    endsOn: null,
+    archived: false,
+    nextDueOn: '2026-11-10',
+    nextOccurrenceId: 'o1',
+  };
+  const DATA: BillHostData = {
+    bills: [BILL],
+    occurrences: [
+      {
+        occurrenceId: 'o1',
+        billId: 'b1',
+        name: 'Listrik PLN',
+        amount: 485_000,
+        dueOn: '2026-11-10',
+        daysUntil: 4,
+        overdue: false,
+        posted: false,
+        skipped: false,
+        entryId: null,
+        paidOn: null,
+      },
+    ],
+    accounts: [
+      {
+        id: 'a1',
+        name: 'BCA',
+        pocket: 'operasional',
+        walletType: 'bank',
+        openedOn: '2026-01-01',
+        archived: false,
+        balance: 2_000_000,
+      },
+    ],
+    categories: [
+      {
+        id: 'k-listrik',
+        parentId: null,
+        name: 'Listrik & Air',
+        type: 'expense',
+        icon: 'Tag',
+        archived: false,
+      },
+    ],
+    today: '2026-11-06',
+    wajibRoots: {},
+  };
+
+  function setupBill() {
+    render(
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={[]}
+        previous={{}}
+        billNameByRoot={{}}
+        bill={DATA}
+      >
+        <h1>Rencana</h1>
+        <BillBodyTrigger billId="b1" className="flex">
+          Baris Listrik
+        </BillBodyTrigger>
+        <PayButton occurrenceId="o1" billName="Listrik PLN" amountText="Rp 485.000" />
+        <UnskipButton occurrenceId="o1" billName="Listrik PLN" />
+        <AddBillButton label="Tambah tagihan" variant="primary" />
+      </RencanaHost>,
+    );
+  }
+
+  beforeEach(() => {
+    toastSpy.mockClear();
+    actions.payBillAction.mockResolvedValue({
+      ok: true,
+      value: { entryId: 'e1', occurrenceId: 'o1', version: 1, replayed: false, warnings: [] },
+    });
+    actions.skipBillAction.mockResolvedValue({ ok: true, value: { skipped: true } });
+    actions.unskipBillAction.mockResolvedValue({ ok: true, value: { skipped: false } });
+    actions.createBillAction.mockResolvedValue({ ok: true, value: { billId: 'b9' } });
+    actions.archiveBillAction.mockResolvedValue({ ok: true, value: { billId: 'b1' } });
+    entri.voidEntryAction.mockResolvedValue({ ok: true, value: { version: 2 } });
+  });
+
+  it('Bayar: nama aksesibel memuat nominal; nominal beda dikirim, toast + Urungkan membatalkan entri', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Bayar Listrik PLN, Rp 485.000' }));
+    const nominal = await screen.findByRole('textbox', { name: 'Nominal' });
+    expect(nominal).toHaveValue('485.000');
+    await user.clear(nominal);
+    await user.type(nominal, '512000');
+    await user.click(screen.getByRole('button', { name: /^Bayar Rp\s512\.000$/ }));
+    await waitFor(() => {
+      expect(actions.payBillAction).toHaveBeenCalledTimes(1);
+    });
+    expect(actions.payBillAction).toHaveBeenCalledWith(
+      'pribadi',
+      expect.objectContaining({
+        occurrenceId: 'o1',
+        accountId: 'a1',
+        amount: 512_000,
+        occurredOn: '2026-11-06',
+        allowNegative: false,
+        clientId: expect.any(String) as string,
+      }),
+    );
+    const t = toastSpy.mock.calls.at(-1)?.[0] as {
+      message: string;
+      action: { onAction: () => void };
+    };
+    expect(t.message).toMatch(/^Tagihan Listrik PLN dibayar di Pribadi · Rp\s512\.000 dari BCA$/);
+    t.action.onAction();
+    t.action.onAction(); // klik ganda: satu permintaan
+    await waitFor(() => {
+      expect(entri.voidEntryAction).toHaveBeenCalledTimes(1);
+    });
+    expect(entri.voidEntryAction).toHaveBeenCalledWith('pribadi', {
+      clientId: expect.any(String) as string,
+      entryId: 'e1',
+      expectedVersion: 1,
+    });
+  });
+
+  it('klik ganda Bayar = satu permintaan (clientId sama)', async () => {
+    const user = userEvent.setup();
+    let release: (v: unknown) => void = () => undefined;
+    actions.payBillAction.mockReturnValue(
+      new Promise((r) => {
+        release = r;
+      }),
+    );
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    const pay = await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ });
+    await user.dblClick(pay);
+    expect(actions.payBillAction).toHaveBeenCalledTimes(1);
+    release({
+      ok: true,
+      value: { entryId: 'e1', occurrenceId: 'o1', version: 1, replayed: false, warnings: [] },
+    });
+  });
+
+  it('saldo kurang: peringatan tanpa galat, tombol jadi Tetap bayar dan mengirim allowNegative', async () => {
+    const user = userEvent.setup();
+    actions.payBillAction.mockResolvedValueOnce({ ok: false, error: { code: 'saldo_negatif' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /Saldo BCA tinggal Rp\s2\.000\.000\. Kalau dibayar, saldonya jadi Rp\s1\.515\.000\./,
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Tetap bayar' }));
+    await waitFor(() => {
+      expect(actions.payBillAction).toHaveBeenCalledTimes(2);
+    });
+    expect(actions.payBillAction.mock.calls[1]?.[1]).toMatchObject({ allowNegative: true });
+    expect(actions.payBillAction.mock.calls[1]?.[1].clientId).toBe(
+      actions.payBillAction.mock.calls[0]?.[1].clientId,
+    );
+  });
+
+  it('already_posted: kotak galat tanpa nominal, Muat ulang menutup sheet dan refresh', async () => {
+    const user = userEvent.setup();
+    actions.payBillAction.mockResolvedValueOnce({ ok: false, error: { code: 'already_posted' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Tagihan ini sudah dibayar.');
+    expect(alert.textContent).not.toMatch(/Rp/);
+    await user.click(within(alert).getByRole('button', { name: 'Muat ulang' }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('Lewati tagihan ini memanggil skip; toast Urungkan memanggil unskip', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: 'Lewati tagihan ini' }));
+    await waitFor(() => {
+      expect(actions.skipBillAction).toHaveBeenCalledWith('pribadi', 'o1');
+    });
+    const t = toastSpy.mock.calls.at(-1)?.[0] as {
+      message: string;
+      action: { onAction: () => void };
+    };
+    expect(t.message).toBe('Listrik PLN dilewati · Pribadi');
+    t.action.onAction();
+    await waitFor(() => {
+      expect(actions.unskipBillAction).toHaveBeenCalledWith('pribadi', 'o1');
+    });
+  });
+
+  it('Batalkan lewati memanggil unskip dan memberi toast', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Batalkan lewati Listrik PLN' }));
+    await waitFor(() => {
+      expect(actions.unskipBillAction).toHaveBeenCalledWith('pribadi', 'o1');
+    });
+    await waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith({ message: 'Listrik PLN kembali ditagih · Pribadi' });
+    });
+  });
+
+  it('Tambah tagihan: validasi nama, simpan memanggil createBillAction dengan clientId', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    await user.click(await screen.findByRole('button', { name: 'Simpan tagihan' }));
+    expect(
+      await screen.findByText('Nama tagihan wajib diisi, paling banyak 60 huruf.'),
+    ).toBeTruthy();
+    await user.type(screen.getByRole('textbox', { name: 'Nama' }), 'Internet');
+    await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '300000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    await waitFor(() => {
+      expect(actions.createBillAction).toHaveBeenCalledTimes(1);
+    });
+    expect(actions.createBillAction).toHaveBeenCalledWith(
+      'pribadi',
+      expect.objectContaining({
+        name: 'Internet',
+        amount: 300_000,
+        categoryId: 'k-listrik',
+        dayOfMonth: 1,
+        startsOn: '2026-11-06',
+        endsOn: null,
+        accountId: null,
+        clientId: expect.any(String) as string,
+      }),
+    );
+  });
+
+  it('obligation_double di Tagihan: galat di kolom Kategori dengan jalan keluar, fokus ke Kategori', async () => {
+    const user = userEvent.setup();
+    actions.createBillAction.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'obligation_double' },
+    });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Listrik');
+    await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '1000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    expect(
+      await screen.findByText(/Kategori Listrik & Air sudah punya anggaran wajib\. Satu kewajiban/),
+    ).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Kategori' })).toHaveFocus();
+  });
+
+  it('Ubah: nominal diganti memanggil updateBillAction; Arsipkan lewat dialog (fokus awal Kembali)', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    const nominal = await screen.findByRole('textbox', { name: 'Perkiraan nominal' });
+    expect(nominal).toHaveFocus();
+    expect(
+      screen.getByText('Berlaku untuk tagihan yang belum dibayar mulai hari ini.'),
+    ).toBeTruthy();
+    await user.clear(nominal);
+    await user.type(nominal, '500000');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    await waitFor(() => {
+      expect(actions.updateBillAction).toHaveBeenCalledWith(
+        'pribadi',
+        expect.objectContaining({ billId: 'b1', amount: 500_000, accountId: 'a1' }),
+      );
+    });
+  });
+
+  it('Arsipkan: dialog dengan fokus awal Kembali, konfirmasi memanggil archiveBillAction', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    await user.click(await screen.findByRole('button', { name: 'Arsipkan tagihan' }));
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Arsipkan tagihan Listrik PLN?',
+    });
+    expect(within(dialog).getByRole('button', { name: 'Kembali' })).toHaveFocus();
+    await user.click(within(dialog).getByRole('button', { name: 'Arsipkan tagihan' }));
+    await waitFor(() => {
+      expect(actions.archiveBillAction).toHaveBeenCalledWith('pribadi', 'b1');
     });
   });
 });

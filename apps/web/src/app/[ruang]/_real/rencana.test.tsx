@@ -33,6 +33,34 @@ vi.mock('./rencana-islands', () => ({
   ),
   CopyBudgetsIsland: () => <button type="button">Salin anggaran periode lalu</button>,
   CopyConflictIsland: () => null,
+  BillBodyIsland: ({
+    billId,
+    className,
+    children,
+  }: {
+    billId: string;
+    className: string;
+    children: ReactNode;
+  }) => (
+    <button type="button" data-bill-row={billId} className={className}>
+      {children}
+    </button>
+  ),
+  AddBillIsland: ({ label, className }: { label: string; className?: string }) => (
+    <button type="button" className={className}>
+      {label}
+    </button>
+  ),
+  PayIsland: ({ billName, amountText }: { billName: string; amountText: string }) => (
+    <button type="button" aria-label={`Bayar ${billName}, ${amountText}`}>
+      Bayar
+    </button>
+  ),
+  UnskipIsland: ({ billName }: { billName: string }) => (
+    <button type="button" aria-label={`Batalkan lewati ${billName}`}>
+      Batalkan lewati
+    </button>
+  ),
 }));
 vi.mock('./transaksi-islands', () => ({
   RetryIsland: () => <button type="button">Coba lagi</button>,
@@ -346,5 +374,145 @@ describe('RencanaFailed', () => {
     render(<RencanaFailed />);
     expect(screen.getByRole('alert')).toHaveTextContent('Rencana belum bisa dimuat.');
     expect(screen.getByRole('button', { name: 'Coba lagi' })).toBeTruthy();
+  });
+});
+
+const occ = (over: Partial<RencanaData['due'][number]> = {}): RencanaData['due'][number] => ({
+  occurrenceId: 'o1',
+  billId: 'b1',
+  name: 'Listrik PLN',
+  amount: 485_000,
+  dueOn: '2026-11-10',
+  daysUntil: 4,
+  overdue: false,
+  posted: false,
+  skipped: false,
+  entryId: null,
+  paidOn: null,
+  ...over,
+});
+
+describe('RencanaReal: Tagihan (S9-TG1)', () => {
+  const tagihan = (over: Partial<RencanaData> = {}) => view(data(over), { bagian: 'tagihan' });
+
+  it('kelompok Lewat jatuh tempo / Periode ini / Berikutnya, kelompok kosong tidak dirender', () => {
+    tagihan({
+      bills: [
+        bill(),
+        bill({ billId: 'b2', name: 'Internet' }),
+        bill({ billId: 'b3', name: 'Kartu' }),
+      ],
+      due: [
+        occ({
+          occurrenceId: 'o0',
+          billId: 'b2',
+          name: 'Internet',
+          dueOn: '2026-11-01',
+          daysUntil: -5,
+          overdue: true,
+          amount: 300_000,
+        }),
+        occ(),
+      ],
+      upcoming: [
+        occ({
+          occurrenceId: 'o9',
+          billId: 'b3',
+          name: 'Kartu',
+          dueOn: '2026-12-20',
+          daysUntil: 44,
+          amount: 1_200_000,
+        }),
+      ],
+    });
+    const lewat = screen.getByRole('region', { name: 'Lewat jatuh tempo' });
+    expect(flat(lewat)).toContain('Internet');
+    expect(flat(lewat)).toContain('Lewat 5 hari');
+    const periode = screen.getByRole('region', { name: 'Periode ini' });
+    expect(flat(periode)).toContain('Listrik PLN');
+    expect(flat(periode)).toContain('4 hari lagi');
+    expect(flat(periode)).toContain('Rp 485.000');
+    const next = screen.getByRole('region', { name: 'Berikutnya' });
+    expect(flat(next)).toContain('20 Des');
+    expect(screen.queryByText(/Tagihan diarsipkan/)).toBeNull();
+  });
+
+  it('Bayar bernama dengan nominal; Lunas tanpa Bayar; Dilewati punya Batalkan lewati', () => {
+    tagihan({
+      bills: [
+        bill(),
+        bill({ billId: 'b2', name: 'Internet' }),
+        bill({ billId: 'b3', name: 'Kartu' }),
+      ],
+      due: [
+        occ(),
+        occ({
+          occurrenceId: 'o2',
+          billId: 'b2',
+          name: 'Internet',
+          posted: true,
+          paidOn: '2026-10-21',
+          amount: 310_000,
+          daysUntil: -16,
+        }),
+        occ({ occurrenceId: 'o3', billId: 'b3', name: 'Kartu', skipped: true }),
+      ],
+    });
+    expect(screen.getAllByRole('button', { name: /^Bayar / })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^Bayar Listrik PLN, Rp\s485\.000$/ })).toBeTruthy();
+    expect(screen.getByText('Lunas · 21 Okt')).toBeTruthy();
+    expect(screen.getByText('Dilewati')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Batalkan lewati Kartu' })).toBeTruthy();
+  });
+
+  it('badan baris menyebut Ubah tagihan; arsip terlipat dan baca-saja', () => {
+    tagihan({
+      bills: [bill(), bill({ billId: 'b9', name: 'Lama', archived: true })],
+      due: [occ()],
+    });
+    const body = document.querySelector('[data-bill-row="b1"]');
+    expect(body?.textContent).toContain('Ubah tagihan Listrik PLN');
+    const details = document.querySelector('details');
+    expect(details?.hasAttribute('open')).toBe(false);
+    expect(details?.textContent).toContain('Tagihan diarsipkan (1)');
+    expect(details?.querySelector('button')).toBeNull();
+  });
+
+  it('ada anggaran tetapi tanpa tagihan: ajakan bagian Tagihan dengan Tambah tagihan', () => {
+    tagihan({ budgets: BUDGETS });
+    expect(screen.getByRole('heading', { level: 2, name: 'Belum ada tagihan.' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tambah tagihan' })).toBeTruthy();
+  });
+
+  it('RC0 punya dua aksi: Atur anggaran pertama dan Tambah tagihan', () => {
+    view(data());
+    expect(screen.getByRole('button', { name: 'Atur anggaran pertama' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tambah tagihan' })).toBeTruthy();
+  });
+
+  it('pulau mendapat data tagihan (tanpa kategori/dompet lain) dan wajibRoots', () => {
+    view(
+      data({
+        budgets: [
+          row({
+            categoryId: 'k-listrik',
+            name: 'Listrik & Air',
+            budget: 1,
+            wajib: true,
+            pct: 0,
+            remaining: 1,
+          }),
+        ],
+        bills: [bill()],
+        due: [occ()],
+        upcoming: [occ({ occurrenceId: 'o9', dueOn: '2026-12-10', daysUntil: 34 })],
+      }),
+    );
+    const props = host.mock.calls.at(-1)?.[0] as {
+      bill: { occurrences: unknown[]; wajibRoots: unknown; today: string };
+    };
+    expect(props.bill.occurrences).toHaveLength(2);
+    expect(props.bill.wajibRoots).toEqual({ 'k-listrik': true });
+    expect(props.bill.today).toBe('2026-11-05');
   });
 });
