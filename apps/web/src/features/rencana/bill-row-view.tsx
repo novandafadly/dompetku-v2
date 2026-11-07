@@ -78,8 +78,15 @@ export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }
       <span className="flex min-w-0 flex-1 flex-col gap-0.75 text-left">
         <span className="flex items-start gap-1 text-body/tight font-semibold text-text">
           {caret ? <span className="sr-only">Ubah tagihan </span> : null}
-          <span className="line-clamp-2 min-w-0 break-words">{item.bill.name}</span>
-          {caret ? <CaretRightIcon size={16} className="mt-0.5 shrink-0 text-text-muted" /> : null}
+          <span className="line-clamp-2 min-w-0 break-words">
+            {item.bill.name}
+            {caret ? (
+              <CaretRightIcon
+                size={16}
+                className="ml-1 inline-block align-text-bottom text-text-muted"
+              />
+            ) : null}
+          </span>
         </span>
         <span className={`flex items-center gap-1 text-meta font-semibold ${TONE[sub.tone]}`}>
           <SubIcon icon={sub.icon} />

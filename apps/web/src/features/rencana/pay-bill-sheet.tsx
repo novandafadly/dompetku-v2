@@ -18,12 +18,18 @@ import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { WarningIcon } from '@/components/ui/icons/warning';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
+import { focusRing } from '@/components/ui/styles';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { newClientId } from '@/features/ledger/client-id';
 import type { AccountVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { Alert, payableAccounts, SelectField, type BillResult } from './bill-sheet';
 import type { BillItem } from './bills';
-import { accountArchivedBillText, saldoKurangBayarText, TAGIHAN_COPY as C } from './copy';
+import {
+  accountArchivedBillText,
+  MAX_AMOUNT,
+  saldoKurangBayarText,
+  TAGIHAN_COPY as C,
+} from './copy';
 
 const FORM_ID = 'bayar-tagihan';
 /** Tanggal bayar: hari ini sampai 13 hari lalu (pola Catat); bayar di muka tetap bertanggal hari ini. */
@@ -100,6 +106,7 @@ function Form(p: FormProps) {
     if (busy.current) return;
     const next: typeof errors = {};
     if (amount === null || amount <= 0) next.amount = C.errAmount;
+    else if (amount > MAX_AMOUNT) next.amount = C.errAmountMax;
     if (account === undefined) next.account = C.errPickAccount;
     setErrors(next);
     setGalat(null);
@@ -165,7 +172,7 @@ function Form(p: FormProps) {
         break;
       case 'invalid':
         if ((res.field ?? '').includes('amount')) {
-          setErrors({ amount: C.errAmount });
+          setErrors({ amount: amount > MAX_AMOUNT ? C.errAmountMax : C.errAmount });
           p.amountRef.current?.focus();
         } else {
           setGalat('invalid');
@@ -231,11 +238,13 @@ function Form(p: FormProps) {
   return (
     <>
       <p
-        className={`flex items-center gap-1.5 text-label font-medium ${occ.overdue ? 'text-danger' : 'text-text-soft'}`}
+        className={`flex flex-wrap items-center gap-x-1.5 text-label font-medium ${occ.overdue ? 'text-danger' : 'text-text-soft'}`}
       >
         {occ.overdue ? <WarningCircleIcon size={16} weight="fill" className="shrink-0" /> : null}
-        {C.dueOn(shortDateLabel(occ.dueOn))}
-        {occ.overdue ? <span className="font-bold"> · {C.lateDays(late)}</span> : null}
+        <span>
+          {C.dueOn(shortDateLabel(occ.dueOn))}
+          {occ.overdue ? <span className="font-bold">{` · ${C.lateDays(late)}`}</span> : null}
+        </span>
       </p>
       <form
         id={FORM_ID}
@@ -333,7 +342,7 @@ function Form(p: FormProps) {
               >
                 Coba lagi
               </Button>
-            ) : galat === 'posted' ? (
+            ) : galat === 'posted' || galat === 'gone' || galat === 'archived' ? (
               <Button variant="secondary" size="sm" onClick={p.onReload}>
                 {C.reload}
               </Button>
@@ -356,17 +365,17 @@ function Form(p: FormProps) {
         </Alert>
       )}
       <div className="flex flex-col items-start gap-1 pt-1">
-        <Button
-          variant="text"
-          size="sm"
+        <button
+          type="button"
           aria-disabled={p.saving || undefined}
           onClick={() => {
             if (!p.saving) void skip();
           }}
+          className={`inline-flex min-h-11 items-center rounded-md text-label font-bold text-text-soft underline underline-offset-2 hover-pointer:text-text aria-disabled:text-text-muted ${focusRing}`}
         >
           {C.skip}
-        </Button>
-        <p className="px-3 text-caption font-medium text-text-muted">{C.skipHint}</p>
+        </button>
+        <p className="text-caption font-medium text-text-muted">{C.skipHint}</p>
       </div>
     </>
   );

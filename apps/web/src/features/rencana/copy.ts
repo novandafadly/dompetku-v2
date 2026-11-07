@@ -8,6 +8,9 @@ import type { BudgetOverviewVM } from './types';
  * ruang itu sendiri.
  */
 
+/** Batas nominal (Zod `rencana.ts` dan DB): lebih dari ini = `Nominal terlalu besar`. */
+export const MAX_AMOUNT = 10 ** 13;
+
 export const RUANG_NAME: Record<Ruang, string> = { pribadi: 'Pribadi', bersama: 'Bersama' };
 
 export const RENCANA_COPY = {
@@ -158,7 +161,8 @@ export const TAGIHAN_COPY = {
   archive: 'Arsipkan tagihan',
   back: 'Kembali',
   archiveTitle: (nama: string) => `Arsipkan tagihan ${nama}?`,
-  archiveBody: 'Tagihan berhenti ditagih mulai sekarang. Yang sudah dibayar tetap tercatat.',
+  archiveBody:
+    'Tagihan berhenti ditagih mulai sekarang dan tidak bisa diaktifkan lagi. Yang sudah dibayar tetap tercatat.',
   saved: (nama: string, ruang: Ruang) => `Tagihan ${nama} disimpan · ${RUANG_NAME[ruang]}`,
   archivedToast: (nama: string, ruang: Ruang) =>
     `Tagihan ${nama} diarsipkan · ${RUANG_NAME[ruang]}`,
@@ -187,6 +191,9 @@ export const TAGIHAN_COPY = {
   // Galat
   errName: 'Nama tagihan wajib diisi, paling banyak 60 huruf.',
   errAmount: 'Nominal harus lebih dari nol.',
+  archivedAccount: (dompet: string) =>
+    `Dompet bawaan ${dompet} sudah diarsipkan. Pilih dompet lain atau biarkan kosong.`,
+  errAmountMax: 'Nominal terlalu besar. Maksimal Rp 10.000.000.000.000.',
   errDay: 'Pilih tanggal 1 sampai 31.',
   errEndsOn: 'Tanggal berakhir tidak boleh sebelum tanggal mulai.',
   errStartsOn: 'Isi tanggal mulai.',
@@ -203,6 +210,8 @@ export const TAGIHAN_COPY = {
   errNetwork:
     'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan mencatat dua kali.',
   errServer: 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan mencatat dua kali.',
+  errArchiveGone: 'Tagihan ini sudah tidak ada. Muat ulang halaman.',
+  errArchiveArchived: 'Tagihan ini sudah diarsipkan. Muat ulang halaman.',
   errArchiveNetwork: 'Belum diarsipkan. Koneksi terputus saat mengirim. Coba lagi.',
   errArchiveServer: 'Belum diarsipkan. Ada kendala di server. Coba lagi.',
   errUnskip: 'Belum bisa dibatalkan. Coba lagi.',

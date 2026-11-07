@@ -612,6 +612,169 @@ describe('RencanaHost: Tagihan', () => {
     expect(screen.getByRole('combobox', { name: 'Dompet bayar bawaan' })).toHaveFocus();
   });
 
+  it('clientId Bayar berputar per pembukaan sheet (sukses lalu buka lagi; buka, tutup, buka lagi)', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    const ids = () =>
+      actions.payBillAction.mock.calls.map((c) => (c[1] as { clientId: string }).clientId);
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    await waitFor(() => {
+      expect(ids()).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    await waitFor(() => {
+      expect(ids()).toHaveLength(2);
+    });
+    expect(ids()[1]).not.toBe(ids()[0]);
+    // buka, tutup tanpa bayar, buka lagi: gagal bayar dua kali dari sheet berbeda tetap berbeda.
+    actions.payBillAction.mockResolvedValue({ ok: false, error: { code: 'network' } });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    await waitFor(() => {
+      expect(ids()).toHaveLength(3);
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    await waitFor(() => {
+      expect(ids()).toHaveLength(4);
+    });
+    expect(ids()[3]).not.toBe(ids()[2]);
+    // "Coba lagi" di sheet yang sama memakai clientId yang sama.
+    await user.click(await screen.findByRole('button', { name: 'Coba lagi' }));
+    await waitFor(() => {
+      expect(ids()).toHaveLength(5);
+    });
+    expect(ids()[4]).toBe(ids()[3]);
+  });
+
+  it('peringatan saldo kurang hilang saat nominal atau dompet diganti', async () => {
+    const user = userEvent.setup();
+    actions.payBillAction.mockResolvedValue({ ok: false, error: { code: 'saldo_negatif' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    expect(await screen.findByRole('status')).toBeTruthy();
+    const nominal = screen.getByRole('textbox', { name: 'Nominal' });
+    await user.clear(nominal);
+    await user.type(nominal, '400000');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Bayar Rp\s400\.000$/ })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: /^Bayar Rp\s400\.000$/ }));
+    expect(await screen.findByRole('status')).toBeTruthy();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Dompet' }), 'a1');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('buka lagi sesudah ditutup: nominal dan peringatan saldo kembali awal (sesi baru)', async () => {
+    const user = userEvent.setup();
+    actions.payBillAction.mockResolvedValue({ ok: false, error: { code: 'saldo_negatif' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    const nominal = await screen.findByRole('textbox', { name: 'Nominal' });
+    await user.clear(nominal);
+    await user.type(nominal, '400000');
+    await user.click(screen.getByRole('button', { name: /^Bayar Rp\s400\.000$/ }));
+    expect(await screen.findByRole('status')).toBeTruthy();
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    expect(await screen.findByRole('textbox', { name: 'Nominal' })).toHaveValue('485.000');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Bayar Rp\s485\.000$/ })).toBeTruthy();
+  });
+
+  it('nominal terlalu besar: salinan sendiri, bukan "lebih dari nol"', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    const nominal = await screen.findByRole('textbox', { name: 'Nominal' });
+    await user.clear(nominal);
+    await user.type(nominal, '99999999999999');
+    await user.click(screen.getByRole('button', { name: /^Bayar Rp/ }));
+    expect(await screen.findByText(/Nominal terlalu besar/)).toBeTruthy();
+    expect(actions.payBillAction).not.toHaveBeenCalled();
+  });
+
+  it('Ubah dengan not_found: salinan + Muat ulang (refresh)', async () => {
+    const user = userEvent.setup();
+    actions.updateBillAction.mockResolvedValueOnce({ ok: false, error: { code: 'not_found' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    await user.click(await screen.findByRole('button', { name: 'Simpan tagihan' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Tagihan ini sudah tidak ada.');
+    await user.click(within(alert).getByRole('button', { name: 'Muat ulang' }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('Arsip not_found dan bill_archived dipetakan ke salinannya, bukan kendala server', async () => {
+    const user = userEvent.setup();
+    actions.archiveBillAction.mockResolvedValueOnce({ ok: false, error: { code: 'not_found' } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    await user.click(await screen.findByRole('button', { name: 'Arsipkan tagihan' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Arsipkan tagihan' }));
+    expect(await within(dialog).findByText(/sudah tidak ada/)).toBeTruthy();
+    expect(dialog.textContent).not.toMatch(/kendala di server/);
+    actions.archiveBillAction.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'bill_archived' },
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Arsipkan tagihan' }));
+    expect(await within(dialog).findByText(/sudah diarsipkan/)).toBeTruthy();
+  });
+
+  it('Ubah dengan dompet bawaan terarsip: keterangan, bukan kosong diam-diam', async () => {
+    const user = userEvent.setup();
+    render(
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={[]}
+        previous={{}}
+        billNameByRoot={{}}
+        bill={{
+          ...DATA,
+          accounts: [{ ...DATA.accounts[0]!, archived: true }],
+        }}
+      >
+        <BillBodyTrigger billId="b1" className="flex">
+          Baris Listrik
+        </BillBodyTrigger>
+      </RencanaHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    expect(
+      await screen.findByText(
+        'Dompet bawaan BCA sudah diarsipkan. Pilih dompet lain atau biarkan kosong.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('tanggal Mulai/Berakhir punya teks pasti (bukan format lokal browser)', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    expect(await screen.findByText('6 Nov 2026')).toBeTruthy();
+    expect(screen.getByText('Belum diisi')).toBeTruthy();
+  });
+
   it('Arsipkan: dialog dengan fokus awal Kembali, konfirmasi memanggil archiveBillAction', async () => {
     const user = userEvent.setup();
     setupBill();

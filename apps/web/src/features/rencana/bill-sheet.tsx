@@ -17,7 +17,12 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { toast } from '@/components/ui/toast';
 import { newClientId } from '@/features/ledger/client-id';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
-import { accountArchivedBillText, obligationDoubleBillText, TAGIHAN_COPY as C } from './copy';
+import {
+  accountArchivedBillText,
+  MAX_AMOUNT,
+  obligationDoubleBillText,
+  TAGIHAN_COPY as C,
+} from './copy';
 import type { BillListVM } from './types';
 
 const FORM_ID = 'tagihan';
@@ -196,8 +201,9 @@ function DateField({
   const id = useId();
   const errorId = `${id}-e`;
   const hintId = `${id}-h`;
+  const textId = `${id}-t`;
   const describedBy =
-    [hint === undefined ? null : hintId, error === undefined ? null : errorId]
+    [textId, hint === undefined ? null : hintId, error === undefined ? null : errorId]
       .filter((x) => x !== null)
       .join(' ') || undefined;
   return (
@@ -220,6 +226,10 @@ function DateField({
           className="min-h-11 w-full min-w-0 bg-transparent text-body font-medium text-text outline-none"
         />
       </div>
+      {/* Teks pasti: pemilih tanggal browser memakai format lokal (11/07 bisa terbaca 11 Juli). */}
+      <p id={textId} className="text-meta font-semibold text-text-soft">
+        {value === '' ? 'Belum diisi' : fullDate(value)}
+      </p>
       {error === undefined ? null : (
         <div role="alert">
           <FieldError id={errorId}>{error}</FieldError>
@@ -228,6 +238,11 @@ function DateField({
       {hint === undefined ? null : <FieldHint id={hintId}>{hint}</FieldHint>}
     </div>
   );
+}
+
+/** `2026-11-07` → `7 Nov 2026`. */
+function fullDate(d: string): string {
+  return `${shortDateLabel(d)} ${d.slice(0, 4)}`;
 }
 
 const rootOf = (categories: readonly CategoryVM[], id: string): CategoryVM | null => {
@@ -251,6 +266,7 @@ interface FormProps {
   onCreate: (input: CreateBillSubmit) => Promise<BillResult>;
   onUpdate: (input: UpdateBillSubmit) => Promise<BillResult>;
   onArchive: () => void;
+  onReload: () => void;
   onDone: (name: string, billId: string | null) => void;
 }
 
@@ -289,6 +305,7 @@ function Form(p: FormProps) {
     const trimmed = name.trim();
     if (trimmed === '' || trimmed.length > NAME_MAX) next.name = C.errName;
     if (amount === null || amount <= 0) next.amount = C.errAmount;
+    else if (amount > MAX_AMOUNT) next.amount = C.errAmountMax;
     if (categoryId === '') next.category = C.errCategory;
     if (!editing && startsOn === '') next.endsOn = C.errStartsOn;
     else if (endsOn !== '' && endsOn < startsOn) next.endsOn = C.errEndsOn;
@@ -366,7 +383,7 @@ function Form(p: FormProps) {
           setErrors({ name: C.errName });
           p.nameRef.current?.focus();
         } else if (f.includes('amount')) {
-          setErrors({ amount: C.errAmount });
+          setErrors({ amount: amount > MAX_AMOUNT ? C.errAmountMax : C.errAmount });
           p.amountRef.current?.focus();
         } else if (f.includes('endson')) {
           setErrors({ endsOn: C.errEndsOn });
@@ -464,6 +481,11 @@ function Form(p: FormProps) {
             setErrors((x) => ({ ...x, account: undefined }));
           }}
           error={errors.account}
+          hint={
+            bill?.accountId != null && !payable.some((a) => a.id === bill.accountId)
+              ? C.archivedAccount(bill.accountName ?? 'ini')
+              : undefined
+          }
           selectRef={accountRef}
           busy={p.saving}
         >
@@ -482,9 +504,10 @@ function Form(p: FormProps) {
           ))}
         </SelectField>
         {editing ? (
-          <p className="text-label font-semibold text-text-soft">
-            {C.startedOn(shortDateLabel(bill.startsOn))}
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>{C.startsOn}</FieldLabel>
+            <p className="text-body font-medium text-text">{fullDate(bill.startsOn)}</p>
+          </div>
         ) : (
           <DateField
             label={C.startsOn}
@@ -522,6 +545,10 @@ function Form(p: FormProps) {
                 }}
               >
                 Coba lagi
+              </Button>
+            ) : galat === 'gone' || galat === 'archived' ? (
+              <Button variant="secondary" size="sm" onClick={p.onReload}>
+                {C.reload}
               </Button>
             ) : undefined
           }
@@ -614,6 +641,8 @@ export interface BillSheetProps {
   onArchive: (billId: string) => Promise<BillResult>;
   /** Sesudah simpan/arsip berhasil (Host memulihkan fokus ke baris). */
   onChanged?: ((billId: string | null) => void) | undefined;
+  /** `not_found`/`bill_archived` (sheet basi): tutup sheet dan muat ulang halaman. */
+  onReload: () => void;
 }
 
 /**
@@ -644,6 +673,7 @@ function BillSession({
   onUpdate,
   onArchive,
   onChanged,
+  onReload,
 }: BillSheetProps) {
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -671,7 +701,15 @@ function BillSession({
       onChanged?.(null);
       return;
     }
-    setArchiveError(res.code === 'network' ? C.errArchiveNetwork : C.errArchiveServer);
+    setArchiveError(
+      res.code === 'network'
+        ? C.errArchiveNetwork
+        : res.code === 'not_found'
+          ? C.errArchiveGone
+          : res.code === 'bill_archived'
+            ? C.errArchiveArchived
+            : C.errArchiveServer,
+    );
   }
 
   return (
@@ -730,6 +768,7 @@ function BillSession({
             setArchiveError(null);
             setConfirm(true);
           }}
+          onReload={onReload}
           onDone={(name, billId) => {
             toast({ message: C.saved(name, ruang) });
             onOpenChange(false);

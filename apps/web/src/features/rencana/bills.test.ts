@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { payableAccounts } from './bill-sheet';
 import { dueSub, groupBills, rowAction } from './bills';
 import type { BillDueVM, BillListVM } from './types';
 
@@ -97,5 +98,27 @@ describe('rowAction', () => {
     expect(rowAction(occ({ skipped: true }))).toBe('batalkan');
     expect(rowAction(occ({ posted: true }))).toBeNull();
     expect(rowAction(null)).toBeNull();
+  });
+});
+
+describe('payableAccounts', () => {
+  const acc = (over: Record<string, unknown>) => ({
+    id: 'a',
+    name: 'A',
+    pocket: 'operasional' as const,
+    walletType: 'bank' as const,
+    openedOn: '2026-01-01',
+    archived: false,
+    balance: 0,
+    ...over,
+  });
+  it('tanpa Kas Kantor dan dompet terarsip', () => {
+    const r = payableAccounts([
+      acc({ id: '1' }),
+      acc({ id: '2', pocket: 'kantor' }),
+      acc({ id: '3', archived: true }),
+      acc({ id: '4', pocket: 'tabungan' }),
+    ]);
+    expect(r.map((a) => a.id)).toEqual(['1', '4']);
   });
 });

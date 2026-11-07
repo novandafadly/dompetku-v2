@@ -45,12 +45,13 @@ export function focusHeadingAt(href: string): void {
  * `<body>` (pemicunya ikut hilang atau pindah daftar), fokus ke `selector` bila ada, selain itu ke
  * `h1`. Dua percobaan menunggu RSC baru masuk; fokus yang sudah di elemen lain tidak diganggu.
  */
-export function restoreFocus(selector: string | null): void {
+export function restoreFocus(selector: string | null, fallback: string | null = null): void {
   const attempt = () => {
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     const target =
       (selector === null ? null : document.querySelector<HTMLElement>(selector)) ??
+      (fallback === null ? null : document.querySelector<HTMLElement>(fallback)) ??
       document.querySelector<HTMLElement>('h1');
     if (target === null) return;
     if (!target.hasAttribute('tabindex') && !(target instanceof HTMLButtonElement)) {

@@ -60,7 +60,7 @@ interface HostApi {
   ruang: Ruang;
   month: string;
   openBudget: (categoryId: string | null) => void;
-  openBill: (billId: string | null) => void;
+  openBill: (billId: string | null, occurrenceId?: string) => void;
   openPay: (occurrenceId: string) => void;
   unskip: (occurrenceId: string, name: string) => void;
   conflict: number;
@@ -190,6 +190,8 @@ export function RencanaHost({
   const [open, setOpen] = useState(false);
   const [billOpen, setBillOpen] = useState(false);
   const [billTarget, setBillTarget] = useState<string | null>(null);
+  // Baris kemunculan yang diketuk: fokus kembali ke sana (bukan baris pertama tagihan itu).
+  const [billOcc, setBillOcc] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<(BillItem & { occ: BillDueVM }) | null>(null);
   const billMounted = useOpenedOnce(billOpen);
@@ -205,8 +207,9 @@ export function RencanaHost({
       setTarget(categoryId);
       setOpen(true);
     },
-    openBill: (billId) => {
+    openBill: (billId, occurrenceId) => {
       setBillTarget(billId);
+      setBillOcc(occurrenceId ?? null);
       setBillOpen(true);
     },
     openPay: (occurrenceId) => {
@@ -222,8 +225,12 @@ export function RencanaHost({
     conflict,
     setConflict,
   };
-  const focusBill = (billId: string | null) => {
-    restoreFocus(billId === null ? null : `[data-bill-row="${billId}"]`);
+  // Sesudah Ubah id kemunculan terbuka berganti: jatuh ke baris pertama tagihan itu.
+  const focusBill = (billId: string | null, occurrenceId: string | null = null) => {
+    restoreFocus(
+      occurrenceId === null ? null : `[data-occ-row="${occurrenceId}"]`,
+      billId === null ? null : `[data-bill-row="${billId}"]`,
+    );
   };
   const editing =
     billTarget === null ? null : (bill?.bills.find((b) => b.billId === billTarget) ?? null);
@@ -267,7 +274,13 @@ export function RencanaHost({
             onCreate={(input) => runBill(() => createBillAction(ruang, input))}
             onUpdate={(input) => runBill(() => updateBillAction(ruang, input))}
             onArchive={(billId) => runBill(() => archiveBillAction(ruang, billId))}
-            onChanged={focusBill}
+            onChanged={(billId) => {
+              focusBill(billId, billOcc);
+            }}
+            onReload={() => {
+              setBillOpen(false);
+              router.refresh();
+            }}
           />
         </Suspense>
       ) : null}
@@ -296,7 +309,7 @@ export function RencanaHost({
                   onAction: undoPayment(ruang, info.entryId, info.version),
                 },
               });
-              focusBill(payTarget?.bill.billId ?? null);
+              focusBill(payTarget?.bill.billId ?? null, payTarget?.occ.occurrenceId ?? null);
             }}
             onSkipped={(name, occurrenceId) => {
               setPayOpen(false);
@@ -309,7 +322,7 @@ export function RencanaHost({
                   },
                 },
               });
-              focusBill(payTarget?.bill.billId ?? null);
+              focusBill(payTarget?.bill.billId ?? null, payTarget?.occ.occurrenceId ?? null);
             }}
             onReload={() => {
               setPayOpen(false);
@@ -461,10 +474,12 @@ export function CopyConflictNote() {
 /** Badan baris tagihan: membuka sheet Ubah. */
 export function BillBodyTrigger({
   billId,
+  occurrenceId,
   className,
   children,
 }: {
   billId: string;
+  occurrenceId?: string | undefined;
   className: string;
   children: ReactNode;
 }) {
@@ -473,11 +488,12 @@ export function BillBodyTrigger({
     <button
       type="button"
       data-bill-row={billId}
+      data-occ-row={occurrenceId}
       className={className}
       onPointerEnter={preloadBill}
       onFocus={preloadBill}
       onClick={() => {
-        openBill(billId);
+        openBill(billId, occurrenceId);
       }}
     >
       {children}
