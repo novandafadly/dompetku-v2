@@ -17,7 +17,7 @@ import {
  * S9 Task 12 mode nyata: Beranda. Kartu Aman dipakai lengkap (periode gajian, status ikon + teks,
  * rincian tagihan + wajib), Tagihan 7 hari (termasuk lewat), Anggaran hampir habis (≥ 80%),
  * Beranda = Rencana untuk periode yang sama, Bersama tanpa data Pribadi, axe, dan budget JS. Satu
- * urutan serial dengan data sendiri (nama unik); berjalan sendiri atau sesudah spec lain.
+ * urutan serial dengan data sendiri (nama unik); berjalan sesudah spec ledger/s7/s9 (urutan berkas: nama berawalan `t-` supaya data Beranda ini tidak mengotori asumsi keadaan kosong spec lain).
  */
 test.describe.configure({ mode: 'serial' });
 
