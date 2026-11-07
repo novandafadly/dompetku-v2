@@ -428,3 +428,11 @@ Perbandingan visual dilakukan terhadap screenshot nyata (`docs/design/s9/laporan
 8. **Tidak diuji e2e:** LP6 (memuat) dan LP7 (galat) tidak bisa dipicu tanpa merusak server; keadaannya dicakup tes unit dan bingkai. Bar tren dengan nilai ekstrem (Rp 12 M) terlihat benar di screenshot LP12.
 9. **Label `Transfer antar dompet`** menggantikan `Transfer internal` di Ringkasan Transaksi (prototipe juga; tes e2e prototipe dan auth disesuaikan).
 10. **Budget JS**: bundel Beranda/Transaksi/Rencana prototipe tidak bertambah dibanding 554fe7e (diukur per chunk, gzip).
+
+### Putaran review Task 13 (design review, 2026-11-07)
+
+- **D1 judul HP:** `Laporan` 26/800 terlihat di HP/tablet sebagai teks dekoratif (`aria-hidden`) dari halaman Laporan; `h1` aslinya tetap sr-only dari `PageHeader`. Shell tidak berubah (budget prototipe).
+- **D2 pembacaan langsung:** satu baris server-render di bawah legenda (`Nov · berjalan: Pemasukan Rp … · Pengeluaran Rp …`) dari baris tren SQL periode yang dilihat; hanya bila periode itu ada di jendela. Mengembalikan butir SPEC §6.1 yang sebelumnya dihapus (keputusan 11 di atas gugur untuk butir ini).
+- **D3 basis kalender:** status anggaran sengaja hilang (anggaran berlabel periode gajian, rentang kalender tidak sejalan; tidak dihitung ulang). Kartu kategori kini menjelaskannya: `Anggaran mengikuti periode gajian, jadi statusnya hanya tampil di tampilan Periode gajian.`
+- **D4 Kontribusi:** tidak tampil di screenshot Bersama karena data e2e:ledger satu anggota (kartu disembunyikan bila < 2 anggota, K10). Dicakup tes unit komponen dan `laporan.int`; screenshot dua anggota (config e2e:bersama) belum dibuat.
+- **Kecil:** jarak label `berjalan` dari garis bawah sumbu +4 px; format sumbu miliar (`Rp 15 M`) disengaja (selaras `jt`/`rb`); screenshot tabel data terbuka ditambah di 320 (daftar `dl` bertumpuk); data demo screenshot dibuat lebih bervariasi.
