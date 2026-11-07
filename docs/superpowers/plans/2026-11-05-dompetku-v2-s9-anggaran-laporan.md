@@ -282,6 +282,8 @@ Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `
 - [ ] **Step 2–4:** FAIL → implementasi → PASS; budget dilapor.
 - [ ] **Step 5:** Design reviewer; commit `feat(web): tagihan rutin dasar di Rencana`.
 
+**Catatan dari review Task 10 dan 11 (UI Rencana; wajib dibaca Task 12–15):** review kode + design reviewer, perbaikan diverifikasi ulang. Total kartu Rencana dihitung SQL (`budgetTotalsTx`); fokus sesudah simpan/hapus/salin/bayar lewat `restoreFocus` ke baris (`data-budget-row`, `data-occ-row`) lalu judul; `NEAR_PCT` satu sumber (`features/rencana/copy.ts`); bayar: `clientId` per pembukaan sheet, `allowNegative` hanya sesudah `saldo_negatif` + "Tetap bayar"; proyeksi saldo di sheet Bayar dihitung TS (preseden S6, hanya tampilan, penyimpangan diterima). **Ruling (pemilik "lanjut" 2026-11-07):** input tanggal tagihan memakai `<input type=date>` bawaan; Chromium headless menampilkan format AS di screenshot, dimitigasi teks pasti `7 Nov 2026` di bawah isian; kontrol tanggal sendiri = utang (S10+). Timeout sekali `e2e-auth/auth.spec.ts:341` (Detail S6, konflik versi dua tab) di CI 3071a05 tidak terulang di 2338f2a; akar belum diketahui, pantau.
+
 ### Task 12: Beranda nyata: aman dipakai lengkap, Tagihan 7 hari, Anggaran hampir habis · Model: sonnet + kursi design reviewer
 
 **Desain:** agen (bingkai `S9-BR1`, `S9-BR2`).
