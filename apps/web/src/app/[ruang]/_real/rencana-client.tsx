@@ -225,7 +225,8 @@ export function RencanaHost({
   const focusBill = (billId: string | null) => {
     restoreFocus(billId === null ? null : `[data-bill-row="${billId}"]`);
   };
-  const editing = billTarget === null ? null : (bill?.bills.find((b) => b.billId === billTarget) ?? null);
+  const editing =
+    billTarget === null ? null : (bill?.bills.find((b) => b.billId === billTarget) ?? null);
   return (
     <Host.Provider value={api}>
       {children}
@@ -284,7 +285,12 @@ export function RencanaHost({
             onPaid={(info) => {
               setPayOpen(false);
               toast({
-                message: TAGIHAN_COPY.paid(info.name, ruang, formatRupiah(info.amount), info.accountName),
+                message: TAGIHAN_COPY.paid(
+                  info.name,
+                  ruang,
+                  formatRupiah(info.amount),
+                  info.accountName,
+                ),
                 action: {
                   label: TAGIHAN_COPY.undo,
                   onAction: undoPayment(ruang, info.entryId, info.version),

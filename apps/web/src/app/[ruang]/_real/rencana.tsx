@@ -178,7 +178,6 @@ function Anggaran({ data }: { data: RencanaData }) {
   );
 }
 
-
 function BillRowItem({ item }: { item: BillItem }) {
   const { occ, bill } = item;
   const action = rowAction(occ);

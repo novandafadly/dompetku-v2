@@ -17,11 +17,7 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { toast } from '@/components/ui/toast';
 import { newClientId } from '@/features/ledger/client-id';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
-import {
-  accountArchivedBillText,
-  obligationDoubleBillText,
-  TAGIHAN_COPY as C,
-} from './copy';
+import { accountArchivedBillText, obligationDoubleBillText, TAGIHAN_COPY as C } from './copy';
 import type { BillListVM } from './types';
 
 const FORM_ID = 'tagihan';
@@ -298,10 +294,10 @@ function Form(p: FormProps) {
     else if (endsOn !== '' && endsOn < startsOn) next.endsOn = C.errEndsOn;
     setErrors(next);
     setGalat(null);
-    if (next.name !== undefined) return void p.nameRef.current?.focus();
-    if (next.amount !== undefined || amount === null) return void p.amountRef.current?.focus();
-    if (next.category !== undefined) return void categoryRef.current?.focus();
-    if (next.endsOn !== undefined) return void endsRef.current?.focus();
+    if (next.name !== undefined) return p.nameRef.current?.focus();
+    if (next.amount !== undefined || amount === null) return p.amountRef.current?.focus();
+    if (next.category !== undefined) return categoryRef.current?.focus();
+    if (next.endsOn !== undefined) return endsRef.current?.focus();
     busy.current = true;
     p.setSaving(true);
     const common = {
@@ -352,7 +348,9 @@ function Form(p: FormProps) {
       }
       case 'category_archived': {
         const c = p.categories.find((x) => x.id === categoryId);
-        setErrors({ category: `${c?.name ?? 'Kategori ini'} sudah diarsipkan. Pilih kategori lain.` });
+        setErrors({
+          category: `${c?.name ?? 'Kategori ini'} sudah diarsipkan. Pilih kategori lain.`,
+        });
         categoryRef.current?.focus();
         break;
       }
@@ -476,13 +474,7 @@ function Form(p: FormProps) {
             </option>
           ))}
         </SelectField>
-        <SelectField
-          label={C.day}
-          value={day}
-          onChange={setDay}
-          hint={C.dayHint}
-          busy={p.saving}
-        >
+        <SelectField label={C.day} value={day} onChange={setDay} hint={C.dayHint} busy={p.saving}>
           {Array.from({ length: 31 }, (_, i) => (
             <option key={i + 1} value={String(i + 1)} className="bg-surface text-text">
               {i + 1}

@@ -212,7 +212,8 @@ export const TAGIHAN_COPY = {
 
 /** `obligation_double` di sheet Tagihan: kategori (atau induknya) sudah punya anggaran wajib. */
 export function obligationDoubleBillText(kategori: string, wajibRoot: string | null): string {
-  const tail = 'Satu kewajiban cukup dicatat sekali: jadikan anggarannya tidak wajib atau pilih kategori lain.';
+  const tail =
+    'Satu kewajiban cukup dicatat sekali: jadikan anggarannya tidak wajib atau pilih kategori lain.';
   return wajibRoot === null || wajibRoot === kategori
     ? `Kategori ${kategori} sudah punya anggaran wajib. ${tail}`
     : `Anggaran wajib ${wajibRoot} sudah mencakup ${kategori}. ${tail}`;

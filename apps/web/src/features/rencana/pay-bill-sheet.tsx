@@ -103,8 +103,8 @@ function Form(p: FormProps) {
     if (account === undefined) next.account = C.errPickAccount;
     setErrors(next);
     setGalat(null);
-    if (next.amount !== undefined || amount === null) return void p.amountRef.current?.focus();
-    if (next.account !== undefined || account === undefined) return void accountRef.current?.focus();
+    if (next.amount !== undefined || amount === null) return p.amountRef.current?.focus();
+    if (next.account !== undefined || account === undefined) return accountRef.current?.focus();
     busy.current = true;
     p.setSaving(true);
     let res: PayResult;

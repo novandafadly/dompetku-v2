@@ -26,9 +26,7 @@ export interface BillGroups {
  * (urutan SQL dipertahankan). Tagihan aktif tanpa kemunculan terlihat (mulai jauh di depan,
  * sudah berakhir) masuk `Berikutnya` supaya tetap bisa diubah atau diarsipkan.
  */
-export function groupBills(
-  data: Pick<RencanaData, 'bills' | 'due' | 'upcoming'>,
-): BillGroups {
+export function groupBills(data: Pick<RencanaData, 'bills' | 'due' | 'upcoming'>): BillGroups {
   const byId = new Map(data.bills.map((b) => [b.billId, b]));
   const overdue: BillItem[] = [];
   const period: BillItem[] = [];
@@ -54,7 +52,11 @@ export type DueIcon = 'clock' | 'warning' | 'check' | 'skip' | null;
 /** Sub baris: `4 hari lagi`, `Hari ini`, `Besok`, `Lewat 3 hari`, `Lunas · 21 Okt`, `Dilewati`. */
 export function dueSub(occ: BillDueVM): { text: string; tone: DueTone; icon: DueIcon } {
   if (occ.posted) {
-    return { text: `Lunas · ${shortDateLabel(occ.paidOn ?? occ.dueOn)}`, tone: 'accent', icon: 'check' };
+    return {
+      text: `Lunas · ${shortDateLabel(occ.paidOn ?? occ.dueOn)}`,
+      tone: 'accent',
+      icon: 'check',
+    };
   }
   if (occ.skipped) return { text: 'Dilewati', tone: 'muted', icon: 'skip' };
   const n = occ.daysUntil;

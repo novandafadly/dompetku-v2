@@ -66,7 +66,11 @@ function DateTile({ item }: { item: BillItem }) {
 export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }) {
   const sub =
     item.occ === null
-      ? { text: TAGIHAN_COPY.everyMonth(item.bill.dayOfMonth), tone: 'muted' as const, icon: 'clock' as const }
+      ? {
+          text: TAGIHAN_COPY.everyMonth(item.bill.dayOfMonth),
+          tone: 'muted' as const,
+          icon: 'clock' as const,
+        }
       : dueSub(item.occ);
   return (
     <>
