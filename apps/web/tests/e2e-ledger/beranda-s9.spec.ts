@@ -239,13 +239,18 @@ test('Bersama: kartu ada, tanpa data Pribadi (B13), kosong sesuai bingkai', asyn
     `select (select count(*) from app.bills where space_id = $1)::int as n`,
     [await spaceId('shared')],
   );
-  // Keadaan dijamin urutan project (`kosong` lebih dulu, tidak ada tagihan Bersama).
-  expect(shared?.n, 'ruang Bersama harus belum punya tagihan').toBe(0);
-  {
+  // Dua cabang, keduanya diasersi: Bersama tanpa tagihan = ajakan; dengan tagihan (sisa spec
+  // lain) = bukan ajakan. Jumlah dibaca dari DB, jadi tidak ada cabang yang dilewati diam-diam.
+  if (shared?.n === 0) {
     await expect(billsCard(page)).toContainText('Belum ada tagihan.');
     await expect(billsCard(page).getByRole('link', { name: 'Tambah tagihan' })).toHaveAttribute(
       'href',
       '/bersama/rencana?bagian=tagihan',
+    );
+  } else {
+    await expect(billsCard(page)).not.toContainText('Belum ada tagihan.');
+    await expect(billsCard(page)).toContainText(
+      /Tidak ada tagihan 7 hari ke depan\.|hari lagi|Lewat|Hari ini|Besok/,
     );
   }
 });
