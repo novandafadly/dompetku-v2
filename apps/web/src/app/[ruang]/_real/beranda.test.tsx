@@ -591,7 +591,7 @@ describe('BerandaReal S9 (BR1, BR2)', () => {
       '/pribadi/rencana?bagian=tagihan',
     );
     expect(screen.getByRole('link', { name: 'Atur anggaran' }).getAttribute('href')).toBe(
-      '/pribadi/rencana?bagian=anggaran',
+      '/pribadi/rencana',
     );
   });
 

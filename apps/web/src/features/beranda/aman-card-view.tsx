@@ -89,7 +89,6 @@ export function AmanCardView({
   holidayNote: boolean;
 }) {
   const until = shortDateLabel(vm.until);
-  const title = `Aman dipakai${ruang === 'bersama' ? ' bersama' : ''} sampai ${until}`;
   const showObligations = vm.hasObligations;
   const negative = vm.status === 'lewat';
   const sentence = negative ? negativeText(showObligations) : reasonText(vm.reason, ruang);
@@ -108,11 +107,12 @@ export function AmanCardView({
     <section
       aria-labelledby="aman-dipakai"
       data-testid="balance-card"
-      className={`flex flex-col gap-3 p-4 laptop:p-6 ${heroCard}`}
+      className={`flex flex-col gap-3 p-4 laptop:p-6 ${holidayNote ? '' : 'pb-1.75 laptop:pb-3.75'} ${heroCard}`}
     >
       <div className="flex items-start justify-between gap-2">
         <h2 id="aman-dipakai" className="text-label font-semibold text-text-soft">
-          {title}
+          {`Aman dipakai${ruang === 'bersama' ? ' bersama' : ''} sampai `}
+          <span className="whitespace-nowrap">{until}</span>
         </h2>
         <SpaceTag space={ruang} />
       </div>

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GaugeIcon } from '@/components/ui/icons/gauge';
+import { WarningIcon } from '@/components/ui/icons/warning';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
 import { focusRing, rowDivider } from '@/components/ui/styles';
 import { CardError } from '@/features/bersama/card-error';
@@ -27,7 +27,7 @@ export function BudgetsNearCard({
   query: string;
   data: BerandaBudgetsVM | 'error';
 }) {
-  const icon = <GaugeIcon size={18} />;
+  const icon = <WarningIcon size={18} weight="fill" />;
   if (data === 'error') {
     return (
       <ListCard title="Anggaran hampir habis" icon={icon}>
@@ -49,7 +49,7 @@ export function BudgetsNearCard({
             <EmptyLine>Belum ada anggaran.</EmptyLine>
             <Link
               href={href}
-              className={`-mt-2 mb-1 inline-flex min-h-11 items-center self-start rounded-md px-2 text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+              className={`-mt-2 mb-1 inline-flex min-h-11 items-center self-start rounded-md text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
             >
               {RENCANA_COPY.set}
             </Link>

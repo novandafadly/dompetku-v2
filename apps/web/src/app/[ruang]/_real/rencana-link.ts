@@ -10,6 +10,10 @@ export function rencanaBagianHref(
   bagian: 'anggaran' | 'tagihan',
   query: string,
 ): Route {
-  const rest = query.startsWith('?') ? `&${query.slice(1)}` : '';
-  return `/${ruang}/rencana?bagian=${bagian}${rest}` as Route;
+  // Anggaran = bagian bawaan Rencana: URL kanonik tanpa `?bagian=`.
+  const parts = [
+    ...(bagian === 'tagihan' ? ['bagian=tagihan'] : []),
+    ...(query.startsWith('?') ? [query.slice(1)] : []),
+  ];
+  return `/${ruang}/rencana${parts.length === 0 ? '' : `?${parts.join('&')}`}` as Route;
 }

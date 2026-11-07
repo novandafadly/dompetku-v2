@@ -11,7 +11,7 @@ const bill = (over: Partial<BillDueVM>): BillDueVM => ({
   billId: 'b1',
   name: 'Listrik PLN',
   amount: 485_000,
-  dueOn: '2026-11-06',
+  dueOn: '2030-01-01',
   daysUntil: 2,
   overdue: false,
   posted: false,
@@ -40,14 +40,14 @@ describe('BillsDueCard (S9-BR2)', () => {
       <BillsDueCard
         ruang="pribadi"
         query=""
-        today="2026-11-04"
+
         data={{
           hasBills: true,
           items: [
             bill({
               occurrenceId: 'o0',
               name: 'Internet',
-              dueOn: '2026-11-01',
+              dueOn: '2030-01-01',
               daysUntil: -3,
               overdue: true,
             }),
@@ -68,9 +68,7 @@ describe('BillsDueCard (S9-BR2)', () => {
     const items = Array.from({ length: 7 }, (_, i) =>
       bill({ occurrenceId: `o${String(i)}`, name: `T${String(i)}` }),
     );
-    render(
-      <BillsDueCard ruang="pribadi" query="" today="2026-11-04" data={{ hasBills: true, items }} />,
-    );
+    render(<BillsDueCard ruang="pribadi" query="" data={{ hasBills: true, items }} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(5);
   });
 
@@ -79,7 +77,7 @@ describe('BillsDueCard (S9-BR2)', () => {
       <BillsDueCard
         ruang="bersama"
         query=""
-        today="2026-11-04"
+
         data={{ hasBills: false, items: [] }}
       />,
     );
@@ -94,7 +92,7 @@ describe('BillsDueCard (S9-BR2)', () => {
       <BillsDueCard
         ruang="pribadi"
         query=""
-        today="2026-11-04"
+
         data={{ hasBills: true, items: [] }}
       />,
     );
@@ -103,7 +101,7 @@ describe('BillsDueCard (S9-BR2)', () => {
   });
 
   it('galat: pesan + Coba lagi, tanpa menjatuhkan', () => {
-    render(<BillsDueCard ruang="pribadi" query="" today="2026-11-04" data="error" />);
+    render(<BillsDueCard ruang="pribadi" query="" data="error" />);
     expect(screen.getByText('Tagihan belum bisa dimuat.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Coba lagi' }).getAttribute('href')).toBe(
       '/pribadi/beranda',
@@ -115,7 +113,7 @@ describe('BillsDueCard (S9-BR2)', () => {
       <BillsDueCard
         ruang="pribadi"
         query="?theme=light"
-        today="2026-11-04"
+
         data={{ hasBills: true, items: [bill({})] }}
       />,
     );
@@ -157,14 +155,27 @@ describe('BudgetsNearCard (S9-BR2)', () => {
       within(card)
         .getByRole('link', { name: /Semua\s+anggaran/ })
         .getAttribute('href'),
-    ).toBe('/pribadi/rencana?bagian=anggaran');
+    ).toBe('/pribadi/rencana');
+  });
+
+  it('URL kanonik tanpa bagian; query tema ikut', () => {
+    render(
+      <BudgetsNearCard
+        ruang="pribadi"
+        query="?theme=light"
+        data={{ hasBudgets: true, items: [budget({})] }}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Semua/ }).getAttribute('href')).toBe(
+      '/pribadi/rencana?theme=light',
+    );
   });
 
   it('belum punya anggaran: ajakan Atur anggaran', () => {
     render(<BudgetsNearCard ruang="pribadi" query="" data={{ hasBudgets: false, items: [] }} />);
     expect(screen.getByText('Belum ada anggaran.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Atur anggaran' }).getAttribute('href')).toBe(
-      '/pribadi/rencana?bagian=anggaran',
+      '/pribadi/rencana',
     );
   });
 

@@ -222,8 +222,8 @@ export function BerandaReal({
           />
           {checklist}
           {/* S9-BR2: HP satu kolom, tablet dan laptop berdampingan (auto-fit). */}
-          <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 laptop:grid-cols-autofit-260">
-            <BillsDueCard ruang={ruang} query={query} today={today} data={data.billsDue} />
+          <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:grid-cols-autofit-260">
+            <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
             <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
           </div>
           {kontribusi}

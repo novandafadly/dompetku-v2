@@ -1,4 +1,4 @@
-import { dayOfMonth, dueLabel, weekdayShort, type IsoDate } from '@dompetku/domain';
+import { dayOfMonth, weekdayShort } from '@dompetku/domain';
 import { BillRow } from '@/components/ui/bill-row';
 import Link from 'next/link';
 import { CalendarDotsIcon } from '@/components/ui/icons/calendar-dots';
@@ -7,6 +7,7 @@ import { focusRing } from '@/components/ui/styles';
 import { CardError } from '@/features/bersama/card-error';
 import type { Ruang } from '@/features/ledger/types';
 import { buildHref } from '@/features/shell/hrefs';
+import { dueSub } from '@/features/rencana/bills';
 import { TAGIHAN_COPY } from '@/features/rencana/copy';
 import type { BerandaBillsVM } from '@/server/ledger/beranda';
 import { rencanaBagianHref } from './rencana-link';
@@ -22,12 +23,10 @@ const MAX_ROWS = 5;
 export function BillsDueCard({
   ruang,
   query,
-  today,
   data,
 }: {
   ruang: Ruang;
   query: string;
-  today: IsoDate;
   data: BerandaBillsVM | 'error';
 }) {
   const icon = <CalendarDotsIcon size={18} />;
@@ -52,7 +51,7 @@ export function BillsDueCard({
             <EmptyLine>Belum ada tagihan.</EmptyLine>
             <Link
               href={href}
-              className={`-mt-2 mb-1 inline-flex min-h-11 items-center self-start rounded-md px-2 text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+              className={`-mt-2 mb-1 inline-flex min-h-11 items-center self-start rounded-md text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
             >
               {TAGIHAN_COPY.add}
             </Link>
@@ -74,7 +73,7 @@ export function BillsDueCard({
             weekday={weekdayShort(b.dueOn)}
             day={dayOfMonth(b.dueOn)}
             name={b.name}
-            due={dueLabel(b.dueOn, today)}
+            due={dueSub(b).text}
             overdue={b.overdue}
             amount={b.amount}
           />
