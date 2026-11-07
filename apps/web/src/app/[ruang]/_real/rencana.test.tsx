@@ -26,7 +26,11 @@ vi.mock('./rencana-islands', () => ({
       {children}
     </button>
   ),
-  SetBudgetIsland: ({ label }: { label: string }) => <button type="button">{label}</button>,
+  SetBudgetIsland: ({ label, className }: { label: string; className?: string }) => (
+    <button type="button" className={className}>
+      {label}
+    </button>
+  ),
   CopyBudgetsIsland: () => <button type="button">Salin anggaran periode lalu</button>,
   CopyConflictIsland: () => null,
 }));
@@ -133,7 +137,12 @@ const view = (
 
 describe('RencanaReal: daftar Anggaran (S9-AN1)', () => {
   it('judul periode, kartu total, Dianggarkan (urut persen), Belum dianggarkan, tombol Atur anggaran', () => {
-    view(data({ budgets: BUDGETS }));
+    view(
+      data({
+        budgets: BUDGETS,
+        totals: { budget: 1_500_000, spent: 950_000, remaining: 550_000, pct: 63 },
+      }),
+    );
     expect(screen.getByRole('heading', { level: 1, name: 'Rencana' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'November 2026' })).toBeTruthy();
     expect(screen.getByText('23 Okt – 24 Nov · berjalan, 20 hari lagi')).toBeTruthy();
