@@ -347,19 +347,18 @@ test('Rencana = Laporan: realisasi dan persen anggaran sama; tautan Buka di Renc
   await expect(page).toHaveURL(/\/pribadi\/rencana\?bagian=anggaran/);
 });
 
-test('navigasi: sidebar laptop di bawah Rencana, Menu, ganti ruang tetap di Laporan', async ({
+test('navigasi: Laporan dari Menu (laptop dan HP), tanpa tab aktif, ganti ruang tetap di Laporan', async ({
   page,
 }) => {
+  // Laptop: sidebar tanpa item Laporan (bundel prototipe tidak boleh bertambah, aturan budget S9 a);
+  // Laporan dibuka dari Menu di sidebar, dan tidak ada tab yang tampak aktif.
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/pribadi/laporan');
+  await page.goto('/pribadi/transaksi');
   const nav = page.getByRole('navigation', { name: 'Navigasi utama' });
-  const links = await nav.getByRole('link').allInnerTexts();
-  expect(links.indexOf('Laporan')).toBe(links.indexOf('Rencana') + 1);
-  await expect(nav.getByRole('link', { name: 'Laporan' })).toHaveAttribute('aria-current', 'page');
-  await expect(nav.getByRole('link', { name: 'Beranda' })).not.toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  await nav.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Laporan' }).click();
+  await expect(page).toHaveURL(/\/pribadi\/laporan$/);
+  await expect(nav.locator('[aria-current="page"]')).toHaveCount(0);
   await page
     .getByRole('navigation', { name: 'Ruang' })
     .getByRole('link', { name: 'Bersama' })

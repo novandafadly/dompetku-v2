@@ -16,19 +16,13 @@ const ACTIVE = {
 
 /** Dua tautan dalam pil; ruang aktif = isi warna ruang + ✓ + aria-current, tidak hanya warna. */
 export function SpaceSwitcher({ wide = false }: { wide?: boolean }) {
-  const { ruang, href, query, sampahHref, kategoriHref } = useNav();
+  const { ruang, href, query } = useNav();
   const pathname = usePathname();
   const tab = tabFromPathname(pathname);
   const section = sectionFromPathname(pathname);
-  // Pindah ruang dari Sampah/Kategori tetap di layar itu (bukan jatuh ke Beranda).
+  // Pindah ruang dari Sampah/Kategori/Laporan tetap di layar itu (bukan jatuh ke Beranda).
   const target = (r: (typeof RUANGS)[number]) =>
-    section === 'sampah'
-      ? sampahHref(r)
-      : section === 'kategori'
-        ? kategoriHref(r)
-        : section === 'laporan'
-          ? buildSectionHref(r, 'laporan', query)
-          : href(r, tab ?? 'beranda');
+    section ? buildSectionHref(r, section, query) : href(r, tab ?? 'beranda');
   return (
     <nav
       aria-label="Ruang"
