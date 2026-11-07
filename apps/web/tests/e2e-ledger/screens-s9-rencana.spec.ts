@@ -16,7 +16,7 @@ const OUT_DIR = fileURLToPath(new URL('../../../../docs/design/s9/', import.meta
 const main = (page: Page) => page.getByRole('main');
 const WIDTHS = [320, 390, 768, 1280];
 const THEMES = ['dark', 'light'] as const;
-const LONG = 'Kebutuhan Bulanan Keluarga Besar Nusantara';
+const LONG = 'Kebutuhan Bulanan Keluarga Besar';
 
 async function withPage(
   browser: Browser,
