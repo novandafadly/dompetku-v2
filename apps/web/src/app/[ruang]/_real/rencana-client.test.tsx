@@ -495,6 +495,22 @@ describe('RencanaHost: Tagihan', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  it.each([
+    ['not_found', 'Tagihan ini sudah tidak ada.'],
+    ['bill_archived', 'Tagihan ini sudah diarsipkan.'],
+  ])('Bayar %s: salinan tanpa nominal + Muat ulang (refresh)', async (code, text) => {
+    const user = userEvent.setup();
+    actions.payBillAction.mockResolvedValueOnce({ ok: false, error: { code } });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: /^Bayar Listrik PLN/ }));
+    await user.click(await screen.findByRole('button', { name: /^Bayar Rp\s485\.000$/ }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(text);
+    expect(alert.textContent).not.toMatch(/Rp/);
+    await user.click(within(alert).getByRole('button', { name: 'Muat ulang' }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it('Lewati tagihan ini memanggil skip; toast Urungkan memanggil unskip', async () => {
     const user = userEvent.setup();
     setupBill();
