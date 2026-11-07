@@ -258,6 +258,76 @@ test('aman dipakai Beranda tidak berubah saat bayar = perkiraan; berubah hanya s
   expect(await aman()).toBe(before);
 });
 
+const C = 'Uji Undo N';
+
+test('Urungkan bayar: entri batal, baris kembali punya tombol Bayar', async ({ page }) => {
+  await addBill(page, C, 50_000, KAT_A);
+  const sheet = paySheet(page);
+  await openUntil(
+    () => payBtn(page, C).first(),
+    sheet,
+    sheet.getByRole('textbox', { name: 'Nominal' }),
+  );
+  await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
+  await sheet.getByRole('button', { name: /^Bayar Rp/ }).click();
+  await expect(toasts(page).getByText(new RegExp(`^Tagihan ${C} dibayar`))).toBeVisible();
+  await expect(
+    main(page)
+      .getByText(/^Lunas · /)
+      .first(),
+  ).toBeVisible();
+  const before = await payBtn(page, C).count();
+  await toasts(page).getByRole('button', { name: 'Urungkan' }).first().click();
+  await expect(async () => {
+    expect(await payBtn(page, C).count()).toBe(before + 1);
+  }).toPass();
+  const n = await adminQuery<{ n: number }>(
+    `select count(*)::int as n from app.entries where description = $1 and voided_at is null`,
+    [C],
+  );
+  expect(n[0]?.n).toBe(0);
+});
+
+test('saldo kurang: peringatan, lalu Tetap bayar sampai server (saldo jadi minus)', async ({
+  page,
+}) => {
+  const SMALL = 'Dompet Kecil N';
+  await addWallet(page, 'pribadi', SMALL, 10_000);
+  await page.goto('/pribadi/rencana?bagian=tagihan');
+  const sheet = paySheet(page);
+  await openUntil(
+    () => payBtn(page, C).first(),
+    sheet,
+    sheet.getByRole('textbox', { name: 'Nominal' }),
+  );
+  await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: SMALL });
+  await sheet.getByRole('button', { name: /^Bayar Rp\s50\.000$/ }).click();
+  await expect(sheet.getByRole('status')).toContainText(
+    `Saldo ${SMALL} tinggal Rp 10.000. Kalau dibayar, saldonya jadi −Rp 40.000.`,
+  );
+  await expect(sheet.getByRole('alert')).toHaveCount(0);
+  expect(
+    (
+      await adminQuery<{ n: number }>(
+        `select count(*)::int as n from app.entries where description = $1 and voided_at is null`,
+        [C],
+      )
+    )[0]?.n,
+  ).toBe(0);
+  await sheet.getByRole('button', { name: 'Tetap bayar' }).click();
+  await expect(
+    toasts(page).getByText(new RegExp(`dibayar di Pribadi · Rp\\s50\\.000 dari ${SMALL}`)),
+  ).toBeVisible();
+  expect(
+    (
+      await adminQuery<{ n: number }>(
+        `select count(*)::int as n from app.entries where description = $1 and voided_at is null`,
+        [C],
+      )
+    )[0]?.n,
+  ).toBe(1);
+});
+
 test('ubah tagihan: nominal diganti, berlaku untuk kemunculan terbuka', async ({ page }) => {
   await page.goto('/pribadi/rencana?bagian=tagihan');
   const sheet = billSheet(page);

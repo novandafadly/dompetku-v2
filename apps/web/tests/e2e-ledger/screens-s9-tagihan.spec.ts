@@ -80,6 +80,13 @@ const BILLS = [
   { name: 'Netflix', amount: 54_000, kategori: 'Langganan', day: 3 },
   { name: 'Tagihan Kartu Kredit', amount: 2_340_000, kategori: 'Cicilan & Tagihan', day: 12 },
   { name: 'Spotify', amount: 55_000, kategori: 'Langganan', day: 20 },
+  {
+    name: 'Asuransi Tahunan',
+    amount: 4_800_000,
+    kategori: 'Cicilan & Tagihan',
+    day: 15,
+    start: '2027-06-01',
+  },
 ];
 const LONG = 'Cicilan Renovasi Rumah Orang Tua di Kampung Halaman Tahap Kedua';
 const WALLET = 'BCA';
@@ -93,6 +100,7 @@ test('data: dompet BCA, empat tagihan (satu lewat jatuh tempo), satu dibayar, sa
   page,
 }) => {
   await addWallet(page, 'pribadi', WALLET, 8_000_000);
+  await addWallet(page, 'pribadi', 'Dompet Darurat', 1_800_000);
   const iso = await today();
   for (const b of [
     ...BILLS,
@@ -109,7 +117,7 @@ test('data: dompet BCA, empat tagihan (satu lewat jatuh tempo), satu dibayar, sa
     await sheet.getByRole('textbox', { name: 'Perkiraan nominal' }).fill(String(b.amount));
     await sheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: b.kategori });
     await sheet.getByRole('combobox', { name: 'Tanggal tiap bulan' }).selectOption(String(b.day));
-    await sheet.getByLabel('Mulai').fill(`${iso.slice(0, 7)}-01`);
+    await sheet.getByLabel('Mulai').fill('start' in b ? b.start : `${iso.slice(0, 7)}-01`);
     await sheet.getByRole('button', { name: 'Simpan tagihan' }).click();
     await expect(toasts(page).getByText(`Tagihan ${b.name} disimpan · Pribadi`)).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -139,6 +147,17 @@ test('data: dompet BCA, empat tagihan (satu lewat jatuh tempo), satu dibayar, sa
     .getByRole('button', { name: 'Arsipkan tagihan', exact: true })
     .click();
   await expect(toasts(page).getByText('Tagihan Arsip Lama diarsipkan · Pribadi')).toBeVisible();
+  // Spotify dilewati (sudah dibayar di luar aplikasi).
+  await openUntil(
+    () =>
+      main(page)
+        .getByRole('button', { name: /^Bayar Spotify, Rp/ })
+        .first(),
+    pay,
+    pay.getByRole('button', { name: 'Lewati tagihan ini' }),
+  );
+  await pay.getByRole('button', { name: 'Lewati tagihan ini' }).click();
+  await expect(toasts(page).getByText('Spotify dilewati · Pribadi')).toBeVisible();
 });
 
 test('stres: nama 60 huruf dan nominal Rp 12.345.678.900 (bukan untuk portofolio)', async ({
@@ -309,7 +328,7 @@ test('S9-TG3 sheet Bayar, peringatan saldo kurang, tanpa dompet', async ({
         s,
         s.getByRole('textbox', { name: 'Nominal' }),
       );
-      await s.getByRole('textbox', { name: 'Nominal' }).fill('9000000');
+      await s.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: 'Dompet Darurat' });
       await s.getByRole('button', { name: /^Bayar Rp/ }).click();
       await expect(s.getByRole('status')).toContainText('Kalau dibayar');
     },
