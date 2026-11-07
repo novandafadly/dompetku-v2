@@ -51,6 +51,10 @@ export function LaporanReal({
     <>
       <PageHeader title="Laporan" />
       <div className={WRAP}>
+        {/* HP/tablet: judul terlihat (SPEC §3); `h1` aslinya sr-only dari PageHeader, jadi ini dekoratif. */}
+        <p aria-hidden="true" className="text-title font-extrabold text-text laptop:hidden">
+          Laporan
+        </p>
         <PeriodPicker ruang={ruang} period={period} query={query} />
         {empty ? (
           <LaporanEmptyCard action={<CatatEmptyIsland />} />

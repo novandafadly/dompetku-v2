@@ -308,6 +308,8 @@ Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `
 
 ### Task 14: Utang S8 dan S7 yang dibawa ke S9 · Model: sonnet (review: terkuat untuk riwayat dompet dan pemetaan galat)
 
+**Dipindah ke S10 (keputusan pemilik 2026-11-07).** Butirnya dibawa ke plan S10; tidak dikerjakan di S9.
+
 **Files:** sesuai butir; Test di tiap berkas yang disentuh.
 
 - [ ] **Step 1 (riwayat dompet, uang):** reproduksi dulu: kaki keluar transfer/antar ruang dengan biaya di `/[ruang]/dompet/[id]` menampilkan `−nominal` tanpa biaya, sehingga baris tidak menjumlah ke saldo. Tes gagal: Σ efek baris riwayat = perubahan saldo dompet (Pribadi dan Bersama, termasuk fee Kas Kantor); baris memuat `Biaya Rp …` (pola `S8-D1a`). Perbaiki `effectOnAccountVM` / `read.ts` tanpa migrasi bila data sudah ada di kueri.
@@ -332,6 +334,8 @@ Keputusan kecil yang diambil agen (biaya bila salah ditulis di tasknya): tabel `
 - [ ] **Step 2:** Jalankan sampai hijau (perbaikan masuk task pemilik kodenya bila temuan nyata); commit `test(e2e): kriteria keluar S9`.
 
 ### Task 16: Web Vitals (kriteria keluar IPD) · Model: sonnet
+
+**Dipindah ke S10 (keputusan pemilik 2026-11-07).** Butirnya dibawa ke plan S10; tidak dikerjakan di S9.
 
 **Files:** Create `tests/e2e-ledger/vitals.spec.ts`; Modify `.github/workflows/ci.yml` (job `auth`, laporan sebagai anotasi, tidak memblok bila runner lambat: lihat Step 2).
 

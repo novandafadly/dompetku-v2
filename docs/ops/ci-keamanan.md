@@ -12,6 +12,15 @@ Saat kedaluwarsa: cek apakah ESLint/typescript-eslint sudah memakai minimatch ya
 
 `handlebars` 4.7.8 (dev, lewat `eslint-plugin-boundaries`) diperbaiki dengan `overrides: handlebars: ^4.7.10` di `pnpm-workspace.yaml`, bukan dikecualikan.
 
+## Trivy (`.trivyignore.yaml`, job `image`)
+
+| ID               | Paket                                     | Kedaluwarsa | Alasan                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CVE-2026-76844` | `zlib1g` 1:1.3.dfsg+really1.3.1-1+b1 (OS) | 2026-11-21  | Ada di image dasar `gcr.io/distroless/nodejs24-debian13:nonroot`, bukan dependensi kita. Debian sudah merilis `+deb13u1`, tetapi build distroless terbaru (digest `b8cec4b…`, 2026-11-07) belum memuatnya; tidak bisa di-`apt` di distroless. Aplikasi tidak memanggil zlib sistem langsung (Node membawa zlib sendiri, dugaan belum dibuktikan). Persetujuan pemilik 2026-11-07. |
+| `CVE-2026-85091` | `zlib1g` (sama)                           | 2026-11-21  | Sama; cacat di `gz_vacate()` (API file gzip), tidak dipakai aplikasi.                                                                                                                                                                                                                                                                                                             |
+
+Saat distroless rilis build dengan `zlib1g` `+deb13u1`: naikkan digest di `apps/web/Dockerfile`, hapus kedua entri. Bila tanggal lewat tanpa rebuild: pertimbangkan base image lain atau perpanjang paling lama 14 hari dengan alasan baru dan persetujuan pemilik.
+
 ## Semgrep (`.semgrepignore`)
 
 - `docs/design/panel-malam/designs/support.js`: runtime pratinjau dari handoff Claude Design (kode pihak ketiga), hanya dimuat berkas `*.dc.html` di folder yang sama saat dibuka lokal. Tidak diimpor `apps/web`, tidak dibundel, tidak dideploy. Temuannya (`postMessage` ke `*`, `console.log` dengan string gabungan, prototype pollution loop) relevan untuk aplikasi web yang berjalan, bukan berkas referensi desain.

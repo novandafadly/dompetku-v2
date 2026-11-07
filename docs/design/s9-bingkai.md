@@ -423,8 +423,16 @@ Perbandingan visual dilakukan terhadap screenshot nyata (`docs/design/s9/laporan
 3. **Lebar kolom label sumbu 48 px dan jarak batang 2 px** (SPEC 50 dan 3) karena skala spasi 4 px; ukuran angka besar lewat `@utility laporan-angka` (CSS container query `cqw`, maks 44 px, laptop 56 px) karena lint melarang nilai arbitrer.
 4. **Penyebut persen kategori = Pengeluaran penuh** (termasuk biaya dan tanpa kategori), bukan "berkategori" (SPEC §6.2): `pct10`/`root_pct10`/`pct10_in_root` dipakai apa adanya (catatan review Task 8).
 5. **Prototipe**: `/{ruang}/laporan` adalah keadaan jujur `Laporan segera hadir` (tanpa data demo); item Laporan di sidebar dan Menu hanya di mode nyata (Menu prototipe tetap `Analisis · Segera`).
-6. **Sidebar**: item Laporan di bawah Rencana (K8); tab bar tidak menandai tab apa pun di Laporan (`tabFromPathname` = `null`); pindah ruang dari Laporan tetap di Laporan.
+6. **Sidebar tanpa item Laporan** (K8 "bila muat"; review Task 13): item sidebar menambah ±0,18 kB ke shell yang dimuat Beranda prototipe (aturan budget S9 a melarang). Laporan dibuka dari Menu (sheet muat malas, tersedia juga di sidebar laptop lewat tombol Menu) dan dari `Laporan lengkap` di Ringkasan Transaksi. Tab bar tidak menandai tab apa pun di Laporan (`tabFromPathname` = `null`); pindah ruang dari Laporan tetap di Laporan (`space-switcher` memakai `buildSectionHref`). Biaya bila ditolak: item sidebar + ±0,18 kB (Beranda prototipe 161,9 kB).
 7. **Tabel data di bawah 360 px** = daftar `dl` bertumpuk (dua representasi di DOM, satu `display:none`).
 8. **Tidak diuji e2e:** LP6 (memuat) dan LP7 (galat) tidak bisa dipicu tanpa merusak server; keadaannya dicakup tes unit dan bingkai. Bar tren dengan nilai ekstrem (Rp 12 M) terlihat benar di screenshot LP12.
 9. **Label `Transfer antar dompet`** menggantikan `Transfer internal` di Ringkasan Transaksi (prototipe juga; tes e2e prototipe dan auth disesuaikan).
-10. **Budget JS**: sidebar nyata menambah ±0,1 kB ke shell bersama sehingga Beranda prototipe 161,7 → 161,8 kB (bukan identik; kode shell tidak bisa dipisah dari rute prototipe).
+10. **Budget JS**: bundel Beranda/Transaksi/Rencana prototipe tidak bertambah dibanding 554fe7e (diukur per chunk, gzip).
+
+### Putaran review Task 13 (design review, 2026-11-07)
+
+- **D1 judul HP:** `Laporan` 26/800 terlihat di HP/tablet sebagai teks dekoratif (`aria-hidden`) dari halaman Laporan; `h1` aslinya tetap sr-only dari `PageHeader`. Shell tidak berubah (budget prototipe).
+- **D2 pembacaan langsung:** satu baris server-render di bawah legenda (`Nov · berjalan: Pemasukan Rp … · Pengeluaran Rp …`) dari baris tren SQL periode yang dilihat; hanya bila periode itu ada di jendela. Mengembalikan butir SPEC §6.1 yang sebelumnya dihapus (keputusan 11 di atas gugur untuk butir ini).
+- **D3 basis kalender:** status anggaran sengaja hilang (anggaran berlabel periode gajian, rentang kalender tidak sejalan; tidak dihitung ulang). Kartu kategori kini menjelaskannya: `Anggaran mengikuti periode gajian, jadi statusnya hanya tampil di tampilan Periode gajian.`
+- **D4 Kontribusi:** tidak tampil di screenshot Bersama karena data e2e:ledger satu anggota (kartu disembunyikan bila < 2 anggota, K10). Dicakup tes unit komponen dan `laporan.int`; screenshot dua anggota (config e2e:bersama) belum dibuat.
+- **Kecil:** jarak label `berjalan` dari garis bawah sumbu +4 px; format sumbu miliar (`Rp 15 M`) disengaja (selaras `jt`/`rb`); screenshot tabel data terbuka ditambah di 320 (daftar `dl` bertumpuk); data demo screenshot dibuat lebih bervariasi.

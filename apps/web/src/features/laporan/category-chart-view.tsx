@@ -310,6 +310,11 @@ export function CategoryChartView({
           <MoneyText value={expense.total} size="inherit" className="text-label font-bold" />
         ) : null}
       </div>
+      {budgets === null && expense.groups.length > 0 ? (
+        <p className="pb-1 text-meta font-medium text-text-muted">
+          Anggaran mengikuti periode gajian, jadi statusnya hanya tampil di tampilan Periode gajian.
+        </p>
+      ) : null}
       {expense.groups.length > 0 ? (
         <ul>
           {expense.groups.map((g) => (

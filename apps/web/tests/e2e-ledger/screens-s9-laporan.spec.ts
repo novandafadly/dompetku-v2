@@ -146,12 +146,14 @@ test('isi data wajar Pribadi dan Bersama', async () => {
     { kind: 'personal', wallet: 'BCA Utama', wallet2: 'Dompet Tunai', opening: 12_000_000 },
     [
       { cat: 'Gaji', amount: 6_500_000, on: d.p3, kind: 'income' },
-      { cat: 'Gaji', amount: 6_500_000, on: d.p2, kind: 'income' },
-      { cat: 'Gaji', amount: 6_500_000, on: d.p1, kind: 'income' },
+      { cat: 'Gaji', amount: 6_800_000, on: d.p2, kind: 'income' },
+      { cat: 'Gaji', amount: 7_100_000, on: d.p1, kind: 'income' },
       { cat: 'Gaji', amount: 6_500_000, on: d.t, kind: 'income' },
       { cat: 'Makan Siang & Minum', amount: 1_450_000, on: d.p3 },
-      { cat: 'Makan Siang & Minum', amount: 1_320_000, on: d.p2 },
+      { cat: 'Makan Siang & Minum', amount: 2_320_000, on: d.p2 },
+      { cat: 'Hiburan', amount: 880_000, on: d.p2 },
       { cat: 'Makan Siang & Minum', amount: 1_610_000, on: d.p1 },
+      { cat: 'Belanja', amount: 1_450_000, on: d.p1 },
       { cat: 'Transportasi', amount: 640_000, on: d.p1 },
       { cat: 'Langganan', amount: 153_000, on: d.p1 },
       { cat: 'Makan Siang & Minum', amount: 980_000, on: d.t },
@@ -193,7 +195,7 @@ test('LP1, LP3, LP4, LP5, LP9..LP11: Pribadi, Bersama, kalender, kosong', async 
 }) => {
   await shoot(browser, ownerState, '/pribadi/laporan', 'laporan-pribadi');
   await shoot(browser, ownerState, '/pribadi/laporan', 'laporan-pribadi-tabel-data', {
-    widths: [390],
+    widths: [320, 390],
     ready: async (p) => {
       await p.getByText('Tabel data').first().click();
     },

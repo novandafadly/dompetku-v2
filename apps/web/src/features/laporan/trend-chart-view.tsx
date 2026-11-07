@@ -1,6 +1,7 @@
 import { formatRupiah, spokenRupiah, type Rupiah } from '@dompetku/domain';
 import type { CSSProperties } from 'react';
 import { CaretDownIcon } from '@/components/ui/icons/caret-down';
+import { MoneyText } from '@/components/ui/money-text';
 import { card, focusRing } from '@/components/ui/styles';
 import {
   axisLabel,
@@ -199,7 +200,8 @@ export function TrendChartView({
   const scale = trendScale(rows);
   const chart = rows.length >= 2;
   const hasRunning = rows.some((r) => r.isCurrent);
-  const inWindow = rows.some((r) => r.labelMonth.slice(0, 7) === viewed);
+  const viewedRow = rows.find((r) => r.labelMonth.slice(0, 7) === viewed);
+  const inWindow = viewedRow !== undefined;
   const label =
     trendAriaLabel(rows) +
     (inWindow
@@ -232,6 +234,21 @@ export function TrendChartView({
               </li>
             ) : null}
           </ul>
+          {viewedRow ? (
+            <p
+              data-testid="laporan-tren-langsung"
+              className="rounded-lg bg-surface-2 px-3 py-2 text-meta font-medium text-text-soft"
+            >
+              <span className="font-bold text-text">
+                {trendLabel(viewedRow.labelMonth)}
+                {viewedRow.isCurrent ? ' · berjalan' : ''}
+              </span>
+              {': Pemasukan '}
+              <MoneyText value={viewedRow.pemasukan} size="inherit" />
+              {' · Pengeluaran '}
+              <MoneyText value={viewedRow.pengeluaran} size="inherit" />
+            </p>
+          ) : null}
           <div
             role="img"
             aria-label={label}
@@ -296,7 +313,7 @@ export function TrendChartView({
                     </span>
                     {r.isCurrent ? (
                       <span
-                        className={`text-tag font-semibold text-text-muted ${
+                        className={`pt-1 text-tag font-semibold text-text-muted ${
                           rows.length >= 6 ? 'max-narrow:hidden' : ''
                         }`}
                       >
