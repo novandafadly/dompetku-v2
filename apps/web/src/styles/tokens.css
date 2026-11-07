@@ -45,6 +45,9 @@
   --chart-tagihan: #f0b44c;
   --chart-tagihan-2: #b8862f;
   --chart-wajib: #ff8f7d;
+  --chart-expense: #8a9590;
+  --chart-income: #5fd8a4;
+  --chart-income-tint: #253d33;
   --shadow-color: rgb(0 0 0 / 0.45);
   --shadow-edge: rgb(0 0 0 / 0.25);
 }
@@ -92,6 +95,9 @@
   --chart-tagihan: #d99a2b;
   --chart-tagihan-2: #b07a1c;
   --chart-wajib: #d9564b;
+  --chart-expense: #6b7670;
+  --chart-income: #1a7447;
+  --chart-income-tint: #e4efe9;
   --shadow-color: rgb(20 25 23 / 0.16);
   --shadow-edge: rgb(20 25 23 / 0.12);
 }
@@ -141,6 +147,9 @@
     --chart-tagihan: #d99a2b;
     --chart-tagihan-2: #b07a1c;
     --chart-wajib: #d9564b;
+    --chart-expense: #6b7670;
+    --chart-income: #1a7447;
+    --chart-income-tint: #e4efe9;
     --shadow-color: rgb(20 25 23 / 0.16);
     --shadow-edge: rgb(20 25 23 / 0.12);
   }

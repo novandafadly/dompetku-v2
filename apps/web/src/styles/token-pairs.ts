@@ -100,6 +100,12 @@ export const pairs: Pair[] = [
   pair('focus', 'surface-2', NON_TEXT),
   // Bilah proporsi (grafik non-teks, WCAG 1.4.11): hanya segmen aman yang diuji; segmen lain dikecualikan karena nilainya diulang sebagai teks.
   pair('chart-aman', 'surface', NON_TEXT),
+  // Grafik Laporan (S9): batang pengeluaran dan tepi batang pemasukan membawa informasi; isi pemasukan (tint) dekoratif.
+  pair('chart-expense', 'surface', NON_TEXT),
+  pair('chart-expense', 'surface-2', NON_TEXT),
+  pair('chart-income', 'surface', NON_TEXT),
+  pair('chart-income', 'surface-2', NON_TEXT),
+  pair('chart-income', 'chart-income-tint', NON_TEXT),
   // Tema terang: lime tidak terbaca di latar terang, jadi tombol primer diberi garis accent-edge.
   pair('accent-edge', 'bg', NON_TEXT, [null, 5.8], 'light'),
   pair('accent-edge', 'surface', NON_TEXT, [null, 6.3], 'light'),

@@ -76,6 +76,9 @@ const HANDOFF: Record<string, [string, string]> = {
   'chart-tagihan': ['#F0B44C', '#D99A2B'],
   'chart-tagihan-2': ['#B8862F', '#B07A1C'],
   'chart-wajib': ['#FF8F7D', '#D9564B'],
+  'chart-expense': ['#8A9590', '#6B7670'],
+  'chart-income': ['#5FD8A4', '#1A7447'],
+  'chart-income-tint': ['#253D33', '#E4EFE9'],
 };
 
 function luminance(hex: string): number {

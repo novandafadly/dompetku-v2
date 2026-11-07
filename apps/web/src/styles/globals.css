@@ -54,6 +54,9 @@
   --color-tab: var(--tab);
   --color-hover: var(--hover);
   --color-chart-aman: var(--chart-aman);
+  --color-chart-expense: var(--chart-expense);
+  --color-chart-income: var(--chart-income);
+  --color-chart-income-tint: var(--chart-income-tint);
   --color-chart-tagihan: var(--chart-tagihan);
   --color-chart-tagihan-2: var(--chart-tagihan-2);
   --color-chart-wajib: var(--chart-wajib);
