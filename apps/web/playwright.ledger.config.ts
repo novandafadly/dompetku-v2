@@ -20,8 +20,12 @@ const browser = {
   ...devices['Desktop Chrome'],
   ...(executablePath ? { launchOptions: { executablePath } } : {}),
 };
-/** Spec yang mengisi data tanpa membersihkan; jalan sesudah project `kosong`. */
-const DATA_SPECS = [/beranda-s9\.spec\.ts$/, /tagihan\.spec\.ts$/];
+/**
+ * Spec yang mengisi data tanpa membersihkan; jalan sesudah project `kosong`. Regex dijangkarkan ke
+ * awal nama berkas supaya `screens-s9-tagihan.spec.ts` tetap di `kosong`. Iterasi lokal satu spec
+ * data tanpa menjalankan seluruh `kosong`: `--no-deps` (data harus bersih dari global-setup).
+ */
+const DATA_SPECS = [/[\\/]beranda-s9\.spec\.ts$/, /[\\/]tagihan\.spec\.ts$/];
 
 export default defineConfig({
   testDir: './tests/e2e-ledger',
