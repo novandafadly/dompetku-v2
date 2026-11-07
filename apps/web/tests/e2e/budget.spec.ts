@@ -27,6 +27,8 @@ for (const path of [
   '/bersama/aktivitas',
   // Rencana (S9 Task 10): prototipe tetap keadaan kosong; JS nyata diukur di e2e:ledger.
   '/pribadi/rencana',
+  // Laporan (S9 Task 13): prototipe = keadaan jujur ringan; JS nyata diukur di e2e:ledger.
+  '/pribadi/laporan',
 ]) {
   test(`JS muat dingin ${path} ≤ ${String(BUDGET_KB)} kB`, async ({ browser }) => {
     // Konteks baru = cache kosong.

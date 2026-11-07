@@ -25,7 +25,11 @@ const browser = {
  * awal nama berkas supaya `screens-s9-tagihan.spec.ts` tetap di `kosong`. Iterasi lokal satu spec
  * data tanpa menjalankan seluruh `kosong`: `--no-deps` (data harus bersih dari global-setup).
  */
-const DATA_SPECS = [/[\\/]beranda-s9\.spec\.ts$/, /[\\/]tagihan\.spec\.ts$/];
+const DATA_SPECS = [
+  /[\\/]beranda-s9\.spec\.ts$/,
+  /[\\/]laporan\.spec\.ts$/,
+  /[\\/]tagihan\.spec\.ts$/,
+];
 
 export default defineConfig({
   testDir: './tests/e2e-ledger',
