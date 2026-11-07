@@ -157,6 +157,16 @@ describe('Beranda S9 (periode gajian, aman dipakai lengkap)', () => {
     });
     if (after.billsDue === 'error') throw new Error('tagihan gagal');
     expect(after.billsDue.items).toEqual([]);
+    // Rencana: lunas membawa tanggal bayar dari entri; hari ini dari SQL; Berikutnya sesudah periode.
+    const rc = await loadRencana(ctx);
+    expect(rc.today).toBe(TODAY.slice(0, 10));
+    expect(rc.due.find((d) => d.occurrenceId === occ)).toMatchObject({
+      posted: true,
+      paidOn: TODAY.slice(0, 10),
+      amount: GOLDEN.bills,
+    });
+    expect(rc.upcoming.every((u) => u.dueOn > rc.period.to)).toBe(true);
+    expect(rc.due.every((d) => d.dueOn <= rc.period.to)).toBe(true);
     // Laporan ikut: pengeluaran bertambah nominal bayar (kategori tagihan).
     expect((await loadLaporan(ctx)).summary.pengeluaran).toBe(GOLDEN.pengeluaran + GOLDEN.bills);
   });
