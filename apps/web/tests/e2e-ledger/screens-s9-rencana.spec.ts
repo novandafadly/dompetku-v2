@@ -16,7 +16,7 @@ const OUT_DIR = fileURLToPath(new URL('../../../../docs/design/s9/', import.meta
 const main = (page: Page) => page.getByRole('main');
 const WIDTHS = [320, 390, 768, 1280];
 const THEMES = ['dark', 'light'] as const;
-const LONG = 'Kebutuhan Rumah Tangga Bulanan Keluarga Besar'.slice(0, 40);
+const LONG = 'Kebutuhan Bulanan Keluarga Besar Nusantara';
 
 async function withPage(
   browser: Browser,
@@ -110,9 +110,38 @@ test('data: dompet, dua pengeluaran, anggaran bernama panjang dan nominal besar'
       [sid, name, amount, wajib],
     );
   expect(spent).not.toBe('');
-  await ins(spent.split('\n')[0] ?? '', 1_000_000, true);
-  await ins(LONG, 12_345_678_900, false);
+  await ins(spent.split('\n')[0] ?? '', 1_200_000, true);
+  await ins(LONG, 3_000_000, false);
   await ins('Kesehatan', 750_000, false);
+});
+
+test('stres: nominal sangat panjang (bukan untuk portofolio)', async ({ browser, ownerState }) => {
+  const sid = await spaceId('personal');
+  await adminQuery(
+    `update app.budgets set amount = 12345678900
+      where space_id = $1 and category_id = (select id from app.categories where space_id = $1 and name = $2)`,
+    [sid, LONG],
+  );
+  for (const theme of THEMES)
+    for (const w of [320, 390])
+      await withPage(
+        browser,
+        ownerState,
+        w,
+        theme,
+        '/pribadi/rencana',
+        async (p) => {
+          await expect(
+            main(p).getByRole('region', { name: 'Dianggarkan', exact: true }),
+          ).toBeVisible();
+        },
+        'stres-an1-nominal-panjang',
+      );
+  await adminQuery(
+    `update app.budgets set amount = 3000000
+      where space_id = $1 and category_id = (select id from app.categories where space_id = $1 and name = $2)`,
+    [sid, LONG],
+  );
 });
 
 test('Pribadi kosong (S9-RC0) dan terisi (S9-AN1)', async ({ browser, ownerState }) => {

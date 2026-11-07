@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations, WCAG_TAGS } from '../e2e/axe';
 import { noHorizontalScroll } from '../e2e-auth/helpers';
 import { adminQuery, expect, test } from './fixtures';
-import { expectRouteBudget, spaceId, toasts } from './helpers';
+import { addWallet, chipsOf, expectRouteBudget, openCatat, spaceId, toasts } from './helpers';
 
 /**
  * S9 Task 10 mode nyata: Rencana > Anggaran. Tab Rencana selalu ada, kosong = ajakan, atur, ubah,
@@ -36,6 +36,14 @@ async function save(page: Page, sheet: Locator, toast: string) {
   await sheet.getByRole('button', { name: 'Simpan anggaran' }).click();
   await expect(toasts(page).getByText(toast)).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectFocusKept(page);
+}
+
+/** Fokus tidak jatuh ke <body> sesudah perubahan yang memuat ulang halaman (I2). */
+async function expectFocusKept(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.tagName ?? 'BODY'), { timeout: 5_000 })
+    .not.toBe('BODY');
 }
 
 async function categoryId(kind: 'personal' | 'shared', name: string): Promise<string> {
@@ -78,10 +86,16 @@ test('atur anggaran: validasi, simpan, baris muncul di Dianggarkan', async ({ pa
   // Kategori induk pengeluaran saja (pemasukan Gaji tidak ada).
   await expect(sheet.getByRole('option', { name: 'Gaji' })).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Simpan anggaran' }).click();
-  await expect(sheet.getByText('Pilih kategori pengeluaran.')).toBeVisible();
+  // Simpan tidak aria-disabled: ketukan memunculkan galat kolom (role=alert) dan memindah fokus.
+  await expect(
+    sheet.getByRole('alert').filter({ hasText: 'Pilih kategori pengeluaran.' }),
+  ).toBeVisible();
+  await expect(sheet.getByRole('combobox', { name: 'Kategori' })).toBeFocused();
   await sheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: MAKAN });
   await sheet.getByRole('button', { name: 'Simpan anggaran' }).click();
-  await expect(sheet.getByText('Nominal harus lebih dari nol.')).toBeVisible();
+  await expect(
+    sheet.getByRole('alert').filter({ hasText: 'Nominal harus lebih dari nol.' }),
+  ).toBeVisible();
   await expect(sheet.getByRole('textbox', { name: 'Anggaran periode ini' })).toBeFocused();
   await sheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('1000000');
   await save(page, sheet, `Anggaran ${MAKAN} disimpan · Pribadi`);
@@ -168,6 +182,7 @@ test('hapus: dialog dengan fokus awal Kembali; Kembali tidak menghapus; konfirma
   await dialog.getByRole('button', { name: 'Hapus anggaran' }).click();
   await expect(toasts(page).getByText(`Anggaran ${MAKAN} dihapus · Pribadi`)).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectFocusKept(page);
   // Pengeluaran tidak disentuh; anggaran habis = kembali ke ajakan.
   await expect(
     main(page).getByRole('heading', { name: 'Belum ada rencana di Pribadi.' }),
@@ -177,6 +192,57 @@ test('hapus: dialog dengan fokus awal Kembali; Kembali tidak menghapus; konfirma
       await categoryId('personal', MAKAN),
     ]),
   ).toHaveLength(0);
+});
+
+test('realisasi nyata: 85% terpakai dengan ikon, lalu Lewat Rp … di baris dan kartu total', async ({
+  page,
+}) => {
+  await addWallet(page, 'pribadi', 'BCA', 5_000_000);
+  const expense = async (amount: number) => {
+    await page.goto('/pribadi/beranda');
+    const sheet = await openCatat(page);
+    await page.keyboard.type(String(amount));
+    const chip = chipsOf(sheet).first();
+    const name = ((await chip.innerText()) || '').trim().split('\n')[0] ?? '';
+    await chip.click();
+    await sheet.getByRole('button', { name: 'Simpan', exact: true }).click();
+    await expect(
+      toasts(page)
+        .getByText(/Tersimpan di Pribadi/)
+        .last(),
+    ).toBeVisible();
+    await expect(sheet).toHaveCount(0);
+    return name;
+  };
+  const kategori = await expense(850_000);
+  await page.goto('/pribadi/rencana');
+  const sheet = await openSheet(page, () =>
+    main(page).getByRole('button', { name: 'Atur anggaran pertama' }),
+  );
+  await sheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: kategori });
+  await sheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('1000000');
+  await save(page, sheet, `Anggaran ${kategori} disimpan · Pribadi`);
+  // 85%: ikon peringatan (selain caret) + teks, sisa di sub dan kartu total.
+  await expect(row(page, kategori)).toContainText('85% terpakai');
+  await expect(row(page, kategori).locator('svg')).toHaveCount(2);
+  await expect(main(page).getByRole('region', { name: /Terpakai/ })).toContainText(
+    'sisa Rp 150.000',
+  );
+  await expense(300_000);
+  await page.goto('/pribadi/rencana');
+  await expect(row(page, kategori)).toContainText('Lewat Rp 150.000');
+  await expect(row(page, kategori).locator('svg')).toHaveCount(2);
+  await expect(main(page).getByRole('region', { name: /Terpakai/ })).toContainText(
+    'Lewat Rp 150.000',
+  );
+  // Pulihkan keadaan kosong untuk tes berikutnya.
+  const edit = await openSheet(page, () => row(page, kategori));
+  await edit.getByRole('button', { name: 'Hapus anggaran' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Hapus anggaran', exact: true })
+    .click();
+  await expect(toasts(page).getByText(`Anggaran ${kategori} dihapus · Pribadi`)).toBeVisible();
 });
 
 test('Bersama: obligation_double dengan nama tagihan, jalan keluar tidak wajib; tanpa data Pribadi', async ({
@@ -206,7 +272,9 @@ test('Bersama: obligation_double dengan nama tagihan, jalan keluar tidak wajib; 
     'Kategori ini sudah punya tagihan Listrik PLN. Satu kewajiban cukup dicatat sekali: arsipkan tagihannya atau jadikan anggaran ini tidak wajib.';
   await expect(sheet.getByText(msg)).toBeVisible();
   await expect(sheet.getByRole('switch', { name: 'Wajib' })).toBeFocused();
-  await expect(sheet.getByRole('switch', { name: 'Wajib' })).toHaveAccessibleDescription(msg);
+  await expect(sheet.getByRole('switch', { name: 'Wajib' })).toHaveAccessibleDescription(
+    `Dipotong dari aman dipakai sampai terpakai. ${msg}`,
+  );
   expect(await adminQuery('select 1 from app.budgets where space_id = $1', [sid])).toHaveLength(0);
   // Jalan keluar: tidak wajib menyimpan; lalu dihapus lagi untuk tes salin.
   await sheet.getByRole('switch', { name: 'Wajib' }).click();
@@ -255,6 +323,7 @@ test('salin anggaran periode lalu: kartu catatan, bentrok tagihan dilewati dan d
     });
   }).toPass();
   await expect(toasts(page).getByText('2 anggaran disalin ke Bersama · 1 dilewati')).toBeVisible();
+  await expectFocusKept(page);
   const dianggarkan = main(page).getByRole('region', { name: 'Dianggarkan', exact: true });
   await expect(dianggarkan).toContainText('Sewa Rumah');
   await expect(dianggarkan).toContainText('Internet');
