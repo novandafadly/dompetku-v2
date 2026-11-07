@@ -594,6 +594,24 @@ describe('RencanaHost: Tagihan', () => {
     });
   });
 
+  it('bill_account_kantor: galat kolom Dompet dengan jalan keluar, fokus ke Dompet', async () => {
+    const user = userEvent.setup();
+    actions.createBillAction.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'bill_account_kantor' },
+    });
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Internet');
+    await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '1000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    expect(
+      await screen.findByText('Dompet Kantor tidak bisa dipakai untuk tagihan. Pilih dompet lain.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Dompet bayar bawaan' })).toHaveFocus();
+  });
+
   it('Arsipkan: dialog dengan fokus awal Kembali, konfirmasi memanggil archiveBillAction', async () => {
     const user = userEvent.setup();
     setupBill();

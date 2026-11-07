@@ -127,9 +127,17 @@ test('bayar dengan nominal beda: saldo turun hari ini, satu entri, lunas, toast 
   await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toBeFocused();
   await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toHaveValue('485.000');
   await expect(sheet.getByText('Perkiraan Rp 485.000')).toBeVisible();
-  await expect(sheet.getByRole('combobox', { name: 'Dompet' }).locator('option')).not.toHaveText(
-    /Kantor/,
+  // Dompet Kas Kantor (pocket kantor) tidak pernah ditawarkan untuk membayar tagihan.
+  const kantor = await adminQuery<{ name: string }>(
+    `select name from app.accounts where space_id = $1 and pocket = 'kantor'`,
+    [await spaceId('personal')],
   );
+  const options = await sheet
+    .getByRole('combobox', { name: 'Dompet' })
+    .locator('option')
+    .allInnerTexts();
+  expect(options).toContain(WALLET);
+  for (const k of kantor) expect(options).not.toContain(k.name);
   await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
   await sheet.getByRole('textbox', { name: 'Nominal' }).fill('512000');
   const pay = sheet.getByRole('button', { name: /^Bayar Rp\s512\.000$/ });
