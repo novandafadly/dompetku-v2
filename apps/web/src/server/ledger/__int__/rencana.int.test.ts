@@ -7,6 +7,7 @@ import { loadLaporan } from '../laporan';
 import { spendPaceTx } from '../read';
 import { payBill, loadRencana, setBudget, setOccurrenceSkipped } from '../rencana';
 import { withLedger } from '../retry';
+import { createEntry } from '../write';
 import { createLedgerHarness, memuatNominal, resetLedger } from './harness';
 import { clockEnv, ctxAt, GOLDEN, KANARI, seedS9, TODAY, type Clock, type S9Fixture } from './s9';
 
@@ -263,6 +264,18 @@ describe('Rencana dan Laporan: angka sama dengan Beranda [T17]', () => {
     expect(r.totals.spent).toBe(
       1_800_000 + (r.budgets.find((x) => x.categoryId === fx.ids.kanariCat)?.spent ?? 0),
     );
+    // Pengeluaran di kategori induk tanpa anggaran (Cicilan & Tagihan) tidak mengubah total kartu
+    // (review ulang Task 10: tanpa ini filter "hanya beranggaran" tidak teruji).
+    expect(r.budgets.find((x) => x.categoryId === fx.ids.tagihanCat)?.budget).toBeNull();
+    await createEntry(ctx, {
+      clientId: randomUUID(),
+      accountId: fx.ids.bca,
+      kind: 'expense',
+      amount: 77_000,
+      categoryId: fx.ids.tagihanCat,
+      occurredOn: '2026-11-05',
+    });
+    expect((await loadRencana(ctx)).totals).toEqual(r.totals);
 
     // Rencana: periode lalu kosong (K13), tagihan + kemunculan, dompet dan kategori ruang ini.
     expect(r.previous).toEqual({
