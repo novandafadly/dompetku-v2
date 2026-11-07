@@ -39,8 +39,11 @@ import { RetryIsland } from './transaksi-islands';
 
 export type Bagian = 'anggaran' | 'tagihan';
 
+// Lebar eksplisit: `w-full` + `-mx-4` hanya menggeser; baris harus melebar 2 × 16 px agar bilah dan
+// isinya selebar garis pemisah.
 const ROW =
-  'flex w-full items-center -mx-4 px-4 hover-pointer:bg-hover active:bg-hover ' + focusRing;
+  'flex w-[calc(100%+2rem)] items-center -mx-4 px-4 hover-pointer:bg-hover active:bg-hover ' +
+  focusRing;
 const BUDGET_ROW = `${ROW} min-h-19 py-3`;
 const UNBUDGETED_ROW = `${ROW} min-h-15.5`;
 
@@ -81,7 +84,7 @@ function Anggaran({ data }: { data: RencanaData }) {
   const newPeriod = budgeted.length === 0 && data.previous.budgetCount > 0;
   return (
     <>
-      {budgeted.length > 0 ? (
+      {budgeted.length > 0 || newPeriod ? (
         <div className="flex flex-col gap-0.5">
           <h2 className="text-header font-extrabold text-text">{title}</h2>
           <p className="text-meta font-medium text-text-muted">{periodSubtitle(data.period)}</p>
@@ -149,8 +152,14 @@ function Anggaran({ data }: { data: RencanaData }) {
           <EmptyLine>{RENCANA_COPY.allBudgeted}</EmptyLine>
         </ListCard>
       ) : null}
-      {budgeted.length > 0 ? (
-        <SetBudgetIsland label={RENCANA_COPY.set} variant="secondary" plus className="w-full" />
+      {budgeted.length > 0 && unbudgeted.length > 0 ? (
+        // Laptop: aksi yang sama ada di header halaman (satu tombol bernama sama per layar).
+        <SetBudgetIsland
+          label={RENCANA_COPY.set}
+          variant="secondary"
+          plus
+          className="w-full laptop:hidden"
+        />
       ) : null}
     </>
   );
@@ -185,7 +194,7 @@ export function RencanaReal({
       <PageHeader
         title="Rencana"
         action={
-          bagian === 'anggaran' && hasBudgets ? (
+          bagian === 'anggaran' && hasBudgets && unbudgetedRows(data.budgets).length > 0 ? (
             <SetBudgetIsland label={RENCANA_COPY.set} variant="secondary" plus />
           ) : undefined
         }

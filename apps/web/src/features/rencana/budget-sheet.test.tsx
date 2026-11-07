@@ -164,7 +164,7 @@ describe('BudgetSheet: galat server', () => {
       'Kategori ini sudah punya tagihan Listrik PLN. Satu kewajiban cukup dicatat sekali: arsipkan tagihannya atau jadikan anggaran ini tidak wajib.',
     );
     expect(msg.id).not.toBe('');
-    expect(wajib().getAttribute('aria-describedby')).toBe(msg.id);
+    expect(wajib().getAttribute('aria-describedby')?.split(' ')).toContain(msg.id);
     expect(wajib()).toHaveAttribute('aria-invalid', 'true');
     expect(wajib()).toHaveFocus();
     expect(msg.textContent).not.toMatch(/\d{3}/);
@@ -223,6 +223,45 @@ describe('BudgetSheet: galat server', () => {
     onSubmit.mockRejectedValueOnce(new Error('putus'));
     await fill(user);
     expect((await screen.findByRole('alert')).textContent).toContain('Koneksi terputus');
+  });
+});
+
+describe('BudgetSheet: a11y sakelar dan galat (M2, M3, D5, D6)', () => {
+  it('sakelar Wajib selalu merujuk petunjuk; Ya memakai ikon centang selain teks', async () => {
+    const user = userEvent.setup();
+    setup({ categoryId: 'k-internet' });
+    await screen.findByRole('dialog');
+    const hint = screen.getByText('Dipotong dari aman dipakai sampai terpakai.');
+    expect(wajib().getAttribute('aria-describedby')).toBe(hint.id);
+    expect(wajib().querySelector('svg')).toBeNull();
+    await user.click(wajib());
+    expect(wajib().querySelector('svg')).toBeTruthy();
+    expect(wajib()).toHaveTextContent('Ya');
+  });
+
+  it('galat kolom memakai role=alert dan memindahkan fokus ke kolom yang salah', async () => {
+    const user = userEvent.setup();
+    setup({ categoryId: 'k-internet' });
+    await user.click(await screen.findByRole('button', { name: 'Simpan anggaran' }));
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Nominal harus lebih dari nol.');
+    expect(amount()).toHaveFocus();
+  });
+
+  it('invalid pada month: kotak galat umum, bukan "Pilih kategori"', async () => {
+    const user = userEvent.setup();
+    setup({ categoryId: 'k-internet' }, { ok: false, code: 'invalid', field: 'month' });
+    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
+    await user.click(save());
+    expect(await screen.findByText('Isian belum lengkap. Periksa lagi lalu simpan.')).toBeTruthy();
+    expect(screen.queryByText('Pilih kategori pengeluaran.')).toBeNull();
+  });
+
+  it('semua kategori sudah dianggarkan: fokus awal tidak ke select yang nonaktif', async () => {
+    setup({ rows: ROWS.filter((r) => r.budget !== null && !r.archived) });
+    await screen.findByRole('dialog');
+    expect(category()).not.toHaveFocus();
+    expect(amount()).toHaveFocus();
   });
 });
 

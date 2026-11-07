@@ -144,6 +144,72 @@ describe('RencanaHost: sheet Anggaran', () => {
   });
 });
 
+describe('fokus sesudah perubahan (I2)', () => {
+  it('simpan dari baris: fokus tidak jatuh ke <body> (kembali ke baris)', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Baris Internet' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
+    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
+    await waitFor(
+      () => {
+        expect(document.activeElement).not.toBe(document.body);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it('pemicu hilang (EmptyState) dan baris ada: fokus ke baris; baris tidak ada: ke judul halaman', async () => {
+    const user = userEvent.setup();
+    render(
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={ROWS}
+        previous={{}}
+        billNameByRoot={{}}
+      >
+        <h1>Rencana</h1>
+        <SetBudgetButton label="Atur anggaran pertama" variant="primary" />
+        <BudgetRowTrigger categoryId="k-internet" className="flex">
+          Baris Internet
+        </BudgetRowTrigger>
+      </RencanaHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Atur anggaran pertama' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-internet');
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
+    await waitFor(
+      () => {
+        expect(document.activeElement).not.toBe(document.body);
+      },
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe('catatan bentrok (M7)', () => {
+  it('hilang sesudah atur anggaran berikutnya', async () => {
+    const user = userEvent.setup();
+    actions.copyBudgetsAction.mockResolvedValueOnce({
+      ok: true,
+      value: { copied: 1, skippedExisting: 0, skippedConflict: 2, skippedArchived: 0 },
+    });
+    setup();
+    await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
+    expect(await screen.findByText(/2 anggaran wajib tidak disalin/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Baris Internet' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Anggaran periode ini' }), '100');
+    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
+    await waitFor(() => {
+      expect(screen.queryByText(/anggaran wajib tidak disalin/)).toBeNull();
+    });
+  });
+});
+
 describe('CopyBudgetsButton (K13)', () => {
   it('menyalin ke bulan label ini; toast menyebut jumlah, ruang, dan yang dilewati', async () => {
     const user = userEvent.setup();

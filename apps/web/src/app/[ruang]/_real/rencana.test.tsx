@@ -213,6 +213,30 @@ describe('RencanaReal: daftar Anggaran (S9-AN1)', () => {
   });
 });
 
+describe('RencanaReal: tombol Atur anggaran (D4, M1)', () => {
+  it('bawah daftar disembunyikan di laptop (header membawa aksi); keduanya hilang bila semua dianggarkan', () => {
+    view(data({ budgets: BUDGETS }));
+    const [header, bottom] = screen.getAllByRole('button', { name: 'Atur anggaran' });
+    expect(header?.closest('header')).toBeTruthy();
+    expect(bottom?.className).toContain('laptop:hidden');
+    cleanup();
+    view(data({ budgets: BUDGETS.filter((b) => b.budget !== null) }));
+    expect(screen.queryByRole('button', { name: 'Atur anggaran' })).toBeNull();
+  });
+
+  it('periode baru: judul periode tampil di atas kartu catatan, satu tombol Atur anggaran', () => {
+    view(
+      data({
+        budgets: BUDGETS.slice(2),
+        previous: { labelMonth: '2026-10-01', budgetCount: 3, wajibCount: 1, amounts: { x: 1 } },
+      }),
+    );
+    expect(screen.getByRole('heading', { level: 2, name: 'November 2026' })).toBeTruthy();
+    expect(screen.getByText('23 Okt – 24 Nov · berjalan, 20 hari lagi')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Atur anggaran' })).toHaveLength(1);
+  });
+});
+
 describe('RencanaReal: kosong = ajakan (S9-RC0)', () => {
   it('ruang tanpa anggaran dan tagihan: judul menyebut ruang, satu ajakan, tanpa Rp 0', () => {
     view(data({ budgets: [row({ categoryId: 'k1', name: 'Makan' })] }), { ruang: 'bersama' });

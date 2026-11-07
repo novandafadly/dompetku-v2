@@ -9,6 +9,7 @@ import type {
 } from '@/features/ledger/types';
 import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
 import { amanStatus } from '@/features/beranda/aman-status';
+import { NEAR_PCT } from '@/features/rencana/copy';
 import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
 import type pg from 'pg';
 import { bersamaBerandaTx } from './bersama';
@@ -99,8 +100,6 @@ export interface BerandaBersama {
 const RECENT = 5;
 /** T8 m0a: `Tagihan 7 hari` = jatuh tempo ≤ hari ini + 7 (WIB server). */
 const BILLS_WITHIN_DAYS = 7;
-/** m0a: "hampir habis" = terpakai ≥ 80%. */
-const NEAR_PCT = 80;
 
 /**
  * Ada tagihan aktif atau anggaran wajib berlabel periode ini (`showObligations` kartu Aman).

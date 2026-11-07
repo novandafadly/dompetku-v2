@@ -11,6 +11,7 @@ import type { ActionResult, Ruang } from '@/features/ledger/types';
 import { RENCANA_COPY } from '@/features/rencana/copy';
 import type { BudgetResult, BudgetSubmit } from '@/features/rencana/budget-sheet';
 import type { BudgetOverviewVM } from '@/features/rencana/types';
+import { restoreFocus } from './focus-title';
 import { copyBudgetsAction, deleteBudgetAction, setBudgetAction } from '../_actions/rencana';
 
 /**
@@ -109,6 +110,11 @@ export function RencanaHost({
               run(() => setBudgetAction(ruang, { ...input, month }))
             }
             onDelete={(categoryId) => run(() => deleteBudgetAction(ruang, { categoryId, month }))}
+            onChanged={(categoryId) => {
+              // Catatan bentrok salinan basi sesudah atur/hapus; fokus tidak jatuh ke <body>.
+              setConflict(0);
+              restoreFocus(`[data-budget-row="${categoryId}"]`);
+            }}
           />
         </Suspense>
       ) : null}
@@ -204,6 +210,7 @@ export function CopyBudgetsButton() {
       const v = res.value;
       const skipped = v.skippedExisting + v.skippedConflict + v.skippedArchived;
       setConflict(v.skippedConflict);
+      restoreFocus(null);
       toast({
         message:
           v.copied > 0

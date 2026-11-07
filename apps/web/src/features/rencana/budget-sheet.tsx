@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FieldLabel } from '@/components/ui/field';
 import { FieldError, FieldHint } from '@/components/ui/field-messages';
+import { CheckIcon } from '@/components/ui/icons/check';
 import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { CircleNotchIcon } from '@/components/ui/icons/circle-notch';
 import { TrashIcon } from '@/components/ui/icons/trash';
@@ -57,14 +58,16 @@ function Alert({ children, action }: { children: string; action?: React.ReactNod
 function WajibSwitch({
   checked,
   onChange,
-  describedBy,
+  hintId,
+  errorId,
   invalid,
   buttonRef,
   disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
-  describedBy: string;
+  hintId: string;
+  errorId: string | undefined;
   invalid: boolean;
   buttonRef: React.RefObject<HTMLButtonElement | null>;
   disabled: boolean;
@@ -77,7 +80,7 @@ function WajibSwitch({
       role="switch"
       aria-checked={checked}
       aria-labelledby={labelId}
-      aria-describedby={describedBy}
+      aria-describedby={errorId === undefined ? hintId : `${hintId} ${errorId}`}
       aria-invalid={invalid || undefined}
       aria-disabled={disabled || undefined}
       onClick={() => {
@@ -91,7 +94,9 @@ function WajibSwitch({
         <span id={labelId} className="text-body/tight font-semibold text-text">
           {RENCANA_COPY.wajib}
         </span>
-        <span className="text-caption font-medium text-text-muted">{RENCANA_COPY.wajibHint}</span>
+        <span id={hintId} className="text-caption font-medium text-text-muted">
+          {RENCANA_COPY.wajibHint}
+        </span>
       </span>
       <span
         aria-hidden="true"
@@ -101,7 +106,14 @@ function WajibSwitch({
             : 'border-hairline bg-surface-2 text-text-soft'
         }`}
       >
-        {checked ? 'Ya' : 'Tidak'}
+        {checked ? (
+          <>
+            <CheckIcon size={14} weight="bold" className="mr-1 shrink-0" />
+            Ya
+          </>
+        ) : (
+          'Tidak'
+        )}
       </span>
     </button>
   );
@@ -154,6 +166,7 @@ function Form({
   const amountHintId = useId();
   const amountErrorId = useId();
   const wajibErrorId = useId();
+  const wajibHintId = useId();
   const archived = editing?.archived === true;
   const chosen = rows.find((r) => r.categoryId === categoryId) ?? null;
   const prev = chosen === null ? undefined : previous[chosen.categoryId];
@@ -209,7 +222,7 @@ function Form({
         if (f.includes('amount')) {
           setErrors({ amount: RENCANA_COPY.errAmount });
           amountRef.current?.focus();
-        } else if (f.includes('categor') || f.includes('month')) {
+        } else if (f.includes('categor')) {
           setErrors({ category: RENCANA_COPY.errCategory });
           categoryRef.current?.focus();
         } else {
@@ -287,7 +300,9 @@ function Form({
             </p>
           )}
           {errors.category === undefined ? null : (
-            <FieldError id={categoryErrorId}>{errors.category}</FieldError>
+            <div role="alert">
+              <FieldError id={categoryErrorId}>{errors.category}</FieldError>
+            </div>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
@@ -307,23 +322,28 @@ function Form({
             {prev === undefined ? '' : ` · Periode lalu: ${formatRupiah(prev)}`}
           </FieldHint>
           {errors.amount === undefined ? null : (
-            <FieldError id={amountErrorId}>{errors.amount}</FieldError>
+            <div role="alert">
+              <FieldError id={amountErrorId}>{errors.amount}</FieldError>
+            </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 pb-2">
           <WajibSwitch
             checked={wajib}
             onChange={(v) => {
               setWajib(v);
               setErrors((x) => ({ ...x, wajib: undefined }));
             }}
-            describedBy={errors.wajib === undefined ? '' : wajibErrorId}
+            hintId={wajibHintId}
+            errorId={errors.wajib === undefined ? undefined : wajibErrorId}
             invalid={errors.wajib !== undefined}
             buttonRef={wajibRef}
             disabled={saving || archived}
           />
           {errors.wajib === undefined ? null : (
-            <FieldError id={wajibErrorId}>{errors.wajib}</FieldError>
+            <div role="alert">
+              <FieldError id={wajibErrorId}>{errors.wajib}</FieldError>
+            </div>
           )}
         </div>
       </form>
@@ -390,6 +410,7 @@ export function BudgetSheet({
   billNameByRoot,
   onSubmit,
   onDelete,
+  onChanged,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -407,6 +428,8 @@ export function BudgetSheet({
   onSubmit: (input: BudgetSubmit) => Promise<BudgetResult>;
   /** `ok: false` memunculkan galat di dialog; `network` memberi saran Coba lagi. */
   onDelete: (categoryId: string) => Promise<BudgetResult>;
+  /** Sesudah simpan/hapus berhasil: kategorinya (Host memulihkan fokus dan membersihkan catatan). */
+  onChanged?: ((categoryId: string) => void) | undefined;
 }) {
   const categoryRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -435,6 +458,7 @@ export function BudgetSheet({
       setConfirm(false);
       toast({ message: RENCANA_COPY.removed(editing.name, ruang) });
       onOpenChange(false);
+      onChanged?.(editing.categoryId);
       return;
     }
     setRemoveError(
@@ -458,7 +482,11 @@ export function BudgetSheet({
           </>
         }
         tint={ruang}
-        initialFocus={editing === null ? categoryRef : amountRef}
+        initialFocus={
+          editing === null && rows.some((r) => r.budget === null && !r.archived)
+            ? categoryRef
+            : amountRef
+        }
         footer={
           editing?.archived === true ? undefined : (
             <Button
@@ -504,6 +532,7 @@ export function BudgetSheet({
           onDone={(row) => {
             toast({ message: RENCANA_COPY.saved(row.name, ruang) });
             onOpenChange(false);
+            onChanged?.(row.categoryId);
           }}
         />
       </Sheet>

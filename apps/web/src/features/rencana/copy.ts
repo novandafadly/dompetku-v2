@@ -98,13 +98,16 @@ export function periodSubtitle(period: PeriodVM): string {
   return range === '' ? left : `${range} · ${left}`;
 }
 
+/** Ambang `hampir habis`/peringatan: terpakai ≥ 80% (dipakai Rencana dan kartu Beranda). */
+export const NEAR_PCT = 80;
+
 export type BudgetLevel = 'ok' | 'near' | 'full' | 'over';
 
 /** Tangga status anggaran (ikon + teks, bukan warna saja): ≥ 80% hati-hati, 100% penuh, > 100% lewat. */
 export function budgetLevel(row: Pick<BudgetOverviewVM, 'pct' | 'remaining'>): BudgetLevel {
   if (row.remaining !== null && row.remaining < 0) return 'over';
   if (row.remaining === 0) return 'full';
-  return (row.pct ?? 0) >= 80 ? 'near' : 'ok';
+  return (row.pct ?? 0) >= NEAR_PCT ? 'near' : 'ok';
 }
 
 /** Anggaran terisi, urut persentase terbesar lalu nama (bingkai AN1). */
