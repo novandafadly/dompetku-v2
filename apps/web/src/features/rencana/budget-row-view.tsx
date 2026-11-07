@@ -62,7 +62,14 @@ function Status({ level, pct, over }: { level: BudgetLevel; pct: number; over: n
  * Isi satu baris anggaran (nama + `Wajib`, status, bilah 6 px, sub). Judul `flex-wrap`: status yang
  * panjang (`Lewat Rp 12.345.678.900`) turun ke baris kedua rata kiri, nama tidak jatuh ke nol.
  */
-export function BudgetItemView({ row }: { row: BudgetOverviewVM }) {
+export function BudgetItemView({
+  row,
+  caret = true,
+}: {
+  row: BudgetOverviewVM;
+  /** Isyarat baris membuka sheet; Beranda (baca saja) mematikannya. */
+  caret?: boolean;
+}) {
   const budget = row.budget ?? 0;
   const level = budgetLevel(row);
   const pct = row.pct ?? 0;
@@ -77,7 +84,7 @@ export function BudgetItemView({ row }: { row: BudgetOverviewVM }) {
               {RENCANA_COPY.wajib}
             </span>
           ) : null}
-          <CaretRightIcon size={16} className="shrink-0 text-text-muted" />
+          {caret ? <CaretRightIcon size={16} className="shrink-0 text-text-muted" /> : null}
         </span>
         <Status level={level} pct={pct} over={-remaining} />
       </span>

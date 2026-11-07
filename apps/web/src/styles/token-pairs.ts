@@ -79,6 +79,8 @@ export const pairs: Pair[] = [
   pair('warning', 'surface-2', TEXT),
   pair('warning', 'surface-3', TEXT),
   pair('warning', 'warning-tint', TEXT, [7.7, null]),
+  // Sebab status Hati-hati di kartu Aman (S9-BR1).
+  pair('text-soft', 'warning-tint', TEXT),
   // Warna ruang: label, tag, chip terpilih, judul Catat.
   pair('pribadi', 'surface', TEXT, [12.6, 6.3]),
   pair('pribadi', 'pribadi-tint', TEXT, [10.4, 5.5]),
