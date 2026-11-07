@@ -58,7 +58,7 @@ const ROW =
 const BUDGET_ROW = `${ROW} min-h-19 py-3`;
 const UNBUDGETED_ROW = `${ROW} min-h-15.5`;
 // Badan baris tagihan: ubin + nama + sub; kolom kanan (nominal + Bayar) di luar tombol.
-const BILL_BODY = `flex min-h-18 min-w-0 flex-1 items-center gap-3 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
+const BILL_BODY = `flex min-h-18 min-w-0 flex-[1_1_11rem] items-center gap-3 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 
 function bagianHref(ruang: Ruang, bagian: Bagian, query: string): Route {
   const params = new URLSearchParams(query);
@@ -184,7 +184,7 @@ function BillRowItem({ item }: { item: BillItem }) {
   const amount = occ?.amount ?? bill.amount;
   return (
     <li className={rowDivider}>
-      <div className="-mx-4 flex items-stretch">
+      <div className="-mx-4 flex flex-wrap items-stretch">
         <BillBodyIsland billId={bill.billId} className={BILL_BODY}>
           <BillBodyView item={item} caret />
         </BillBodyIsland>

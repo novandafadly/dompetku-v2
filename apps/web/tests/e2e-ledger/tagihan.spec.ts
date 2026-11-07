@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations } from '../e2e/axe';
 import { noHorizontalScroll } from '../e2e-auth/helpers';
 import { adminQuery, expect, test } from './fixtures';
-import { addWallet, digits, spaceId, toasts, walletBalance } from './helpers';
+import { addWallet, digits, expectRouteBudget, spaceId, toasts, walletBalance } from './helpers';
 
 /**
  * S9 Task 11 mode nyata: Rencana > Tagihan. Tambah, bayar dengan nominal beda (K12), bayar ulang
@@ -387,4 +387,23 @@ test('Bersama: tidak memuat tagihan, kategori, atau dompet Pribadi; axe dan tanp
   ).toBeVisible();
   await expectNoSeriousViolations(page);
   expect(digits(1)).toBe('1');
+});
+
+test('budget JS: rute Rencana (Anggaran dan Tagihan) dan Beranda/Transaksi nyata ≤ 162 kB', async ({
+  browser,
+  ownerState,
+}) => {
+  for (const url of [
+    '/pribadi/beranda',
+    '/pribadi/transaksi',
+    '/pribadi/rencana',
+    '/pribadi/rencana?bagian=tagihan',
+    '/bersama/rencana?bagian=tagihan',
+  ]) {
+    await expectRouteBudget(browser, ownerState, url);
+    const a = test.info().annotations.slice(-2);
+    console.log(
+      `BUDGET-S9T ${url}: ${a.map((x) => `${x.type} ${x.description ?? ''}`).join(', ')}`,
+    );
+  }
 });

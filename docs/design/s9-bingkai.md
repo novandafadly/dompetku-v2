@@ -392,3 +392,17 @@ Anggaran subkategori, review bulanan, salin anggaran lanjutan (ke periode yang s
 - **Total kartu Anggaran** dijumlah di SQL (`budgetTotalsTx`), bukan di TS.
 - **Fokus** sesudah simpan/hapus/salin: ke baris kategori bila ada, selain itu ke judul halaman.
 - **Titik di judul RC0** (`Bersama.`) tampak renggang pada bobot 800: itu kerning huruf, teksnya tanpa spasi (diuji).
+
+## Penyimpangan Task 11 dari bingkai (diputuskan agen, 2026-11-07)
+
+- **Segmen** tetap tautan (bukan `role="tablist"`), sesuai bagian segmen bingkai.
+- **Nama tagihan maksimal 60 huruf** (DB `check_bill` dan Zod), bukan 80 seperti salinan galat bingkai; teks galat `Nama tagihan wajib diisi, paling banyak 60 huruf.`
+- **Ikon `Dilewati`** memakai `minus-circle` (fill): ikon `skip-forward` tidak ada di set ikon; tanpa ikon baru demi budget.
+- **Baris Lunas dan Dilewati tetap membuka sheet Ubah** (dengan caret), supaya tagihan yang kemunculannya sudah lunas semua tetap bisa diubah atau diarsipkan; bingkai menyebut baris itu statis.
+- **Tagihan aktif tanpa kemunculan terlihat** (mulai di masa depan, sudah berakhir) masuk `Berikutnya` dengan sub `Tiap tanggal N`, supaya tidak tersembunyi.
+- **`Berikutnya`** dibaca dari `api.bills_due` sampai `ends_on + 62` hari (`billsUpcomingTx`), bukan dari `bill_list.next_due_on`: hari ke jatuh tempo tetap dari SQL. Baris lunas di muka (bayar kemunculan bulan depan) ikut tampil sebagai `Lunas · {tgl bayar}`.
+- **Tanggal bayar** `Lunas · {tgl}` memakai `occurred_on` entri bayar (kolom baru `paidOn` di `BillDueVM`).
+- **Dompet bawaan di sheet Bayar**: dompet tagihan bila masih bisa dipakai, selain itu dompet pertama yang boleh (bukan Kas Kantor, aktif). Biaya bila salah: salah pilih dompet; terlihat di isian dan toast `… dari {dompet}`, dan bisa diurungkan.
+- **Tombol `Bayar Rp …` tetap bisa diketuk saat nominal kosong**: galat kolom dan fokus ke Nominal (pola Task 10), bukan `aria-disabled`.
+- **Baris sempit**: kolom kanan (nominal + `Bayar`) turun ke baris sendiri bila nominal panjang (`flex-wrap`, basis badan 11rem) supaya nama tidak jatuh ke nol di 320 px.
+- **Urungkan bayar** memanggil `voidEntryAction` pada entri hasil bayar (kemunculan terbuka lagi karena entri batal).

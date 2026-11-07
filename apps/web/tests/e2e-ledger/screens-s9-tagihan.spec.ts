@@ -34,7 +34,7 @@ async function withPage(
   });
   const page = await context.newPage();
   try {
-    await page.goto(`${path}?theme=${theme}`);
+    await page.goto(`${path}${path.includes('?') ? '&' : '?'}theme=${theme}`);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await fn(page);
     await page.evaluate(() => document.fonts.ready);
@@ -282,7 +282,10 @@ test('S9-TG3 sheet Bayar, peringatan saldo kurang, tanpa dompet', async ({
     async (p) => {
       const s = paySheet(p);
       await openUntil(
-        () => main(p).getByRole('button', { name: /^Bayar Cicilan Motor, Rp/ }),
+        () =>
+          main(p)
+            .getByRole('button', { name: /^Bayar Cicilan Motor, Rp/ })
+            .first(),
         s,
         s.getByRole('textbox', { name: 'Nominal' }),
       );
@@ -299,7 +302,10 @@ test('S9-TG3 sheet Bayar, peringatan saldo kurang, tanpa dompet', async ({
     async (p) => {
       const s = paySheet(p);
       await openUntil(
-        () => main(p).getByRole('button', { name: /^Bayar Tagihan Kartu Kredit, Rp/ }),
+        () =>
+          main(p)
+            .getByRole('button', { name: /^Bayar Tagihan Kartu Kredit, Rp/ })
+            .first(),
         s,
         s.getByRole('textbox', { name: 'Nominal' }),
       );

@@ -99,7 +99,7 @@ export function BillAmountColumn({
   children?: React.ReactNode;
 }) {
   return (
-    <span className="flex shrink-0 flex-col items-end justify-center gap-1.5 py-2 pr-4">
+    <span className="ml-auto flex shrink-0 flex-col items-end justify-center gap-1.5 py-2 pr-4">
       <span className="whitespace-nowrap">
         <MoneyText value={amount} />
       </span>
