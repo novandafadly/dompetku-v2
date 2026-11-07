@@ -445,3 +445,183 @@ describe('BerandaReal sisi Farida (anggota, S8-O1/O2)', () => {
     expect(screen.getByText(/Kamu dan Farida sama-sama bisa mencatat/)).toBeTruthy();
   });
 });
+
+// ===== S9 Task 12: Aman dipakai lengkap, Tagihan 7 hari, Anggaran hampir habis =====
+const PERIODE_GAJIAN = {
+  label: 'November 2026 · 23 Okt – 24 Nov',
+  from: '2026-10-23',
+  to: '2026-11-24',
+  labelMonth: '2026-11-01',
+  daysLeft: 21,
+  holidaysKnown: true,
+  basis: 'gajian',
+} as const;
+
+const SAFE_S9 = {
+  operasional: 5_000_000,
+  billsUntilEom: 700_000,
+  budgetWajibRemaining: 300_000,
+  aman: 4_000_000,
+  until: '2026-11-24',
+  daysLeft: 21,
+  perDay: 190_476,
+  status: 'aman',
+  reason: null,
+  hasObligations: true,
+} as const;
+
+describe('BerandaReal S9 (BR1, BR2)', () => {
+  it('Aman dipakai sampai akhir periode gajian dengan rincian tagihan + wajib', () => {
+    render(view({ period: PERIODE_GAJIAN, safe: { ...SAFE_S9 } }, 'pribadi'));
+    expect(screen.getByRole('heading', { name: 'Aman dipakai sampai 24 Nov' })).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'Rincian aman dipakai' });
+    expect(within(table).getByRole('rowheader', { name: 'Tagihan s.d. 24 Nov' })).toBeTruthy();
+    expect(within(table).getByRole('rowheader', { name: 'Sisa anggaran wajib' })).toBeTruthy();
+  });
+
+  it('tanpa kewajiban: dua baris rincian saja (perilaku S6/S8)', () => {
+    render(
+      view({ period: PERIODE_GAJIAN, safe: { ...SAFE_S9, hasObligations: false } }, 'pribadi'),
+    );
+    const table = screen.getByRole('table', { name: 'Rincian aman dipakai' });
+    expect(within(table).getAllByRole('rowheader')).toHaveLength(2);
+  });
+
+  it('Hati-hati karena tagihan lewat tampil di kartu Aman', () => {
+    render(
+      view(
+        {
+          period: PERIODE_GAJIAN,
+          safe: { ...SAFE_S9, status: 'hati_hati', reason: { kind: 'overdue', count: 1 } },
+        },
+        'pribadi',
+      ),
+    );
+    expect(screen.getByTestId('aman-status').textContent).toContain(
+      'Ada 1 tagihan lewat jatuh tempo.',
+    );
+  });
+
+  it('tanda libur: hanya periode gajian dengan data libur kosong', () => {
+    const { rerender } = render(
+      view(
+        { period: { ...PERIODE_GAJIAN, holidaysKnown: false }, safe: { ...SAFE_S9 } },
+        'pribadi',
+      ),
+    );
+    expect(screen.getByText(/Libur nasional 2026 belum diisi/)).toBeTruthy();
+    // payday_rule kosong = bulan kalender: tanpa peringatan libur.
+    rerender(
+      view(
+        {
+          period: { ...PERIODE_GAJIAN, holidaysKnown: false, basis: 'kalender' },
+          safe: { ...SAFE_S9 },
+        },
+        'pribadi',
+      ),
+    );
+    expect(screen.queryByText(/Libur nasional/)).toBeNull();
+  });
+
+  it('kartu Tagihan 7 hari dan Anggaran hampir habis dari data loader', () => {
+    render(
+      view(
+        {
+          period: PERIODE_GAJIAN,
+          safe: { ...SAFE_S9 },
+          billsDue: {
+            hasBills: true,
+            items: [
+              {
+                occurrenceId: 'o1',
+                billId: 'b1',
+                name: 'Internet',
+                amount: 350_000,
+                dueOn: '2026-11-01',
+                daysUntil: -3,
+                overdue: true,
+                posted: false,
+                skipped: false,
+                entryId: null,
+                paidOn: null,
+              },
+            ],
+          },
+          budgetsNear: {
+            hasBudgets: true,
+            items: [
+              {
+                categoryId: 'c1',
+                name: 'Makan Siang & Minum',
+                icon: 'x',
+                budget: 1_000_000,
+                wajib: false,
+                spent: 900_000,
+                pct: 90,
+                remaining: 100_000,
+                archived: false,
+              },
+            ],
+          },
+        },
+        'pribadi',
+      ),
+    );
+    const bills = screen.getByRole('region', { name: 'Tagihan 7 hari' });
+    expect(within(bills).getByText('Lewat 3 hari')).toBeTruthy();
+    expect(within(bills).getByText('Internet')).toBeTruthy();
+    const budgets = screen.getByRole('region', { name: 'Anggaran hampir habis' });
+    expect(within(budgets).getByText('90% terpakai')).toBeTruthy();
+  });
+
+  it('galat per kartu: Beranda tetap tampil dengan kartu lain', () => {
+    render(view({ billsDue: 'error' }, 'pribadi'));
+    expect(screen.getByText('Tagihan belum bisa dimuat.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Anggaran hampir habis' })).toBeTruthy();
+    expect(screen.getByTestId('balance-card')).toBeTruthy();
+    cleanup();
+    render(view({ budgetsNear: 'error' }, 'pribadi'));
+    expect(screen.getByText('Anggaran belum bisa dimuat.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Tagihan 7 hari' })).toBeTruthy();
+  });
+
+  it('kosong: ajakan membuka Rencana (bagian yang sesuai)', () => {
+    render(view({}, 'pribadi'));
+    expect(screen.getByRole('link', { name: 'Tambah tagihan' }).getAttribute('href')).toBe(
+      '/pribadi/rencana?bagian=tagihan',
+    );
+    expect(screen.getByRole('link', { name: 'Atur anggaran' }).getAttribute('href')).toBe(
+      '/pribadi/rencana?bagian=anggaran',
+    );
+  });
+
+  it('urutan: Aman, Tagihan 7 hari, Anggaran hampir habis, Kontribusi, Aktivitas, Terakhir', () => {
+    const { container } = render(view({ bersama: dua() }));
+    const t = container.textContent;
+    const idx = [
+      'Aman dipakai bersama',
+      'Tagihan 7 hari',
+      'Anggaran hampir habis',
+      'Kontribusi November',
+      'Aktivitas',
+      'Terakhir',
+    ].map((x) => t.indexOf(x));
+    expect(idx.every((i) => i >= 0)).toBe(true);
+    expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+  });
+
+  it('tanpa dompet operasional dan Bersama kosong: kedua kartu tidak dirender', () => {
+    render(view({ hasOperasional: false }, 'pribadi'));
+    expect(screen.queryByRole('region', { name: 'Tagihan 7 hari' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Anggaran hampir habis' })).toBeNull();
+    cleanup();
+    render(
+      view({
+        hasOperasional: false,
+        hasExpense: false,
+        bersama: { ...S8_NONE, members: 2, isOwner: true, empty: true },
+      }),
+    );
+    expect(screen.queryByRole('region', { name: 'Tagihan 7 hari' })).toBeNull();
+  });
+});
