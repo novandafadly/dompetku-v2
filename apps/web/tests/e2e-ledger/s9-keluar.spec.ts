@@ -352,7 +352,7 @@ async function rencanaNumbers(page: Page, ruang: 'pribadi' | 'bersama') {
     .locator('[data-budget-row]');
   for (const r of await budgeted.all()) {
     const t = await seen(r);
-    const name = (await r.locator('.truncate').first().textContent())?.trim() ?? '';
+    const name = (await r.locator('[data-budget-name]').first().textContent())?.trim() ?? '';
     spent.set(name, money(t, /(−?)Rp\s?([\d.]+) dari Rp/));
     if (` ${t} `.includes(' Wajib ') && t.includes('sisa')) {
       wajibSisa += money(t, /sisa (−?)Rp\s?([\d.]+)/);
@@ -363,7 +363,7 @@ async function rencanaNumbers(page: Page, ruang: 'pribadi' | 'bersama') {
     .locator('[data-budget-row]');
   for (const r of await unbudgeted.all()) {
     const t = await seen(r);
-    const name = (await r.locator('.truncate').first().textContent())?.trim() ?? '';
+    const name = (await r.locator('[data-budget-name]').first().textContent())?.trim() ?? '';
     spent.set(name, t.includes('periode ini') ? money(t, /(−?)Rp\s?([\d.]+) periode ini/) : 0);
   }
   return { spent, wajibSisa };

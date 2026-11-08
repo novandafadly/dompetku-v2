@@ -139,7 +139,7 @@ const ENTRY_COLUMNS = `
   e.category_id, cat.name as category_name, cat.icon as category_icon,
   e.description, ${wib('e.voided_at')} as voided_at, e.direction::text as direction,
   e.shared_note, e.reimbursable, ${wib('e.moved_at')} as moved_at,
-  case when e.kind = 'space_transfer' and e.direction = 'out' then
+  case when e.kind = 'transfer' or (e.kind = 'space_transfer' and e.direction = 'out') then
     (select abs(sum(fl.amount))::bigint from app.entry_lines fl
       where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id`;
 

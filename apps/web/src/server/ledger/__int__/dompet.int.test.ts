@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { effectOnAccountVM } from '@/features/ledger/present';
 import { toLedgerError } from '../errors';
 import { loadDompetDaftar, loadDompetRiwayat } from '../dompet';
 import { listAccounts, listCategories } from '../read';
@@ -10,6 +11,7 @@ import {
   createAccount,
   createCategory,
   createEntry,
+  createSpaceTransfer,
   createTransfer,
   updateCategory,
   voidEntry,
@@ -124,6 +126,72 @@ describe('Dompet nyata (persona N, F bergabung)', () => {
     // Dompet lawan transfer melihat entrinya juga (sebagai lawan).
     const lawan = await muatRiwayat(ctx, b, 50);
     expect(lawan?.entries.map((e) => e.kind)).toEqual(['transfer']);
+  });
+
+  it('Σ efek baris riwayat + saldo awal = saldo dompet (transfer + biaya, Kas Kantor + biaya, antar ruang + biaya)', async () => {
+    const pribadi = await ctxOf(n, 'pribadi');
+    const bersama = await ctxOf(n, 'bersama');
+    const bca = await wallet(pribadi, 'BCA', 10_000_000);
+    const gopay = await wallet(pribadi, 'GoPay', 100_000);
+    const { accountId: kantor } = await createAccount(pribadi, {
+      clientId: randomUUID(),
+      name: 'Kas Kantor',
+      pocket: 'kantor',
+      walletType: 'bank',
+      openingBalance: 5_000_000,
+    });
+    const kasBersama = await wallet(bersama, 'Kas Bersama', 1_000_000);
+
+    // Transfer dalam ruang dengan biaya Rp 2.500 (BCA → GoPay) dan dari Kas Kantor dengan biaya Rp 6.500.
+    await createTransfer(pribadi, {
+      clientId: randomUUID(),
+      fromAccountId: bca,
+      toAccountId: gopay,
+      amount: 500_000,
+      fee: 2_500,
+    });
+    await createTransfer(pribadi, {
+      clientId: randomUUID(),
+      fromAccountId: kantor,
+      toAccountId: bca,
+      amount: 300_000,
+      fee: 6_500,
+    });
+    // Setor ke Bersama dengan biaya Rp 2.500 (BCA → Kas Bersama) dan ambil dari Bersama dengan biaya Rp 1.500.
+    await createSpaceTransfer(pribadi, {
+      clientId: randomUUID(),
+      fromAccountId: bca,
+      toSpaceId: bersama.spaceId,
+      toAccountId: kasBersama,
+      amount: 1_000_000,
+      fee: 2_500,
+      allowNegative: false,
+    });
+    await createSpaceTransfer(bersama, {
+      clientId: randomUUID(),
+      fromAccountId: kasBersama,
+      toSpaceId: pribadi.spaceId,
+      toAccountId: gopay,
+      amount: 200_000,
+      fee: 1_500,
+      allowNegative: false,
+    });
+
+    for (const [ctx, accId] of [
+      [pribadi, bca],
+      [pribadi, gopay],
+      [pribadi, kantor],
+      [bersama, kasBersama],
+    ] as const) {
+      const riwayat = await muatRiwayat(ctx, accId, 50);
+      expect(riwayat).not.toBeNull();
+      const openingSum = (riwayat?.opening ?? []).reduce((s, e) => s + e.amount, 0);
+      const rowsSum = (riwayat?.entries ?? []).reduce(
+        (s, e) => s + effectOnAccountVM(e, accId).value,
+        0,
+      );
+      expect(openingSum + rowsSum).toBe(riwayat?.account.balance);
+    }
   });
 
   it('bukan uuid, tidak ada, atau dompet ruang lain = null (tidak membocorkan Pribadi dari Bersama)', async () => {

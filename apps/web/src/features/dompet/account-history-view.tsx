@@ -21,6 +21,7 @@ export interface HistoryRow {
   entryKind: string;
   label: string;
   meta: string;
+  status?: ReactNode;
   value: Rupiah;
   kind: MoneyKind;
 }
@@ -125,6 +126,7 @@ export function AccountHistoryView({
               icon={<CategoryIcon name={r.iconName} kind={r.entryKind} size={20} />}
               label={r.label}
               meta={r.meta}
+              status={r.status}
               value={r.value}
               kind={r.kind}
             />

@@ -67,12 +67,20 @@ export const createEntrySchema = z.object({
   allowNegative: z.boolean().optional(),
 });
 
+/** Biaya transfer (admin bank), 0 = tanpa biaya; batas sama dengan `p_fee` di DB. */
+const fee = z
+  .number()
+  .int()
+  .min(0)
+  .max(10 ** 13);
+
 export const createTransferSchema = z
   .object({
     clientId: id,
     fromAccountId: id,
     toAccountId: id,
     amount,
+    fee: fee.optional(),
     occurredOn: isoDate.optional(),
     description: description.optional(),
     allowNegative: z.boolean().optional(),
@@ -91,13 +99,6 @@ export const updateEntrySchema = z.object({
   reimbursable: z.boolean(),
   allowNegative: z.boolean().optional(),
 });
-
-/** Biaya transfer (admin bank), 0 = tanpa biaya; batas sama dengan `p_fee` di DB. */
-const fee = z
-  .number()
-  .int()
-  .min(0)
-  .max(10 ** 13);
 
 /** Transfer antar ruang (S7): ruang tujuan eksplisit dan berbeda dari ruang konteks. */
 export const createSpaceTransferSchema = z.object({
@@ -282,6 +283,7 @@ export interface CreateTransferInput {
   fromAccountId: string;
   toAccountId: string;
   amount: Rupiah;
+  fee?: Rupiah | undefined;
   occurredOn?: IsoDate | undefined;
   description?: string | undefined;
   allowNegative?: boolean | undefined;
@@ -298,14 +300,15 @@ export async function createTransfer(
     (c) => assertInSpace(c, 'accounts', [v.fromAccountId, v.toAccountId], ctx.spaceId),
     `select api.create_transfer(
        p_client_id => $1, p_space_id => $2, p_from_account => $3, p_to_account => $4,
-       p_amount => $5::bigint, p_occurred_on => $6::date, p_description => $7,
-       p_allow_negative => $8) as r`,
+       p_amount => $5::bigint, p_fee => $6::bigint, p_occurred_on => $7::date, p_description => $8,
+       p_allow_negative => $9) as r`,
     [
       v.clientId,
       ctx.spaceId,
       v.fromAccountId,
       v.toAccountId,
       v.amount,
+      v.fee ?? 0,
       v.occurredOn ?? null,
       v.description ?? null,
       v.allowNegative ?? false,

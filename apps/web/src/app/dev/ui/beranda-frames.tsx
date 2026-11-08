@@ -3,8 +3,9 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { PlusIcon } from '@/components/ui/icons/plus';
+import { AmanCardView } from '@/features/beranda/aman-card-view';
 import { NoSpendButton } from '@/features/beranda/no-spend-button';
-import { SafeToSpendCard, SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
+import { SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
 
 /**
  * Bingkai S6-B1 dan kartu utama mode nyata (tanpa baris tagihan/anggaran) di atas VM statis:
@@ -29,16 +30,21 @@ export function BerandaFrames() {
   return (
     <div className="flex flex-col gap-6">
       <Frame id="b1-idle" title="S6-B1 · belum ditandai (tekan: sukses)">
-        <SafeToSpendCard
+        <AmanCardView
           ruang="pribadi"
-          today={TODAY}
+          holidayNote={false}
           vm={{
             operasional: 3_250_000,
             billsUntilEom: 0,
             budgetWajibRemaining: 0,
             aman: 3_250_000,
+            until: '2026-10-31',
+            daysLeft: 10,
+            perDay: 325_000,
+            status: 'aman',
+            reason: null,
+            hasObligations: false,
           }}
-          showObligations={false}
         />
         <NoSpendButton hasExpense={false} noSpendMarked={false} onMark={ok} />
       </Frame>
@@ -52,16 +58,21 @@ export function BerandaFrames() {
         <NoSpendButton hasExpense={false} noSpendMarked onMark={ok} />
       </Frame>
       <Frame id="kartu-negatif" title="Kartu nyata · negatif, nominal panjang (Bersama)">
-        <SafeToSpendCard
+        <AmanCardView
           ruang="bersama"
-          today={TODAY}
+          holidayNote={false}
           vm={{
             operasional: -12_345_678_900,
             billsUntilEom: 0,
             budgetWajibRemaining: 0,
             aman: -12_345_678_900,
+            until: '2026-10-31',
+            daysLeft: 10,
+            perDay: -1_234_567_890,
+            status: 'lewat',
+            reason: null,
+            hasObligations: false,
           }}
-          showObligations={false}
         />
       </Frame>
       <Frame id="kartu-kosong" title="Kartu nyata · belum ada dompet operasional">

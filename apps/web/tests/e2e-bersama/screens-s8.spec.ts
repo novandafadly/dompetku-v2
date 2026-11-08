@@ -301,18 +301,20 @@ test('@screens Beranda Bersama dua anggota: kosong, lalu berisi', async ({
   ]);
 
   // Kontrol: tidak ada nama dompet di kartu (K1).
-  const page = await (
-    await browser.newContext({ storageState: ownerState, baseURL: BASE })
-  ).newPage();
-  await page.goto('/bersama/beranda');
-  for (const name of ['Aktivitas', 'Kontribusi']) {
-    const kartu = page.getByRole('region', { name: new RegExp(`^${name}`) });
-    await expect(kartu).toBeVisible();
-    for (const w of [BERSAMA_WALLET, BESAR_WALLET, 'KANARI']) {
-      await expect(kartu).not.toContainText(w);
+  const context = await browser.newContext({ storageState: ownerState, baseURL: BASE });
+  try {
+    const page = await context.newPage();
+    await page.goto('/bersama/beranda');
+    for (const name of ['Aktivitas', 'Kontribusi']) {
+      const kartu = page.getByRole('region', { name: new RegExp(`^${name}`) });
+      await expect(kartu).toBeVisible();
+      for (const w of [BERSAMA_WALLET, BESAR_WALLET, 'KANARI']) {
+        await expect(kartu).not.toContainText(w);
+      }
     }
+  } finally {
+    await context.close();
   }
-  await page.context().close();
 });
 
 test('@screens Aktivitas Bersama berisi: dua hari, 30 baris, Muat sebelumnya', async ({

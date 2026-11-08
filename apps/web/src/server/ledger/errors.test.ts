@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { toLedgerError } from './errors';
+import { isSpaceNotFoundError, toLedgerError } from './errors';
 import { SpaceNotFoundError } from './space';
 
 /** Bentuk galat `pg` (DatabaseError): code = SQLSTATE, message, detail opsional. */
@@ -43,10 +43,9 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     });
   });
 
-  it('DK401, DK500, DK422 lain, dan 23505 = unknown, dilog tanpa detail', () => {
+  it('DK500, DK422 lain, dan 23505 = unknown, dilog tanpa detail', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const secret = 'Rp 12.345.678 deskripsi rahasia';
-    expect(toLedgerError(pgError('DK401', 'unauthenticated', secret))).toEqual({ code: 'unknown' });
     expect(toLedgerError(pgError('DK500', 'invariant_broken', secret))).toEqual({
       code: 'unknown',
     });
@@ -54,9 +53,9 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(toLedgerError(pgError('23505', 'duplicate key value', `Key (x)=(${secret})`))).toEqual({
       code: 'unknown',
     });
-    expect(log).toHaveBeenCalledTimes(4);
+    expect(log).toHaveBeenCalledTimes(3);
     const logged = JSON.stringify(log.mock.calls);
-    expect(logged).toContain('DK401');
+    expect(logged).toContain('DK500');
     expect(logged).toContain('space_mismatch');
     expect(logged).not.toContain('Rp');
     expect(logged).not.toContain('rahasia');
@@ -113,10 +112,15 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     }
   });
 
-  it('DK401 tetap unknown (utang S8, diputuskan Task 14)', () => {
+  it('DK401 = not_found tanpa log; isSpaceNotFoundError membedakan space_not_found dari DK404 item', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(toLedgerError(pgError('DK401', 'unauthenticated'))).toEqual({ code: 'unknown' });
-    expect(log).toHaveBeenCalledTimes(1);
+    expect(toLedgerError(pgError('DK401', 'unauthenticated'))).toEqual({ code: 'not_found' });
+    expect(log).not.toHaveBeenCalled();
+    expect(isSpaceNotFoundError(pgError('DK401', 'unauthenticated'))).toBe(true);
+    expect(isSpaceNotFoundError(pgError('DK404', 'space_not_found'))).toBe(true);
+    expect(isSpaceNotFoundError(pgError('DK404', 'entry_not_found'))).toBe(false);
+    expect(isSpaceNotFoundError(pgError('DK404', 'bill_not_found'))).toBe(false);
+    expect(isSpaceNotFoundError(new Error('lain'))).toBe(false);
   });
 
   it('nama dompet ganda (accounts_name_unique) = name_taken', () => {

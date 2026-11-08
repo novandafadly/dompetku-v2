@@ -4,6 +4,7 @@ import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledge
 import { buildHref, keptQuery, REAL_KEPT_PARAMS, validMonth } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDetail } from '@/server/ledger/detail';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext } from '../../_real/context';
 import { DetailFailed, DetailReal } from '../../_real/detail';
@@ -43,6 +44,7 @@ export default async function Page({
     data = await loadDetail(ctx, id);
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[detail] gagal memuat', errorTag(e));
     return <DetailFailed listHref={listHref} />;
   }

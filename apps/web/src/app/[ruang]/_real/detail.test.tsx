@@ -182,13 +182,13 @@ describe('detailAbilities (sesuai api.update_entry / void_entry / move_entry_to_
 });
 
 describe('DetailReal', () => {
-  it('hidup: Ubah, Batalkan, dan Pindahkan ke ruang tujuan (S7-D2); dicatat oleh kamu', () => {
+  it('hidup: Ubah, Batalkan, dan Pindahkan ke ruang tujuan (S7-D2); dicatat oleh Kamu', () => {
     render(<DetailReal {...props} me="u-n" data={data(entry())} labels={labels} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Nasi padang' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ubah' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Batalkan transaksi' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pindahkan ke bersama' })).toBeTruthy();
-    expect(screen.getByText('kamu')).toBeTruthy();
+    expect(screen.getByText('Kamu')).toBeTruthy();
     expect(screen.queryByText('Transaksi ini sudah dibatalkan.')).toBeNull();
   });
 
@@ -367,8 +367,37 @@ describe('DetailReal antar ruang (S7-D1)', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Setor ke Bersama' })).toBeTruthy();
     expect(screen.getByText('→')).toBeTruthy();
     expect(screen.getByText('dari Pribadi ke Bersama').className).toContain('sr-only');
-    expect(screen.getByText('bayar kos adik')).toBeTruthy();
+    expect(screen.getByText('Catatan').nextElementSibling?.textContent).toBe('bayar kos adik');
     expect(screen.getByText('BCA')).toBeTruthy();
+  });
+
+  it('kaki Pribadi dengan keterangan pribadi dan catatan Bersama berbeda: menampilkan Catatan pribadi & Catatan Bersama (K1)', () => {
+    const e = entry({
+      kind: 'space_transfer',
+      spaceKind: 'personal',
+      direction: 'out',
+      description: 'bayar kos adik',
+      sharedNote: 'Setoran bulanan rumah',
+      categoryName: undefined as never,
+    });
+    render(
+      <DetailReal
+        {...props}
+        me="u-n"
+        data={data(e)}
+        labels={{
+          title: entryTitleVM(e),
+          category: 'Antar ruang',
+          amount: { value: -25_000, kind: 'neutral' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Catatan pribadi').nextElementSibling?.textContent).toBe(
+      'bayar kos adik',
+    );
+    expect(screen.getByText('Catatan Bersama').nextElementSibling?.textContent).toBe(
+      'Setoran bulanan rumah',
+    );
   });
 });
 

@@ -171,13 +171,30 @@ describe('BerandaReal Bersama kosong (S7-B2)', () => {
 });
 
 describe('BerandaReal Bersama dua anggota dan Pribadi (tidak berubah)', () => {
-  it('Bersama dua anggota: tanpa ajakan, tanpa Aktivitas, pengantar S6', () => {
-    render(view({ bersama: { ...S8_NONE, members: 2, isOwner: true, empty: false } }));
+  it('Bersama dua anggota: tanpa ajakan, tanpa Aktivitas, pengantar dengan nama pasangan atau sapaan netral bila belum termuat', () => {
+    const { unmount } = render(
+      view({
+        bersama: {
+          ...S8_NONE,
+          members: 2,
+          isOwner: true,
+          empty: false,
+          partner: { name: 'Farida', initial: 'F' },
+        },
+      }),
+    );
     expect(screen.queryByText('Farida belum bergabung di Bersama.')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Aktivitas' })).toBeNull();
     expect(
       screen.getByText(
         'Pengeluaran yang kalian bagi. Kamu dan Farida sama-sama bisa mencatat dan mengubah di sini.',
+      ),
+    ).toBeTruthy();
+    unmount();
+    render(view({ bersama: { ...S8_NONE, members: 2, isOwner: true, empty: false } }));
+    expect(
+      screen.getByText(
+        'Pengeluaran yang kalian bagi. Kamu dan pasangan sama-sama bisa mencatat dan mengubah di sini.',
       ),
     ).toBeTruthy();
   });

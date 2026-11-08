@@ -174,7 +174,7 @@ export function DetailReal({
   const moved = entry.movedAt !== undefined;
   const tujuan = otherRuang(ruang);
   const { editable, voidable, movable, reimbursable } = detailAbilities(entry, data, today, me);
-  const by = entry.createdBy.id === me ? 'kamu' : entry.createdBy.name;
+  const by = entry.createdBy.id === me ? 'Kamu' : entry.createdBy.name;
   const antarRuang = entry.kind === 'space_transfer';
   const creator = entry.createdBy.id === me;
 

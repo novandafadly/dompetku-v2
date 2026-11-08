@@ -1,9 +1,66 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type Page } from '@playwright/test';
 import pg from 'pg';
 import { MAIL_FILE } from '../../playwright.auth.config';
 import { expectNoSeriousViolations, WCAG_TAGS } from '../e2e/axe';
+
+export const PASSWORD = 'kuda-lari-di-sawah-42';
+
+/** Satu kueri superuser (asersi baris; tidak pernah dipakai untuk menulis data uji). */
+export async function adminQuery<T extends pg.QueryResultRow>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
+  await admin.connect();
+  try {
+    return (await admin.query<T>(sql, params)).rows;
+  } finally {
+    await admin.end();
+  }
+}
+
+/**
+ * Pemilik lewat alur nyata (AFD §1): buat akun dari allowlist, konfirmasi email, masuk, amankan
+ * dengan passkey (autentikator virtual), kode pemulihan, sampai Beranda. Sesi disimpan sebagai
+ * storageState dan dipakai semua tes; worker yang dimulai ulang sesudah tes gagal memakai berkas
+ * yang sama (pemilik hanya bisa didaftarkan sekali per run).
+ */
+export async function registerOwner(
+  browser: Browser,
+  baseURL: string,
+  ownerEmail: string,
+  mailFile: string,
+  statePath: string,
+): Promise<void> {
+  const context = await browser.newContext({ baseURL });
+  try {
+    const page = await context.newPage();
+    await page.goto('/buat-akun');
+    await page.getByLabel('Email').fill(ownerEmail);
+    await page.getByLabel('Nama panggilan').fill('Novanda');
+    await page.getByLabel('Kata sandi baru').fill(PASSWORD);
+    await page.getByRole('button', { name: 'Buat akun' }).click();
+    await expect(page.getByRole('heading', { name: 'Periksa email' })).toBeVisible();
+    await page.goto(linkIn((await lastMail(/Konfirmasi email/, mailFile)).text));
+    await page.getByRole('button', { name: 'Konfirmasi email' }).click();
+    await expect(page.getByText('Email terkonfirmasi.')).toBeVisible();
+    await page.getByLabel('Email').fill(ownerEmail);
+    await page.getByLabel('Kata sandi', { exact: true }).fill(PASSWORD);
+    await page.getByRole('button', { name: 'Masuk', exact: true }).click();
+    await expect(page).toHaveURL(/\/amankan$/);
+    await addPasskeyAuthenticator(page);
+    await page.getByRole('button', { name: 'Buat passkey' }).click();
+    await page.getByRole('button', { name: 'Buat kode pemulihan' }).click();
+    await page.getByLabel('Saya sudah menyimpan kode ini di tempat yang aman.').check();
+    await page.getByRole('button', { name: 'Selesai' }).click();
+    await expect(page).toHaveURL(/\/pribadi\/beranda$/);
+    await context.storageState({ path: statePath });
+  } finally {
+    await context.close();
+  }
+}
 
 /**
  * Helper e2e mode nyata bersama `e2e:auth` dan `e2e:ledger`: email tes, TOTP, autentikator

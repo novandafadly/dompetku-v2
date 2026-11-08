@@ -1,5 +1,6 @@
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { isPrototype } from '@/server/env';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangCategories, ruangContext } from '../_real/context';
 import { KategoriFailed, KategoriReal } from '../_real/kategori';
@@ -18,6 +19,7 @@ export default async function Page({ params }: { params: Promise<{ ruang: string
     categories = await ruangCategories(ctx);
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[kategori] gagal memuat', errorTag(e));
     return <KategoriFailed ruang={ctx.ruang} />;
   }

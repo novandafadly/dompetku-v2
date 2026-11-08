@@ -1,8 +1,9 @@
 import { todayWIB } from '@dompetku/domain';
-import { unstable_rethrow } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDompetDaftar } from '@/server/ledger/dompet';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangAccounts, ruangContext } from '../_real/context';
 import { DompetFailed, DompetReal } from '../_real/dompet';
@@ -37,6 +38,7 @@ export default async function Page({
     extra = await loadDompetDaftar(ctx, ctx.kind);
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[dompet] gagal memuat', errorTag(e));
     return <DompetFailed />;
   }

@@ -1,6 +1,7 @@
-import { unstable_rethrow } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { loadRencana } from '@/server/ledger/rencana';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext, ruangShell } from '../_real/context';
@@ -35,6 +36,7 @@ export default async function Page({
     data = await loadRencana(ctx, { shell: ruangShell(ctx) });
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[rencana] gagal memuat', errorTag(e));
     return <RencanaFailed />;
   }

@@ -37,7 +37,7 @@ export function ContributionCardView({ vm }: { vm: ContributionVM }) {
                   {r.member.name}
                 </span>
               </div>
-              <dl className="flex max-w-xs flex-col gap-0.5 pl-12">
+              <dl className="flex max-w-52 flex-col gap-0.5 pl-12">
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-meta font-medium text-text-soft">Setor</dt>
                   <dd

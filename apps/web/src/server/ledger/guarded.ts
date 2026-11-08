@@ -1,11 +1,17 @@
 import 'server-only';
 import type pg from 'pg';
+import { isSpaceNotFoundError } from './errors';
 
 /**
- * Dilempar ulang dari savepoint: 40001/40P01 (ulang seluruh transaksi) dan galat otorisasi
- * DK401/DK404 (keanggotaan dicabut di tengah muat: tetap `not_found`, bukan kartu galat).
+ * Dilempar ulang dari savepoint: 40001/40P01 (ulang seluruh transaksi) dan galat otorisasi ruang
+ * (`DK401` / `DK404 space_not_found`, keanggotaan dicabut di tengah muat: tetap `not_found`, bukan
+ * kartu galat). `DK404` level item tetap ditangkap savepoint kartu.
  */
-const RETHROW = new Set(['40001', '40P01', 'DK401', 'DK404']);
+function shouldRethrow(e: unknown): boolean {
+  if (isSpaceNotFoundError(e)) return true;
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === '40001' || code === '40P01';
+}
 
 /** Kartu Beranda yang dibaca di savepoint sendiri; nama = bagian nama savepoint dan log. */
 export type GuardedCard = 'activity' | 'contributions' | 'bills' | 'budgets';
@@ -36,8 +42,8 @@ export async function guarded<T>(
     await c.query(`release savepoint ${sp}`);
     return value;
   } catch (e) {
+    if (shouldRethrow(e)) throw e;
     const code = (e as { code?: unknown } | null)?.code;
-    if (typeof code === 'string' && RETHROW.has(code)) throw e;
     await c.query(`rollback to savepoint ${sp}`);
     const safe = typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : 'non-sql';
     console.error(`[${PREFIX[what]}] ${what} gagal dimuat: ${safe}`);

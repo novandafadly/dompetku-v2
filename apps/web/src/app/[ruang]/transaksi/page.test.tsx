@@ -98,11 +98,15 @@ describe('page Transaksi (nyata)', () => {
     expect(props(await run({}))).toMatchObject({ minMonth: '2026-10' });
   });
 
-  it('notFound() dari loader dilempar ulang (unstable_rethrow asli), bukan gagal muat', async () => {
+  it('notFound() dan DK404 space_not_found / DK401 dari loader dilempar sebagai 404, bukan gagal muat', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     h.load.mockImplementation(() => {
       notFound();
     });
+    await expect(run({})).rejects.toThrow();
+    h.load.mockRejectedValue(Object.assign(new Error('space_not_found'), { code: 'DK404' }));
+    await expect(run({})).rejects.toThrow();
+    h.load.mockRejectedValue(Object.assign(new Error('unauthenticated'), { code: 'DK401' }));
     await expect(run({})).rejects.toThrow();
     expect(err).not.toHaveBeenCalled();
     err.mockRestore();

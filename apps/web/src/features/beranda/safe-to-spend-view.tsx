@@ -65,22 +65,18 @@ function ProportionBar({
   aman,
   tagihan,
   wajib,
-  showObligations,
 }: {
   operasional: number;
   aman: number;
   tagihan: number;
   wajib: number;
-  showObligations: boolean;
 }) {
-  const label = showObligations
-    ? `Saldo operasional ${formatRupiah(operasional)}: aman ${formatRupiah(aman)}, tagihan ${formatRupiah(tagihan)}, sisa anggaran wajib ${formatRupiah(wajib)}`
-    : `Saldo operasional ${formatRupiah(operasional)}: aman ${formatRupiah(aman)}`;
+  const label = `Saldo operasional ${formatRupiah(operasional)}: aman ${formatRupiah(aman)}, tagihan ${formatRupiah(tagihan)}, sisa anggaran wajib ${formatRupiah(wajib)}`;
   if (aman < 0) {
     return (
       <div
         role="img"
-        aria-label={`${label}. ${showObligations ? 'Pengeluaran wajib melebihi saldo operasional.' : NEGATIVE_BALANCE}`}
+        aria-label={`${label}. Pengeluaran wajib melebihi saldo operasional.`}
         className="bg-hatch-danger mt-1 h-3 rounded-sm border border-danger"
       />
     );
@@ -98,9 +94,6 @@ function ProportionBar({
   );
 }
 
-/** Negatif tanpa tagihan/anggaran (mode nyata S6): penyebabnya hanya saldo operasional minus. */
-const NEGATIVE_BALANCE = 'Saldo operasional sudah minus.';
-
 const breakdownRow = 'border-t border-hairline';
 const cell = 'py-2.25 text-label';
 
@@ -108,16 +101,10 @@ export function SafeToSpendCard({
   ruang,
   today,
   vm,
-  showObligations = true,
 }: {
   ruang: Ruang;
   today: IsoDate;
   vm: SafeToSpendVM;
-  /**
-   * Baris tagihan dan sisa anggaran wajib. Mode nyata S6 belum punya tagihan/anggaran (S8/S9),
-   * jadi barisnya tidak dirender daripada menampilkan Rp 0 yang menyesatkan.
-   */
-  showObligations?: boolean;
 }) {
   const untilDate = endOfMonth(today);
   const until = shortDateLabel(untilDate);
@@ -127,13 +114,9 @@ export function SafeToSpendCard({
 
   const rows: { label: string; value: number; swatch: string }[] = [
     { label: 'Saldo operasional', value: vm.operasional, swatch: 'border-1.5 border-border' },
+    { label: `Tagihan s.d. ${until}`, value: -vm.billsUntilEom, swatch: 'bg-hatch-tagihan-sm' },
+    { label: 'Sisa anggaran wajib', value: -vm.budgetWajibRemaining, swatch: 'bg-chart-wajib' },
   ];
-  if (showObligations) {
-    rows.push(
-      { label: `Tagihan s.d. ${until}`, value: -vm.billsUntilEom, swatch: 'bg-hatch-tagihan-sm' },
-      { label: 'Sisa anggaran wajib', value: -vm.budgetWajibRemaining, swatch: 'bg-chart-wajib' },
-    );
-  }
 
   return (
     <AmanShell ruang={ruang} title={amanTitle(ruang, until)}>
@@ -143,11 +126,7 @@ export function SafeToSpendCard({
       {negative ? (
         <p className="flex items-start gap-2 rounded-lg bg-danger-tint px-3 py-2.5 text-label font-bold text-danger">
           <WarningOctagonIcon size={18} weight="fill" className="mt-px shrink-0" />
-          <span>
-            {showObligations
-              ? 'Pengeluaran wajib bulan ini melebihi saldo operasional.'
-              : NEGATIVE_BALANCE}
-          </span>
+          <span>Pengeluaran wajib bulan ini melebihi saldo operasional.</span>
         </p>
       ) : (
         <p className="text-label font-medium text-text-soft">
@@ -159,9 +138,8 @@ export function SafeToSpendCard({
       <ProportionBar
         operasional={vm.operasional}
         aman={vm.aman}
-        tagihan={showObligations ? vm.billsUntilEom : 0}
-        wajib={showObligations ? vm.budgetWajibRemaining : 0}
-        showObligations={showObligations}
+        tagihan={vm.billsUntilEom}
+        wajib={vm.budgetWajibRemaining}
       />
       <table className="w-full border-collapse">
         <caption className="sr-only">Rincian aman dipakai</caption>

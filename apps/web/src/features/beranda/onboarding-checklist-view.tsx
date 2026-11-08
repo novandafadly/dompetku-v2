@@ -103,7 +103,7 @@ export function OnboardingChecklistView({
   ruang,
   steps,
   intro,
-  partnerName = 'Farida',
+  partnerName,
 }: {
   ruang: Ruang;
   steps: ChecklistStep[];
@@ -128,7 +128,7 @@ export function OnboardingChecklistView({
       {ruang === 'bersama' ? (
         <p className="pt-1 text-label font-medium text-text-soft">
           {intro ??
-            `Pengeluaran yang kalian bagi. Kamu dan ${partnerName} sama-sama bisa mencatat dan mengubah di sini.`}
+            `Pengeluaran yang kalian bagi. Kamu dan ${partnerName ?? 'pasangan'} sama-sama bisa mencatat dan mengubah di sini.`}
         </p>
       ) : null}
       <ul aria-label="Mulai dari sini">

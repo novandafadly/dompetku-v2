@@ -1,7 +1,8 @@
 import { todayWIB } from '@dompetku/domain';
-import { unstable_rethrow } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { keptQuery, REAL_KEPT_PARAMS, validMonth } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { errorTag, loadTransaksi } from '@/server/ledger/transaksi';
 import { ruangContext } from '../_real/context';
 import { TransaksiFailed, TransaksiReal } from '../_real/transaksi';
@@ -36,6 +37,7 @@ export default async function Page({
     data = await loadTransaksi(ctx, month);
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[transaksi] gagal memuat', errorTag(e));
     return <TransaksiFailed />;
   }

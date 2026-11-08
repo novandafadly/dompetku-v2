@@ -69,26 +69,50 @@ export function signedAmountVM(e: EntryVM): {
 
 /**
  * Efek entri pada satu dompet (riwayat dompet): pengeluaran mengurangi, pemasukan menambah;
- * transfer mengurangi dompet sumber (baris utama) dan menambah dompet lawan; antar ruang dan
- * cocokkan saldo mengikuti `direction`. Entri pembuka (Saldo awal) ditampilkan terpisah.
+ * transfer mengurangi dompet sumber sebesar nominal + biaya dan menambah dompet lawan sebesar
+ * nominal; antar ruang keluar mengurangi sebesar nominal + biaya; cocokkan saldo mengikuti
+ * `direction`. Entri pembuka (Saldo awal) ditampilkan terpisah.
  */
 export function effectOnAccountVM(
   e: EntryVM,
   accountId: string,
 ): { value: Rupiah; kind: 'income' | 'expense' | 'neutral' } {
+  const fee = e.fee ?? 0;
   switch (e.kind) {
     case 'income':
       return { value: e.amount, kind: 'income' };
     case 'expense':
       return { value: -e.amount, kind: 'expense' };
     case 'transfer':
-      return { value: e.accountId === accountId ? -e.amount : e.amount, kind: 'neutral' };
+      return {
+        value: e.accountId === accountId ? -(e.amount + fee) : e.amount,
+        kind: 'neutral',
+      };
     case 'space_transfer':
+      return {
+        value: e.direction === 'out' ? -(e.amount + fee) : e.amount,
+        kind: 'neutral',
+      };
     case 'adjustment':
       return { value: e.direction === 'out' ? -e.amount : e.amount, kind: 'neutral' };
     default:
       return { value: e.amount, kind: 'neutral' };
   }
+}
+
+/**
+ * Keterangan biaya di baris riwayat satu dompet (`/[ruang]/dompet/[id]`): tampil pada dompet yang
+ * menanggung biaya (dompet pengirim `transfer` atau kaki keluar `space_transfer`).
+ */
+export function accountFeeNoteVM(e: EntryVM, accountId: string): string | undefined {
+  if (e.fee === undefined || e.fee <= 0) return undefined;
+  if (
+    (e.kind === 'transfer' && e.accountId === accountId) ||
+    (e.kind === 'space_transfer' && e.direction === 'out')
+  ) {
+    return `Biaya ${formatRupiah(e.fee)}`;
+  }
+  return undefined;
 }
 
 /**

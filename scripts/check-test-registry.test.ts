@@ -97,8 +97,8 @@ describe('check-test-registry', () => {
     assert.equal(code, 0, out);
   });
 
-  it('tag Playwright bentuk salah (@B20x) atau ID di luar registry: keluar 1', () => {
-    for (const tag of ['@B20x', '@B77', '@Z']) {
+  it('tag Playwright bentuk salah (@B20x, @b20, @br1) atau ID di luar registry: keluar 1; @screens lolos', () => {
+    for (const tag of ['@B20x', '@B77', '@Z', '@b20', '@br1']) {
       const root = sample({
         'packages/db/tests/01.sql': '-- ID: B2\n',
         'apps/web/src/x.test.ts': "it('feed [B20]', () => {});\n",
@@ -108,6 +108,12 @@ describe('check-test-registry', () => {
       assert.equal(code, 1, tag);
       assert.match(out, new RegExp(tag.slice(1)));
     }
+    const okRoot = sample({
+      'packages/db/tests/01.sql': '-- ID: B2\n',
+      'apps/web/src/x.test.ts': "it('feed [B20]', () => {});\n",
+      'apps/web/tests/e2e/a.spec.ts': "test('x', { tag: '@screens' }, async () => {});\n",
+    });
+    assert.equal(run(okRoot).code, 0);
   });
 
   it('tag di node_modules diabaikan', () => {
