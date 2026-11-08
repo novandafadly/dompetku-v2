@@ -295,4 +295,3 @@
   - `docs/product/IPD.md` §5 S9: catat hasil pengukuran Web Vitals (`vitals.spec.ts`) dan tuntasnya Task 14 & 16 S9.
   - `docs/superpowers/handoff/s9.md`: perbarui bagian "Dibawa ke S10" sehingga yang tersisa untuk S10 murni fitur S10 (ekspor CSV, review bulanan & salin anggaran dengan penyesuaian, anggaran subkategori, dan gerbang keluar M2).
 - [ ] **Step 4:** Commit perubahan dokumentasi & screenshot, push cabang `claude/m2-pra-s10-utang-s9`, dan buat PR ke `main` setelah seluruh cek hijau.
-

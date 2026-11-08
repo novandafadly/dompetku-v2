@@ -196,7 +196,14 @@ async function measureOnce(
     expect(response?.status(), path).toBe(200);
     await expect(page.getByRole('main')).toBeVisible();
     await page.evaluate(
-      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+      () =>
+        new Promise<void>((r) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              r();
+            });
+          });
+        }),
     );
     const loadVitals = await page.evaluate(() => ({
       lcp: window.__vitals?.lcp ?? 0,
@@ -205,7 +212,14 @@ async function measureOnce(
 
     await interactOnRoute(page, path);
     await page.evaluate(
-      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+      () =>
+        new Promise<void>((r) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              r();
+            });
+          });
+        }),
     );
     const afterVitals = await page.evaluate(() => ({
       lcp: window.__vitals?.lcp ?? 0,
