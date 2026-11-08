@@ -21,7 +21,7 @@ const KAT_A = 'Cicilan & Tagihan';
 const KAT_B = 'Langganan';
 
 const billSheet = (page: Page) =>
-  page.getByRole('dialog', { name: /^(Tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
+  page.getByRole('dialog', { name: /^(Tambah tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
 const paySheet = (page: Page) =>
   page.getByRole('dialog', { name: /^Bayar .+\s(Pribadi|Bersama)$/ });
 const body = (page: Page, name: string) =>

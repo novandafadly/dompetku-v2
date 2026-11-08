@@ -72,7 +72,7 @@ async function openUntil(open: () => Locator, sheet: Locator, field: Locator) {
 }
 
 const billSheet = (p: Page) =>
-  p.getByRole('dialog', { name: /^(Tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
+  p.getByRole('dialog', { name: /^(Tambah tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
 const budgetSheet = (p: Page) => p.getByRole('dialog', { name: /^Anggaran\s*(Pribadi|Bersama)$/ });
 const ruangName = { pribadi: 'Pribadi', bersama: 'Bersama' } as const;
 

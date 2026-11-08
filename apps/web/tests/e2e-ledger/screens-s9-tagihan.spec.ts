@@ -71,7 +71,7 @@ async function openUntil(open: () => Locator, sheet: Locator, field: Locator) {
 }
 
 const billSheet = (p: Page) =>
-  p.getByRole('dialog', { name: /^(Tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
+  p.getByRole('dialog', { name: /^(Tambah tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
 const paySheet = (p: Page) => p.getByRole('dialog', { name: /^Bayar .+\s(Pribadi|Bersama)$/ });
 const body = (p: Page, name: string) =>
   main(p).locator('[data-bill-row]').filter({ hasText: name }).first();

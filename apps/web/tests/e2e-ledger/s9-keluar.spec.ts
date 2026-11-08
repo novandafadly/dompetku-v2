@@ -42,7 +42,7 @@ const budgetsCard = (page: Page) =>
 const budgetSheet = (page: Page) =>
   page.getByRole('dialog', { name: /^Anggaran\s*(Pribadi|Bersama)$/ });
 const billSheet = (page: Page) =>
-  page.getByRole('dialog', { name: /^(Tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
+  page.getByRole('dialog', { name: /^(Tambah tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
 const paySheet = (page: Page) =>
   page.getByRole('dialog', { name: /^Bayar .+\s(Pribadi|Bersama)$/ });
 const payBtn = (page: Page, name: string) =>

@@ -722,7 +722,7 @@ function BillSession({
         title={bill === null ? C.sheetTitle(ruang) : C.sheetEditTitle(ruang)}
         titleContent={
           <>
-            {bill === null ? 'Tagihan' : 'Ubah tagihan'}
+            {bill === null ? 'Tambah tagihan' : 'Ubah tagihan'}
             <SpaceTag space={ruang} />
           </>
         }

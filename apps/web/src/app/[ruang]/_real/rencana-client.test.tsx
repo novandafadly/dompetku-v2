@@ -546,6 +546,8 @@ describe('RencanaHost: Tagihan', () => {
     const user = userEvent.setup();
     setupBill();
     await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    // Judul menyebut aksi (S9-C7), sejajar dengan `Ubah tagihan`.
+    expect(await screen.findByRole('dialog', { name: /^Tambah tagihan\s*Pribadi$/ })).toBeTruthy();
     await user.click(await screen.findByRole('button', { name: 'Simpan tagihan' }));
     expect(
       await screen.findByText('Nama tagihan wajib diisi, paling banyak 60 huruf.'),

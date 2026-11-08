@@ -33,7 +33,7 @@ const KAT_BILL = 'Cicilan & Tagihan';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 const billSheet = (page: Page) =>
-  page.getByRole('dialog', { name: /^(Tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
+  page.getByRole('dialog', { name: /^(Tambah tagihan|Ubah tagihan)\s*(Pribadi|Bersama)$/ });
 const budgetSheet = (page: Page) =>
   page.getByRole('dialog', { name: /^Anggaran\s*(Pribadi|Bersama)$/ });
 const amanCard = (page: Page) => page.getByTestId('balance-card');

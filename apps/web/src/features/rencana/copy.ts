@@ -140,7 +140,7 @@ export const TAGIHAN_COPY = {
   /** Tagihan aktif tanpa kemunculan terlihat: sub baris. */
   everyMonth: (day: number) => `Tiap tanggal ${String(day)}`,
   // Sheet Tambah/Ubah (TG2)
-  sheetTitle: (ruang: Ruang) => `Tagihan · ${RUANG_NAME[ruang]}`,
+  sheetTitle: (ruang: Ruang) => `Tambah tagihan · ${RUANG_NAME[ruang]}`,
   sheetEditTitle: (ruang: Ruang) => `Ubah tagihan · ${RUANG_NAME[ruang]}`,
   name: 'Nama',
   amount: 'Perkiraan nominal',
