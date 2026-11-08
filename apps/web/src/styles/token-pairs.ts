@@ -79,6 +79,8 @@ export const pairs: Pair[] = [
   pair('warning', 'surface-2', TEXT),
   pair('warning', 'surface-3', TEXT),
   pair('warning', 'warning-tint', TEXT, [7.7, null]),
+  // Sebab status Hati-hati di kartu Aman (S9-BR1).
+  pair('text-soft', 'warning-tint', TEXT),
   // Warna ruang: label, tag, chip terpilih, judul Catat.
   pair('pribadi', 'surface', TEXT, [12.6, 6.3]),
   pair('pribadi', 'pribadi-tint', TEXT, [10.4, 5.5]),
@@ -98,6 +100,12 @@ export const pairs: Pair[] = [
   pair('focus', 'surface-2', NON_TEXT),
   // Bilah proporsi (grafik non-teks, WCAG 1.4.11): hanya segmen aman yang diuji; segmen lain dikecualikan karena nilainya diulang sebagai teks.
   pair('chart-aman', 'surface', NON_TEXT),
+  // Grafik Laporan (S9): batang pengeluaran dan tepi batang pemasukan membawa informasi; isi pemasukan (tint) dekoratif.
+  pair('chart-expense', 'surface', NON_TEXT),
+  pair('chart-expense', 'surface-2', NON_TEXT),
+  pair('chart-income', 'surface', NON_TEXT),
+  pair('chart-income', 'surface-2', NON_TEXT),
+  pair('chart-income', 'chart-income-tint', NON_TEXT),
   // Tema terang: lime tidak terbaca di latar terang, jadi tombol primer diberi garis accent-edge.
   pair('accent-edge', 'bg', NON_TEXT, [null, 5.8], 'light'),
   pair('accent-edge', 'surface', NON_TEXT, [null, 6.3], 'light'),

@@ -17,6 +17,11 @@ describe('layar di luar tab (Sampah, Kategori)', () => {
     expect(tabFromPathname('/pribadi/dompet')).toBe('dompet');
     expect(tabFromPathname('/masuk')).toBe('beranda');
   });
+
+  it('Laporan: bagian di luar tab, tanpa tab aktif (K8)', () => {
+    expect(sectionFromPathname('/pribadi/laporan')).toBe('laporan');
+    expect(tabFromPathname('/bersama/laporan')).toBeNull();
+  });
 });
 
 describe('buildAddWalletHref (S6-C6: Tambah dompet dari Catat dan Beranda)', () => {

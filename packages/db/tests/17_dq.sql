@@ -1,13 +1,14 @@
 -- Cek kualitas data S7 (0112; data-engineer §3, BSD §10) dan skema pgboss untuk worker.
--- jobs.dq_reconcile = tepat 10 baris (check_id, severity, violations), tanpa nominal: DQ01, DQ03,
--- DQ04, DQ04b, DQ06, DQ07, DQ09, DQ10, DQ11, DQ12. DB bersih dan skenario S7 (transfer, transfer
+-- jobs.dq_reconcile = tepat 11 baris (check_id, severity, violations), tanpa nominal: DQ01, DQ03,
+-- DQ04, DQ04b, DQ06, DQ07, DQ09, DQ10, DQ11, DQ12, dan DQ13 (S9, 0119: satu kewajiban per label
+-- periode gajian, menangkap pergeseran label sesudah payday_rule atau app.holidays berubah). DB bersih dan skenario S7 (transfer, transfer
 -- antar ruang, talangan + reimburse sebagian, pindah ruang, batal) = nol temuan. Tiap cek baru
 -- diuji positif: data dirusak lewat tests.raw_exec (superuser, session_replication_role = replica,
 -- di dalam savepoint yang di-rollback) atau lewat api.* bila keadaannya sah (DQ07, saldo negatif
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
 -- ID: S7, T18
 begin;
-select plan(44);
+select plan(50);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -25,7 +26,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12']) c
+                    'DQ12', 'DQ13']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -60,8 +61,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error',
-  'tepat 10 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error',
+  'tepat 11 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -203,6 +204,40 @@ rollback to savepoint s;
 select tests.raw_exec(format($$update app.entry_lines set amount = -250000 where entry_id = %L and role = 'main'$$, :'t1'));
 select tests.raw_exec(format($$update app.entry_lines set amount = -10000 where entry_id = %L and role = 'main'$$, :'t2'));
 select is(pg_temp.dq(), pg_temp.expect('DQ12=2'), 'DQ12: dihitung per talangan');
+rollback to savepoint s;
+
+-- ===== DQ13: satu kewajiban (tagihan aktif + anggaran wajib, label periode gajian; S9, 0119) =====
+-- Gajian 25: label Maret = 25 Feb..24 Mar, April = 25 Mar..24 Apr. Tagihan Bersama tanggal 28 mulai
+-- 1 Mar (dibuat 20 Mar): kemunculan 28 Mar = label April, jadi anggaran wajib label Maret sah.
+select tests.owner_exec(null, 'update app.households set payday_rule = 25');
+select tests.owner_val(null, format($q$select id from app.categories where space_id = %L and name = 'Internet'$q$, :'sh')) as k_net,
+       tests.owner_val(null, format($q$select id from app.categories where space_id = %L and name = 'Listrik & Air'$q$, :'sh')) as k_listrik \gset
+select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Internet', 300000, %L, 28::smallint, '2026-03-01')$$,
+  :'sh', :'k_net')) is not null as x \gset
+select tests.web_val(tests.f(), format($$select api.set_budget(%L, %L, '2026-03-01', 400000, true)$$, :'sh', :'k_net')) is null as x \gset
+select tests.web_val(tests.n(), format($$select api.set_budget(%L, %L, '2026-04-01', 400000, false)$$, :'sh', :'k_net')) is null as x \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: tagihan + anggaran wajib label lain + anggaran tidak wajib label sama = nol temuan');
+select tests.owner_exec(null, 'update app.households set payday_rule = null');
+select is(pg_temp.dq(), pg_temp.expect('DQ13=1'), 'DQ13: aturan gajian dikosongkan, 28 Mar pindah ke label Maret = bentrok');
+select tests.owner_exec(null, 'update app.households set payday_rule = 25');
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: aturan dikembalikan = nol temuan');
+rollback to savepoint s;
+select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Listrik', 300000, %L, 10::smallint, '2026-03-01')$$,
+  :'sh', :'k_listrik')) is not null as x \gset
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
+  values (%L, %L, '2026-03-01', 1, true, %L), (%L, %L, '2026-04-01', 1, true, %L)$$,
+  :'sh', :'k_listrik', tests.n(), :'sh', :'k_listrik', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect('DQ13=2'), 'DQ13: trigger dilewati, dua label wajib bentrok tagihan = dihitung per pasangan');
+select tests.raw_exec(format($$update app.bills set archived_at = now() where category_id = %L$$, :'k_listrik'));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: tagihan terarsip tidak dihitung');
+rollback to savepoint s;
+-- Label lampau (Februari; hari ini 20 Mar = label Maret) yang bentrok tidak dihitung.
+select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Listrik', 300000, %L, 10::smallint, '2026-02-01')$$,
+  :'sh', :'k_listrik')) is not null as x \gset
+select tests.raw_exec(format($$update app.bills set created_at = '2026-02-01 10:00+07' where category_id = %L$$, :'k_listrik'));
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
+  values (%L, %L, '2026-02-01', 1, true, %L)$$, :'sh', :'k_listrik', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: bentrok di label lampau tidak dihitung (hanya label berjalan ke depan)');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

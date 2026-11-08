@@ -66,7 +66,22 @@ describe('loadBeranda (persona N)', () => {
     for (const ruang of ['pribadi', 'bersama'] as const) {
       const data = await loadBeranda(await ctxOf(n, ruang));
       expect(data).toEqual({
-        safe: { operasional: 0, billsUntilEom: 0, budgetWajibRemaining: 0, aman: 0 },
+        // Gajian kosong (bootstrap_owner) = bulan kalender, tanpa tanda libur (S9).
+        period: expect.objectContaining({ basis: 'kalender', holidaysKnown: true }) as unknown,
+        safe: {
+          operasional: 0,
+          billsUntilEom: 0,
+          budgetWajibRemaining: 0,
+          aman: 0,
+          until: expect.stringMatching(ISO_DATE) as string,
+          daysLeft: expect.any(Number) as number,
+          perDay: 0,
+          status: 'aman',
+          reason: null,
+          hasObligations: false,
+        },
+        billsDue: { items: [], hasBills: false },
+        budgetsNear: { items: [], hasBudgets: false },
         today: { hasExpense: false, noSpendMarked: false },
         hasOperasional: false,
         hasExpense: false,

@@ -86,6 +86,39 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(log).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['obligation_double'],
+    ['category_in_obligation'],
+    ['category_not_root'],
+    ['already_posted'],
+    ['bill_archived'],
+    ['bill_account_kantor'],
+    ['category_archived'],
+  ] as const)('DK422 S9 %s = kode sama, tanpa log', (rule) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK422', rule, 'Rp 485.000 rahasia'))).toEqual({ code: rule });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('S9: bill_not_found = not_found; copy_budgets DK400 membawa from_month/to_month', () => {
+    expect(toLedgerError(pgError('DK404', 'bill_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK404', 'category_not_found', 'category_id'))).toEqual({
+      code: 'not_found',
+    });
+    for (const field of ['from_month', 'to_month', 'month', 'day_of_month', 'ends_on']) {
+      expect(toLedgerError(pgError('DK400', 'invalid_argument', field))).toEqual({
+        code: 'invalid',
+        field,
+      });
+    }
+  });
+
+  it('DK401 tetap unknown (utang S8, diputuskan Task 14)', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK401', 'unauthenticated'))).toEqual({ code: 'unknown' });
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
   it('nama dompet ganda (accounts_name_unique) = name_taken', () => {
     const dup = Object.assign(pgError('23505', 'duplicate key value', 'Key (x)=(BCA rahasia)'), {
       constraint: 'accounts_name_unique',

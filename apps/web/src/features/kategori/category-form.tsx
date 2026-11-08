@@ -31,6 +31,8 @@ export const KATEGORI_COPY = {
     'Belum tersimpan. Koneksi terputus saat mengirim. Coba lagi tidak akan menyimpan dua kali.',
   server: 'Belum tersimpan. Ada kendala di server. Coba lagi tidak akan menyimpan dua kali.',
   idem: 'Kategori ini mungkin sudah tersimpan. Tutup lalu periksa daftar kategori.',
+  obligation:
+    'Kategori ini dipakai tagihan atau anggaran wajib. Arsipkan tagihannya atau hapus anggarannya dulu.',
   gone: 'Kategori ini sudah tidak ada atau sudah diarsipkan. Tutup lalu muat ulang halaman.',
 } as const;
 
@@ -59,7 +61,7 @@ export interface CategoryFormProps {
   onArchive?: (() => void) | undefined;
 }
 
-type Galat = 'network' | 'server' | 'gone' | 'idem';
+type Galat = 'network' | 'server' | 'gone' | 'idem' | 'obligation';
 
 function Alert({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
@@ -202,6 +204,9 @@ function Body({
       case 'idem_mismatch':
         setGalat('idem');
         break;
+      case 'category_in_obligation':
+        setGalat('obligation');
+        break;
       case 'not_found':
       case 'category_archived':
         setGalat('gone');
@@ -277,7 +282,7 @@ function Body({
       {galat === null ? null : (
         <Alert
           action={
-            galat === 'gone' || galat === 'idem' ? undefined : (
+            galat === 'gone' || galat === 'idem' || galat === 'obligation' ? undefined : (
               <Button
                 variant="secondary"
                 size="sm"
@@ -292,11 +297,13 @@ function Body({
         >
           {galat === 'network'
             ? KATEGORI_COPY.network
-            : galat === 'gone'
-              ? KATEGORI_COPY.gone
-              : galat === 'idem'
-                ? KATEGORI_COPY.idem
-                : KATEGORI_COPY.server}
+            : galat === 'obligation'
+              ? KATEGORI_COPY.obligation
+              : galat === 'gone'
+                ? KATEGORI_COPY.gone
+                : galat === 'idem'
+                  ? KATEGORI_COPY.idem
+                  : KATEGORI_COPY.server}
         </Alert>
       )}
     </form>

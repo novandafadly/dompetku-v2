@@ -28,6 +28,7 @@ import {
 } from '../write';
 import {
   createLedgerHarness,
+  memuatNominal,
   resetLedger,
   seedPersonas,
   spaceIdOf,
@@ -352,18 +353,19 @@ describe('loader baca ledger (N dan F bergabung)', () => {
         sharedNote: 'Setoran November',
       });
 
-      const blob = JSON.stringify({
+      const data = {
         list,
         perAccount: await listEntries(fBersama, { month, accountId: kas }),
         detail: await getEntry(fBersama, setor.linkedEntryId),
         foreign: await getEntry(fBersama, setor.entryId),
         foreignAccount: await listEntries(fBersama, { month, accountId: bca }),
-      });
+      };
+      const blob = JSON.stringify(data);
       for (const kanari of [KANARI_DESC, KANARI_DOMPET, bca, setor.entryId, nPribadi.spaceId]) {
         expect(blob).not.toContain(kanari);
       }
       // Biaya hanya di kaki Pribadi: tidak ada nominal biaya di Bersama.
-      expect(blob).not.toContain('6500');
+      expect(memuatNominal(data, 6_500)).toBe(false);
 
       // Sisi Pribadi N: kaki keluar membawa deskripsi, tanpa catatan Bersama.
       const keluar = must(
@@ -492,12 +494,19 @@ describe('loader baca ledger (N dan F bergabung)', () => {
     it('safeToSpend = saldo operasional ruang', async () => {
       await wallet(nPribadi, 400_000, 'BCA');
       await wallet(nBersama, 1_000_000, 'Kas Rumah');
-      expect(await safeToSpend(nPribadi)).toEqual({
+      const s = await safeToSpend(nPribadi);
+      expect(s).toEqual({
         operasional: 400_000,
         billsUntilEom: 0,
         budgetWajibRemaining: 0,
         aman: 400_000,
+        until: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as string,
+        daysLeft: expect.any(Number) as number,
+        perDay: expect.any(Number) as number,
       });
+      // Gajian kosong (bootstrap): sampai akhir bulan kalender; per hari floor (SQL).
+      expect(s.daysLeft).toBeGreaterThanOrEqual(1);
+      expect(s.perDay).toBe(Math.floor(400_000 / s.daysLeft));
     });
   });
 

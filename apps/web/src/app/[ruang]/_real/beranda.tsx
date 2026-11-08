@@ -19,7 +19,8 @@ import {
   ContributionCardView,
 } from '@/features/bersama/contribution-card-view';
 import { RecentEntriesView, type RecentRow } from '@/features/beranda/recent-entries-view';
-import { SafeToSpendCard, SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
+import { AmanCardView } from '@/features/beranda/aman-card-view';
+import { SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
 import {
   entryKindLabelVM,
   entryTitleVM,
@@ -37,13 +38,16 @@ import {
 import { PageHeader } from '@/features/shell/page-header';
 import type { BerandaData } from '@/server/ledger/beranda';
 import { markNoSpendDayAction } from '../_actions/beranda';
+import { BillsDueCard } from './bills-due-view';
+import { BudgetsNearCard } from './budgets-near-view';
 import { berandaSteps, bersamaView, type BerandaStepState } from './beranda-steps';
 import { CatatStepIsland, NoSpendIsland } from './beranda-islands';
 
 /**
  * Beranda mode nyata (Server Component): kartu utama (`SafeToSpendVM`), S6-B1, checklist,
- * Terakhir; Bersama dua anggota juga Kontribusi dan Aktivitas (S8). Seksi anggaran dan tagihan belum
- * dirender (S9). Dirangkai di
+ * Terakhir; Bersama dua anggota juga Kontribusi dan Aktivitas (S8). S9: kartu Aman lengkap
+ * (`AmanCardView`: periode gajian, status, tagihan + wajib), Tagihan 7 hari, Anggaran hampir habis
+ * (Server Component murni, tanpa JS baru). Dirangkai di
  * server dari data ruang ini saja; klien hanya menerima props tampilan, pulau klien = tombol
  * S6-B1 dan langkah Catat. Tanpa store demo.
  */
@@ -199,19 +203,31 @@ export function BerandaReal({
     );
   }
 
-  // HP: Aman → S6-B1 → checklist → (Bersama) Kontribusi → Aktivitas → Terakhir, satu kolom. Laptop: keputusan kiri, riwayat kanan.
+  // HP: Aman → S6-B1 → Tagihan 7 hari → Anggaran hampir habis → checklist → (Bersama) Kontribusi →
+  // Aktivitas → Terakhir, satu kolom. Checklist sesudah dua kartu S9 (critique S9-C2): kartu yang
+  // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop: keputusan
+  // kiri, riwayat kanan.
   return (
     <>
       {header}
       <div className="grid grid-cols-1 gap-3 tablet:gap-4 laptop:max-w-250 laptop:grid-cols-beranda laptop:items-start laptop:gap-5">
         <div className="flex flex-col gap-3 tablet:gap-4">
-          <SafeToSpendCard ruang={ruang} today={today} vm={data.safe} showObligations={false} />
+          <AmanCardView
+            ruang={ruang}
+            vm={data.safe}
+            holidayNote={!data.period.holidaysKnown && data.period.basis === 'gajian'}
+          />
           {invite}
           <NoSpendIsland
             hasExpense={data.today.hasExpense}
             noSpendMarked={data.today.noSpendMarked}
             onMark={markNoSpendDayAction.bind(null, ruang)}
           />
+          {/* S9-BR2: HP satu kolom, tablet dan laptop berdampingan (auto-fit). */}
+          <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:grid-cols-autofit-260">
+            <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
+            <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
+          </div>
           {checklist}
           {kontribusi}
         </div>

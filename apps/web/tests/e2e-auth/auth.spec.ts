@@ -223,10 +223,12 @@ test('pemilik: Beranda nyata tanpa dompet: tanpa data demo, no-store, checklist,
   await expect(main.getByRole('button', { name: 'Tambah dompet' }).first()).toBeVisible();
   await expect(page.getByText('Data demo')).toHaveCount(0);
   await checkScreen(page);
-  // Rencana belum ada di mode nyata: 404.
-  // Status stream sudah 200 saat page melempar notFound (Suspense root); isinya halaman 404.
+  // Rencana nyata (S9): ruang tanpa anggaran dan tagihan = keadaan kosong, tanpa data demo.
   await page.goto('/pribadi/rencana');
-  await expect(page.getByText('This page could not be found.')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Belum ada rencana di Pribadi.' }),
+  ).toBeVisible();
+  await expect(page.getByText('Data demo')).toHaveCount(0);
 });
 
 test('pemilik: Beranda nyata dengan dompet: kartu, tidak ada pengeluaran hari ini', async () => {
@@ -285,7 +287,7 @@ test('pemilik: Transaksi nyata: entri dan ringkasan Pribadi, tidak terbawa ke Be
   // Laptop: ringkasan bulan di kolom kanan, dari api.month_summary.
   const summary = page.getByRole('complementary', { name: 'Ringkasan bulan' });
   await expect(summary.getByRole('row', { name: /Pengeluaran/ })).toContainText('37.500');
-  await expect(summary.getByText(/Tidak termasuk: Transfer internal/)).toBeVisible();
+  await expect(summary.getByText(/Tidak termasuk: Transfer antar dompet/)).toBeVisible();
   await expect(main.getByRole('link', { name: 'Sampah' })).toHaveAttribute(
     'href',
     '/pribadi/sampah',

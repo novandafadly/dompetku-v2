@@ -5,6 +5,7 @@ import { MenuSheet } from './menu-sheet';
 vi.mock('./nav-provider', () => ({
   useNav: () => ({
     ruang: 'bersama',
+    query: '',
     sampahHref: (r: string) => `/${r}/sampah`,
     kategoriHref: (r: string) => `/${r}/kategori`,
   }),
@@ -22,7 +23,12 @@ describe('MenuSheet: Kategori', () => {
       '/bersama/kategori',
     );
     // Butir lain yang belum ada tetap "Segera".
-    expect(screen.getAllByText('Segera')).toHaveLength(5);
+    expect(screen.getAllByText('Segera')).toHaveLength(4);
+    // Analisis diganti Laporan (S9 K8).
+    expect(screen.getByRole('link', { name: 'Laporan' })).toHaveAttribute(
+      'href',
+      '/bersama/laporan',
+    );
   });
 
   it('prototipe (bawaan): Kategori tetap nonaktif dengan "Segera"', () => {

@@ -64,9 +64,10 @@ jobs:
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD
+          -v "$GITHUB_WORKSPACE/.trivyignore.yaml:/trivyignore.yaml:ro"
           ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
           image --platform linux/arm64 --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
-          --scanners vuln --no-progress "$REF"
+          --ignorefile /trivyignore.yaml --scanners vuln --no-progress "$REF"
 
       - name: SBOM (SPDX)
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3

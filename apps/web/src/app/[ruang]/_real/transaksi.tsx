@@ -12,6 +12,7 @@ import type { Ruang } from '@/features/ledger/types';
 import { buildEntryHref, buildHref, buildSectionHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { PageHeader } from '@/features/shell/page-header';
 import { EntryListView, SampahLink } from '@/features/transaksi/entry-list-view';
+import { laporanHref } from '@/features/laporan/href';
 import { SummaryViewVM } from '@/features/transaksi/summary-view-vm';
 import { TransaksiLayout } from '@/features/transaksi/transaksi-layout';
 import type { TransaksiData } from '@/server/ledger/transaksi';
@@ -119,7 +120,13 @@ export function TransaksiReal({
           <SampahLink href={buildSectionHref(ruang, 'sampah', query)} />
         </div>
       }
-      summary={<SummaryViewVM month={month} summary={data.summary} />}
+      summary={
+        <SummaryViewVM
+          month={month}
+          summary={data.summary}
+          laporanHref={laporanHref(ruang, query, { periode: month, basis: 'kalender' })}
+        />
+      }
     />
   );
 }

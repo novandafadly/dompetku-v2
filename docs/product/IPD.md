@@ -159,7 +159,7 @@ Gerbang keluar: Farida bergabung; kedua akun 7 hari berturut-turut (definisi PRD
 - **Dependensi.** S7.
 - **Kriteria keluar.** Feed tidak pernah memuat nama dompet atau entri Pribadi (Playwright dua user); isolasi penuh pada tabel baru.
 - **Risiko / mitigasi.** Farida menolak alur: pantau penilaian M0a; sesuaikan.
-- **Status (2026-11-05).** Selesai di branch `ccr-48ce6bf9-qkb933` (Task 1 sampai 12; migrasi `0114`-`0115`, tanpa tabel baru); merge menunggu pemilik dan CI. Catatan teknis: BSD §16 "Catatan S8"; keputusan desain dan critique: `docs/design/s8-bingkai.md`; serah-terima dan langkah pemilik: `docs/superpowers/handoff/s8.md`.
+- **Status (2026-11-05).** Selesai dan di-merge ke `main` (PR #20, 2026-11-05; Task 1 sampai 12; migrasi `0114`-`0115`, tanpa tabel baru). Catatan teknis: BSD §16 "Catatan S8"; keputusan desain dan critique: `docs/design/s8-bingkai.md`; serah-terima dan langkah pemilik: `docs/superpowers/handoff/s8.md`.
 
 ### S9: anggaran, laporan, tagihan dasar, Beranda
 
@@ -167,10 +167,16 @@ Gerbang keluar: Farida bergabung; kedua akun 7 hari berturut-turut (definisi PRD
 - **Dependensi.** S8.
 - **Kriteria keluar.** Angka Beranda cocok dengan laporan; budget JS ≤ 162 kB (target 150 dibatalkan); Web Vitals LCP < 2,5 s, INP < 200 ms, CLS < 0,1 di HP kelas menengah.
 - **Risiko / mitigasi.** Dobel hitung kewajiban: aturan tunggal dan tes. Grafik menambah JS: Recharts hanya di rute Laporan, dimuat malas.
+- **Status (2026-11-08).** Selesai di branch `claude/bold-pasteur-535stf`, PR #24 (Task 1 sampai 13, 15, 17; Task 14 dan 16 dipindah ke S10 oleh pemilik 2026-11-07). Migrasi `0116`-`0121`, expand-only: periode gajian (`payday_rule = 25`, `app.holidays`, `app.pay_period`, BSD §8.2a menggantikan "tanggal gajian opsional"), tabel `bills`/`bill_occurrences`/`budgets`, API tagihan + job `materialize_bills` 00:05 WIB (dimajukan dari S10), API anggaran + `copy_budgets` (salin anggaran dimajukan dari S10), aman dipakai lengkap + `spend_pace`, fungsi baca Laporan. Grafik Laporan = SVG statis dari Server Component (tanpa Recharts). Merge = deploy + migrasi `0116`-`0121` di produksi. Bukti kriteria keluar:
+  - Angka Beranda cocok dengan laporan: golden T17 (`24_aman_dipakai`, `25_laporan`), `rencana.int`, e2e `s9-keluar.spec` (Beranda = Rencana = Laporan pada skenario campuran Pribadi dan Bersama, dengan selisih sah dari SQL; BSD §16 "Catatan S9").
+  - Budget JS ≤ 162 kB (js-route): prototipe Beranda 161,6, Transaksi 160,9, Rencana 154,4, Laporan 155,3; nyata Beranda 157,5, Transaksi 156,8, Rencana 150,3, Laporan 151,2 (e2e budget di `s9-keluar.spec`, `s9-bersama.spec`, `tagihan.spec`).
+  - Web Vitals: **belum diukur**, dipindah ke S10 (Task 16 plan S9).
+  - Satu kewajiban (`obligation_double`): `21_kewajiban`, `99_konkurensi` (C9), DQ13, e2e `tagihan.spec`. B13 (Laporan dan Rencana Bersama tanpa kanari Pribadi): pgTAP, `rencana.int`, e2e dua user `s9-bersama.spec` (HTML + payload RSC untuk Novanda dan Farida).
+  - Catatan teknis: BSD §16 "Catatan S9"; desain, critique, dan Delivery Gate: `docs/design/s9-bingkai.md`; serah-terima dan langkah pemilik: `docs/superpowers/handoff/s9.md`.
 
 ### S10: worker lanjutan, CSV, review bulanan
 
-- **Cakupan.** `recurring_materialize` 00:05 WIB di worker yang sudah ada; export CSV (escape formula); review bulanan dan salin anggaran 1 ketukan.
+- **Cakupan.** `recurring_materialize` 00:05 WIB di worker yang sudah ada; export CSV (escape formula); review bulanan dan salin anggaran 1 ketukan (salin dasar `copy_budgets` sudah di S9). Dari S9: Web Vitals (kriteria keluar S9 yang dipindah), anggaran subkategori (K5), utang S7/S8 (Task 14 plan S9); daftar lengkap `docs/superpowers/handoff/s9.md`.
 - **Dependensi.** S9.
 - **Kriteria keluar.** Job idempoten (jalan 2x = 1 entri); CSV cocok dengan laporan; gerbang M2 (masa pakai 7 hari setelah sprint).
 - **Risiko / mitigasi.** Job gagal diam: alert dan `job_runs`. Beban di VM sempit: limit memori container worker.

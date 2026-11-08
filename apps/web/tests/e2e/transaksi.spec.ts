@@ -271,7 +271,7 @@ test.describe('Transaksi 390', () => {
     await expect(main.getByRole('row', { name: /Pengeluaran/ })).toContainText('Rp 2.427.000');
     await expect(main.getByRole('row', { name: /Selisih/ })).toContainText('\u2212Rp 2.427.000');
     await expect(
-      main.getByText('Tidak termasuk: Kas kantor Rp 334.000, Transfer internal Rp 1.000.000'),
+      main.getByText('Tidak termasuk: Kas kantor Rp 334.000, Transfer antar dompet Rp 1.000.000'),
     ).toBeVisible();
     await expect(main.getByRole('row', { name: /Pemasukan/ })).toContainText(
       formatRupiah(s.pemasukan),
@@ -282,7 +282,7 @@ test.describe('Transaksi 390', () => {
     await expect(main.getByRole('row', { name: /Selisih/ })).toContainText(formatRupiah(s.selisih));
     await expect(
       main.getByText(
-        `Tidak termasuk: Kas kantor ${formatRupiah(s.kantor)}, Transfer internal ${formatRupiah(s.transfer)}`,
+        `Tidak termasuk: Kas kantor ${formatRupiah(s.kantor)}, Transfer antar dompet ${formatRupiah(s.transfer)}`,
       ),
     ).toBeVisible();
   });

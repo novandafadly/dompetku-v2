@@ -91,7 +91,7 @@ describe('TransaksiReal', () => {
     const table = await screen.findByRole('table', { name: 'Ringkasan bulan' });
     expect(within(table).getByRole('row', { name: /Pemasukan/ })).toHaveTextContent(/100\.000/);
     expect(within(table).getByRole('row', { name: /Selisih/ })).toHaveTextContent(/75\.000/);
-    expect(container).toHaveTextContent(/Tidak termasuk: Transfer internal Rp\s?40\.000/);
+    expect(container).toHaveTextContent(/Tidak termasuk: Transfer antar dompet Rp\s?40\.000/);
     expect(screen.queryByText('Anggaran bulan ini')).toBeNull();
   });
 

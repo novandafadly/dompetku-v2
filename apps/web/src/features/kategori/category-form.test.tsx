@@ -195,6 +195,18 @@ describe('CategoryForm (S6-K1)', () => {
     expect(select).toHaveFocus();
   });
 
+  it('category_in_obligation: kotak peringatan dengan jalan keluar, tanpa Coba lagi', async () => {
+    const user = userEvent.setup();
+    setup({ onSubmit: () => Promise.resolve({ ok: false, code: 'category_in_obligation' }) });
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Parkir');
+    await user.click(save());
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Kategori ini dipakai tagihan atau anggaran wajib. Arsipkan tagihannya atau hapus anggarannya dulu.',
+    );
+    expect(screen.queryByRole('button', { name: 'Coba lagi' })).toBeNull();
+  });
+
   it('galat jaringan: peringatan dengan Coba lagi; clientId tetap sama walau isian diubah', async () => {
     const user = userEvent.setup();
     const onSubmit = vi

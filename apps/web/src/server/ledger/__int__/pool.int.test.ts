@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPools, withUser } from '../../db';
 import { loadBeranda } from '../beranda';
 import { loadDetail } from '../detail';
+import { loadLaporan } from '../laporan';
 import { toLedgerError } from '../errors';
 import {
   getEntry,
@@ -18,6 +19,7 @@ import {
   todayStatus,
   trashList,
 } from '../read';
+import { loadRencana } from '../rencana';
 import { loadSampah } from '../sampah';
 import { resolveSpace } from '../space';
 import { loadTransaksi } from '../transaksi';
@@ -224,8 +226,18 @@ describe('satu transaksi baca per page', () => {
     for (const ctx of [pribadi, bersama]) {
       const { peak, result } = await peakDuring(() => loadBeranda(ctx));
       expect(peak).toBe(1);
-      // `bersama` (Task 13) tidak ada di bentuk lama; isinya diuji di beranda.int.test.
-      expect({ ...result, bersama: undefined }).toEqual(await berandaLama(ctx));
+      // `bersama` (Task 13) dan bacaan S9 (periode, status, kartu Tagihan/Anggaran) tidak ada di
+      // bentuk lama; isinya diuji di beranda.int.test dan rencana.int.test.
+      const { status, reason, hasObligations, ...safe } = result.safe;
+      expect([status, reason, hasObligations]).toEqual(['aman', null, false]);
+      expect({
+        ...result,
+        safe,
+        bersama: undefined,
+        period: undefined,
+        billsDue: undefined,
+        budgetsNear: undefined,
+      }).toEqual(await berandaLama(ctx));
     }
     const p = await loadBeranda(pribadi);
     expect(p.recent.map((e) => e.kind)).toEqual([
@@ -302,6 +314,22 @@ describe('satu transaksi baca per page', () => {
     const shell = await peakDuring(() => loadRuangShell(bersama));
     expect(shell.peak).toBe(1);
     expect(shell.result.accounts.map((a) => a.name)).toEqual(['Kas Rumah']);
+  });
+
+  it('S9: Rencana dan Laporan satu koneksi; Rencana + layout ≤ 2', async () => {
+    for (const ctx of [pribadi, bersama]) {
+      const r = await peakDuring(() => loadRencana(ctx));
+      expect(r.peak).toBe(1);
+      const l = await peakDuring(() => loadLaporan(ctx));
+      expect(l.peak).toBe(1);
+      const both = await peakDuring(async () => {
+        const shell = loadRuangShell(ctx);
+        const [, data] = await Promise.all([shell, loadRencana(ctx, { shell })]);
+        return data;
+      });
+      expect(both.peak).toBeLessThanOrEqual(2);
+      expect(both.result).toEqual(r.result);
+    }
   });
 });
 

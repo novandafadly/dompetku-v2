@@ -51,6 +51,14 @@ const m = vi.hoisted(() => ({
   loadRuangShell: vi.fn(),
   createReimbursement: vi.fn(),
   openReimbursables: vi.fn(),
+  setBudget: vi.fn(),
+  deleteBudget: vi.fn(),
+  copyBudgets: vi.fn(),
+  createBill: vi.fn(),
+  updateBill: vi.fn(),
+  archiveBill: vi.fn(),
+  payBill: vi.fn(),
+  setOccurrenceSkipped: vi.fn(),
 }));
 
 vi.mock('@/server/auth/next', () => ({
@@ -84,6 +92,17 @@ vi.mock('@/server/ledger/reimburse', async (orig) => ({
   createReimbursement: m.createReimbursement,
   openReimbursables: m.openReimbursables,
 }));
+vi.mock('@/server/ledger/rencana', async (orig) => ({
+  ...(await orig<typeof import('@/server/ledger/rencana')>()),
+  setBudget: m.setBudget,
+  deleteBudget: m.deleteBudget,
+  copyBudgets: m.copyBudgets,
+  createBill: m.createBill,
+  updateBill: m.updateBill,
+  archiveBill: m.archiveBill,
+  payBill: m.payBill,
+  setOccurrenceSkipped: m.setOccurrenceSkipped,
+}));
 vi.mock('@/server/ledger/read', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/read')>()),
   listAccounts: m.listAccounts,
@@ -103,6 +122,7 @@ const kategori = await import('./kategori');
 const dompet = await import('./dompet');
 const beranda = await import('./beranda');
 const reimburse = await import('./reimburse');
+const rencana = await import('./rencana');
 
 type AnyAction = (ruang: unknown, input?: unknown) => Promise<unknown>;
 
@@ -113,6 +133,7 @@ const ACTIONS: Record<string, AnyAction> = {
   ...(dompet as unknown as Record<string, AnyAction>),
   ...(beranda as unknown as Record<string, AnyAction>),
   ...(reimburse as unknown as Record<string, AnyAction>),
+  ...(rencana as unknown as Record<string, AnyAction>),
 };
 
 /** Input sah per action dan wrapper DB pertama yang dipanggilnya. */
@@ -207,6 +228,50 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
     mutation: true,
   },
   openReimbursablesAction: { wrapper: 'openReimbursables', mutation: false },
+  setBudgetAction: {
+    input: { categoryId: A, month: '2026-11', amount: 2_000_000, wajib: false },
+    wrapper: 'setBudget',
+    mutation: true,
+  },
+  deleteBudgetAction: {
+    input: { categoryId: A, month: '2026-11' },
+    wrapper: 'deleteBudget',
+    mutation: true,
+  },
+  copyBudgetsAction: { input: { toMonth: '2026-11' }, wrapper: 'copyBudgets', mutation: true },
+  createBillAction: {
+    input: {
+      clientId: A,
+      name: 'Listrik PLN',
+      amount: 485_000,
+      categoryId: B,
+      dayOfMonth: 20,
+      startsOn: '2026-11-01',
+    },
+    wrapper: 'createBill',
+    mutation: true,
+  },
+  updateBillAction: {
+    input: {
+      billId: A,
+      name: 'Listrik PLN',
+      amount: 500_000,
+      categoryId: B,
+      dayOfMonth: 21,
+      endsOn: null,
+      accountId: null,
+    },
+    wrapper: 'updateBill',
+    mutation: true,
+  },
+  archiveBillAction: { input: A, wrapper: 'archiveBill', mutation: true },
+  payBillAction: {
+    input: { clientId: A, occurrenceId: B, accountId: C },
+    wrapper: 'payBill',
+    mutation: true,
+  },
+  skipBillAction: { input: B, wrapper: 'setOccurrenceSkipped', mutation: true },
+  unskipBillAction: { input: B, wrapper: 'setOccurrenceSkipped', mutation: true },
 };
 
 const NAMES = Object.keys(CASES);
@@ -233,6 +298,14 @@ const WRAPPERS = [
   'loadRuangShell',
   'createReimbursement',
   'openReimbursables',
+  'setBudget',
+  'deleteBudget',
+  'copyBudgets',
+  'createBill',
+  'updateBill',
+  'archiveBill',
+  'payBill',
+  'setOccurrenceSkipped',
 ] as const;
 
 function call(name: string, ruang: unknown = 'pribadi', input?: unknown): Promise<unknown> {
@@ -277,6 +350,25 @@ beforeEach(() => {
   m.loadRuangShell.mockResolvedValue({ accounts: [], categories: [] });
   m.createReimbursement.mockResolvedValue({ entryId: D, remaining: 200_000, replayed: false });
   m.openReimbursables.mockResolvedValue([]);
+  m.setBudget.mockResolvedValue(undefined);
+  m.deleteBudget.mockResolvedValue(undefined);
+  m.copyBudgets.mockResolvedValue({
+    copied: 2,
+    skippedExisting: 0,
+    skippedConflict: 1,
+    skippedArchived: 0,
+  });
+  m.createBill.mockResolvedValue({ billId: A });
+  m.updateBill.mockResolvedValue({ billId: A });
+  m.archiveBill.mockResolvedValue({ billId: A });
+  m.payBill.mockResolvedValue({
+    entryId: D,
+    occurrenceId: B,
+    version: 1,
+    replayed: false,
+    warnings: [],
+  });
+  m.setOccurrenceSkipped.mockResolvedValue({ skipped: true });
 });
 
 afterEach(() => {
@@ -508,6 +600,96 @@ describe('ruang', () => {
     const [ctx, input] = m.createEntry.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(ctx).toEqual({ pools: POOLS, userId: USER_ID, spaceId: SPACE_ID });
     expect(input).not.toHaveProperty('spaceId');
+  });
+});
+
+describe('Rencana (S9)', () => {
+  const pgError = (code: string, message: string, detail?: string) =>
+    Object.assign(new Error(message), { code, detail });
+
+  it.each([
+    ['setBudgetAction', 'setBudget', 'obligation_double'],
+    ['createBillAction', 'createBill', 'obligation_double'],
+    ['setBudgetAction', 'setBudget', 'category_not_root'],
+    ['payBillAction', 'payBill', 'already_posted'],
+    ['payBillAction', 'payBill', 'bill_account_kantor'],
+    ['updateBillAction', 'updateBill', 'bill_archived'],
+    ['skipBillAction', 'setOccurrenceSkipped', 'already_posted'],
+  ] as const)('%s: DK422 %s → kode %s tanpa nominal, tanpa refresh', async (name, w, rule) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    m[w].mockRejectedValue(pgError('DK422', rule, 'Rp 485.000 rahasia'));
+    const r = await call(name);
+    expect(r).toEqual({ ok: false, error: { code: rule } });
+    expect(JSON.stringify(r)).not.toMatch(/485|rahasia/);
+    expect(log).not.toHaveBeenCalled();
+    expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it('copy_budgets DK400 to_month = invalid field to_month', async () => {
+    m.copyBudgets.mockRejectedValue(pgError('DK400', 'invalid_argument', 'to_month'));
+    await expect(call('copyBudgetsAction')).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field: 'to_month' },
+    });
+  });
+
+  it('input ditolak sebelum DB: bulan bukan YYYY-MM, nominal 0, tanggal 32, berakhir < mulai', async () => {
+    for (const [name, input, field] of [
+      ['setBudgetAction', { categoryId: A, month: '2026-11-01', amount: 1, wajib: false }, 'month'],
+      ['setBudgetAction', { categoryId: A, month: '2026-11', amount: 0, wajib: true }, 'amount'],
+      ['copyBudgetsAction', { toMonth: '2026-13' }, 'toMonth'],
+      ['copyBudgetsAction', { toMonth: '0000-01' }, 'toMonth'],
+      ['setBudgetAction', { categoryId: A, month: '9999-12', amount: 1, wajib: false }, 'month'],
+      [
+        'createBillAction',
+        {
+          clientId: A,
+          name: 'X',
+          amount: 1,
+          categoryId: B,
+          dayOfMonth: 32,
+          startsOn: '2026-11-01',
+        },
+        'dayOfMonth',
+      ],
+      [
+        'createBillAction',
+        {
+          clientId: A,
+          name: 'X',
+          amount: 1,
+          categoryId: B,
+          dayOfMonth: 5,
+          startsOn: '2026-11-01',
+          endsOn: '2026-10-31',
+        },
+        'endsOn',
+      ],
+      ['payBillAction', { clientId: A, occurrenceId: B, amount: 0 }, 'amount'],
+      ['payBillAction', { clientId: A, occurrenceId: B, occurredOn: '0001-01-01' }, 'occurredOn'],
+    ] as const) {
+      await expect(call(name, 'pribadi', input)).resolves.toEqual({
+        ok: false,
+        error: { code: 'invalid', field },
+      });
+    }
+    for (const w of WRAPPERS) expect(m[w]).not.toHaveBeenCalled();
+  });
+
+  it('sukses: hasil wrapper diteruskan, refresh sekali', async () => {
+    await expect(call('copyBudgetsAction')).resolves.toEqual({
+      ok: true,
+      value: { copied: 2, skippedExisting: 0, skippedConflict: 1, skippedArchived: 0 },
+    });
+    expect(m.copyBudgets).toHaveBeenCalledWith(
+      { pools: POOLS, userId: USER_ID, spaceId: SPACE_ID },
+      { toMonth: '2026-11' },
+    );
+    expect(m.refresh).toHaveBeenCalledTimes(1);
+    await call('unskipBillAction');
+    expect(m.setOccurrenceSkipped).toHaveBeenLastCalledWith(expect.anything(), B, false);
+    await call('skipBillAction');
+    expect(m.setOccurrenceSkipped).toHaveBeenLastCalledWith(expect.anything(), B, true);
   });
 });
 

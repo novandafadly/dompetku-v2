@@ -21,6 +21,7 @@ describe('JOBS', () => {
       ['purge_unfinished_users', '25 1 * * *', 'Asia/Jakarta', 'jobs'],
       ['purge_audit', '30 1 * * *', 'Asia/Jakarta', 'jobs'],
       ['purge_voided', '15 1 * * 1', 'Asia/Jakarta', 'jobs'],
+      ['materialize_bills', '5 0 * * *', 'Asia/Jakarta', 'jobs'],
     ]);
   });
 
@@ -40,12 +41,28 @@ describe('JOBS', () => {
     ]);
   });
 
+  it('materialize_bills harian 00:05 WIB (K3 S9): dari 17:00Z berikutnya 17:05Z = 00:05 WIB', () => {
+    const j = JOBS.find((x) => x.name === 'materialize_bills');
+    expect(j).toMatchObject({ kind: 'count', sql: 'select jobs.materialize_bills() as n' });
+    expect(next('5 0 * * *', '2026-11-04T17:00:00Z', 2)).toEqual([
+      '2026-11-04T17:05:00.000Z',
+      '2026-11-05T17:05:00.000Z',
+    ]);
+  });
+
   it('tidak bentrok dengan backup 02:00 WIB dan uji restore Minggu 04:00 WIB', () => {
     for (const j of JOBS) {
       for (const at of next(j.cron, '2026-11-01T00:00:00Z', 14)) {
         // Jam WIB = UTC + 7; semua job selesai sebelum 02:00 (statement_timeout 60 s).
-        const wib = (new Date(at).getUTCHours() + 7) % 24;
-        expect(wib, `${j.name} ${at}`).toBe(1);
+        const d = new Date(at);
+        const wib = (d.getUTCHours() + 7) % 24;
+        if (j.name === 'materialize_bills') {
+          // 00:05 WIB: selesai (statement_timeout 60 s) jauh sebelum jendela 01:00–01:30.
+          expect([wib, d.getUTCMinutes()], `${j.name} ${at}`).toEqual([0, 5]);
+        } else {
+          expect(wib, `${j.name} ${at}`).toBe(1);
+          expect(d.getUTCMinutes(), `${j.name} ${at}`).toBeLessThanOrEqual(30);
+        }
       }
     }
   });

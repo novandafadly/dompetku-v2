@@ -13,7 +13,13 @@ import {
   voidEntry,
   type LedgerCtx,
 } from '../write';
-import { createLedgerHarness, resetLedger, seedPersonas, type Persona } from './harness';
+import {
+  createLedgerHarness,
+  memuatNominal,
+  resetLedger,
+  seedPersonas,
+  type Persona,
+} from './harness';
 
 /**
  * Jalur data Detail transaksi nyata (page `[ruang]/transaksi/[id]`): `resolveSpace` →
@@ -301,7 +307,7 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
     expect(await loadDetail(bersama, st.entryId)).toBeNull();
     const kakiP = await loadDetail(pribadi, st.entryId);
     expect(kakiB?.entry.fee).toBeUndefined();
-    expect(json).not.toContain('6543');
+    expect(memuatNominal(kakiB, 6_543)).toBe(false);
     expect(kakiP?.entry.fee).toBe(6_543);
     expect(kakiP?.entry).toMatchObject({
       spaceKind: 'personal',
@@ -376,7 +382,7 @@ describe('loadDetail S7: talangan, antar ruang, pindah', () => {
     });
     const kakiBMasuk = await loadDetail(bersamaN, setor.linkedEntryId);
     expect(kakiBMasuk?.entry.fee).toBeUndefined();
-    expect(JSON.stringify(kakiBMasuk)).not.toContain('777');
+    expect(memuatNominal(kakiBMasuk, 777)).toBe(false);
   });
 
   it('pindah ruang: entri asal bertanda movedAt (tanpa penunjuk ke tujuan), tetap terbuka', async () => {

@@ -18,6 +18,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
 import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import { signOutAction } from '@/server/auth/actions';
+import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
@@ -77,7 +78,7 @@ export function MenuSheet({
 }) {
   const [theme, setTheme] = useState<ThemeChoice>(currentTheme);
   const themeLabel = useId();
-  const { ruang, sampahHref, kategoriHref } = useNav();
+  const { ruang, query, sampahHref, kategoriHref } = useNav();
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Menu">
       <ul className="flex flex-col">
@@ -96,6 +97,13 @@ export function MenuSheet({
               <MenuLink
                 href={kategoriHref(ruang)}
                 name={name}
+                Icon={Icon}
+                onOpenChange={onOpenChange}
+              />
+            ) : real && name === 'Analisis' ? (
+              <MenuLink
+                href={buildSectionHref(ruang, 'laporan', query)}
+                name="Laporan"
                 Icon={Icon}
                 onOpenChange={onOpenChange}
               />

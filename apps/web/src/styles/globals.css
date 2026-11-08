@@ -54,6 +54,9 @@
   --color-tab: var(--tab);
   --color-hover: var(--hover);
   --color-chart-aman: var(--chart-aman);
+  --color-chart-expense: var(--chart-expense);
+  --color-chart-income: var(--chart-income);
+  --color-chart-income-tint: var(--chart-income-tint);
   --color-chart-tagihan: var(--chart-tagihan);
   --color-chart-tagihan-2: var(--chart-tagihan-2);
   --color-chart-wajib: var(--chart-wajib);
@@ -168,6 +171,16 @@
       opacity: 0;
       transform: translateY(8px);
     }
+  }
+}
+
+/* Angka besar Laporan (S9-LP12): ukuran = min(maks, (lebar kartu - 30px) / --em); --em dihitung server. */
+@utility laporan-angka {
+  --max: 2.75rem;
+  font-size: max(1.25rem, min(var(--max), calc((100cqw - 30px) / var(--em))));
+  letter-spacing: -0.025em;
+  @media (width >= 64rem) {
+    --max: 3.5rem;
   }
 }
 

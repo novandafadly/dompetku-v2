@@ -207,6 +207,10 @@ create function tests.wipe() returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
+  -- Tagihan dan anggaran (0117) lebih dulu: FK ke entries, categories, accounts.
+  delete from app.bill_occurrences;
+  delete from app.bills;
+  delete from app.budgets;
   delete from app.entries;
   delete from app.entry_tombstones;
   delete from app.accounts;

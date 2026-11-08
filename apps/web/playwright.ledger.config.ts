@@ -16,6 +16,22 @@ export const LEDGER_MAIL_FILE = path.join(dir, 'test-results', 'ledger-mail.json
 export const LEDGER_OWNER_STATE = path.join(dir, 'test-results', 'ledger-owner.json');
 const executablePath = process.env.PW_CHROMIUM_PATH;
 
+const browser = {
+  ...devices['Desktop Chrome'],
+  ...(executablePath ? { launchOptions: { executablePath } } : {}),
+};
+/**
+ * Spec yang mengisi data tanpa membersihkan; jalan sesudah project `kosong`. Regex dijangkarkan ke
+ * awal nama berkas supaya `screens-s9-tagihan.spec.ts` tetap di `kosong`. Iterasi lokal satu spec
+ * data tanpa menjalankan seluruh `kosong`: `--no-deps` (data harus bersih dari global-setup).
+ */
+const DATA_SPECS = [
+  /[\\/]beranda-s9\.spec\.ts$/,
+  /[\\/]laporan\.spec\.ts$/,
+  /[\\/]s9-keluar\.spec\.ts$/,
+  /[\\/]tagihan\.spec\.ts$/,
+];
+
 export default defineConfig({
   testDir: './tests/e2e-ledger',
   globalSetup: './tests/e2e-ledger/global-setup.ts',
@@ -27,13 +43,20 @@ export default defineConfig({
     ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-ledger' }]]
     : 'list',
   use: { baseURL: `http://localhost:${String(port)}`, trace: 'retain-on-failure' },
+  // Urutan eksplisit (bukan urutan nama berkas): `kosong` = spec yang berasumsi ruang Pribadi/Bersama
+  // kosong (ledger, s7, s9, screenshot); `data` = spec yang mengisi data dan tidak membersihkannya,
+  // baru jalan sesudah `kosong` selesai (`dependencies`). `pnpm e2e:ledger` menjalankan keduanya.
   projects: [
     {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        ...(executablePath ? { launchOptions: { executablePath } } : {}),
-      },
+      name: 'kosong',
+      testIgnore: DATA_SPECS,
+      use: browser,
+    },
+    {
+      name: 'data',
+      testMatch: DATA_SPECS,
+      dependencies: ['kosong'],
+      use: browser,
     },
   ],
   webServer: {
