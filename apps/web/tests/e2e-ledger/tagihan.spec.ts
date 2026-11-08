@@ -113,56 +113,58 @@ test('lewat jatuh tempo: ikon + teks bukan warna saja, tanggal 1 sebelum hari in
   await expect(lewat.locator('svg').first()).toBeVisible();
 });
 
-test('bayar dengan nominal beda: saldo turun hari ini, satu entri, lunas, toast Urungkan', async ({
-  page,
-}) => {
-  const before = await walletBalance(page, 'pribadi', WALLET);
-  await page.goto('/pribadi/rencana?bagian=tagihan');
-  const sheet = paySheet(page);
-  await openUntil(
-    () => payBtn(page, A).first(),
-    sheet,
-    sheet.getByRole('textbox', { name: 'Nominal' }),
-  );
-  await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toBeFocused();
-  await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toHaveValue('485.000');
-  await expect(sheet.getByText('Perkiraan Rp 485.000')).toBeVisible();
-  // Dompet Kas Kantor (pocket kantor) tidak pernah ditawarkan untuk membayar tagihan.
-  const kantor = await adminQuery<{ name: string }>(
-    `select name from app.accounts where space_id = $1 and pocket = 'kantor'`,
-    [await spaceId('personal')],
-  );
-  const options = await sheet
-    .getByRole('combobox', { name: 'Dompet' })
-    .locator('option')
-    .allInnerTexts();
-  expect(options).toContain(WALLET);
-  for (const k of kantor) expect(options).not.toContain(k.name);
-  await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
-  await sheet.getByRole('textbox', { name: 'Nominal' }).fill('512000');
-  const pay = sheet.getByRole('button', { name: /^Bayar Rp\s512\.000$/ });
-  await pay.dblclick();
-  await expect(
-    toasts(page).getByText(`Tagihan ${A} dibayar di Pribadi · Rp 512.000 dari ${WALLET}`),
-  ).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expectFocusKept(page);
-  const entries = await adminQuery<{ n: number; amount: string }>(
-    `select count(*)::int as n, coalesce(max(l.amount),0)::text as amount from app.entries e
+test(
+  'bayar dengan nominal beda: saldo turun hari ini, klik ganda = satu entri, lunas, toast Urungkan',
+  { tag: ['@C6'] },
+  async ({ page }) => {
+    const before = await walletBalance(page, 'pribadi', WALLET);
+    await page.goto('/pribadi/rencana?bagian=tagihan');
+    const sheet = paySheet(page);
+    await openUntil(
+      () => payBtn(page, A).first(),
+      sheet,
+      sheet.getByRole('textbox', { name: 'Nominal' }),
+    );
+    await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toBeFocused();
+    await expect(sheet.getByRole('textbox', { name: 'Nominal' })).toHaveValue('485.000');
+    await expect(sheet.getByText('Perkiraan Rp 485.000')).toBeVisible();
+    // Dompet Kas Kantor (pocket kantor) tidak pernah ditawarkan untuk membayar tagihan.
+    const kantor = await adminQuery<{ name: string }>(
+      `select name from app.accounts where space_id = $1 and pocket = 'kantor'`,
+      [await spaceId('personal')],
+    );
+    const options = await sheet
+      .getByRole('combobox', { name: 'Dompet' })
+      .locator('option')
+      .allInnerTexts();
+    expect(options).toContain(WALLET);
+    for (const k of kantor) expect(options).not.toContain(k.name);
+    await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
+    await sheet.getByRole('textbox', { name: 'Nominal' }).fill('512000');
+    const pay = sheet.getByRole('button', { name: /^Bayar Rp\s512\.000$/ });
+    await pay.dblclick();
+    await expect(
+      toasts(page).getByText(`Tagihan ${A} dibayar di Pribadi · Rp 512.000 dari ${WALLET}`),
+    ).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expectFocusKept(page);
+    const entries = await adminQuery<{ n: number; amount: string }>(
+      `select count(*)::int as n, coalesce(max(l.amount),0)::text as amount from app.entries e
        join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
       where e.description = $1 and e.voided_at is null`,
-    [A],
-  );
-  expect(entries[0]?.n).toBe(1);
-  expect(entries[0]?.amount).toBe('-512000');
-  expect(await walletBalance(page, 'pribadi', WALLET)).toBe(before - 512_000);
-  await page.goto('/pribadi/rencana?bagian=tagihan');
-  await expect(
-    main(page)
-      .getByText(/^Lunas · \d+ \w+$/)
-      .first(),
-  ).toBeVisible();
-});
+      [A],
+    );
+    expect(entries[0]?.n).toBe(1);
+    expect(entries[0]?.amount).toBe('-512000');
+    expect(await walletBalance(page, 'pribadi', WALLET)).toBe(before - 512_000);
+    await page.goto('/pribadi/rencana?bagian=tagihan');
+    await expect(
+      main(page)
+        .getByText(/^Lunas · \d+ \w+$/)
+        .first(),
+    ).toBeVisible();
+  },
+);
 
 test('bayar ulang dari tab lain = already_posted, tanpa nominal, Muat ulang menutup sheet', async ({
   page,
