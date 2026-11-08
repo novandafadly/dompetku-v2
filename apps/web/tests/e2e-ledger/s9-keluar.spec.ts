@@ -555,6 +555,10 @@ test('skenario campuran: Beranda = Rencana = Laporan (layar dan SQL), Pribadi da
     // kategori + selisih sah dari SQL mentah.
     const sumRencana = [...rencana.spent.values()].reduce((a, b) => a + b, 0);
     const gap = await legitimateGap(c, per);
+    // Skenario ini tidak mengarsipkan kategori induk yang punya pengeluaran periode ini, jadi
+    // selisih arsip harus nol; bila suatu saat bukan nol, persamaan di bawah tidak lagi menguji
+    // apa-apa untuk cabang itu dan skenario perlu diperbarui dengan sengaja.
+    expect(gap.archived, `${ruang} selisih kategori arsip`).toBe(0);
     const fee = laporan.rows.get('Biaya transfer') ?? 0;
     const none = laporan.rows.get('Tanpa kategori') ?? 0;
     expect(
@@ -599,6 +603,17 @@ test('skenario campuran: Beranda = Rencana = Laporan (layar dan SQL), Pribadi da
       expect(laporan.rows.get(SEHAT)).toBe(64_000 + 77_000);
       expect(beranda.tagihan).toBeGreaterThanOrEqual(55_000);
       expect(beranda.wajib).toBeGreaterThanOrEqual(300_000 - 64_000);
+
+      // Kartu Beranda `Anggaran hampir habis` = Laporan per kategori: Makan Siang & Minum tidak
+      // wajib, jadi terpakai harus sama persis. Baris tampil karena tes anggaran di atas mengatur
+      // ±90% dan skenario ini menambah Rp 250.000 lagi (pct hanya naik; dijaga SQL di bawah).
+      expect((await overviewOf(n, MAKAN)).pct).toBeGreaterThanOrEqual(80);
+      await page.goto('/pribadi/beranda');
+      const li = budgetsCard(page).locator('li').filter({ hasText: MAKAN });
+      await expect(li).toBeVisible();
+      expect(money(await seen(li), /(−?)Rp\s?([\d.]+) dari Rp/), 'Beranda = Laporan').toBe(
+        laporan.rows.get(MAKAN),
+      );
     }
   }
 });
@@ -695,12 +710,14 @@ test('keyboard saja: Rencana (segmen → Atur → simpan; Bayar → konfirmasi) 
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/pribadi/rencana?bagian=tagihan');
+  await hydrated(page);
   const segAnggaran = main(page)
     .getByRole('navigation', { name: 'Bagian Rencana' })
     .getByRole('link', { name: 'Anggaran' });
   await tabTo(page, segAnggaran);
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/pribadi\/rencana$/);
+  await hydrated(page);
   const rowMakan = main(page)
     .getByRole('region', { name: 'Dianggarkan', exact: true })
     .locator('[data-budget-row]')
@@ -725,6 +742,7 @@ test('keyboard saja: Rencana (segmen → Atur → simpan; Bayar → konfirmasi) 
   await tabTo(page, segTagihan, 80, 'Shift+Tab');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/bagian=tagihan$/);
+  await hydrated(page);
   const next = payBtn(page, BILL_LALU).first();
   await tabTo(page, next);
   await page.keyboard.press('Enter');
