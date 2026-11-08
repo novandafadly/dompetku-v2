@@ -610,6 +610,24 @@ describe('BerandaReal S9 (BR1, BR2)', () => {
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
   });
 
+  it('checklist sesudah Tagihan 7 hari dan Anggaran hampir habis (S9-C2)', () => {
+    for (const ruang of ['pribadi', 'bersama'] as const) {
+      const { container } = render(view({}, ruang));
+      const t = container.textContent;
+      const idx = [
+        ruang === 'pribadi' ? 'Aman dipakai' : 'Aman dipakai bersama',
+        'Tanpa pengeluaran hari ini',
+        'Tagihan 7 hari',
+        'Anggaran hampir habis',
+        'Mulai dari sini',
+        'Terakhir',
+      ].map((x) => t.indexOf(x));
+      expect(idx.every((i) => i >= 0)).toBe(true);
+      expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+      cleanup();
+    }
+  });
+
   it('tanpa dompet operasional dan Bersama kosong: kedua kartu tidak dirender', () => {
     render(view({ hasOperasional: false }, 'pribadi'));
     expect(screen.queryByRole('region', { name: 'Tagihan 7 hari' })).toBeNull();

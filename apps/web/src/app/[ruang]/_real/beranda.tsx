@@ -203,7 +203,10 @@ export function BerandaReal({
     );
   }
 
-  // HP: Aman → S6-B1 → checklist → (Bersama) Kontribusi → Aktivitas → Terakhir, satu kolom. Laptop: keputusan kiri, riwayat kanan.
+  // HP: Aman → S6-B1 → Tagihan 7 hari → Anggaran hampir habis → checklist → (Bersama) Kontribusi →
+  // Aktivitas → Terakhir, satu kolom. Checklist sesudah dua kartu S9 (critique S9-C2): kartu yang
+  // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop: keputusan
+  // kiri, riwayat kanan.
   return (
     <>
       {header}
@@ -220,12 +223,12 @@ export function BerandaReal({
             noSpendMarked={data.today.noSpendMarked}
             onMark={markNoSpendDayAction.bind(null, ruang)}
           />
-          {checklist}
           {/* S9-BR2: HP satu kolom, tablet dan laptop berdampingan (auto-fit). */}
           <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:grid-cols-autofit-260">
             <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
             <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
           </div>
+          {checklist}
           {kontribusi}
         </div>
         <div className="flex flex-col gap-3 tablet:gap-4">
