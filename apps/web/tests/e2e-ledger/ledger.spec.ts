@@ -526,9 +526,13 @@ test('keyboard saja', async ({ page }) => {
   await expect(
     page.getByRole('main').getByRole('link', { name: new RegExp(PRIBADI_KANARI) }),
   ).toBeVisible();
-  await page.keyboard.press('c');
   const sheet = catatSheet(page);
-  await expect(chipsOf(sheet).first()).toBeVisible();
+  // Pintasan `c` dipasang shell sesudah hidrasi; tekan sebelum itu tidak membuka apa pun. Ulangi
+  // hanya bila belum ada dialog (pola `openCatat`).
+  await expect(async () => {
+    if ((await page.getByRole('dialog').count()) === 0) await page.keyboard.press('c');
+    await expect(chipsOf(sheet).first()).toBeVisible({ timeout: 2_000 });
+  }).toPass();
   const nominal = sheet.getByRole('textbox', { name: 'Nominal' });
   await expect(nominal).toBeFocused();
   await page.keyboard.type('4321');

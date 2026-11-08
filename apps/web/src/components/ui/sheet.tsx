@@ -114,6 +114,16 @@ export function Sheet({
               e.preventDefault();
             }
           }}
+          onKeyDown={(e) => {
+            // Radix memasang pendengar Escape hanya untuk lapisan teratas, dan sheet baru menjadi
+            // teratas satu render sesudah fokus awalnya bila lapisan lain (toast) sudah ada. Escape
+            // di celah itu jatuh ke toast dan sheet tetap terbuka. Cadangan: Escape dari dalam sheet
+            // yang belum ditangani lapisan mana pun menutup sheet.
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            if (e.target instanceof Element && e.target.closest('[data-own-escape]')) return;
+            e.preventDefault();
+            onOpenChange(false);
+          }}
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             returnFocusTo.current?.focus();
