@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { GaugeIcon } from '@/components/ui/icons/gauge';
 import { WarningIcon } from '@/components/ui/icons/warning';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
 import { focusRing, rowDivider } from '@/components/ui/styles';
@@ -16,7 +17,9 @@ const MAX_ROWS = 5;
 /**
  * Kartu `Anggaran hampir habis` mode nyata (S9-BR2): anggaran dengan pct ≥ 80 (loader). Server
  * Component, tanpa `'use client'` dan tanpa demo; `BudgetsNearLimit` prototipe tidak dipakai.
- * Baris hanya baca (tanpa caret dan tombol); mengatur dari Rencana.
+ * Baris hanya baca (tanpa caret dan tombol); mengatur dari Rencana. Ikon `warning` hanya bila ada
+ * baris (S9-C1): keadaan kosong dan galat memakai `gauge` netral (sama dengan prototipe), supaya
+ * ikon tidak menyatakan masalah yang tidak ada.
  */
 export function BudgetsNearCard({
   ruang,
@@ -27,7 +30,7 @@ export function BudgetsNearCard({
   query: string;
   data: BerandaBudgetsVM | 'error';
 }) {
-  const icon = <WarningIcon size={18} weight="fill" />;
+  const icon = <GaugeIcon size={18} />;
   if (data === 'error') {
     return (
       <ListCard title="Anggaran hampir habis" icon={icon}>
@@ -61,7 +64,7 @@ export function BudgetsNearCard({
   return (
     <ListCard
       title="Anggaran hampir habis"
-      icon={icon}
+      icon={<WarningIcon size={18} weight="fill" />}
       link={{ href, label: 'Semua', srLabel: 'anggaran' }}
     >
       <ul>

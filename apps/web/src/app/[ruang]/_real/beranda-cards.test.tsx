@@ -1,5 +1,8 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
+import { GaugeIcon } from '@/components/ui/icons/gauge';
+import { WarningIcon } from '@/components/ui/icons/warning';
 import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
 import { BillsDueCard } from './bills-due-view';
 import { BudgetsNearCard } from './budgets-near-view';
@@ -123,7 +126,30 @@ describe('BillsDueCard (S9-BR2)', () => {
   });
 });
 
+/** Ikon judul kartu (svg di dalam heading) dibanding markup ikon yang diharapkan. */
+function headingIcon(name: string): string {
+  const heading = within(screen.getByRole('region', { name })).getByRole('heading');
+  return heading.querySelector('svg')?.outerHTML ?? '';
+}
+const GAUGE = renderToStaticMarkup(<GaugeIcon size={18} />);
+const WARNING = renderToStaticMarkup(<WarningIcon size={18} weight="fill" />);
+
 describe('BudgetsNearCard (S9-BR2)', () => {
+  it('ikon peringatan hanya bila ada baris; kosong dan galat memakai gauge netral (S9-C1)', () => {
+    const cases = [
+      { data: { hasBudgets: true, items: [budget({})] }, icon: WARNING },
+      { data: { hasBudgets: false, items: [] }, icon: GAUGE },
+      { data: { hasBudgets: true, items: [] }, icon: GAUGE },
+      { data: 'error' as const, icon: GAUGE },
+    ];
+    expect(GAUGE).not.toBe(WARNING);
+    for (const c of cases) {
+      render(<BudgetsNearCard ruang="pribadi" query="" data={c.data} />);
+      expect(headingIcon('Anggaran hampir habis')).toBe(c.icon);
+      cleanup();
+    }
+  });
+
   it('baris baca: nama, persen, sisa; tanpa tombol; Semua ke anggaran', () => {
     render(
       <BudgetsNearCard
