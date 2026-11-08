@@ -295,6 +295,8 @@ test('saldo kurang: peringatan, lalu Tetap bayar sampai server (saldo jadi minus
 }) => {
   const SMALL = 'Dompet Kecil N';
   await addWallet(page, 'pribadi', SMALL, 10_000);
+  // 320 px: peringatan saldo membuat isi sheet lebih tinggi dari layar (S9-C9).
+  await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/pribadi/rencana?bagian=tagihan');
   const sheet = paySheet(page);
   await openUntil(
@@ -308,6 +310,20 @@ test('saldo kurang: peringatan, lalu Tetap bayar sampai server (saldo jadi minus
     `Saldo ${SMALL} tinggal Rp 10.000. Kalau dibayar, saldonya jadi −Rp 40.000.`,
   );
   await expect(sheet.getByRole('alert')).toHaveCount(0);
+  // S9-C9: `Lewati tagihan ini` bisa digulir ke pandangan, utuh di atas footer (tidak tertutup),
+  // dan target sentuhnya ≥ 44 px.
+  const skipBtn = sheet.getByRole('button', { name: 'Lewati tagihan ini' });
+  await skipBtn.scrollIntoViewIfNeeded();
+  const skipBox = await skipBtn.boundingBox();
+  const footerBox = await sheet.getByRole('button', { name: 'Tetap bayar' }).boundingBox();
+  expect(skipBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect((skipBox?.y ?? 0) + (skipBox?.height ?? 0)).toBeLessThanOrEqual(footerBox?.y ?? 0);
+  expect(
+    await skipBtn.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    }),
+  ).toBe(true);
   expect(
     (
       await adminQuery<{ n: number }>(
@@ -364,6 +380,8 @@ test('obligation_double: tagihan pada kategori beranggaran wajib; jalan keluar k
     [sid],
   );
   try {
+    // 320 px: isian lebih tinggi dari layar, fokus galat menggulir sheet (S9-C8).
+    await page.setViewportSize({ width: 320, height: 640 });
     await page.goto('/pribadi/rencana?bagian=tagihan');
     const sheet = billSheet(page);
     await openUntil(
@@ -384,6 +402,10 @@ test('obligation_double: tagihan pada kategori beranggaran wajib; jalan keluar k
       ),
     ).toBeVisible();
     await expect(sheet.getByRole('combobox', { name: 'Kategori' })).toBeFocused();
+    // S9-C8: kolom bergalat tidak menempel ke header sheet; labelnya tetap terlihat di bawah header.
+    const header = await sheet.locator('header').boundingBox();
+    const label = await sheet.locator('label', { hasText: /^Kategori$/ }).boundingBox();
+    expect(label?.y ?? 0).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
     expect(
       await adminQuery('select 1 from app.bills where name = $1', ['Bioskop Bulanan']),
     ).toHaveLength(0);

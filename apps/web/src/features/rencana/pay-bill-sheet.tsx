@@ -364,7 +364,9 @@ function Form(p: FormProps) {
                       : C.errInvalid}
         </Alert>
       )}
-      <div className="flex flex-col items-start gap-1 pt-1">
+      {/* S9-C9: ruang bawah supaya tautan dan keterangannya tidak menempel ke footer saat digulir
+          sampai ujung (320 px dengan peringatan saldo); tombol tetap 44 px. */}
+      <div className="flex flex-col items-start gap-1 pt-1 pb-3">
         <button
           type="button"
           aria-disabled={p.saving || undefined}
