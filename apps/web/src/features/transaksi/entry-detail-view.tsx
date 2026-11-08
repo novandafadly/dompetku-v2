@@ -150,12 +150,22 @@ export function EntryDetailView({
         <DetailRow term="Tanggal">{detailDateLabel(entry.occurredOn, today)}</DetailRow>
         <DetailRow term="Ruang">{ruangValue ?? <SpaceTag space={ruang} />}</DetailRow>
         <DetailRow term="Dicatat oleh">{by}</DetailRow>
-        {entry.kind === 'space_transfer' && entry.description !== undefined ? (
-          <DetailRow term="Keterangan">{entry.description}</DetailRow>
-        ) : null}
-        {entry.sharedNote === undefined ? null : (
-          <DetailRow term="Catatan">{entry.sharedNote}</DetailRow>
-        )}
+        {(() => {
+          const personalNote = entry.kind === 'space_transfer' ? entry.description : undefined;
+          const sharedNote = entry.sharedNote;
+          if (personalNote !== undefined && sharedNote !== undefined && personalNote !== sharedNote) {
+            return (
+              <>
+                <DetailRow term="Catatan pribadi">{personalNote}</DetailRow>
+                <DetailRow term="Catatan Bersama">{sharedNote}</DetailRow>
+              </>
+            );
+          }
+          const singleNote = personalNote ?? sharedNote;
+          return singleNote === undefined ? null : (
+            <DetailRow term="Catatan">{singleNote}</DetailRow>
+          );
+        })()}
         {rows}
       </dl>
       {after}

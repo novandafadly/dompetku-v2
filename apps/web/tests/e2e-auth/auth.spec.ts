@@ -352,7 +352,7 @@ test('pemilik: Detail nyata: Ubah, konflik versi dari tab lain, Batalkan + Urung
   const res = await page.request.get(path);
   expect(res.headers()['cache-control'] ?? '').toContain('no-store');
   await expect(main.getByRole('heading', { level: 1, name: PRIBADI_KANARI })).toBeVisible();
-  await expect(main.getByRole('definition').filter({ hasText: /^kamu$/ })).toBeVisible();
+  await expect(main.getByRole('definition').filter({ hasText: /^Kamu$/ })).toBeVisible();
   // Mode nyata S6: tanpa Pindahkan ke ruang lain (S7), tanpa data demo.
   await expect(main.getByRole('button', { name: 'Pindahkan ke ruang lain' })).toHaveCount(0);
   await expect(page.getByText('Data demo')).toHaveCount(0);

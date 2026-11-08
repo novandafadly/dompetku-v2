@@ -47,5 +47,5 @@ export function OnboardingChecklist({
       action: { kind: 'link', href: undangHref },
     });
   }
-  return <OnboardingChecklistView ruang={ruang} steps={steps} />;
+  return <OnboardingChecklistView ruang={ruang} steps={steps} partnerName="Farida" />;
 }

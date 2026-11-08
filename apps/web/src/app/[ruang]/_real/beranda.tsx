@@ -205,13 +205,17 @@ export function BerandaReal({
 
   // HP: Aman → S6-B1 → Tagihan 7 hari → Anggaran hampir habis → checklist → (Bersama) Kontribusi →
   // Aktivitas → Terakhir, satu kolom. Checklist sesudah dua kartu S9 (critique S9-C2): kartu yang
-  // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop: keputusan
-  // kiri, riwayat kanan.
+  // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop (S9-C10):
+  // kolom kiri = Aman + S6-B1 + checklist + Kontribusi; kolom kanan = Tagihan 7 hari + Anggaran
+  // hampir habis + Aktivitas + Terakhir (urutan DOM tetap, lewat penempatan kolom grid).
+  const leftBottom = checklist !== null || kontribusi !== null;
   return (
     <>
       {header}
-      <div className="grid grid-cols-1 gap-3 tablet:gap-4 laptop:max-w-250 laptop:grid-cols-beranda laptop:items-start laptop:gap-5">
-        <div className="flex flex-col gap-3 tablet:gap-4">
+      <div className="grid grid-cols-1 gap-3 tablet:gap-4 laptop:max-w-250 laptop:grid-cols-beranda laptop:items-start laptop:gap-x-5 laptop:gap-y-4">
+        <div
+          className={`flex flex-col gap-3 tablet:gap-4 laptop:col-start-1 laptop:row-start-1 ${leftBottom ? '' : 'laptop:row-span-2'}`}
+        >
           <AmanCardView
             ruang={ruang}
             vm={data.safe}
@@ -223,15 +227,19 @@ export function BerandaReal({
             noSpendMarked={data.today.noSpendMarked}
             onMark={markNoSpendDayAction.bind(null, ruang)}
           />
-          {/* S9-BR2: HP satu kolom, tablet dan laptop berdampingan (auto-fit). */}
-          <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:grid-cols-autofit-260">
-            <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
-            <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
-          </div>
-          {checklist}
-          {kontribusi}
         </div>
-        <div className="flex flex-col gap-3 tablet:gap-4">
+        {/* S9-BR2 + S9-C10: HP satu kolom, tablet berdampingan, laptop di kolom kanan. */}
+        <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:col-start-2 laptop:row-start-1 laptop:grid-cols-1">
+          <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
+          <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
+        </div>
+        {leftBottom ? (
+          <div className="flex flex-col gap-3 tablet:gap-4 laptop:col-start-1 laptop:row-start-2">
+            {checklist}
+            {kontribusi}
+          </div>
+        ) : null}
+        <div className="flex flex-col gap-3 tablet:gap-4 laptop:col-start-2 laptop:row-start-2">
           {/* Dua anggota: Aktivitas di atas Terakhir (sama dengan prototipe); solo tetap di bawah. */}
           {view.solo ? null : aktivitas}
           {recent}

@@ -91,6 +91,7 @@ export function toLedgerError(e: unknown): LedgerError | null {
         return { code: 'conflict' };
       case 'DK410':
         return { code: 'idem_mismatch' };
+      case 'DK401':
       case 'DK404':
         return { code: 'not_found' };
       case 'DK400': {
@@ -115,10 +116,21 @@ export function toLedgerError(e: unknown): LedgerError | null {
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         break;
     }
-    // DK401, DK500, DK422 lain, 23505, DKnnn baru: bug atau invarian, bukan keadaan UI.
+    // DK500, DK422 lain, 23505, DKnnn baru: bug atau invarian, bukan keadaan UI.
     logUnmapped(d.code, d.message);
     return { code: 'unknown' };
   }
   if (isNetwork(e)) return { code: 'network' };
   return null;
+}
+
+/**
+ * Keanggotaan ruang hilang atau sesi DB kosong di tengah request (`DK401` dari `require_user`,
+ * `DK404 space_not_found` dari `app.assert_member`). Loader page mengubahnya menjadi 404
+ * (`notFound()`), bukan layar gagal muat (`*Failed`).
+ */
+export function isSpaceNotFoundError(e: unknown): boolean {
+  const d = domainError(e);
+  if (d === null) return false;
+  return d.code === 'DK401' || (d.code === 'DK404' && d.message === 'space_not_found');
 }

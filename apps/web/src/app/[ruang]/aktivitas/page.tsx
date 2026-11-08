@@ -4,6 +4,7 @@ import { notFound, unstable_rethrow } from 'next/navigation';
 import { buildAktivitasHref, buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { encodeCursor, loadAktivitas, parseCursor } from '@/server/ledger/bersama';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext } from '../_real/context';
 import { AktivitasFailed, AktivitasReal } from '../_real/aktivitas';
@@ -49,6 +50,7 @@ export default async function Page({
     data = await loadAktivitas(ctx, { before });
   } catch (e) {
     unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
     console.error('[aktivitas] gagal memuat', errorTag(e));
     const retry = before === null ? query : withCursor(query, encodeCursor(before));
     return <AktivitasFailed backHref={backHref} retryHref={buildAktivitasHref(retry)} />;

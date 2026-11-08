@@ -5,6 +5,7 @@ import { cache } from 'react';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import { isRuang } from '@/features/shell/hrefs';
 import { authService, requireDataUser } from '@/server/auth/next';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { loadRuangShell, type RuangShellData } from '@/server/ledger/read';
 import { resolveSpace, SpaceNotFoundError } from '@/server/ledger/space';
 import type { LedgerCtx } from '@/server/ledger/write';
@@ -42,7 +43,10 @@ export async function ruangContext(
  */
 const shellOnce = cache(
   (pools: LedgerCtx['pools'], userId: string, spaceId: string): Promise<RuangShellData> =>
-    loadRuangShell({ pools, userId, spaceId }),
+    loadRuangShell({ pools, userId, spaceId }).catch((e: unknown) => {
+      if (isSpaceNotFoundError(e)) notFound();
+      throw e;
+    }),
 );
 
 export function ruangShell(ctx: LedgerCtx): Promise<RuangShellData> {

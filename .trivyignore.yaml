@@ -2,8 +2,12 @@
 # Entri gugur otomatis pada `expired_at`; sesudah itu CVE kembali menggagalkan CI.
 vulnerabilities:
   - id: CVE-2026-76844
+    purls:
+      - pkg:deb/debian/zlib1g
     expired_at: 2026-11-21
     statement: zlib1g di image dasar distroless nodejs24-debian13; tambalan Debian +deb13u1 belum masuk build distroless. Persetujuan pemilik 2026-11-07.
   - id: CVE-2026-85091
+    purls:
+      - pkg:deb/debian/zlib1g
     expired_at: 2026-11-21
     statement: zlib1g di image dasar distroless nodejs24-debian13; tambalan Debian +deb13u1 belum masuk build distroless. Persetujuan pemilik 2026-11-07.

@@ -88,28 +88,36 @@ export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }
             ) : null}
           </span>
         </span>
-        <span className={`flex items-center gap-1 text-meta font-semibold ${TONE[sub.tone]}`}>
+        <span className={`flex flex-wrap items-center gap-1 text-meta font-semibold ${TONE[sub.tone]}`}>
           <SubIcon icon={sub.icon} />
-          {sub.text}
+          <span>{sub.text}</span>
+          {item.occ?.skipped === true ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <MoneyText value={item.occ.amount} size="inherit" />
+            </>
+          ) : null}
         </span>
       </span>
     </>
   );
 }
 
-/** Kolom kanan: nominal di atas, aksi (Bayar / Batalkan lewati) di bawahnya, rata kanan. */
+/** Kolom kanan: nominal di atas, aksi (Bayar / Batalkan lewati) di bawahnya, rata kanan atas (S9-C3). */
 export function BillAmountColumn({
   amount,
   children,
 }: {
-  amount: number;
+  amount?: number | null;
   children?: React.ReactNode;
 }) {
   return (
-    <span className="ml-auto flex shrink-0 flex-col items-end justify-center gap-1.5 py-2 pr-4">
-      <span className="whitespace-nowrap">
-        <MoneyText value={amount} />
-      </span>
+    <span className="ml-auto flex shrink-0 flex-col items-end justify-start gap-1.5 pt-2.5 pr-4 pb-2">
+      {amount === undefined || amount === null ? null : (
+        <span className="whitespace-nowrap">
+          <MoneyText value={amount} />
+        </span>
+      )}
       {children}
     </span>
   );

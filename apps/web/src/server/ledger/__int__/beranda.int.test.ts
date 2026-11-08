@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { PARTNER } from '../../auth/__int__/harness';
 import { withUser } from '../../db';
 import { loadBeranda } from '../beranda';
+import { isSpaceNotFoundError } from '../errors';
 import { listAccounts } from '../read';
 import { resolveSpace } from '../space';
 import { createAccount, createEntry, type LedgerCtx } from '../write';
@@ -191,6 +192,11 @@ describe('loadBeranda (persona N)', () => {
 
       // Farida (anggota, bukan pemilik) tidak pernah melihat Undang Farida.
       expect((await loadBeranda(await ctxOf(f, 'bersama'))).invite).toBe(false);
+
+      // Bila keanggotaan ruang dicabut di tengah request (sesudah resolveSpace), loadBeranda
+      // melempar DK404 space_not_found yang dikenali isSpaceNotFoundError (page → 404).
+      const err = await loadBeranda({ ...pribadi, userId: f.id }).catch((e: unknown) => e);
+      expect(isSpaceNotFoundError(err)).toBe(true);
     });
 
     it('Bersama dua anggota kosong: empty tanpa ajakan; bukan pemilik: isOwner false', async () => {

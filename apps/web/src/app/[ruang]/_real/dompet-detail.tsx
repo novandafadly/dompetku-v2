@@ -14,7 +14,12 @@ import {
 } from '@/features/dompet/account-history-view';
 import { groupByDayVM } from '@/features/ledger/group-by-day';
 import { openingEditable } from '@/features/ledger/opening';
-import { effectOnAccountVM, entryKindLabelVM, entryTitleVM } from '@/features/ledger/present';
+import {
+  accountFeeNoteVM,
+  effectOnAccountVM,
+  entryKindLabelVM,
+  entryTitleVM,
+} from '@/features/ledger/present';
 import type { Ruang } from '@/features/ledger/types';
 import { buildEntryHref } from '@/features/shell/hrefs';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
@@ -67,6 +72,7 @@ export function DompetDetailReal({
     total: g.entries.reduce((sum, e) => sum + effect(e).value, 0),
     rows: g.entries.map((e): HistoryRow => {
       const { value, kind } = effect(e);
+      const feeNote = accountFeeNoteVM(e, account.id);
       return {
         id: e.id,
         href: buildEntryHref(ruang, e.id, query),
@@ -78,6 +84,9 @@ export function DompetDetailReal({
             ? `${e.accountName} → ${e.counterAccountName}`
             : account.name
         }`,
+        ...(feeNote === undefined
+          ? {}
+          : { status: <span className="text-meta font-semibold text-text-muted">{feeNote}</span> }),
         value,
         kind,
       };

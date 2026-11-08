@@ -12,7 +12,7 @@
 -- Persona N, F, Luar (tests.x(), tanpa ruang); kanari KANARI-N-TAGIHAN dan KANARI-F-TAGIHAN.
 -- ID: B1, B2, B13, T13, T14, T15, Z4
 begin;
-select plan(133);
+select plan(137);
 select tests.fixture();
 select tests.clock_at('2026-11-05 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -424,6 +424,15 @@ from (values
   ('bill_list', format('select count(*) from api.bill_list(%L)', :'sh'), 'DK404:space_not_found:'),
   ('bills_due', format('select count(*) from api.bills_due(%L)', :'sh'), 'DK404:space_not_found:')
 ) v (t, q, e);
+-- 0122: assert_member sebelum idem_begin: client_id bekas milik sendiri ke ruang/kemunculan orang lain tetap DK404 (bukan DK410).
+select is(pg_temp.err(tests.n(), format($$select api.create_bill('a0000000-0000-4000-8000-000000000001', %L, 'Sadar',
+    10000, %L, 10::smallint, '2026-11-05')$$, :'fp', :'flangganan')),
+  'DK404:space_not_found:', 'create_bill ke ruang orang lain dengan client_id bekas = DK404 (assert_member sebelum idem_begin)');
+select is(pg_temp.err(tests.f(), pg_temp.post_sql(pg_temp.occ_id(:'bill_k', '2026-11-20'), :'fbca', 99000, null,
+    'a0000000-0000-4000-8000-000000000002')),
+  'DK404:bill_not_found:', 'post_bill_occurrence ke kemunculan orang lain dengan client_id bekas = DK404 (assert_member sebelum idem_begin)');
+select is(tests.owner_val(null, format('select count(*) from app.idempotency_keys where user_id = %L', tests.x())), '0',
+  'pemanggil bukan anggota (Luar) tidak meninggalkan baris idempotency_keys');
 
 -- ===== Waktu WIB =====
 -- 31 Okt 23:30 WIB (16:30 UTC): bayar di muka bertanggal 31 Okt [T13].
@@ -470,6 +479,10 @@ select is(pg_temp.occ(:'bill_d31'),
   'tanggal 31: 30 Nov, 31 Des, 31 Jan, 28 Feb 2027, 31 Mar [T14] [Z4]');
 select is(pg_temp.occ(:'bill_g'), '2026-11-15:200000:lunas,2026-12-15:200000:buka,2027-01-15:200000:buka',
   'berakhir 31 Jan: berhenti di 15 Jan; 15 Nov sudah dibayar di muka');
+-- 0122: batas atas p_through = app.today() + 400 (25 Nov 2026 + 400 = 30 Des 2027).
+select tests.worker_val(null, $$select jobs.materialize_bills('2099-12-31')$$);
+select is(tests.owner_val(null, $$select max(due_on) || ' ' || count(*) filter (where due_on > '2027-12-30') from app.bill_occurrences$$),
+  '2027-12-25 0', 'p_through 2099-12-31 dibatasi app.today() + 400 (30 Des 2027; tanggal 31 Des 2027 tidak ikut)');
 
 select * from finish();
 rollback;

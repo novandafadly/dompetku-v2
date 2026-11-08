@@ -308,15 +308,16 @@ test('parameter rusak atau di luar jangkauan = periode berjalan', async ({ page 
   }
 });
 
-test('periode tanpa transaksi: keadaan kosong dengan ajakan Catat, tanpa Rp 0', async ({
+test('periode lama tanpa transaksi: keadaan kosong dengan tautan Ke periode ini, tanpa tren dan tanpa Rp 0', async ({
   page,
 }) => {
   await page.goto('/pribadi/laporan?periode=2020-01');
   await expect(
     main(page).getByRole('heading', { name: 'Belum ada transaksi di periode ini.' }),
   ).toBeVisible();
-  await expect(main(page).getByRole('button', { name: 'Catat' })).toBeVisible();
+  await expect(main(page).getByRole('link', { name: 'Ke periode ini' })).toBeVisible();
   await expect(page.getByTestId('laporan-ringkasan')).toHaveCount(0);
+  await expect(page.getByTestId('laporan-tren')).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Periode sebelumnya belum tersedia' })).toBeVisible();
 });
 

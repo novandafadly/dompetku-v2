@@ -1,5 +1,4 @@
 import { access } from 'node:fs/promises';
-import pg from 'pg';
 import { test as base, expect, type Browser, type Page } from '@playwright/test';
 import {
   BERSAMA_MAIL_FILE,
@@ -7,17 +6,17 @@ import {
   BERSAMA_PARTNER_STATE,
 } from '../../playwright.bersama.config';
 import {
-  addPasskeyAuthenticator,
+  adminQuery,
   createExpense,
   createWallet,
   lastMail,
   linkIn,
+  PASSWORD,
+  registerOwner,
   spaceOf,
   totp,
 } from '../e2e-auth/helpers';
 import { OWNER, PARTNER } from './global-setup';
-
-const PASSWORD = 'kuda-lari-di-sawah-42';
 
 /** Data kanari Pribadi (nominal berbeda per orang agar bocor lintas ruang mudah terlihat). */
 export const KANARI = {
@@ -36,32 +35,18 @@ export const KANARI = {
 } as const;
 export type Kanari = typeof KANARI;
 
-/** Satu kueri superuser untuk memeriksa baris (tidak menulis data uji). */
-async function adminRows<T extends pg.QueryResultRow>(
-  sql: string,
-  params: unknown[],
-): Promise<T[]> {
-  const admin = new pg.Client({ connectionString: process.env.AUTH_E2E_ADMIN_URL });
-  await admin.connect();
-  try {
-    return (await admin.query<T>(sql, params)).rows;
-  } finally {
-    await admin.end();
-  }
-}
-
 /**
  * Isi Pribadi satu orang; idempoten karena worker dimulai ulang sesudah tes gagal dan nama dompet
  * unik per ruang (createWallet kedua kali akan melempar): cek dulu dompet dan entri yang ada.
  */
 export async function seedKanari(k: Kanari['n'] | Kanari['f']): Promise<void> {
   const { sid } = await spaceOf(k.email, 'personal');
-  const [wallet] = await adminRows('select 1 from app.accounts where space_id = $1 and name = $2', [
+  const [wallet] = await adminQuery('select 1 from app.accounts where space_id = $1 and name = $2', [
     sid,
     k.wallet,
   ]);
   if (!wallet) await createWallet(k.email, 'personal', k.wallet, 20_000_000);
-  const [entry] = await adminRows(
+  const [entry] = await adminQuery(
     'select 1 from app.entries where space_id = $1 and description = $2',
     [sid, k.description],
   );
@@ -75,36 +60,6 @@ const exists = (file: string) =>
     () => true,
     () => false,
   );
-
-/** Pemilik lewat alur nyata (sama dengan e2e-ledger): daftar, konfirmasi, passkey, kode pemulihan. */
-async function registerOwner(browser: Browser, baseURL: string): Promise<void> {
-  const context = await browser.newContext({ baseURL });
-  try {
-    const page = await context.newPage();
-    await page.goto('/buat-akun');
-    await page.getByLabel('Email').fill(OWNER);
-    await page.getByLabel('Nama panggilan').fill('Novanda');
-    await page.getByLabel('Kata sandi baru').fill(PASSWORD);
-    await page.getByRole('button', { name: 'Buat akun' }).click();
-    await expect(page.getByRole('heading', { name: 'Periksa email' })).toBeVisible();
-    await page.goto(linkIn((await lastMail(/Konfirmasi email/, BERSAMA_MAIL_FILE)).text));
-    await page.getByRole('button', { name: 'Konfirmasi email' }).click();
-    await expect(page.getByText('Email terkonfirmasi.')).toBeVisible();
-    await page.getByLabel('Email').fill(OWNER);
-    await page.getByLabel('Kata sandi', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: 'Masuk', exact: true }).click();
-    await expect(page).toHaveURL(/\/amankan$/);
-    await addPasskeyAuthenticator(page);
-    await page.getByRole('button', { name: 'Buat passkey' }).click();
-    await page.getByRole('button', { name: 'Buat kode pemulihan' }).click();
-    await page.getByLabel('Saya sudah menyimpan kode ini di tempat yang aman.').check();
-    await page.getByRole('button', { name: 'Selesai' }).click();
-    await expect(page).toHaveURL(/\/pribadi\/beranda$/);
-    await context.storageState({ path: BERSAMA_OWNER_STATE });
-  } finally {
-    await context.close();
-  }
-}
 
 /** N mengundang F lewat /undang. */
 async function invitePartner(ownerPage: Page): Promise<void> {
@@ -167,7 +122,8 @@ export const test = base.extend<
   ownerState: [
     async ({ browser }, provide, workerInfo) => {
       const baseURL = workerInfo.project.use.baseURL ?? '';
-      if (!(await exists(BERSAMA_OWNER_STATE))) await registerOwner(browser, baseURL);
+      if (!(await exists(BERSAMA_OWNER_STATE)))
+        await registerOwner(browser, baseURL, OWNER, BERSAMA_MAIL_FILE, BERSAMA_OWNER_STATE);
       await provide(BERSAMA_OWNER_STATE);
     },
     { scope: 'worker', timeout: 120_000 },

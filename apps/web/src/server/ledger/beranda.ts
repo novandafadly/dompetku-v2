@@ -102,31 +102,39 @@ const RECENT = 5;
 const BILLS_WITHIN_DAYS = 7;
 
 /**
- * Ada tagihan aktif atau anggaran wajib berlabel periode ini (`showObligations` kartu Aman).
- * Kueri `exists` dengan `space_id` eksplisit.
+ * Ada tagihan aktif di ruang ini (`hasBills` di kartu Tagihan 7 hari dan bagian `hasObligations`
+ * kartu Aman). Dipanggil sekali per transaksi `loadBeranda`.
  */
-async function hasObligationsTx(
-  c: pg.PoolClient,
-  ctx: LedgerCtx,
-  labelMonth: IsoDate,
-): Promise<boolean> {
-  const { rows } = await c.query<{ any: boolean }>(
-    `select exists (select 1 from app.bills b where b.space_id = $1 and b.archived_at is null)
-            or exists (select 1 from app.budgets b
-                        where b.space_id = $1 and b.month = $2::date and b.wajib) as any`,
-    [ctx.spaceId, labelMonth],
-  );
-  return rows[0]?.any === true;
-}
-
-async function billsCardTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<BerandaBillsVM> {
-  const items = await billsDueTx(c, ctx, { withinDays: BILLS_WITHIN_DAYS });
+async function hasActiveBillsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<boolean> {
   const { rows } = await c.query<{ any: boolean }>(
     `select exists (select 1 from app.bills b where b.space_id = $1 and b.archived_at is null)
               as any`,
     [ctx.spaceId],
   );
-  return { items, hasBills: rows[0]?.any === true };
+  return rows[0]?.any === true;
+}
+
+/** Ada anggaran wajib berlabel periode ini (`hasObligations` kartu Aman bila belum ada tagihan). */
+async function hasWajibBudgetsTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  labelMonth: IsoDate,
+): Promise<boolean> {
+  const { rows } = await c.query<{ any: boolean }>(
+    `select exists (select 1 from app.budgets b
+                     where b.space_id = $1 and b.month = $2::date and b.wajib) as any`,
+    [ctx.spaceId, labelMonth],
+  );
+  return rows[0]?.any === true;
+}
+
+async function billsCardTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  hasBills: boolean,
+): Promise<BerandaBillsVM> {
+  const items = await billsDueTx(c, ctx, { withinDays: BILLS_WITHIN_DAYS });
+  return { items, hasBills };
 }
 
 async function budgetsCardTx(
@@ -219,10 +227,12 @@ export async function loadBeranda(
       const period = await payPeriodTx(c, ctx);
       const raw = await safeToSpendTx(c, ctx);
       const pace = await spendPaceTx(c, ctx);
+      const hasBills = await hasActiveBillsTx(c, ctx);
+      const hasObligations = hasBills || (await hasWajibBudgetsTx(c, ctx, period.labelMonth));
       const safe: SafeToSpendFullVM = {
         ...raw,
         ...amanStatus(raw, pace),
-        hasObligations: await hasObligationsTx(c, ctx, period.labelMonth),
+        hasObligations,
       };
       const today = await todayStatusTx(c, ctx);
       const accounts = given === undefined ? await listAccountsTx(c, ctx) : null;
@@ -239,7 +249,7 @@ export async function loadBeranda(
               labelMonth: period.labelMonth,
             })
           : { partner: null, activity: null, contributions: null };
-      const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx));
+      const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx, hasBills));
       const budgetsNear = await guarded(c, 'budgets', () =>
         budgetsCardTx(c, ctx, period.labelMonth),
       );

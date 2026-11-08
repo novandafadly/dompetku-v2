@@ -76,11 +76,13 @@ export function BudgetItemView({
   const remaining = row.remaining ?? 0;
   return (
     <span className="flex w-full flex-col gap-2 text-left">
-      <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      <span className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="flex min-w-0 items-center gap-2 text-body/tight font-semibold text-text">
-          <span className="truncate">{row.name}</span>
+          <span data-budget-name className="line-clamp-2 break-words leading-snug">
+            {row.name}
+          </span>
           {row.wajib ? (
-            <span className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-tag/snug font-semibold text-text-soft">
+            <span className="shrink-0 whitespace-nowrap rounded-sm border border-border px-1.5 py-0.5 text-tag/snug font-semibold text-text-soft">
               {RENCANA_COPY.wajib}
             </span>
           ) : null}
@@ -111,7 +113,12 @@ export function UnbudgetedItemView({ row }: { row: BudgetOverviewVM }) {
         <CategoryGlyph icon={row.icon} name={row.name} size={20} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.75">
-        <span className="truncate text-body/tight font-semibold text-text">{row.name}</span>
+        <span
+          data-budget-name
+          className="line-clamp-2 break-words text-body/snug font-semibold text-text"
+        >
+          {row.name}
+        </span>
         <span className="text-meta font-medium text-text-muted">
           {row.spent === 0 ? (
             RENCANA_COPY.noSpend

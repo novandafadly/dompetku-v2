@@ -1,7 +1,9 @@
 import { todayWIB } from '@dompetku/domain';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadBeranda } from '@/server/ledger/beranda';
+import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { BerandaReal } from '../_real/beranda';
 import { ruangAccounts, ruangContext } from '../_real/context';
 import { BerandaPage } from './view';
@@ -22,7 +24,14 @@ export default async function Page({
 }) {
   if (isPrototype()) return <BerandaPage />;
   const ctx = await ruangContext(params);
-  const data = await loadBeranda(ctx, { accounts: ruangAccounts(ctx) });
+  let data;
+  try {
+    data = await loadBeranda(ctx, { accounts: ruangAccounts(ctx) });
+  } catch (e) {
+    unstable_rethrow(e);
+    if (isSpaceNotFoundError(e)) notFound();
+    throw e;
+  }
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(await searchParams)) if (typeof v === 'string') sp.set(k, v);
   return (

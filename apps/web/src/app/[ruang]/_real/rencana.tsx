@@ -184,11 +184,11 @@ function BillRowItem({ item }: { item: BillItem }) {
   const amount = occ?.amount ?? bill.amount;
   return (
     <li className={rowDivider}>
-      <div className="-mx-4 flex flex-wrap items-stretch">
+      <div className="-mx-4 flex flex-wrap items-start">
         <BillBodyIsland billId={bill.billId} occurrenceId={occ?.occurrenceId} className={BILL_BODY}>
           <BillBodyView item={item} caret />
         </BillBodyIsland>
-        <BillAmountColumn amount={amount}>
+        <BillAmountColumn amount={occ?.skipped === true ? null : amount}>
           {occ !== null && action === 'bayar' ? (
             <PayIsland
               occurrenceId={occ.occurrenceId}

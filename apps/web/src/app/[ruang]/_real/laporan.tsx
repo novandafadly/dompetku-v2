@@ -1,7 +1,10 @@
 import type { Route } from 'next';
+import Link from 'next/link';
+import { buttonClass } from '@/components/ui/button';
 import { CategoryChartView } from '@/features/laporan/category-chart-view';
 import { ClassBreakdownView } from '@/features/laporan/class-breakdown-view';
 import { ContributionReportView } from '@/features/laporan/contribution-report-view';
+import { laporanHref } from '@/features/laporan/href';
 import {
   LaporanEmptyCard,
   LaporanFailedCard,
@@ -45,8 +48,10 @@ export function LaporanReal({
   const { period, summary } = data;
   const title = period.label.split(' · ')[0] ?? period.label;
   const empty = data.categories.length === 0 && data.classes.length === 0;
-  const showTrend = data.trend.some((r) => r.pemasukan !== 0 || r.pengeluaran !== 0);
   const viewed = period.labelMonth.slice(0, 7);
+  const inTrendWindow = data.trend.some((r) => r.labelMonth.slice(0, 7) === viewed);
+  const showTrend =
+    inTrendWindow && data.trend.some((r) => r.pemasukan !== 0 || r.pengeluaran !== 0);
   return (
     <>
       <PageHeader title="Laporan" />
@@ -57,7 +62,20 @@ export function LaporanReal({
         </p>
         <PeriodPicker ruang={ruang} period={period} query={query} />
         {empty ? (
-          <LaporanEmptyCard action={<CatatEmptyIsland />} />
+          <LaporanEmptyCard
+            action={
+              period.isCurrent ? (
+                <CatatEmptyIsland />
+              ) : (
+                <Link
+                  href={laporanHref(ruang, query, { periode: null, basis: period.basis })}
+                  className={buttonClass('secondary')}
+                >
+                  Ke periode ini
+                </Link>
+              )
+            }
+          />
         ) : (
           <>
             <div className="flex flex-col gap-3 tablet:gap-4 laptop:grid laptop:grid-cols-2 laptop:items-start">

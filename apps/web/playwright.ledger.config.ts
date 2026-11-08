@@ -30,6 +30,7 @@ const DATA_SPECS = [
   /[\\/]laporan\.spec\.ts$/,
   /[\\/]s9-keluar\.spec\.ts$/,
   /[\\/]tagihan\.spec\.ts$/,
+  /[\\/]vitals\.spec\.ts$/,
 ];
 
 export default defineConfig({

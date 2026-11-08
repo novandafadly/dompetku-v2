@@ -3,6 +3,7 @@ import type { DemoState, Entry } from '@dompetku/demo-data';
 import { formatRupiah } from '@dompetku/domain';
 import { describe, expect, it } from 'vitest';
 import {
+  accountFeeNoteVM,
   effectOnAccountVM,
   entryKindLabelVM,
   entryTitleVM,
@@ -91,16 +92,21 @@ describe('effectOnAccountVM: efek entri pada satu dompet (riwayat dompet)', () =
     });
   });
 
-  it('transfer: dompet sumber berkurang, dompet lawan bertambah (netral)', () => {
-    const t: EntryVM = { ...base, kind: 'transfer', counterAccountId: 'a2' };
-    expect(effectOnAccountVM(t, 'a1')).toEqual({ value: -25_000, kind: 'neutral' });
+  it('transfer: dompet sumber berkurang sebesar nominal + biaya, dompet lawan bertambah sebesar nominal (netral)', () => {
+    const t: EntryVM = { ...base, kind: 'transfer', counterAccountId: 'a2', fee: 2_500 };
+    expect(effectOnAccountVM(t, 'a1')).toEqual({ value: -27_500, kind: 'neutral' });
     expect(effectOnAccountVM(t, 'a2')).toEqual({ value: 25_000, kind: 'neutral' });
+    expect(accountFeeNoteVM(t, 'a1')).toBe(`Biaya ${formatRupiah(2_500)}`);
+    expect(accountFeeNoteVM(t, 'a2')).toBeUndefined();
   });
 
-  it('antar ruang dan cocokkan saldo mengikuti arah; tanpa arah dianggap menambah', () => {
-    expect(
-      effectOnAccountVM({ ...base, kind: 'space_transfer', direction: 'out' }, 'a1').value,
-    ).toBe(-25_000);
+  it('antar ruang dan cocokkan saldo mengikuti arah; kaki keluar antar ruang menyertakan biaya', () => {
+    const outWithFee: EntryVM = { ...base, kind: 'space_transfer', direction: 'out', fee: 6_500 };
+    const inLeg: EntryVM = { ...base, kind: 'space_transfer', direction: 'in' };
+    expect(effectOnAccountVM(outWithFee, 'a1').value).toBe(-31_500);
+    expect(effectOnAccountVM(inLeg, 'a1').value).toBe(25_000);
+    expect(accountFeeNoteVM(outWithFee, 'a1')).toBe(`Biaya ${formatRupiah(6_500)}`);
+    expect(accountFeeNoteVM(inLeg, 'a1')).toBeUndefined();
     expect(effectOnAccountVM({ ...base, kind: 'adjustment', direction: 'out' }, 'a1').value).toBe(
       -25_000,
     );

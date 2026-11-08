@@ -115,10 +115,9 @@ function BudgetLine({
         ? 'Terpakai penuh'
         : `${String(budget.pct)}% terpakai`;
   return (
-    <p className="flex flex-wrap items-center gap-x-1 pb-2 pl-13 text-meta font-medium text-text-muted">
+    <p className="flex flex-wrap items-center gap-x-1.5 pb-2 pl-13 text-meta font-medium text-text-muted">
       <span>
         dari anggaran <MoneyText value={budget.amount} size="inherit" />
-        {' · '}
       </span>
       {linked ? (
         <Link
@@ -126,10 +125,16 @@ function BudgetLine({
           aria-label={`${name}: dari anggaran ${formatRupiah(budget.amount)}, ${spoken}. Buka di Rencana.`}
           className={`-my-1 inline-flex min-h-11 items-center ${status} ${focusRing}`}
         >
+          <span aria-hidden="true" className="mr-1 font-medium text-text-muted">
+            ·
+          </span>
           <BudgetStatusText budget={budget} />
         </Link>
       ) : (
         <span className={status}>
+          <span aria-hidden="true" className="mr-1 font-medium text-text-muted">
+            ·
+          </span>
           <BudgetStatusText budget={budget} />
         </span>
       )}
@@ -153,8 +158,8 @@ function RowBody({
   return (
     <>
       <Tile row={row} />
-      <span className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-3 gap-y-1">
-        <span className="min-w-0 grow shrink basis-32">
+      <span className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-2 gap-y-1">
+        <span className="min-w-0 grow shrink basis-20">
           <span className="block text-body font-semibold break-words text-text">
             {categoryName(row)}
           </span>
@@ -187,8 +192,8 @@ function ChildRow({
 }) {
   return (
     <li className="flex flex-col gap-1.5 border-t border-hairline py-2 first:border-t-0">
-      <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <span className="min-w-0 grow shrink basis-32">
+      <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <span className="min-w-0 grow shrink basis-20">
           <span className="block text-label font-semibold break-words text-text">{name}</span>
           {income || row.pct10InRoot === null ? null : (
             <span className="block text-caption font-medium text-text-muted">
