@@ -259,12 +259,16 @@ test(
         }, url);
         expect(rsc.status, `${who} RSC ${url}`).toBe(200);
         expect(rsc.type).toContain('text/x-component');
+        // Penanda khas tiap rute/segmen (sama dengan kontrol HTML di atas): segmen Anggaran
+        // (`/bersama/rencana` tanpa `bagian`) = kategori beranggaran, bukan nama tagihan.
         expect(rsc.body).toContain(
           url.includes('laporan')
             ? 'Kontribusi per orang'
             : url.includes('beranda')
               ? 'Aman dipakai bersama'
-              : BILL,
+              : url === '/bersama/rencana'
+                ? DAPUR
+                : BILL,
         );
         expectClean(`${who} RSC ${url}`, [rsc.body]);
       }
@@ -297,12 +301,20 @@ test(
       expectClean(`${who} navigasi klien`, nav.bodies);
     }
     // Kontrol positif lintas ruang: kanari ada di Pribadi masing-masing (bukan string mati).
-    await page.goto('/pribadi/rencana?bagian=tagihan');
-    await expect(main(page)).toContainText(K9.n.bill);
-    await expect(main(page)).not.toContainText(K9.f.bill);
-    await partnerPage.goto('/pribadi/rencana');
-    await expect(main(partnerPage)).toContainText(K9.f.category);
-    await expect(main(partnerPage)).not.toContainText(K9.n.category);
+    // Tiap orang: tagihan dan kategori beranggaran (dengan nominal khasnya) miliknya sendiri.
+    for (const [pg, own, other] of [
+      [page, K9.n, K9.f],
+      [partnerPage, K9.f, K9.n],
+    ] as const) {
+      await pg.goto('/pribadi/rencana?bagian=tagihan');
+      await expect(main(pg)).toContainText(own.bill);
+      await expect(main(pg)).not.toContainText(other.bill);
+      await pg.goto('/pribadi/rencana');
+      const row = main(pg).locator('[data-budget-row]').filter({ hasText: own.category });
+      await expect(row).toBeVisible();
+      await expect(row).toContainText(`dari Rp ${digits(own.budget)}`);
+      await expect(main(pg)).not.toContainText(other.category);
+    }
   },
 );
 
@@ -398,7 +410,11 @@ test('Kontribusi dua anggota di Laporan Bersama = SQL member_contributions perio
     .map((r) => ({ ...r, name: names.find((x) => x.uid === r.uid)?.name ?? '' }))
     .sort((a, b) => a.name.localeCompare(b.name));
   expect(sql.map((r) => r.name)).toEqual(['Farida', 'Novanda']);
-  for (const r of sql) expect(Number(r.setoran)).toBeGreaterThan(0);
+  // Setoran tiap anggota minimal setoran yang dibuat spec ini (spec lain boleh menambah).
+  const minSetor: Record<string, number> = { Novanda: SETOR_N, Farida: SETOR_F };
+  for (const r of sql) {
+    expect(Number(r.setoran), r.name).toBeGreaterThanOrEqual(minSetor[r.name] ?? Infinity);
+  }
   for (const pg of [page, partnerPage]) {
     await pg.goto('/bersama/laporan');
     const card = pg.getByTestId('laporan-kontribusi');
