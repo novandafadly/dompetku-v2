@@ -424,7 +424,9 @@ function Form(p: FormProps) {
           e.preventDefault();
           void submit();
         }}
-        className="flex flex-col gap-3"
+        // S9-C8: kolom yang menerima fokus (galat) tidak menempel ke tepi atas area gulir sheet;
+        // label di atasnya ikut terlihat.
+        className="flex flex-col gap-3 [&_:is(input,select,textarea)]:scroll-mt-10"
       >
         <NameField
           value={name}
