@@ -28,6 +28,7 @@ const browser = {
 const DATA_SPECS = [
   /[\\/]beranda-s9\.spec\.ts$/,
   /[\\/]laporan\.spec\.ts$/,
+  /[\\/]s9-keluar\.spec\.ts$/,
   /[\\/]tagihan\.spec\.ts$/,
 ];
 
