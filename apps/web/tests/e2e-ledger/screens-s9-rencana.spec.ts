@@ -144,15 +144,11 @@ test('stres: nominal sangat panjang (bukan untuk portofolio)', async ({ browser,
   );
 });
 
-test('Pribadi kosong (S9-RC0) dan terisi (S9-AN1)', async ({ browser, ownerState }) => {
-  // Terisi lebih dulu (data sudah ada); kosong dipotret pada Bersama di bawah.
+test('Pribadi terisi (S9-AN1)', async ({ browser, ownerState }) => {
+  // RC0 (Bersama kosong) dipotret di `screens-s9-tagihan` (`tg1-rc0-bersama`) dengan dua ajakan
+  // (anggaran + tagihan); set `rc0-bersama-kosong` lama (sebelum Tagihan) dihapus (critique S9-C11).
   await shoot(browser, ownerState, 'an1-pribadi-terisi', '/pribadi/rencana', async (p) => {
     await expect(main(p).getByRole('region', { name: 'Dianggarkan', exact: true })).toBeVisible();
-  });
-  await shoot(browser, ownerState, 'rc0-bersama-kosong', '/bersama/rencana', async (p) => {
-    await expect(
-      main(p).getByRole('heading', { name: 'Belum ada rencana di Bersama.' }),
-    ).toBeVisible();
   });
 });
 
