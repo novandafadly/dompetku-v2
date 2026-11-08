@@ -10,12 +10,13 @@
   - Worker int: lihat `apps/worker/package.json` dan job CI `auth` di `.github/workflows/ci.yml`.
   - `e2e:auth` / `e2e:ledger` / `e2e:bersama`: lihat skrip di `apps/web/package.json` dan job CI `auth`.
 - e2e prototipe: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm e2e` (port 3100 harus bebas: `pgrep -fa server.js`; tidak ada proses Playwright lain: `pgrep -f playwright`).
-- Gerbang sebelum melapor DONE (yang relevan dengan task): `pnpm lint && pnpm typecheck && pnpm test && pnpm format:check`, `pnpm build`, e2e; task DB: pg_prove seluruh suite + rollback/up (`update app.settings set value='dev' where key='env'`, `dbmate rollback` lalu `up`); task server/UI nyata: test:int + e2e:ledger.
+- Gerbang sebelum melapor DONE (yang relevan dengan task): `pnpm lint && pnpm typecheck && pnpm test && pnpm format:check`, `pnpm build`, e2e; task DB: pg_prove seluruh suite + rollback/up (`update app.settings set value='dev' where key='env'`, `dbmate rollback` lalu `up`, lalu **kembalikan** `update app.settings set value='prod' where key='env'`; tanpa langkah terakhir `00_katalog` tes 29 gagal); task server/UI nyata: test:int + e2e:ledger.
+- Catatan lingkungan (sesi S9, 2026-11-08): biner `dbmate` asli tidak bisa diunduh di sandbox ini; dipakai pengganti lokal di luar repo yang menjalankan bagian `-- migrate:up`/`-- migrate:down` berkas migrasi lewat `psql` dan mencatat `schema_migrations`. Skripnya sengaja tidak ditaruh di repo. Di CI dan VM tetap dbmate asli (versi di `.github/workflows/ci.yml`).
 
 ## Commit
 - Conventional Commits berbahasa Indonesia (pesan sesuai brief). Akhiri pesan dengan dua baris trailer persis:
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-  Claude-Session: https://claude.ai/code/session_01FKKuYtMYwvURJq9rxNaJ8Q
+  Claude-Session: https://claude.ai/code/session_01FKKuYrvUnJKvxMN1VCfpRD
 - Jangan menulis identitas model di kode/komentar.
 
 ## Aturan proyek
