@@ -88,7 +88,9 @@ export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }
             ) : null}
           </span>
         </span>
-        <span className={`flex flex-wrap items-center gap-1 text-meta font-semibold ${TONE[sub.tone]}`}>
+        <span
+          className={`flex flex-wrap items-center gap-1 text-meta font-semibold ${TONE[sub.tone]}`}
+        >
           <SubIcon icon={sub.icon} />
           <span>{sub.text}</span>
           {item.occ?.skipped === true ? (

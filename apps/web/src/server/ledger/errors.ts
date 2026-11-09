@@ -92,6 +92,10 @@ export function toLedgerError(e: unknown): LedgerError | null {
       case 'DK410':
         return { code: 'idem_mismatch' };
       case 'DK401':
+        // Sesi DB kosong di tengah aksi: ke UI tetap `not_found` (disamarkan), tetapi dicatat
+        // karena `withUser` selalu mengisi pengguna, jadi DK401 berarti anomali, bukan kebiasaan.
+        console.error('[ledger] sesi DB kosong di tengah aksi: DK401');
+        return { code: 'not_found' };
       case 'DK404':
         return { code: 'not_found' };
       case 'DK400': {

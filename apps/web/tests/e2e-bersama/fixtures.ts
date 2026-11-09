@@ -41,10 +41,10 @@ export type Kanari = typeof KANARI;
  */
 export async function seedKanari(k: Kanari['n'] | Kanari['f']): Promise<void> {
   const { sid } = await spaceOf(k.email, 'personal');
-  const [wallet] = await adminQuery('select 1 from app.accounts where space_id = $1 and name = $2', [
-    sid,
-    k.wallet,
-  ]);
+  const [wallet] = await adminQuery(
+    'select 1 from app.accounts where space_id = $1 and name = $2',
+    [sid, k.wallet],
+  );
   if (!wallet) await createWallet(k.email, 'personal', k.wallet, 20_000_000);
   const [entry] = await adminQuery(
     'select 1 from app.entries where space_id = $1 and description = $2',
