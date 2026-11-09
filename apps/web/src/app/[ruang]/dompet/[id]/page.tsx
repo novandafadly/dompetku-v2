@@ -1,10 +1,10 @@
 import { todayWIB } from '@dompetku/domain';
 import type { Route } from 'next';
-import { notFound, unstable_rethrow } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDompetRiwayat } from '@/server/ledger/dompet';
-import { isSpaceNotFoundError } from '@/server/ledger/errors';
+import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { ACCOUNT_HISTORY_MAX } from '@/server/ledger/read';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangAccounts, ruangContext } from '../../_real/context';
@@ -46,8 +46,7 @@ export default async function Page({
   try {
     data = await loadDompetRiwayat(ctx, id, shown, await ruangAccounts(ctx));
   } catch (e) {
-    unstable_rethrow(e);
-    if (isSpaceNotFoundError(e)) notFound();
+    rethrowOrNotFound(e);
     console.error('[dompet] riwayat gagal memuat', errorTag(e));
     return <DompetDetailFailed dompetHref={dompetHref} />;
   }

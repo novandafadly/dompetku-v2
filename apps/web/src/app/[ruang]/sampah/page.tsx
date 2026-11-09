@@ -1,8 +1,7 @@
 import { todayWIB } from '@dompetku/domain';
-import { notFound, unstable_rethrow } from 'next/navigation';
 import { buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
-import { isSpaceNotFoundError } from '@/server/ledger/errors';
+import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { loadSampah } from '@/server/ledger/sampah';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext } from '../_real/context';
@@ -35,8 +34,7 @@ export default async function Page({
   try {
     data = await loadSampah(ctx);
   } catch (e) {
-    unstable_rethrow(e);
-    if (isSpaceNotFoundError(e)) notFound();
+    rethrowOrNotFound(e);
     console.error('[sampah] gagal memuat', errorTag(e));
     return <SampahFailed ruang={ctx.ruang} backHref={backHref} />;
   }

@@ -112,9 +112,12 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     }
   });
 
-  it('DK401 = not_found tanpa log; isSpaceNotFoundError membedakan space_not_found dari DK404 item', () => {
+  it('DK401 = not_found dengan log SQLSTATE saja; isSpaceNotFoundError membedakan space_not_found dari DK404 item', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(toLedgerError(pgError('DK401', 'unauthenticated'))).toEqual({ code: 'not_found' });
+    expect(log).toHaveBeenCalledWith('[ledger] sesi DB kosong di tengah aksi: DK401');
+    log.mockClear();
+    expect(toLedgerError(pgError('DK404', 'space_not_found'))).toEqual({ code: 'not_found' });
     expect(log).not.toHaveBeenCalled();
     expect(isSpaceNotFoundError(pgError('DK401', 'unauthenticated'))).toBe(true);
     expect(isSpaceNotFoundError(pgError('DK404', 'space_not_found'))).toBe(true);
