@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Branch kerja: `ccr-6fc4b982-0wmz1i` (ditetapkan sesi; menggantikan penamaan `claude/<milestone>-<topik>`). Jangan push ke `main`. PR #27 (draft) berlanjut sebagai PR fitur.
-- Commit Conventional Commits berbahasa Indonesia, trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` dan `Claude-Session: https://claude.ai/code/session_0198jjiMhR77D5LBUEZPbRuQ` (aturan CLAUDE.md menyebut Opus 5.5; reminder sesi menggantikannya).
+- Commit Conventional Commits berbahasa Indonesia, trailer persis seperti CLAUDE.md (`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`; instruksi pemilik di CLAUDE.md didahulukan) ditambah `Claude-Session: https://claude.ai/code/session_0198jjiMhR77D5LBUEZPbRuQ`.
 - Gerbang sebelum push: `pnpm lint && pnpm typecheck && pnpm test && pnpm format:check`, `pnpm build`, e2e (`PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm e2e`, tanpa proses Playwright lain), plus `test:int` dan pgTAP untuk perubahan DB.
 - Budget JS 162 kB per rute; Beranda nyata 157,5 kB (headroom 0,3): fitur ini tidak boleh menambah JS ke Beranda atau mode prototipe.
 - Semua kueri data lewat `withUser`/`withLedger`; tidak ada jalur tulis DB lain. Fungsi `SECURITY DEFINER`: `set search_path = ''`, `EXECUTE` hanya `dompetku_web`.
