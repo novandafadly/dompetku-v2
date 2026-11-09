@@ -21,9 +21,7 @@ describe('guarded: savepoint kartu Beranda', () => {
           return Promise.resolve({ rows: [] });
         },
       } as unknown as pg.PoolClient;
-      await expect(
-        guarded(client, 'bills', () => Promise.reject(err)),
-      ).rejects.toBe(err);
+      await expect(guarded(client, 'bills', () => Promise.reject(err))).rejects.toBe(err);
       expect(queries).toEqual(['savepoint beranda_bills']);
     }
   });
