@@ -58,8 +58,9 @@ select set_eq($$
         'create_category', 'update_category', 'archive_category', 'mark_no_spend_day',
         'create_reimbursement', 'move_entry_to_space', 'create_bill', 'update_bill', 'archive_bill',
         'post_bill_occurrence', 'skip_bill_occurrence', 'unskip_bill_occurrence', 'set_budget',
-        'delete_budget', 'copy_budgets'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations)');
+        'delete_budget', 'copy_budgets', 'wa_create_link_code', 'wa_confirm_link',
+        'wa_resolve_sender', 'wa_unlink'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -67,16 +68,20 @@ select set_eq($$
   array['period_summary', 'month_summary', 'safe_to_spend', 'net_worth', 'activity_feed',
         'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
-        'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan)');
+        'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
+        'wa_default_account', 'wa_last_cancellable'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
   'fungsi baca api INVOKER milik dompetku_owner (own_api_functions hanya memindah DEFINER)');
-select is_empty($$
-  select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+-- Pengecualian tertutup (0123): dedupe pesan WA menulis app.wa_messages di bawah policy `own`
+-- web (pola app.product_events), bukan lewat DEFINER.
+select set_eq($$
+  select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
-  'fungsi api INVOKER hanya baca (STABLE)');
+  array['wa_claim_message', 'wa_finish_message'],
+  'fungsi api INVOKER hanya baca (STABLE), kecuali tulis pesan WA');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where p.prosecdef and p.proowner = 'dompetku_owner'::regrole
@@ -87,8 +92,8 @@ select set_eq($$
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
-        'private.materialize_bill', 'jobs.materialize_bills'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan)');
+        'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -243,6 +248,19 @@ select set_eq($$
     ('dompetku_auditor', 'app.bill_occurrences', 'SELECT'),
     ('dompetku_auditor', 'app.budgets', 'SELECT'),
     ('dompetku_auditor', 'app.bill_schedule', 'SELECT'),
+    -- WA (0123): web baca nomor sendiri, tulis pesan sendiri (policy own); api tulis tautan/kode.
+    ('dompetku_web', 'app.wa_links', 'SELECT'),
+    ('dompetku_web', 'app.wa_messages', 'SELECT'),
+    ('dompetku_web', 'app.wa_messages', 'INSERT'),
+    ('dompetku_web', 'app.wa_messages', 'UPDATE'),
+    ('dompetku_api', 'app.wa_links', 'SELECT'),
+    ('dompetku_api', 'app.wa_links', 'INSERT'),
+    ('dompetku_api', 'app.wa_links', 'UPDATE'),
+    ('dompetku_api', 'app.wa_links', 'DELETE'),
+    ('dompetku_api', 'app.wa_link_codes', 'SELECT'),
+    ('dompetku_api', 'app.wa_link_codes', 'INSERT'),
+    ('dompetku_api', 'app.wa_link_codes', 'UPDATE'),
+    ('dompetku_api', 'app.wa_link_codes', 'DELETE'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -293,14 +311,16 @@ select set_eq($$
                                    'create_reimbursement', 'move_entry_to_space', 'create_bill',
                                    'update_bill', 'archive_bill', 'post_bill_occurrence',
                                    'skip_bill_occurrence', 'unskip_bill_occurrence', 'set_budget',
-                                   'delete_budget', 'copy_budgets']) f
+                                   'delete_budget', 'copy_budgets', 'wa_create_link_code',
+                                   'wa_confirm_link', 'wa_resolve_sender', 'wa_unlink']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
                       'suggest_categories', 'open_reimbursables', 'shared_activity',
                       'member_contributions', 'pay_period', 'bill_list', 'bills_due',
                       'budget_progress', 'budget_overview', 'spend_pace', 'category_summary',
-                      'period_trend', 'excluded_summary']) f
+                      'period_trend', 'excluded_summary', 'wa_default_account',
+                      'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -308,7 +328,7 @@ select set_eq($$
                       'entry_snapshot', 'write_history', 'check_date', 'check_amount',
                       'clean_text', 'set_void_state', 'purge_entries', 'seed_categories',
                       'tg_seed_categories', 'materialize_bill', 'check_bill', 'lock_occurrence',
-                      'occurrence_posted']) f
+                      'occurrence_posted', 'wa_audit']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -450,7 +470,7 @@ union all select 'reserved', ev from reserved
 union all select 'system', ev from sys where ev in (select ev from allowed);
 select set_eq($$ select ev from audit_ev where k = 'system' $$,
   array['space_member_change', 'unfinished_user_purged', 'entry_purged', 'purge_voided',
-        'deploy', 'db_manual_access'],
+        'deploy', 'db_manual_access', 'wa_linked', 'wa_unlinked'],
   'event sistem terdeteksi dari fungsi DEFINER/owner + skrip host');
 select is_empty($$
   select ev from audit_ev where k = 'system'

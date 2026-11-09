@@ -1,7 +1,7 @@
 -- audit.events dan product_events (BSD §6, §10, §13 #17, #32): user_id dari konteks, daftar
 -- tertutup event dan kunci meta, tanpa INSERT langsung, append-only, retensi lewat job.
 begin;
-select plan(45);
+select plan(49);
 select tests.fixture();
 
 -- user_id selalu dari konteks request.
@@ -24,7 +24,7 @@ select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(), format('
   'DK422', 'audit_event_reserved', r || ': event sistem ditolak: ' || e)
 from unnest(array['web', 'worker']) r,
      unnest(array['space_member_change', 'unfinished_user_purged', 'entry_purged', 'purge_voided',
-                  'db_manual_access', 'deploy']) e;
+                  'db_manual_access', 'deploy', 'wa_linked', 'wa_unlinked']) e;
 
 -- space_id hanya ruang milik pemanggil.
 select tests.web_exec(tests.n(), format($$select audit.log('step_up', null, null, %L, '{"count": 1}')$$,
