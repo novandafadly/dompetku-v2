@@ -153,7 +153,11 @@ export function EntryDetailView({
         {(() => {
           const personalNote = entry.kind === 'space_transfer' ? entry.description : undefined;
           const sharedNote = entry.sharedNote;
-          if (personalNote !== undefined && sharedNote !== undefined && personalNote !== sharedNote) {
+          if (
+            personalNote !== undefined &&
+            sharedNote !== undefined &&
+            personalNote !== sharedNote
+          ) {
             return (
               <>
                 <DetailRow term="Catatan pribadi">{personalNote}</DetailRow>

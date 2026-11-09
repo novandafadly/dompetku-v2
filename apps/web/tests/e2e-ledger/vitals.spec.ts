@@ -94,11 +94,11 @@ async function seedSpace(kind: 'personal' | 'shared', walletName: string): Promi
     [sid],
   );
   if (period?.label) {
-    await asUser(
-      uid,
-      'select api.set_budget($1, $2, $3::date, 600000::bigint, false)',
-      [sid, expCat.id, period.label],
-    );
+    await asUser(uid, 'select api.set_budget($1, $2, $3::date, 600000::bigint, false)', [
+      sid,
+      expCat.id,
+      period.label,
+    ]);
   }
 
   if (kind === 'personal' && expCat2.id !== expCat.id) {
@@ -261,11 +261,13 @@ for (const path of ROUTES) {
     const inp = median(samples.map((s) => s.inp));
     const cls = median(samples.map((s) => s.cls));
 
-    test.info().annotations.push(
-      { type: 'lcp-ms', description: lcp.toFixed(0) },
-      { type: 'inp-ms', description: inp.toFixed(0) },
-      { type: 'cls', description: cls.toFixed(3) },
-    );
+    test
+      .info()
+      .annotations.push(
+        { type: 'lcp-ms', description: lcp.toFixed(0) },
+        { type: 'inp-ms', description: inp.toFixed(0) },
+        { type: 'cls', description: cls.toFixed(3) },
+      );
 
     expect(lcp, `LCP harus terukur di ${path}`).toBeGreaterThan(0);
     expect(cls, `CLS < 0.1 di ${path}`).toBeLessThan(0.1);
