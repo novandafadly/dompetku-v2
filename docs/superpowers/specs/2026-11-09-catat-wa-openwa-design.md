@@ -193,7 +193,7 @@ Kriteria penerimaan inti (Given/When/Then):
 
 ## 10. Catatan keputusan saya (bukan keputusan pemilik)
 
-Harap diperiksa saat membaca: batas nominal WhatsApp Rp100 juta; batas `batal` 10 menit; batas laju 30 pesan/menit; aturan dompet bawaan 4.4; tidak menyimpan teks mentah; egress `wa_egress` tidak difilter per host; `kemarin` dan `saldo` ditunda ke P1.
+Harap diperiksa saat membaca: batas nominal WhatsApp Rp100 juta; batas `batal` 10 menit; batas laju 30 pesan/menit; aturan dompet bawaan 4.4; tidak menyimpan teks mentah; egress `wa_egress` tidak difilter per host; `kemarin` dan `saldo` ditunda ke P1; anti tebak-kode hubung di web (5 percobaan/jam per nomor, 30/jam global), bukan di DB.
 
 ## 11. Eksekusi
 
