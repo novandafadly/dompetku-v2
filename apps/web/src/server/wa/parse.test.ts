@@ -105,7 +105,88 @@ describe('parseMessage: reject', () => {
     ['25 rbu', 'bad_amount'],
     ['25 rbu kopi', 'bad_amount'],
     ['2 jutaan sewa', 'bad_amount'],
+    // Satuan terpisah dengan tanda baca atau akhiran menempel: gagal tertutup, bukan Rp25.
+    ['25 rb, makan siang', 'bad_amount'],
+    ['50 k.', 'bad_amount'],
+    ['50 k,', 'bad_amount'],
+    ['bensin 50 k!', 'bad_amount'],
+    ['25 ribu.', 'bad_amount'],
+    ['25 Rb.', 'bad_amount'],
+    ['25 rb-an', 'bad_amount'],
+    ['25 rb/porsi', 'bad_amount'],
+    ['25 jt;', 'bad_amount'],
+    ['25 juta?', 'bad_amount'],
+    // Satuan lebar penuh (NFKC = `rb`/`k`) juga ditolak, sama dengan digit lebar penuh.
+    ['25 ｒｂ', 'bad_amount'],
+    ['25 ＲＢ kopi', 'bad_amount'],
+    ['50 ｋ', 'bad_amount'],
+    // Karakter format tak terlihat di depan satuan tidak meloloskan Rp25.
+    ['25 ​rb kopi', 'bad_amount'],
   ])('%j -> %s', (input, reason) => {
     expect(parse(input)).toEqual({ kind: 'reject', reason });
+  });
+});
+
+describe('parseMessage: satuan terpisah, batas aturan', () => {
+  // Hanya token tepat sesudah angka yang dicek; satuan persis lalu kata keterangan biasa tetap
+  // jalan, termasuk kata yang kebetulan diawali huruf satuan.
+  it.each<[string, ParseResult]>([
+    ['25 rb ketupat', entry('expense', 25000, 'personal', 'ketupat')],
+    ['50 k kopi', entry('expense', 50000, 'personal', 'kopi')],
+    ['50 k rbt', entry('expense', 50000, 'personal', 'rbt')],
+    ['1 jt jutawan', entry('expense', 1000000, 'personal', 'jutawan')],
+    ['25 rb rb.', entry('expense', 25000, 'personal', 'rb.')],
+    // `k` diikuti huruf bukan satuan: angka bulat + keterangan (pilihan terdokumentasi).
+    ['50 kopi', entry('expense', 50, 'personal', 'kopi')],
+    ['50 ke pasar', entry('expense', 50, 'personal', 'ke pasar')],
+  ])('%j', (input, expected) => {
+    expect(parse(input)).toEqual(expected);
+  });
+
+  // Properti: token mirip satuan tepat sesudah angka tidak pernah menghasilkan nominal < 1000.
+  const ADVERSARIAL = [
+    '25 rb,',
+    '25 rb, makan',
+    '25 rb.',
+    '25 rb..',
+    '25 rb!',
+    '25 rb?',
+    '25 rb:',
+    '25 rb;',
+    '25 rb-an',
+    '25 rb/porsi',
+    '25 rb)',
+    '25 rb"',
+    "25 rb'",
+    '25 rbu',
+    '25 rbx kopi',
+    '25 ribu.',
+    '25 ribuan',
+    '25 rib',
+    '25 jut',
+    '2 jt.',
+    '2 juta,',
+    '2 jutaan',
+    '50 k.',
+    '50 k,',
+    '50 k!',
+    '50 k-an',
+    '50 k2',
+    '50 k)',
+    '25 ｒｂ',
+    '25 Ｒｂ.',
+    '50 ｋ',
+    '50 ｋ.',
+    '25 ​rb',
+    '25 ⁠k',
+    'Rp 25 rb,',
+    '+ 25 rb.',
+    'b 25 rb, belanja',
+    '1,5 jt.',
+  ];
+  it.each(ADVERSARIAL)('%j tidak tercatat < Rp1.000', (input) => {
+    const r = parse(input);
+    if (r.kind === 'entry') expect(r.amount).toBeGreaterThanOrEqual(1000);
+    else expect(r.kind).toBe('reject');
   });
 });

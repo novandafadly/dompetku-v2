@@ -27,9 +27,18 @@ const SUFFIX_RE = /^(\d+)(?:[.,](\d))?(rb|k|jt)$/;
 // digit pecahan. Hanya token ini yang boleh menerima satuan terpisah.
 const AMOUNT_TOKEN_RE = /^\+?(?:rp\.?)?(?:\d+|\d{1,3}(?:\.\d{3})+|\d+[.,]\d)$/;
 const UNIT_WORD_RE = /^(?:rb|k|jt|ribu|juta)$/;
-// Kata yang diawali satuan tapi bukan satuan ("rbu", "jutaan"): digabung lalu ditolak.
-const UNIT_TYPO_RE = /^(?:rb|jt|rib|jut)\p{L}+$/u;
+// Token yang DIAWALI satuan (dicek sesudah NFKC dan tanpa karakter format tak terlihat):
+// `rb`/`jt`/`rib`/`jut` dengan apa pun sesudahnya, atau `k` yang tidak diikuti huruf.
+// Token seperti ini digabung ke angka di depannya; bila bukan satuan persis ("rb,", "k.",
+// "rb-an", "ｒｂ", "rbu") hasil gabungan gagal di SUFFIX_RE sehingga ditolak (bad_amount),
+// tidak dibaca 1000x lebih kecil. `kopi`/`ke` (k + huruf) tetap keterangan.
+const UNIT_START_RE = /^(?:rb|jt|rib|jut|k(?!\p{L}))/u;
+const FORMAT_CHARS_RE = /\p{Cf}/gu;
 const UNIT_ALIAS: Partial<Record<string, string>> = { ribu: 'rb', juta: 'jt' };
+
+function startsWithUnit(token: string): boolean {
+  return UNIT_START_RE.test(token.normalize('NFKC').toLowerCase().replace(FORMAT_CHARS_RE, ''));
+}
 
 function toAmount(raw: string): number | null {
   const plain = PLAIN_RE.exec(raw);
@@ -53,19 +62,16 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
 
   // "rp 25.000" / "rp. 25.000": gabungkan penanda mata uang dengan token angka berikutnya.
   // "25 rb" / "1,5 jt" / "25 ribu": gabungkan satuan dengan token angka sebelumnya, sehingga
-  // nominal tidak terbaca 1000x lebih kecil. Salah ketik satuan ("25 rbu") ikut digabung agar
-  // ditolak (bad_amount), sama dengan "25rbu".
+  // nominal tidak terbaca 1000x lebih kecil. Token yang hanya diawali satuan ("25 rbu",
+  // "25 rb,", "50 k.", "25 ｒｂ") ikut digabung apa adanya agar ditolak (bad_amount), sama
+  // dengan "25rbu": gagal tertutup.
   const tokens: string[] = [];
   for (const t of norm.split(' ')) {
     const prev = tokens[tokens.length - 1];
     if ((prev === 'rp' || prev === 'rp.') && ANY_DIGIT_RE.test(t))
       tokens[tokens.length - 1] = prev + t;
-    else if (
-      prev !== undefined &&
-      AMOUNT_TOKEN_RE.test(prev) &&
-      (UNIT_WORD_RE.test(t) || UNIT_TYPO_RE.test(t))
-    )
-      tokens[tokens.length - 1] = prev + (UNIT_ALIAS[t] ?? t);
+    else if (prev !== undefined && AMOUNT_TOKEN_RE.test(prev) && startsWithUnit(t))
+      tokens[tokens.length - 1] = prev + (UNIT_WORD_RE.test(t) ? (UNIT_ALIAS[t] ?? t) : t);
     else tokens.push(t);
   }
 
