@@ -66,6 +66,9 @@ export async function wipe(admin: pg.Pool): Promise<void> {
     begin;
     select set_config('dompetku.purge', 'on', true);
     delete from app.product_events;
+    delete from app.wa_messages;
+    delete from app.wa_link_codes;
+    delete from app.wa_links;
     delete from app.idempotency_keys;
     delete from app.invitations;
     delete from app.entry_lines;
