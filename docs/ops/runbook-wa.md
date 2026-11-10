@@ -382,6 +382,7 @@ sudo systemctl start dompetku-deploy.timer
 1. Di app (pemilik): menu WhatsApp → Hubungkan → kode muncul.
 2. Dari WhatsApp pribadi pemilik, kirim ke nomor bot: `hubung KODE`. Harapan: balasan "Nomor terhubung".
 3. Kirim `25rb kopi`. Harapan: balasan konfirmasi dan entri muncul di Transaksi. Kirim `batal`: entri dibatalkan.
+   Uji pilihan dompet: `23rb makan siang padang @cimb` (ganti `cimb` dengan awalan nama dompet Pribadi). Harapan: balasan ✅ menyebut nama dompet itu dan entri ada di dompet tersebut; `@xyz` (tidak ada) dibalas daftar penanda dan tidak mencatat. Tidak perlu `web.env` atau langkah server baru.
 4. Log tanpa teks pesan dan nominal:
 
    ```bash

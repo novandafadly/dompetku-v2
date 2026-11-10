@@ -14,6 +14,7 @@ import { toE164 } from './phone';
 import { createLinkLimiter, createRateLimiter, type RateLimiter } from './ratelimit';
 import type { InboundMessage, WaTransport } from './transport';
 import { uuidV5 } from './uuid';
+import { matchWallet, walletHandle, type WalletOption } from './wallet';
 
 /**
  * Orkestrasi satu pesan WhatsApp masuk (spec 2026-11-09 §4, §5.2, §5.3). Urutan:
@@ -37,11 +38,26 @@ const HOUR = 3_600_000;
 const RUANG_LABEL = { personal: 'Pribadi', shared: 'Bersama' } as const;
 type SpaceKind = keyof typeof RUANG_LABEL;
 
+const WALLET_LIST_MAX = 12;
+
+/** " Pilih: @bca, @cimb" (dipotong di 12 nama); kosong bila tidak ada penanda yang bisa dibentuk. */
+function walletList(options: readonly string[]): string {
+  if (options.length === 0) return '';
+  const shown = options.slice(0, WALLET_LIST_MAX).join(', ');
+  return ` Pilih: ${shown}${options.length > WALLET_LIST_MAX ? ', …' : ''}`;
+}
+
 /** Balasan satu baris (spec 4.2). ✅/❌/↩️/⚠️ persis spec; sisanya salinan task ini. */
 export const REPLY = {
   /** Pemasukan diberi label agar salah baca jenis (mis. kata `masuk` di keterangan) terlihat. */
-  recorded: (type: 'income' | 'expense', category: string, amount: Rupiah, space: SpaceKind) =>
-    `✅ ${type === 'income' ? 'Pemasukan · ' : ''}${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ketik batal untuk membatalkan`,
+  recorded: (
+    type: 'income' | 'expense',
+    category: string,
+    amount: Rupiah,
+    space: SpaceKind,
+    wallet: string,
+  ) =>
+    `✅ ${type === 'income' ? 'Pemasukan · ' : ''}${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ${wallet} · ketik batal untuk membatalkan`,
   cancelled: (category: string, amount: Rupiah) =>
     `↩️ Dibatalkan: ${category} ${formatRupiah(amount)}`,
   unreadable: '❌ Tidak terbaca. Contoh: 25rb makan siang',
@@ -53,7 +69,15 @@ export const REPLY = {
   noCategory: (space: SpaceKind) =>
     `❌ Belum ada kategori aktif di ruang ${RUANG_LABEL[space]}. Buka app dulu.`,
   noSpace: (space: SpaceKind) => `❌ Ruang ${RUANG_LABEL[space]} belum tersedia. Buka app dulu.`,
-  insufficient: '❌ Saldo dompet tidak cukup. Catat dari app.',
+  insufficient: (wallet: string) => `❌ Saldo ${wallet} tidak cukup. Catat dari app.`,
+  /** Penanda `@nama` rusak atau lebih dari satu: tidak ada yang dicatat. */
+  badWallet: '❌ Penanda dompet tidak terbaca. Contoh: 25rb makan siang @cimb',
+  manyWallets: '❌ Satu pesan satu dompet. Contoh: 25rb makan siang @cimb',
+  /** Gagal tertutup: dompet tidak ditebak. Daftar = penanda siap ketik semua dompet aktif ruang itu. */
+  walletNone: (marker: string, space: SpaceKind, options: readonly string[]) =>
+    `❌ Dompet @${marker} tidak ada di ruang ${RUANG_LABEL[space]}.${walletList(options)}`,
+  walletAmbiguous: (marker: string, space: SpaceKind, options: readonly string[]) =>
+    `❌ @${marker} cocok dengan lebih dari satu dompet di ruang ${RUANG_LABEL[space]}. Tulis lebih lengkap.${walletList(options)}`,
   notRecorded: '❌ Tidak bisa dicatat dari WhatsApp. Buka app.',
   unlinked:
     'Nomor ini belum terhubung ke DompetKu. Buka menu WhatsApp di app untuk membuat kode, lalu kirim: hubung KODE',
@@ -222,17 +246,43 @@ const PICK_SQL = `
              p_space_id => $1, p_type => $2::app.category_type, p_amount => $3::bigint,
              p_description => null, p_limit => 20) as b (category_id, score, source)
   )
-  select s.category_id, c.name, api.wa_default_account(p_space_id => $1) as account_id
+  select s.category_id, c.name
     from s
     join app.categories c on c.id = s.category_id
     left join base on base.category_id = s.category_id
    order by (s.score > coalesce(base.score, -1)) desc, s.n
    limit 1`;
 
+/**
+ * Dompet bawaan ruang untuk user (`api.wa_default_account`, tidak pernah `kantor`) beserta namanya,
+ * untuk balasan. INVOKER: di luar keanggotaan RLS menyembunyikan baris -> kosong.
+ */
+const DEFAULT_ACCOUNT_SQL = `
+  select a.id, a.name
+    from app.accounts a
+   where a.id = (select api.wa_default_account(p_space_id => $1))`;
+
+/**
+ * Dompet aktif ruang itu (RLS: hanya ruang anggota), untuk mencocokkan penanda `@nama`. Kantong
+ * `kantor` ikut: hanya pilihan eksplisit yang boleh mencatat ke sana, bawaan tidak pernah.
+ */
+const ACCOUNTS_SQL = `
+  select a.id, a.name, a.pocket::text as pocket
+    from app.accounts a
+   where a.space_id = $1 and a.archived_at is null
+   order by a.sort_order, a.created_at, a.id`;
+
 interface Pick {
-  accountId: string | null;
+  account: { id: string; name: string } | null;
   categoryId: string | null;
   categoryName: string | null;
+  /** Penanda `@nama` yang tidak bisa dipakai; `options` = penanda siap ketik semua dompet aktif. */
+  walletError: { kind: 'none' | 'ambiguous'; options: string[] } | null;
+}
+
+/** Penanda untuk daftar balasan: dompet tanpa penanda yang bisa dibentuk dilewati. */
+function handles(accounts: readonly WalletOption[]): string[] {
+  return accounts.flatMap((a) => walletHandle(a.name) ?? []);
 }
 
 async function pick(
@@ -240,21 +290,39 @@ async function pick(
   type: 'income' | 'expense',
   amount: Rupiah,
   description: string,
+  wallet: string | undefined,
 ): Promise<Pick> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{
-      category_id: string;
-      name: string;
-      account_id: string | null;
-    }>(PICK_SQL, [ctx.spaceId, type, amount, description === '' ? null : description]);
-    const row = rows[0];
-    if (row)
-      return { accountId: row.account_id, categoryId: row.category_id, categoryName: row.name };
-    const acc = await c.query<{ id: string | null }>(
-      'select api.wa_default_account(p_space_id => $1) as id',
-      [ctx.spaceId],
-    );
-    return { accountId: acc.rows[0]?.id ?? null, categoryId: null, categoryName: null };
+    let account: Pick['account'];
+    if (wallet === undefined) {
+      const def = await c.query<{ id: string; name: string }>(DEFAULT_ACCOUNT_SQL, [ctx.spaceId]);
+      account = def.rows[0] ?? null;
+    } else {
+      const { rows } = await c.query<WalletOption>(ACCOUNTS_SQL, [ctx.spaceId]);
+      const m = matchWallet(wallet, rows);
+      if (m.kind !== 'found') {
+        return {
+          account: null,
+          categoryId: null,
+          categoryName: null,
+          walletError: { kind: m.kind, options: handles(rows) },
+        };
+      }
+      account = { id: m.wallet.id, name: m.wallet.name };
+    }
+    const cat = await c.query<{ category_id: string; name: string }>(PICK_SQL, [
+      ctx.spaceId,
+      type,
+      amount,
+      description === '' ? null : description,
+    ]);
+    const row = cat.rows[0];
+    return {
+      account,
+      categoryId: row?.category_id ?? null,
+      categoryName: row?.name ?? null,
+      walletError: null,
+    };
   });
 }
 
@@ -272,7 +340,13 @@ function finalRejection(e: unknown): string | null {
 async function record(
   r: Run,
   userId: string,
-  p: { type: 'income' | 'expense'; amount: Rupiah; space: SpaceKind; description: string },
+  p: {
+    type: 'income' | 'expense';
+    amount: Rupiah;
+    space: SpaceKind;
+    description: string;
+    wallet?: string;
+  },
 ): Promise<void> {
   const { pools } = r.deps;
   let spaceId: string;
@@ -287,19 +361,32 @@ async function record(
     return;
   }
   const ctx: LedgerCtx = { pools, userId, spaceId };
-  const chosen = await pick(ctx, p.type, p.amount, p.description);
-  if (chosen.accountId === null || chosen.categoryId === null || chosen.categoryName === null) {
+  const chosen = await pick(ctx, p.type, p.amount, p.description, p.wallet);
+  if (chosen.walletError !== null && p.wallet !== undefined) {
+    const { kind, options } = chosen.walletError;
     await finish(r, userId, 'rejected');
-    r.log('rejected', chosen.accountId === null ? 'no_wallet' : 'no_category');
-    await reply(r, chosen.accountId === null ? REPLY.noWallet(p.space) : REPLY.noCategory(p.space));
+    r.log('rejected', kind === 'none' ? 'wallet_none' : 'wallet_ambiguous');
+    await reply(
+      r,
+      kind === 'none'
+        ? REPLY.walletNone(p.wallet, p.space, options)
+        : REPLY.walletAmbiguous(p.wallet, p.space, options),
+    );
     return;
   }
+  if (chosen.account === null || chosen.categoryId === null || chosen.categoryName === null) {
+    await finish(r, userId, 'rejected');
+    r.log('rejected', chosen.account === null ? 'no_wallet' : 'no_category');
+    await reply(r, chosen.account === null ? REPLY.noWallet(p.space) : REPLY.noCategory(p.space));
+    return;
+  }
+  const account = chosen.account;
 
   let entryId: string;
   try {
     ({ entryId } = await createEntry(ctx, {
       clientId: uuidV5(WA_CLIENT_NAMESPACE, r.key),
-      accountId: chosen.accountId,
+      accountId: account.id,
       kind: p.type,
       amount: p.amount,
       categoryId: chosen.categoryId,
@@ -310,13 +397,13 @@ async function record(
     if (code === null) throw e;
     await finish(r, userId, 'rejected');
     r.log('rejected', code);
-    await reply(r, code === 'saldo_negatif' ? REPLY.insufficient : REPLY.notRecorded);
+    await reply(r, code === 'saldo_negatif' ? REPLY.insufficient(account.name) : REPLY.notRecorded);
     return;
   }
   // Entri sudah tersimpan: balasan ✅ walau finish gagal (kirim ulang id sama = replayed).
   await finish(r, userId, 'recorded', entryId);
   r.log('recorded');
-  await reply(r, REPLY.recorded(p.type, chosen.categoryName, p.amount, p.space));
+  await reply(r, REPLY.recorded(p.type, chosen.categoryName, p.amount, p.space, account.name));
 }
 
 const lastSchema = (v: unknown): { entryId: string; spaceId: string; version: number } | null => {
@@ -402,6 +489,19 @@ async function link(r: Run, userId: string | null, code: string): Promise<void> 
   await reply(r, REPLY.linked);
 }
 
+function rejectReply(reason: Extract<ParseResult, { kind: 'reject' }>['reason']): string {
+  switch (reason) {
+    case 'too_large':
+      return REPLY.tooLarge;
+    case 'many_wallets':
+      return REPLY.manyWallets;
+    case 'bad_wallet':
+      return REPLY.badWallet;
+    default:
+      return REPLY.unreadable;
+  }
+}
+
 async function dispatch(r: Run, userId: string, parsed: ParseResult): Promise<void> {
   switch (parsed.kind) {
     case 'link':
@@ -413,7 +513,7 @@ async function dispatch(r: Run, userId: string, parsed: ParseResult): Promise<vo
     case 'reject':
       await finish(r, userId, 'rejected');
       r.log('rejected', parsed.reason);
-      await reply(r, parsed.reason === 'too_large' ? REPLY.tooLarge : REPLY.unreadable);
+      await reply(r, rejectReply(parsed.reason));
       break;
     case 'entry':
       await record(r, userId, parsed);

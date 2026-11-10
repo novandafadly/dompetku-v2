@@ -53,7 +53,7 @@ Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 - **Ruang.** Bawaan Pribadi. Bersama bila kata pertama `b` atau ada kata `bersama`.
 - **Keterangan.** Sisa teks setelah nominal dan penanda dibuang, dipangkas, maksimum 200 karakter (batas `createEntrySchema`).
 - **Kategori.** Dari kamus kata kunci yang sudah ada (`app.category_keywords()`, migrasi 0107) atas keterangan; tidak cocok → saran teratas `api.suggest_categories` (riwayat 30 hari, lalu nama) untuk jenis itu di ruang itu; balasan ✅ menyebut kategorinya supaya tebakan yang salah terlihat dan bisa dibatalkan atau diubah di app. Seed kategori tidak punya "Lainnya". Kategori tidak bisa dipaksa dari teks pada v1.
-- **Dompet.** Dompet bawaan ruang untuk user itu (lihat 4.4).
+- **Dompet.** Penanda `@nama` di mana pun dalam pesan memilih dompet (lihat 4.4); tanpa penanda, dompet bawaan ruang untuk user itu.
 - **Tanggal.** Hari ini (WIB, `app.today()`). `kemarin` = P1.
 - **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app. "Terakhir" = pesan `pending`, `recorded` atau `cancelled` terbaru selain `batal` itu sendiri: `batal` kedua sesudah `batal` pertama tidak mundur ke catatan yang lebih lama, dan pesan yang masih `pending` (catatan sedang berjalan, atau status akhirnya gagal disimpan) membuat `batal` dijawab "tidak bisa dibatalkan".
 - **Saldo negatif.** Pengeluaran yang membuat saldo dompet negatif (`saldo_negatif`) ditolak dari WhatsApp dengan balasan yang mengarah ke app; tidak ada penimpaan lewat chat.
@@ -61,6 +61,7 @@ Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 Contoh:
 
 ```
+makan siang padang 23rb @cimb → pengeluaran Rp23.000 · Pribadi · di dompet CIMB
 25rb makan siang        → pengeluaran Rp25.000 · Pribadi · Makan Siang & Minum
 makan siang 25rb        → sama
 +5jt gaji               → pemasukan Rp5.000.000 · Pribadi · Gaji
@@ -72,7 +73,7 @@ beli 2 kopi 50rb        → ditolak (dua angka); balasan: contoh format
 
 Satu baris, tanpa emoji dekoratif selain tanda status.
 
-- Sukses: `✅ Makan Siang & Minum Rp 25.000 · Pribadi · ketik batal untuk membatalkan` (nominal mengikuti `formatRupiah` repo: `Rp` + spasi tanpa putus (NBSP) + angka bertitik). Pemasukan diberi label supaya salah baca jenis terlihat: `✅ Pemasukan · Gaji Rp 5.000.000 · Pribadi · ketik batal untuk membatalkan`; pengeluaran tanpa label
+- Sukses: `✅ Makan Siang & Minum Rp 25.000 · Pribadi · CIMB · ketik batal untuk membatalkan` (nama dompet selalu disebut, juga untuk dompet bawaan) (nominal mengikuti `formatRupiah` repo: `Rp` + spasi tanpa putus (NBSP) + angka bertitik). Pemasukan diberi label supaya salah baca jenis terlihat: `✅ Pemasukan · Gaji Rp 5.000.000 · Pribadi · CIMB · ketik batal untuk membatalkan`; pengeluaran tanpa label
 - Tidak terbaca: `❌ Tidak terbaca. Contoh: 25rb makan siang` (tidak ada yang dicatat)
 - Dibatalkan: `↩️ Dibatalkan: Makan Siang & Minum Rp 25.000`
 - Nomor belum terhubung: balasan satu kali per jam berisi cara menghubungkan (4.3). Tanpa data apa pun.
@@ -92,9 +93,18 @@ Pemetaan nomor WhatsApp ke user tidak boleh bisa dipalsukan.
 
 Tidak ada pesan OTP yang dikirim bot ke nomor yang belum terbukti miliknya.
 
-### 4.4 Dompet bawaan
+### 4.4 Dompet: pilihan per pesan dan bawaan
 
-Dompet bawaan per ruang adalah dompet aktif milik user yang paling baru dipakai di ruang itu; bila belum ada riwayat, dompet aktif pertama dengan kantong `operasional` lebih dulu, lalu menurut urutan tampil (sama dengan Catat di app). **Dompet `kantor` tidak pernah jadi bawaan**, di kedua cabang: pengeluaran sesudah talangan tidak boleh diam-diam masuk Kas Kantor. Ruang yang hanya punya dompet kantor dibalas "belum ada dompet aktif, buka app dulu". Ini keputusan saya; pengaturan eksplisit dompet bawaan WhatsApp adalah P1.
+**Pilihan per pesan (`@nama`, disetujui pemilik 2026-11-10).** Token `@nama` di mana pun dalam pesan (`makan siang padang 23rb @cimb`, `@cimb 23rb makan`) memilih dompet untuk pesan itu. Aturan:
+
+- Dicocokkan hanya dengan dompet **aktif** di ruang tujuan (Pribadi; Bersama bila pesan berawalan `b`/`bersama`) lewat RLS user pengirim, jadi dompet ruang lain atau milik user lain tidak pernah terlihat atau bocor di daftar balasan. Tanpa beda huruf besar/kecil, spasi, tanda baca, atau diakritik (`@kas-kantor` = "Kas Kantor").
+- Pencocokan bertingkat, tingkat pertama yang punya kecocokan menentukan dan harus tepat satu: (1) nama persis, (2) awalan nama (`@cim` = "CIMB"), (3) awalan salah satu kata nama atau nama kantong (`@kantor` = "Kas Kantor", `@tabungan`). Nama persis menang atas awalan, jadi `@bca` tetap memilih "BCA" walau ada "BCA Syariah". Lebih dari satu di tingkat yang sama = ambigu.
+- Tidak ketemu atau ambigu = **ditolak, tidak ada yang dicatat** (gagal tertutup, sama dengan parser), dengan daftar penanda siap ketik semua dompet aktif ruang itu (maksimum 12): `❌ Dompet @mandiri tidak ada di ruang Pribadi. Pilih: @bca, @cimb-niaga`.
+- `@nama` dibuang dari keterangan; balasan ✅ menyebut nama dompet. Saldo kurang di dompet pilihan tetap ditolak (`saldo_negatif`), balasannya menyebut dompet itu: `❌ Saldo CIMB tidak cukup. Catat dari app.`
+- **`@kantor` eksplisit boleh** mencatat ke dompet kantong `kantor` (keputusan pemilik). Kantong `kantor` hanya ada di ruang Pribadi (BSD: `pocket <> 'kantor' or space_kind = 'personal'`), jadi `b ... @kantor` ditolak seperti dompet yang tidak ada.
+- Bukan penanda (tetap keterangan): `@` sendirian, dan `@` di tengah token (`budi@gmail.com`). Token berawalan `@` yang rusak (`@cimb,x`, `@@x`, lebih dari 60 karakter) = ditolak (`bad_wallet`, "Penanda dompet tidak terbaca"); dua penanda = ditolak (`many_wallets`), juga bila sama. `@budi` di keterangan dibaca sebagai penanda dompet (gagal tertutup; tulis tanpa `@`). Nama dompet berspasi diketik tanpa spasi atau dengan `-` (`@kas-kantor`); `@kas kantor` = penanda `@kas` + keterangan "kantor".
+
+**Dompet bawaan (tanpa penanda)** adalah dompet aktif milik user yang paling baru dipakai di ruang itu, termasuk yang dipilih lewat `@nama`; bila belum ada riwayat, dompet aktif pertama dengan kantong `operasional` lebih dulu, lalu menurut urutan tampil (sama dengan Catat di app). **Dompet `kantor` tidak pernah jadi bawaan**, di kedua cabang: pengeluaran sesudah talangan tidak boleh diam-diam masuk Kas Kantor; hanya pilihan eksplisit `@kantor` yang boleh. Ruang yang hanya punya dompet kantor dibalas "belum ada dompet aktif, buka app dulu" untuk pesan tanpa penanda. Ini keputusan saya; pengaturan dompet bawaan permanen lewat perintah (`dompet cimb`, butuh tabel + migrasi) ditunda (fase 2, keputusan pemilik 2026-11-10).
 
 ## 5. Rancangan teknis
 
@@ -213,7 +223,7 @@ Teks bagian di atas sudah diperbarui di tempat. Daftar perubahan dan alasannya:
 | 4.1 | Kategori tanpa kecocokan kamus = saran teratas `api.suggest_categories`, bukan "Lainnya"; balasan ✅ menyebut kategori | Seed 0106 tidak punya kategori "Lainnya" dan `createEntrySchema` mewajibkan kategori; migrasi seed akan mengubah ruang yang sudah ada di produksi. Balasan + `batal` menutup risiko tebakan salah |
 | 4.1 | `batal` kedua tidak mundur ke catatan lama; `saldo_negatif` ditolak dari WhatsApp | Temuan review Task 2 (batal berantai membatalkan catatan yang tidak dimaksud); app menawarkan konfirmasi saldo negatif, chat tidak bisa memberi konfirmasi yang aman |
 | 4.2 | Nominal di balasan mengikuti `formatRupiah` repo: `Rp 25.000` (NBSP) | Satu sumber format uang; contoh spec `Rp25.000` tidak sama dengan keluaran app |
-| 4.4 | Dompet bawaan tidak pernah `kantor`; fallback memilih `operasional` dulu | Review Task 2: pengeluaran sesudah talangan akan diam-diam masuk Kas Kantor; sama dengan aturan Catat di app |
+| 4.4 | Dompet bawaan tidak pernah `kantor`; fallback memilih `operasional` dulu (sejak 2026-11-10 `@kantor` eksplisit boleh; lihat baris `@nama`) | Review Task 2: pengeluaran sesudah talangan akan diam-diam masuk Kas Kantor; sama dengan aturan Catat di app |
 | 5.2 | Pengirim = `senderPhone ?? from`; `@lid` tanpa `senderPhone` diabaikan; OpenWA dijalankan dengan `RESOLVE_LID_TO_PHONE=true` | Pengirim `@lid` tidak membawa nomor; tanpa ini mereka tidak pernah bisa menghubungkan nomor |
 | 5.2 | HMAC atas byte mentah (`arrayBuffer`) | `Request.text()` menghapus BOM dan mengganti byte tidak sah; HMAC akan berbeda dari pengirim |
 | 5.3 | Id pesan di-hash sebelum disimpan; status `pending` + ambil alih 30 detik; kolom `entry_version` | Id OpenWA bisa memuat nomor; menutup jendela crash antara klaim dan `createEntry`; `batal` hanya bila versi entri belum berubah |
@@ -241,3 +251,4 @@ Teks bagian di atas sudah diperbarui di tempat. Daftar perubahan dan alasannya:
 | 4.3 | Reset kata sandi memutus WhatsApp sebelum audit (audit di `finally`); masuk dengan kode pemulihan memutus sebelum sesi dibuat dan sekali lagi sesudah sesi lama dihapus (kode hubung dari sesi curian di jendela itu ikut hilang), galat dicatat `[wa] unlink_failed` tanpa menggagalkan masuk | Audit gagal melewatkan pemutusan; galat pemutusan sesudah kode hangus membuang kode tanpa sesi (fix wave 2) |
 | 4.1 | Slang `reb`/`ewu`, `m`/`mil` sendirian, `miliar`/`milyar`/`triliun`/`trilyun`, huruf Kiril/Yunani mirip dan beraksen sesudah angka = `bad_amount` | `25 rebu`, `25 ewu`, `2 m`, `25 рб`, `25 ríbu` tercatat 1000x (atau 10⁹x) lebih kecil (fix wave 2) |
 | 6 | Image OpenWA `0.27.1` (rilis 2026-11-02), bukan `0.29.1` | `minimumReleaseAge` 7 hari repo diberlakukan juga untuk image; fitur yang dipakai ada di `0.27.1` (Task 10) |
+| 4.1, 4.2, 4.4 | Penanda `@nama` memilih dompet per pesan; balasan ✅ selalu menyebut dompet; balasan saldo kurang menyebut dompet; `@kantor` eksplisit boleh | Pemilik tidak bisa memilih dompet (mis. CIMB) dan mendapat "saldo tidak cukup" bila dompet bawaan kurang (permintaan pemilik 2026-11-10). Tanpa migrasi: pencocokan di web (`wallet.ts`) atas `app.accounts` di bawah RLS |

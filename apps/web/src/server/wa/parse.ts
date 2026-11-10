@@ -7,12 +7,21 @@ export type ParseResult =
       amount: number;
       space: 'personal' | 'shared';
       description: string;
+      /** Penanda `@nama` (huruf kecil, tanpa `@`); kunci tidak ada bila pesan tanpa penanda. */
+      wallet?: string;
     }
   | { kind: 'cancel' }
   | { kind: 'link'; code: string }
   | {
       kind: 'reject';
-      reason: 'empty' | 'no_amount' | 'many_amounts' | 'bad_amount' | 'too_large';
+      reason:
+        | 'empty'
+        | 'no_amount'
+        | 'many_amounts'
+        | 'bad_amount'
+        | 'too_large'
+        | 'many_wallets'
+        | 'bad_wallet';
     };
 
 const MAX_DESCRIPTION = 200;
@@ -37,6 +46,14 @@ const UNIT_WORD_RE = /^(?:rb|k|jt|ribu|juta)$/;
 // tanpa satuan ("2 rebus") ikut ditolak: gagal tertutup, pengguna menulis ulang.
 const UNIT_START_RE =
   /^(?:rb|jt|rib|jut|reb|ewu|miliar|milyar|triliun|trilyun|mil(?!\p{L})|k(?!\p{L})|m(?!\p{L}))/u;
+// Penanda dompet: token yang diawali `@`. Tanda baca penutup kalimat dibuang (`@cimb.`); sisanya
+// harus huruf/angka/`_`/`-`, kalau tidak = bad_wallet (gagal tertutup: dompet tidak ditebak). `@`
+// sendirian dan `@` di tengah token (email) bukan penanda dan tetap keterangan.
+// Nama dompet maksimum 60 karakter (`app.accounts.name`): penanda lebih panjang tidak mungkin
+// cocok dan ditolak sebelum regex apa pun menyentuhnya (pesan sampai 64 KiB).
+const WALLET_MAX = 60;
+const WALLET_TRAIL_RE = /[.,;:!?]+$/;
+const WALLET_RE = /^[\p{L}\p{N}_-]+$/u;
 const FORMAT_CHARS_RE = /\p{Cf}/gu;
 const COMBINING_RE = /\p{M}/gu;
 // Huruf Kiril/Yunani yang mirip atau sebunyi dengan huruf satuan, hanya untuk unitKey (keterangan
@@ -95,13 +112,30 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
   const link = LINK_RE.exec(norm);
   if (link) return { kind: 'link', code: (link[1] ?? '').toUpperCase() };
 
+  // Penanda @nama diambil lebih dulu dan dibuang dari aliran token, sehingga tidak dibaca sebagai
+  // nominal (`@bca2`) dan tidak memutus gabungan angka + satuan (`23 @cimb rb` = 23rb).
+  let wallet: string | undefined;
+  let walletCount = 0;
+  let walletBad = false;
+  const words: string[] = [];
+  for (const t of norm.split(' ')) {
+    if (t.length > 1 && t.startsWith('@')) {
+      walletCount += 1;
+      const name = t.length > WALLET_MAX + 1 ? '' : t.slice(1).replace(WALLET_TRAIL_RE, '');
+      if (WALLET_RE.test(name)) wallet = name;
+      else walletBad = true;
+    } else {
+      words.push(t);
+    }
+  }
+
   // "rp 25.000" / "rp. 25.000": gabungkan penanda mata uang dengan token angka berikutnya.
   // "25 rb" / "1,5 jt" / "25 ribu": gabungkan satuan dengan token angka sebelumnya, sehingga
   // nominal tidak terbaca 1000x lebih kecil. Token yang hanya diawali satuan ("25 rbu",
   // "25 rb,", "50 k.", "25 ｒｂ") ikut digabung apa adanya agar ditolak (bad_amount), sama
   // dengan "25rbu": gagal tertutup.
   const tokens: string[] = [];
-  for (const t of norm.split(' ')) {
+  for (const t of words) {
     const prev = tokens[tokens.length - 1];
     if ((prev === 'rp' || prev === 'rp.') && ANY_DIGIT_RE.test(t))
       tokens[tokens.length - 1] = prev + t;
@@ -153,6 +187,8 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
     return { kind: 'reject', reason: 'bad_amount' };
   }
   if (amount > opts.maxAmount) return { kind: 'reject', reason: 'too_large' };
+  if (walletCount > 1) return { kind: 'reject', reason: 'many_wallets' };
+  if (walletBad) return { kind: 'reject', reason: 'bad_wallet' };
 
   return {
     kind: 'entry',
@@ -160,5 +196,6 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
     amount,
     space: shared || sharedWord ? 'shared' : 'personal',
     description: rest.join(' ').slice(0, MAX_DESCRIPTION).trimEnd(),
+    ...(wallet === undefined ? {} : { wallet }),
   };
 }
