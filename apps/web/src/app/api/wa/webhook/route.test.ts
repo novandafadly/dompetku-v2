@@ -215,6 +215,56 @@ describe('POST /api/wa/webhook', () => {
     expect(call(0)[1]).toMatchObject({ text: 'kopi ☕ 25rb' });
   });
 
+  describe('log pesan diabaikan', () => {
+    const lines = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.map((c) => c.map(String).join(' '));
+    const broadcast = () => {
+      const j = parseFx();
+      j.data.from = 'status@broadcast';
+      j.data.chatId = 'status@broadcast';
+      return JSON.stringify(j);
+    };
+
+    it.each<[string, string, () => Buffer | string]>([
+      ['event non-pesan', 'not_message', () => fx('session-status')],
+      ['JSON rusak bertanda tangan sah', 'not_message', () => '{rusak'],
+      ['grup', 'not_private', () => fx('message-group')],
+      ['status@broadcast', 'not_private', broadcast],
+      ['pesan sendiri', 'from_me', () => fx('message-fromme')],
+      ['bukan teks', 'not_text', () => fx('message-image')],
+    ])('%s = satu baris [wa] ignored %s', async (_n, reason, body) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(noop);
+      const log = vi.spyOn(console, 'log').mockImplementation(noop);
+      const info = vi.spyOn(console, 'info').mockImplementation(noop);
+      const res = await post(body());
+      expect(res.status).toBe(200);
+      expect(lines(warn)).toEqual([`[wa] ignored ${reason}`]);
+      expect(log).not.toHaveBeenCalled();
+      expect(info).not.toHaveBeenCalled();
+      const all = JSON.stringify([warn.mock.calls, log.mock.calls, info.mock.calls]);
+      for (const bad of [
+        '6281',
+        '62898',
+        '1203630',
+        '3EB0',
+        'makan',
+        'oke',
+        'sessionId',
+        'status@',
+      ])
+        expect(all).not.toContain(bad);
+    });
+
+    it('pesan pribadi teks sah = tanpa log ignored', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(noop);
+      const log = vi.spyOn(console, 'log').mockImplementation(noop);
+      await post(fx('message-private'));
+      expect(handleInbound).toHaveBeenCalledTimes(1);
+      expect(warn).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+    });
+  });
+
   it('hanya POST diekspor', () => {
     expect(Object.keys(route).sort()).toEqual(['POST', 'dynamic']);
     expect(route.dynamic).toBe('force-dynamic');

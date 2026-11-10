@@ -49,10 +49,15 @@ describe('readWaEnv', () => {
       expect(() => readWaEnv({ ...full, WA_MAX_AMOUNT: v })).toThrow(/WA_MAX_AMOUNT/);
     expect(() => readWaEnv({ ...full, WA_WEBHOOK_SECRET: 'pendek' })).toThrow(/minimal 16/);
     expect(() => readWaEnv({ ...full, OPENWA_URL: 'bukan url' })).toThrow(/OPENWA_URL/);
+    // Galat ditangkap lalu diperiksa di luar catch: tes gagal bila tidak ada yang dilempar.
+    let err: unknown = null;
     try {
       readWaEnv({ ...full, OPENWA_URL: 'ftp://x' });
     } catch (e) {
-      expect(String(e)).not.toContain(full.OPENWA_API_KEY);
+      err = e;
     }
+    expect(err).toBeInstanceOf(EnvError);
+    expect(String(err)).toMatch(/OPENWA_URL harus http/);
+    expect(String(err)).not.toContain(full.OPENWA_API_KEY);
   });
 });

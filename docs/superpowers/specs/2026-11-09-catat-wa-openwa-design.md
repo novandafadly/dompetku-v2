@@ -72,7 +72,7 @@ beli 2 kopi 50rb        → ditolak (dua angka); balasan: contoh format
 
 Satu baris, tanpa emoji dekoratif selain tanda status.
 
-- Sukses: `✅ Makan Siang & Minum Rp 25.000 · Pribadi · ketik batal untuk membatalkan` (nominal mengikuti `formatRupiah` repo: `Rp` + spasi tanpa putus (NBSP) + angka bertitik)
+- Sukses: `✅ Makan Siang & Minum Rp 25.000 · Pribadi · ketik batal untuk membatalkan` (nominal mengikuti `formatRupiah` repo: `Rp` + spasi tanpa putus (NBSP) + angka bertitik). Pemasukan diberi label supaya salah baca jenis terlihat: `✅ Pemasukan · Gaji Rp 5.000.000 · Pribadi · ketik batal untuk membatalkan`; pengeluaran tanpa label
 - Tidak terbaca: `❌ Tidak terbaca. Contoh: 25rb makan siang` (tidak ada yang dicatat)
 - Dibatalkan: `↩️ Dibatalkan: Makan Siang & Minum Rp 25.000`
 - Nomor belum terhubung: balasan satu kali per jam berisi cara menghubungkan (4.3). Tanpa data apa pun.

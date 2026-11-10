@@ -20,6 +20,15 @@ function reply(status: number, body: Record<string, unknown> = {}): Response {
   return Response.json(body, { status, headers: NO_STORE });
 }
 
+/**
+ * Pesan sah tapi bukan untuk Catat: 200 dan satu baris log berisi alasan mesin saja (tanpa body,
+ * pengirim, teks, atau id), agar bentuk payload OpenWA yang berubah terlihat di log.
+ */
+function ignored(reason: 'not_message' | 'not_private' | 'from_me' | 'not_text'): Response {
+  console.warn(`[wa] ignored ${reason}`);
+  return reply(200, { ok: true });
+}
+
 function getDeps(): WaDeps | null {
   if (deps) return deps;
   const env = readWaEnv();
@@ -46,9 +55,10 @@ export async function POST(req: Request): Promise<Response> {
   if (!d.transport.verify(bytes, req.headers)) return reply(401);
 
   const msg = d.transport.toInbound(bytes);
-  if (msg?.chatType !== 'private' || msg.fromMe || msg.text === null) {
-    return reply(200, { ok: true });
-  }
+  if (msg === null) return ignored('not_message');
+  if (msg.chatType !== 'private') return ignored('not_private');
+  if (msg.fromMe) return ignored('from_me');
+  if (msg.text === null) return ignored('not_text');
   try {
     await handleInbound(d, msg);
   } catch {

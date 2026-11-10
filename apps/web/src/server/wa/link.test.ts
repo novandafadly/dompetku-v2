@@ -63,7 +63,21 @@ describe('loadWaLink', () => {
     m.readWaEnv.mockImplementation(() => {
       throw new Error('Variabel lingkungan X wajib diisi');
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(await loadWaLink(ctx)).toEqual({ state: 'off' });
+    // Satu baris kode mesin; pesan galat (bisa menyebut nama/nilai env) tidak dicatat.
+    expect(warn.mock.calls).toEqual([['[wa] config_error']]);
+    warn.mockRestore();
+  });
+
+  it('fitur mati atau menyala normal: tanpa log', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    m.readWaEnv.mockReturnValueOnce(null);
+    await loadWaLink(ctx);
+    m.query.mockResolvedValue({ rows: [] });
+    await loadWaLink(ctx);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('belum terhubung: unlinked + nomor bot', async () => {

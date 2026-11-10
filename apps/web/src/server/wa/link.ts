@@ -37,12 +37,16 @@ export function maskPhone(e164: string): string {
   return `+${digits.slice(0, 2)} ••••${tail}`;
 }
 
-/** Fitur menyala? Konfigurasi setengah jadi (EnvError) dianggap mati: halaman tetap tenang. */
+/**
+ * Fitur menyala? Konfigurasi setengah jadi (EnvError) dianggap mati: halaman tetap tenang, tapi
+ * satu baris log kode mesin (tanpa pesan galat, nama, atau nilai env) agar salah isi terlihat.
+ */
 export function waEnabled(): { botNumber: string | null } | null {
   try {
     const env = readWaEnv();
     return env === null ? null : { botNumber: normalizeBotNumber(env.botNumber) };
   } catch {
+    console.warn('[wa] config_error');
     return null;
   }
 }

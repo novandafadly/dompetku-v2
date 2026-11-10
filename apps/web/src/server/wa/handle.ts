@@ -39,8 +39,9 @@ type SpaceKind = keyof typeof RUANG_LABEL;
 
 /** Balasan satu baris (spec 4.2). ✅/❌/↩️/⚠️ persis spec; sisanya salinan task ini. */
 export const REPLY = {
-  recorded: (category: string, amount: Rupiah, space: SpaceKind) =>
-    `✅ ${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ketik batal untuk membatalkan`,
+  /** Pemasukan diberi label agar salah baca jenis (mis. kata `masuk` di keterangan) terlihat. */
+  recorded: (type: 'income' | 'expense', category: string, amount: Rupiah, space: SpaceKind) =>
+    `✅ ${type === 'income' ? 'Pemasukan · ' : ''}${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ketik batal untuk membatalkan`,
   cancelled: (category: string, amount: Rupiah) =>
     `↩️ Dibatalkan: ${category} ${formatRupiah(amount)}`,
   unreadable: '❌ Tidak terbaca. Contoh: 25rb makan siang',
@@ -315,7 +316,7 @@ async function record(
   // Entri sudah tersimpan: balasan ✅ walau finish gagal (kirim ulang id sama = replayed).
   await finish(r, userId, 'recorded', entryId);
   r.log('recorded');
-  await reply(r, REPLY.recorded(chosen.categoryName, p.amount, p.space));
+  await reply(r, REPLY.recorded(p.type, chosen.categoryName, p.amount, p.space));
 }
 
 const lastSchema = (v: unknown): { entryId: string; spaceId: string; version: number } | null => {

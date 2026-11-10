@@ -323,7 +323,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
     const [e] = await entries();
     expect(e).toMatchObject({ kind: 'income', amount: 5_000_000, category_name: 'Gaji' });
     expect(r.sent[0]?.text).toBe(
-      `✅ Gaji ${formatRupiah(5_000_000)} · Pribadi · ketik batal untuk membatalkan`,
+      `✅ Pemasukan · Gaji ${formatRupiah(5_000_000)} · Pribadi · ketik batal untuk membatalkan`,
     );
   });
 
