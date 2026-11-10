@@ -57,9 +57,11 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      // Aset statis, health, ikon, dan manifest tidak butuh nonce.
+      // Aset statis, health, ikon, dan manifest tidak butuh nonce. `api/wa/` (webhook WhatsApp,
+      // JSON): proxy membuat Next menyalin dan menahan seluruh body (sampai 10 MiB) sebelum batas
+      // 64 KiB di route berlaku.
       source:
-        '/((?!_next/static|_next/image|api/health|favicon.ico|icon.svg|apple-icon.png|icons/|manifest.webmanifest).*)',
+        '/((?!_next/static|_next/image|api/health|api/wa/|favicon.ico|icon.svg|apple-icon.png|icons/|manifest.webmanifest).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },
