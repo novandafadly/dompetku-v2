@@ -1,0 +1,8 @@
+{
+  "event": "session.status",
+  "timestamp": "2026-11-09T10:00:00.000Z",
+  "sessionId": "8f3c2b1a-9d4e-4c7a-8b2f-1e6d5a4c3b2a",
+  "idempotencyKey": "msg_8f3c2b1a-9d4e-4c7a-8b2f-1e6d5a4c3b2a_3EB0ABC123_f1e2d3c4-b5a6-7890-1234-567890abcdef",
+  "deliveryId": "dlv_550e8400-e29b-41d4-a716-446655440000",
+  "data": { "status": "ready" }
+}

@@ -7,6 +7,7 @@ import type { Icon } from '@/components/ui/icon';
 import { AddressBookIcon } from '@/components/ui/icons/address-book';
 import { AirplaneTiltIcon } from '@/components/ui/icons/airplane-tilt';
 import { SignOutIcon } from '@/components/ui/icons/sign-out';
+import { DeviceMobileIcon } from '@/components/ui/icons/device-mobile';
 import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
 import { ExportIcon } from '@/components/ui/icons/export';
 import { GearSixIcon } from '@/components/ui/icons/gear-six';
@@ -126,6 +127,17 @@ export function MenuSheet({
             )}
           </li>
         ))}
+        {real ? (
+          <li className={rowDivider}>
+            {/* Catat lewat WhatsApp: hanya mode nyata; halamannya sendiri menangani fitur yang mati. */}
+            <MenuLink
+              href={buildSectionHref(ruang, 'whatsapp', query)}
+              name="WhatsApp"
+              Icon={DeviceMobileIcon}
+              onOpenChange={onOpenChange}
+            />
+          </li>
+        ) : null}
         {real ? (
           <li className={rowDivider}>
             {/* Form + button: tetap jalan tanpa JS. Aksi mencatat audit logout lalu redirect ke /masuk?status=keluar. */}

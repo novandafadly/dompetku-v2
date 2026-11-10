@@ -43,6 +43,14 @@
 	request_header -X-Forwarded-Host
 	request_header -X-Real-IP
 
+	# Catat via WhatsApp: /api/wa/* (webhook OpenWA) hanya untuk openwa lewat network compose `wa`,
+	# tidak pernah dari publik (docs/ops/runbook-wa.md). HMAC tetap diperiksa di web; ini menutup
+	# permukaan yang tidak perlu. Harus sebelum handle ke web: handle pertama yang cocok menang.
+	@wa path /api/wa /api/wa/*
+	handle @wa {
+		respond 404
+	}
+
 	# S3: web (Next.js standalone). {client_ip} = IP klien dari edge (trusted_proxies di atas).
 	handle {
 		reverse_proxy web:3000 {

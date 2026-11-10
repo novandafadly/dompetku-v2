@@ -100,12 +100,14 @@ export function buildAuthHref(page: AuthPage, query: string): Route {
   return `/${page}${query}` as Route;
 }
 
-export type Section = 'sampah' | 'kategori' | 'laporan';
+export type Section = 'sampah' | 'kategori' | 'laporan' | 'whatsapp';
 
 /** Layar di luar tab (`/{ruang}/sampah`, `/{ruang}/kategori`); `null` untuk tab dan rute lain. */
 export function sectionFromPathname(pathname: string): Section | null {
   const seg = pathname.split('/')[2];
-  return seg === 'sampah' || seg === 'kategori' || seg === 'laporan' ? seg : null;
+  return seg === 'sampah' || seg === 'kategori' || seg === 'laporan' || seg === 'whatsapp'
+    ? seg
+    : null;
 }
 
 /**
@@ -115,7 +117,7 @@ export function sectionFromPathname(pathname: string): Section | null {
 export function tabFromPathname(pathname: string): Tab | null {
   const seg = pathname.split('/')[2];
   // Laporan dibuka dari Menu/sidebar/Ringkasan Transaksi: tidak ada tab yang tampak aktif (K8).
-  if (seg === 'laporan') return null;
+  if (seg === 'laporan' || seg === 'whatsapp') return null;
   if (seg === 'sampah' || seg === 'kategori') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }

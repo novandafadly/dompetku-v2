@@ -142,8 +142,40 @@ export class AuthService {
       env,
       pools,
       mailer,
-      onPasswordReset: (userId) => this.audit(userId, 'password_reset_done'),
+      onPasswordReset: async (userId) => {
+        // Putus dulu: audit yang gagal tidak boleh melewatkan pemutusan. Audit tetap dicatat
+        // walau pemutusan gagal (galat pemutusan tetap dilempar).
+        try {
+          await this.unlinkWhatsApp(userId, 'password_reset');
+        } finally {
+          await this.audit(userId, 'password_reset_done');
+        }
+      },
     });
+  }
+
+  /**
+   * Semua sesi dicabut (reset kata sandi, masuk dengan kode pemulihan): tautan WhatsApp ikut
+   * diputus, karena sesi curian bisa saja sudah menghubungkan nomor penyerang. `api.wa_unlink`
+   * hanya mengenai baris user ini dan mencatat `wa_unlinked` dengan `via` bila ada nomor.
+   */
+  private async unlinkWhatsApp(
+    userId: string,
+    via: 'password_reset' | 'session_revoked',
+  ): Promise<void> {
+    await withUser(this.pools.app, userId, (c) => c.query('select api.wa_unlink($1)', [via]));
+  }
+
+  /**
+   * Pemutusan di jalur masuk dengan kode pemulihan: gagal tidak boleh menggagalkan masuk (kode
+   * sudah hangus, galat berarti kode terbuang tanpa sesi). Log hanya kode mesin.
+   */
+  private async unlinkWhatsAppBestEffort(userId: string): Promise<void> {
+    try {
+      await this.unlinkWhatsApp(userId, 'session_revoked');
+    } catch {
+      console.error('[wa] unlink_failed');
+    }
   }
 
   // ===== Audit =====
@@ -456,12 +488,16 @@ export class AuthService {
       [user.id, matched],
     );
     if (consumed.rowCount !== 1) return { result: { kind: 'invalid' }, setCookie: null };
+    // Putus WhatsApp sebelum sesi dibuat, lalu sekali lagi sesudah recoverySignIn menghapus sesi
+    // lama: sesi curian yang masih hidup di antara keduanya bisa membuat kode hubung baru.
+    await this.unlinkWhatsAppBestEffort(user.id);
     await this.succeeded(keys);
     const res = await this.auth.api.recoverySignIn({
       body: { userId: user.id },
       headers,
       returnHeaders: true,
     });
+    await this.unlinkWhatsAppBestEffort(user.id);
     await this.audit(user.id, 'recovery_code_used', headers);
     await this.audit(user.id, 'session_revoked', headers, { reason: 'recovery' });
     background(this.mailer.send(mails.recoveryCodeUsed(user.email)));

@@ -124,6 +124,9 @@ jobs:
           shellcheck --severity=warning "${scripts[@]}"
       - run: bash infra/db-vm/deploy/test/deploy-test.sh
       - run: bash infra/db-vm/bin/test/dompetku-psql-test.sh
+      - run: bash infra/db-vm/bin/test/firewall-test.sh
+      # caddy validate gw + wa-proxy dan perilaku allowlist wa-proxy, dengan image caddy di compose.yml.
+      - run: bash infra/db-vm/wa-proxy/test/wa-proxy-test.sh
 
   db:
     # pgTAP (TRD §5 butir 1, BSD §13): role BSD, dbmate up, pg_prove sebagai dompetku_test (bukan

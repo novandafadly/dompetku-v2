@@ -63,3 +63,18 @@ describe('MenuSheet: Keluar', () => {
     expect(screen.queryByRole('button', { name: 'Keluar' })).toBeNull();
   });
 });
+
+describe('MenuSheet: WhatsApp', () => {
+  it('mode nyata: tautan ke /{ruang}/whatsapp, bukan "Segera"', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const link = screen.getByRole('link', { name: 'WhatsApp' });
+    expect(link).toHaveAttribute('href', '/bersama/whatsapp');
+    expect(link).not.toHaveTextContent('Segera');
+  });
+
+  it('prototipe (bawaan): tidak ada butir WhatsApp sama sekali', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByText('WhatsApp')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'WhatsApp' })).toBeNull();
+  });
+});

@@ -1,0 +1,73 @@
+name: Pindai image OpenWA
+
+# Image pihak ketiga ghcr.io/rmyndharis/openwa (layanan compose `openwa`, Catat via WhatsApp) tidak
+# dibangun repo ini, jadi tidak tercakup Trivy job `image`/release maupun osv-scanner (lockfile).
+# Trivy memindai referensi yang dipatok di infra/db-vm/compose.yml (satu-satunya sumber pin; tag +
+# digest dibaca dari berkas itu): mingguan, dan di setiap PR yang mengubah compose.yml, berkas
+# pengecualian, atau workflow ini. Gagal = HIGH/CRITICAL yang sudah ada perbaikannya; email bawaan
+# GitHub untuk jadwal. Pengecualian: .trivyignore-openwa.yaml (docs/ops/ci-keamanan.md).
+
+on:
+  schedule:
+    - cron: '43 2 * * 1' # Senin 02:43 UTC = 09:43 WIB (sesudah osv-mingguan, di luar 06-09 Pacific)
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - infra/db-vm/compose.yml
+      - .trivyignore-openwa.yaml
+      - .github/workflows/openwa-image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwa-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Referensi image dari compose.yml
+        id: ref
+        run: |
+          ref=$(sed -n 's/^    image: \(ghcr\.io\/rmyndharis\/openwa:[^ ]*\)$/\1/p' infra/db-vm/compose.yml)
+          if [[ $(grep -c . <<<"$ref") != 1 || ! $ref =~ ^ghcr\.io/rmyndharis/openwa:[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error file=infra/db-vm/compose.yml::image openwa harus tepat satu, bentuk ghcr.io/rmyndharis/openwa:X.Y.Z@sha256:<64 hex> (dapat: '${ref//$'\n'/ }')"
+            exit 1
+          fi
+          echo "ref=$ref" >>"$GITHUB_OUTPUT"
+      # Premis pengecualian Chromium di .trivyignore-openwa.yaml: engine Baileys tidak meluncurkan
+      # browser (engine.factory.ts OpenWA memakai ENGINE_TYPE proses; env compose menang atas
+      # data/.env.generated dasbor). Bila baris ini berubah/hilang, pengecualian tidak sah: job gagal.
+      - name: Premis pengecualian (ENGINE_TYPE=baileys)
+        run: |
+          got=$(awk '/^  openwa:$/{s=1;next} /^  [^ #]/{s=0} s && /ENGINE_TYPE/' infra/db-vm/compose.yml)
+          if [[ $got != '      ENGINE_TYPE: baileys' ]]; then
+            echo "::error file=infra/db-vm/compose.yml::layanan openwa harus punya tepat satu baris 'ENGINE_TYPE: baileys' (dapat: '${got//$'\n'/ }'); pengecualian Chromium di .trivyignore-openwa.yaml bergantung padanya"
+            exit 1
+          fi
+      # Image Trivy yang sama dengan job `image` di ci.yml dan release.yml (satu versi Trivy di repo).
+      - name: Trivy (HIGH/CRITICAL yang sudah ada perbaikannya, linux/arm64 seperti VM DB)
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+          OUT: ${{ runner.temp }}
+        run: |
+          rc=0
+          docker run --rm -v "$GITHUB_WORKSPACE/.trivyignore-openwa.yaml:/trivyignore.yaml:ro" -v "$OUT:/out" \
+            ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+            image --platform linux/arm64 --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --ignorefile /trivyignore.yaml --scanners vuln --no-progress --format table --output /out/trivy.txt \
+            "$REF" || rc=$?
+          {
+            echo "### Trivy \`$REF\` (linux/arm64)"
+            echo '```'
+            cat "$OUT/trivy.txt" 2>/dev/null || echo '(tanpa keluaran)'
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          cat "$OUT/trivy.txt" 2>/dev/null || true
+          exit "$rc"

@@ -1,0 +1,175 @@
+# wa-proxy: satu-satunya jalur antara openwa dan web (Catat via WhatsApp). Dipasang di
+# /opt/dompetku/wa-proxy/Caddyfile. Spec 2026-11-09 §6, docs/ops/runbook-wa.md.
+#
+# openwa (gateway WhatsApp pihak ketiga yang memproses pesan dari internet) dianggap bisa disusupi.
+# Ia hanya boleh mengirim webhook ke web; web hanya boleh menyuruhnya mengirim teks. Dua listener,
+# masing-masing diikat ke alamat wa-proxy di satu network saja dan hanya menerima alamat sumber
+# pihak itu (alamat dipatok di compose.yml):
+#   172.16.26.2:8081 (network wa)     dari openwa 172.16.26.3: POST /api/wa/webhook -> web:3000
+#   172.16.28.2:2786 (network wa_web) dari web (ip_range 172.16.28.128/25, alamat dinamis):
+#                                      POST .../send-text -> openwa:2785
+# Seandainya satu pihak tetap sampai ke listener pihak lain (mis. alamat diubah tanpa Caddyfile ini),
+# dampaknya nihil: openwa di :2786 hanya memanggil API-nya sendiri (send-text, yang memang sudah ia
+# kuasai), web di :8081 hanya memanggil webhook dirinya sendiri. Selain itu semua dijawab 404.
+#
+# Validasi sebelum dipakai: caddy validate (runbook-wa langkah 2).
+{
+	auto_https off
+	admin off
+	persist_config off
+	servers {
+		# Klien di kedua sisi adalah program, bukan browser: batas ketat agar koneksi lambat dari
+		# openwa yang disusupi tidak menahan wa-proxy.
+		timeouts {
+			read_header 5s
+			read_body 10s
+			write 40s
+			idle 60s
+		}
+		max_header_size 16KB
+	}
+	# Log bawaan (termasuk galat proxy http.log.error, mis. 502 saat backend mati) memuat request
+	# beserta headernya; Caddy hanya menyamarkan Cookie/Authorization. Header dibuang di sini juga.
+	log {
+		output stdout
+		format filter {
+			request>headers delete
+			wrap json
+		}
+	}
+}
+
+# Log akses JSON tanpa header request/respons (X-API-Key, X-OpenWA-Signature) dan tanpa body
+# (Caddy tidak pernah mencatat body). Yang tersisa: waktu, alamat sumber, metode, path, status.
+(access_log) {
+	log {
+		output stdout
+		format filter {
+			request>headers delete
+			resp_headers delete
+			wrap json
+		}
+	}
+}
+
+# Header yang tidak boleh lewat ke arah mana pun: identitas klien palsu (web memercayai
+# X-Forwarded-For untuk jeda auth berbasis IP), header internal Next.js, dan override metode/URL.
+(strip_untrusted) {
+	request_header -X-Forwarded-*
+	request_header -Forwarded
+	request_header -X-Real-IP
+	request_header -X-Client-IP
+	request_header -True-Client-IP
+	request_header -CF-Connecting-IP
+	request_header -X-Cluster-Client-IP
+	request_header -X-Middleware-*
+	request_header -X-Nextjs-*
+	request_header -X-Invoke-*
+	request_header -Next-*
+	request_header -RSC
+	request_header -X-Original-*
+	request_header -X-Rewrite-URL
+	request_header -X-HTTP-Method-Override
+	request_header -X-Method-Override
+	request_header -Cookie
+	request_header -Authorization
+	request_header -Proxy-Authorization
+}
+
+# Di dalam reverse_proxy: Caddy sendiri menambahkan X-Forwarded-For/-Proto/-Host (alamat wa-proxy
+# atau pengirim); dibuang juga, upstream tidak menerima identitas klien sama sekali. Host tetap.
+(no_forwarded) {
+	header_up -X-Forwarded-For
+	header_up -X-Forwarded-Proto
+	header_up -X-Forwarded-Host
+	header_up Host {upstream_hostport}
+	transport http {
+		dial_timeout 5s
+		# Handler webhook menunggu sendText (batas 10 s); WEBHOOK_TIMEOUT OpenWA 20 s.
+		response_header_timeout 30s
+	}
+}
+
+# (a) openwa -> web: hanya webhook.
+http://:8081 {
+	bind 172.16.26.2
+	import access_log
+	# Body di atas batas: Content-Length yang lebih besar dari 65536 ditolak 413 sebelum ke web;
+	# body chunked dipotong di batas (413 ke pengirim, request ke web diputus sebelum body utuh).
+	request_body {
+		max_size 64KiB
+	}
+	@too_big header_regexp Content-Length ^(?:[0-9]{6,}|6[6-9][0-9]{3}|65[6-9][0-9]{2}|655[4-9][0-9]|6553[7-9])$
+	handle @too_big {
+		respond 413
+	}
+
+	@webhook {
+		remote_ip 172.16.26.3
+		method POST
+		path /api/wa/webhook
+	}
+	handle @webhook {
+		import strip_untrusted
+		request_header -X-API-Key
+		# Path tetap tanpa query string: varian yang diterima matcher (huruf besar, //, segmen titik,
+		# %77ebhook, ?_rsc=) sampai ke web hanya sebagai satu bentuk.
+		rewrite * /api/wa/webhook?
+		reverse_proxy web:3000 {
+			import no_forwarded
+		}
+	}
+
+	@webhook_method {
+		remote_ip 172.16.26.3
+		path /api/wa/webhook
+	}
+	handle @webhook_method {
+		header Allow POST
+		respond 405
+	}
+
+	handle {
+		respond 404
+	}
+}
+
+# (b) web -> openwa: hanya kirim teks untuk satu sesi (UUID). Key operator web (X-API-Key) lewat;
+# OpenWA membatasinya ke sesi bot (allowedSessions) dan alamat wa-proxy (allowedIps 172.16.26.2).
+http://:2786 {
+	bind 172.16.28.2
+	import access_log
+	request_body {
+		max_size 16KiB
+	}
+	@too_big header_regexp Content-Length ^(?:[0-9]{6,}|[2-9][0-9]{4}|1[7-9][0-9]{3}|16[4-9][0-9]{2}|1639[0-9]|1638[5-9])$
+	handle @too_big {
+		respond 413
+	}
+
+	@send {
+		remote_ip 172.16.28.128/25
+		method POST
+		path_regexp ^/api/sessions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/messages/send-text$
+	}
+	handle @send {
+		import strip_untrusted
+		rewrite * {path}?
+		reverse_proxy openwa:2785 {
+			import no_forwarded
+		}
+	}
+
+	@send_method {
+		remote_ip 172.16.28.128/25
+		path_regexp ^/api/sessions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/messages/send-text$
+	}
+	handle @send_method {
+		header Allow POST
+		respond 405
+	}
+
+	handle {
+		respond 404
+	}
+}

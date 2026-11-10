@@ -1,0 +1,151 @@
+# Pengecualian Trivy untuk image OpenWA (workflow openwa-image.yml). Terpisah dari .trivyignore.yaml
+# (image web): CVE image pihak ketiga tidak bisa kita tambal sendiri; perbaikannya = naik versi.
+# Setiap entri wajib: id, purls, expired_at <= 30 hari, statement (alasan + persetujuan pemilik).
+# Sesudah expired_at entri gugur dan CVE kembali menggagalkan pemindaian. docs/ops/ci-keamanan.md.
+vulnerabilities:
+  - id: CVE-2026-76024
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76025
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76026
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76027
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76028
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76029
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76030
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-76031
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-109518
+    purls:
+      - pkg:deb/debian/apt
+      - pkg:deb/debian/libapt-pkg6.0
+    expired_at: 2026-11-21
+    statement: 'apt/libapt-pkg6.0 2.6.1 di image OpenWA 0.27.1 (debian 12.15); apt hanya dipakai saat build image, di runtime tidak bisa dijalankan (uid 997, rootfs read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring). Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (apt 2.6.2). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119260
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119261
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119262
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119263
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119264
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119265
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119266
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119267
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119268
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119269
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119270
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
+  - id: CVE-2026-119271
+    purls:
+      - pkg:deb/debian/chromium
+      - pkg:deb/debian/chromium-common
+      - pkg:deb/debian/chromium-sandbox
+    expired_at: 2026-11-21
+    statement: 'Paket chromium Debian di image OpenWA 0.27.1 arm64 (156.0.8078.73, perbaikan .79); hanya dipakai engine whatsapp-web.js yang tidak dipakai. Compose mematok ENGINE_TYPE=baileys (dijaga langkah workflow, env compose menang atas dasbor), jadi Chromium tidak pernah diluncurkan. Kontainer uid 997, read_only, cap_drop ALL, no-new-privileges, tanpa port masuk, egress disaring. Dicabut paling lambat 2026-11-21; naik ke 0.29.1 sesudah 2026-11-14 18:52 WIB (rencana bump). Persetujuan: disetujui pemilik lewat delegasi 2026-11-10 ("kerjain aja best practices dan terbaik dari sisi keamanan"); keputusan terbuka untuk dicabut.'
