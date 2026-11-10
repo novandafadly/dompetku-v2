@@ -51,6 +51,16 @@ Semua perintah manual yang memanggil `docker compose` untuk mengganti layanan di
 
 ### 2. Berkas, gw, dan web di network `wa` (sesi VM)
 
+Cek subnet lebih dulu, sebelum berkas apa pun dipasang: begitu `compose.yml` baru terpasang, deploy berikutnya membuat network `wa` dengan `172.16.26.0/24`. Subnet itu belum boleh dipakai network lain (alasan sama dengan `worker_db` di runbook S7):
+
+```bash
+sudo systemctl stop dompetku-deploy.timer   # tidak ada deploy sampai langkah 2 selesai
+sudo docker network inspect $(sudo docker network ls -q) -f '{{ .Name }} {{ range .IPAM.Config }}{{ .Subnet }} {{ end }}' | grep ' 172\.16\.'
+# harapan: hanya dompetku_worker_db 172.16.25.0/24
+```
+
+Baris lain dengan `172.16.` juga dianggap bentrok bila subnetnya lebih lebar dan mencakup `172.16.26.0/24` (mis. `172.16.0.0/16`, `172.16.0.0/12`). Bila ada: berhenti, nyalakan lagi timer (`sudo systemctl start dompetku-deploy.timer`), catat nama network itu, tanyakan ke sesi Claude.
+
 ```bash
 sudo cp /opt/dompetku/compose.yml /opt/dompetku/compose.yml.pre-wa
 sudo cp /opt/dompetku/bin/deploy /opt/dompetku/bin/deploy.pre-wa
@@ -63,14 +73,6 @@ sudo install -m 644 README.md /opt/dompetku/deploy/README.md
 sudo install -m 644 web.env.example /opt/dompetku/deploy/web.env.example
 sudo install -m 644 openwa.env.example /opt/dompetku/deploy/openwa.env.example
 ```
-
-Subnet `172.16.26.0/24` belum boleh dipakai network lain (alasan sama dengan `worker_db` di runbook S7):
-
-```bash
-sudo docker network inspect $(sudo docker network ls -q) -f '{{ .Name }} {{ range .IPAM.Config }}{{ .Subnet }} {{ end }}' | grep ' 172\.16\.26\.'   # kosong
-```
-
-Bila tidak kosong: berhenti, catat nama network itu, tanyakan ke sesi Claude.
 
 Image OpenWA: pastikan digest di `compose.yml` adalah rilis yang dimaksud dan ada varian `arm64`. Digest diambil dari GHCR 2026-11-10 (tag `0.29.1` = `0.29` = `latest` saat itu):
 
@@ -86,12 +88,13 @@ sudo docker run --rm --network none --entrypoint sh "$img" -c 'command -v curl' 
 
 Untuk naik versi nanti, digest diambil dari indeks multi-arch tag rilis (bukan digest per arsitektur), diganti bersama tag lewat PR. `docker compose pull` gagal keras bila digest tidak cocok dengan tag; jangan pernah menghapus `@sha256:…`.
 
-gw: validasi lalu muat ulang. gw putus sebentar (koneksi aktif terputus); jalankan di luar jam pakai:
+gw: validasi lalu **restart**. `docker compose up -d gw` tidak cukup: konfigurasi compose gw tidak berubah (hanya isi Caddyfile), jadi container tidak dibuat ulang; Caddy berjalan dengan `admin off` sehingga tidak memuat ulang sendiri; dan `install` menulis inode baru, sementara bind mount satu berkas di container tetap menunjuk berkas lama. gw putus sebentar (koneksi aktif terputus); jalankan di luar jam pakai:
 
 ```bash
 cd /opt/dompetku
 sudo docker compose run --rm --no-deps gw caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile   # "Valid configuration"
-sudo docker compose up -d gw
+sudo docker compose restart gw
+sudo docker compose exec -T gw grep -c '@wa path /api/wa /api/wa/\*' /etc/caddy/Caddyfile                   # 1 (container melihat berkas baru)
 ```
 
 Web ikut network `wa` (deploy berikutnya juga melakukannya; manual agar langkah 4 tidak menunggu rilis):
@@ -103,19 +106,24 @@ sudo docker inspect -f '{{ range $k, $v := .NetworkSettings.Networks }}{{ $k }} 
 sudo docker network inspect dompetku_wa -f '{{ .Internal }} {{ (index .IPAM.Config 0).Subnet }}' # true 172.16.26.0/24
 ```
 
-Verifikasi dari VM App:
+Verifikasi dari VM App. Kode `404` saja tidak membuktikan blokir gw: sampai langkah 6 route web sendiri juga menjawab `404` (fitur mati). Pembeda: `respond 404` Caddy tanpa body dan tanpa `Cache-Control`, sedangkan web menjawab JSON `{}` (2 byte) dengan `Cache-Control: no-store`, dan `/api/wa` di web = halaman 404 Next (HTML):
 
 ```bash
-curl -s https://dompet.novandafadly.com/api/health                                                       # {"status":"ok",...}
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://dompet.novandafadly.com/api/wa/webhook -d '{}'  # 404
-curl -s -o /dev/null -w '%{http_code}\n' https://dompet.novandafadly.com/api/wa                           # 404
+curl -s https://dompet.novandafadly.com/api/health                                                                     # {"status":"ok",...}
+curl -s -o /dev/null -w '%{http_code} %{size_download}\n' -X POST https://dompet.novandafadly.com/api/wa/webhook -d '{}' # 404 0
+curl -s -o /dev/null -w '%{http_code} %{size_download}\n' https://dompet.novandafadly.com/api/wa                         # 404 0
+curl -s -D - -o /dev/null -X POST https://dompet.novandafadly.com/api/wa/webhook -d '{}' | grep -ci '^cache-control'   # 0
 ```
+
+Ulangi tiga baris `/api/wa` ini sesudah langkah 6, saat web sendiri akan menjawab `401` untuk request tanpa tanda tangan: harapan tetap `404 0` dan tanpa `Cache-Control`. `401` dari luar = blokir gw tidak aktif; hentikan dan ulangi `restart gw`.
 
 Verifikasi lain:
 
 - `cd /opt/dompetku && sudo docker compose --profile web config --services` memuat `openwa`; tanpa profil tetap `gw`, `postgres`.
 - `diff /opt/dompetku/compose.yml.pre-wa /opt/dompetku/compose.yml` hanya menambah blok `openwa`, network `wa`/`wa_egress`, volume `openwa_data`, `wa` di daftar network web, dan komentar.
 - `sudo test -e /opt/dompetku/env/openwa.env || echo belum-ada` = `belum-ada`. Deploy yang terjadi sekarang mencatat `"openwa":"openwa_env_missing"`.
+
+Nyalakan lagi timer deploy: `sudo systemctl start dompetku-deploy.timer`.
 
 ### 3. [PEMILIK] `env/openwa.env`
 
@@ -259,7 +267,7 @@ sudo mv /opt/dompetku/env/web.env.new /opt/dompetku/env/web.env
 cd /opt/dompetku && sudo flock /run/lock/dompetku-deploy.lock docker compose --profile web up -d --no-deps web
 ```
 
-Tunggu web `healthy` dan `curl` health dari VM App seperti langkah 2. Sesudahnya perintah `curl … http://web:3000/api/wa/webhook` di langkah 4 menjawab `401` (fitur hidup, tanpa tanda tangan); `503` = konfigurasi WA di `web.env` tidak lengkap/salah (log web `[wa] config_error`).
+Tunggu web `healthy` dan `curl` health dari VM App seperti langkah 2, lalu ulangi pemeriksaan `/api/wa` dari VM App (langkah 2): tetap `404 0`. Sesudahnya perintah `curl … http://web:3000/api/wa/webhook` di langkah 4 menjawab `401` (fitur hidup, tanpa tanda tangan); `503` = konfigurasi WA di `web.env` tidak lengkap/salah (log web `[wa] config_error`).
 
 ### 7. Mendaftarkan webhook
 
@@ -272,6 +280,8 @@ sudo bash -c 'set -eu; s=$(sed -n "s/^WA_WEBHOOK_SECRET=//p" /opt/dompetku/env/w
 owa GET "/api/sessions/$SID/webhooks" </dev/null   # tepat satu webhook, url http://web:3000/api/wa/webhook
 sudo systemctl start dompetku-deploy.timer
 ```
+
+`"retryCount":3` diambil dari contoh dokumentasi API (batas 0–5), perilakunya **UNVERIFIED**; bila API menjawab `400` karena field itu, hapus `,\"retryCount\":3` dari body dan kirim ulang (bawaan OpenWA dipakai).
 
 `400` dengan pesan SSRF = `SSRF_ALLOWED_HOSTS` tidak sampai ke container atau web belum ikut network `wa` (langkah 2).
 
@@ -311,17 +321,24 @@ cd /opt/dompetku && sudo flock /run/lock/dompetku-deploy.lock docker compose --p
 
 Lalu kosongkan variabel WA di `web.env` (pola `.new`, `grep -v` baris `WA_*` dan `OPENWA_*`) dan buat ulang web: tanpa variabel itu route webhook menjawab `404` dan menu WhatsApp di app tampil sebagai fitur mati. Deploy berikutnya mencatat `"openwa":"openwa_env_missing"` dan tidak menyalakan openwa.
 
-Rollback penuh pemasangan (mengembalikan berkas sebelum WA):
+Rollback penuh pemasangan (mengembalikan berkas sebelum WA). Urutan penting: `openwa` dihapus selagi `compose.yml` baru masih terpasang (compose lama tidak mengenal layanan itu, container akan yatim dan menahan network).
 
-```bash
-sudo mv /opt/dompetku/compose.yml.pre-wa /opt/dompetku/compose.yml
-sudo mv /opt/dompetku/bin/deploy.pre-wa /opt/dompetku/bin/deploy
-sudo mv /opt/dompetku/gw/Caddyfile.pre-wa /opt/dompetku/gw/Caddyfile
-cd /opt/dompetku
-sudo docker compose up -d gw
-sudo flock /run/lock/dompetku-deploy.lock docker compose --profile web up -d --no-deps web   # keluar dari network wa
-sudo docker network rm dompetku_wa dompetku_wa_egress || true
-```
+1. Jalankan "Fitur mati" di atas, termasuk mengosongkan `WA_*`/`OPENWA_*` di `web.env`. Verifikasi: `sudo docker ps -a --filter name=openwa -q` kosong; `sudo grep -cE '^(WA|OPENWA)_[A-Z_]*=.' /opt/dompetku/env/web.env` = 0 (tidak ada variabel WA yang terisi; baris kosong `NAMA=` boleh).
+2. Kembalikan berkas, restart gw, keluarkan web dari network `wa`, lalu hapus network (tanpa `|| true`: gagal = masih ada container yang terpasang, cari dengan `docker network inspect`):
+
+   ```bash
+   sudo systemctl stop dompetku-deploy.timer
+   sudo mv /opt/dompetku/compose.yml.pre-wa /opt/dompetku/compose.yml
+   sudo mv /opt/dompetku/bin/deploy.pre-wa /opt/dompetku/bin/deploy
+   sudo mv /opt/dompetku/gw/Caddyfile.pre-wa /opt/dompetku/gw/Caddyfile
+   cd /opt/dompetku
+   sudo docker compose restart gw
+   sudo flock /run/lock/dompetku-deploy.lock docker compose --profile web up -d --no-deps web   # dibuat ulang tanpa network wa
+   sudo docker network inspect dompetku_wa dompetku_wa_egress -f '{{ .Name }}: {{ range .Containers }}{{ .Name }} {{ end }}'   # tanpa nama container
+   sudo docker network rm dompetku_wa dompetku_wa_egress
+   sudo docker network ls --format '{{ .Name }}' | grep -x -e dompetku_wa -e dompetku_wa_egress || echo terhapus   # terhapus
+   sudo systemctl start dompetku-deploy.timer
+   ```
 
 Menghapus akun bot sepenuhnya (tidak bisa dibatalkan): `logout` dulu (Operasi), lalu `sudo docker volume rm dompetku_openwa_data`.
 
@@ -362,12 +379,28 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 
 ## Firewall dan egress
 
-`infra/db-vm/bin/firewall.sh` hanya membatasi koneksi **masuk** ke port gw (`10.0.1.68:8443`/`9443` hanya dari VM App) di rantai `DOCKER-USER`. Tidak ada aturan egress untuk network Docker, jadi `openwa` (tanpa port host, hanya koneksi keluar lewat `wa_egress`) tidak butuh perubahan firewall. Port loopback sementara langkah 5B tidak terjangkau dari luar (VM DB memakai Docker 29.1; sejak Docker 28 akses dari host lain ke port yang dipublikasikan di `127.0.0.1` diblokir). Bila nanti egress dibatasi (iptables atau security list OCI), `openwa` perlu TCP 443 keluar ke server WhatsApp (WebSocket `web.whatsapp.com` dan media `*.whatsapp.net`/`*.cdn.whatsapp.net`; daftar host tidak stabil, **UNVERIFIED** untuk Baileys versi ini), jadi pembatasan per host tidak praktis; batasi per port saja.
+`infra/db-vm/bin/firewall.sh` hanya membatasi koneksi **masuk** ke port gw (`10.0.1.68:8443`/`9443` hanya dari VM App) di rantai `DOCKER-USER`. Tidak ada aturan egress untuk network Docker, jadi `openwa` (tanpa port host, hanya koneksi keluar lewat `wa_egress`) tidak butuh perubahan firewall. Port sementara langkah 5B terikat ke `127.0.0.1`, alamat yang tidak dirutekan dari host lain (Docker 29.1 di VM DB juga memblokir akses langsung dari luar ke port loopback yang dipublikasikan). Paparan nyatanya adalah pengguna lokal lain di VM DB selama port terbuka: mereka bisa membuka dasbor, tetapi tetap butuh `API_MASTER_KEY` untuk masuk atau memanggil API. Bila nanti egress dibatasi (iptables atau security list OCI), `openwa` perlu TCP 443 keluar ke server WhatsApp (WebSocket `web.whatsapp.com` dan media `*.whatsapp.net`/`*.cdn.whatsapp.net`; daftar host tidak stabil, **UNVERIFIED** untuk Baileys versi ini), jadi pembatasan per host tidak praktis; batasi per port saja.
+
+**Pengerasan yang disarankan (belum dibuat):** `wa_egress` saat ini network NAT biasa, jadi `openwa` bisa menjangkau apa pun yang bisa dijangkau host (lihat Risiko). Langkah berikutnya, bila pemilik setuju: patok subnet `wa_egress` (di luar pool Docker, mis. `172.16.27.0/24`) lalu tambahkan aturan `DOCKER-USER` di `firewall.sh` untuk sumber subnet itu: `DROP` ke `169.254.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12` (selain balasan koneksi yang sudah ada), izinkan TCP 443 ke internet. Port host (bukan container) dijaga di rantai `INPUT`, bukan `DOCKER-USER`, jadi perlu aturan `INPUT` setara untuk sumber subnet itu.
 
 ## Risiko
 
 - **Protokol tidak resmi.** OpenWA/Baileys meniru WhatsApp Web; melanggar ketentuan WhatsApp untuk otomatisasi. Nomor bot bisa diblokir tanpa peringatan, dan perubahan protokol di sisi WhatsApp bisa mematikan bot sampai OpenWA dirilis ulang. Mitigasi: nomor khusus, bot hanya membalas orang yang menulis lebih dulu (tanpa broadcast), app tetap jalur utama. Jalur resmi (WhatsApp Cloud API) = adaptor baru (spec §5.4).
-- **Kompromi container `openwa`.** Penyerang di `openwa` hanya menjangkau web lewat network `wa` (semua route web, bukan hanya webhook, tanpa melewati gw; webhook tetap butuh HMAC yang tidak ada di `openwa.env`) dan internet lewat `wa_egress`; tidak menjangkau postgres, gw, atau worker. Ia bisa memakai akun bot dan membaca pesan masuk 7 hari terakhir.
+- **Kompromi container `openwa`: akses langsung ke web tanpa gw.** Network `wa` membuka **semua** route web (`web:3000`), bukan hanya webhook, tanpa melewati gw. gw biasanya menimpa `X-Forwarded-For` dengan IP klien dari edge; jalur ini tidak. `clientIp()` (`apps/web/src/server/auth/service.ts`) membaca nilai pertama `X-Forwarded-For` apa adanya, dan header kosong/tidak valid = `null`, sehingga `keys()` tidak memasang kunci IP. Akibatnya penyerang di `openwa` bisa:
+  - melewati jeda yang **hanya** berbasis IP: gagal TOTP saat masuk (`verifyTotpSignIn`), `signup`, dan batas laju `rl-undangan`, `rl-passkey`, `rl-verifikasi` (cukup kirim IP acak di `X-Forwarded-For`, atau tanpa header);
+  - melewati **separuh IP** dari jeda password, recovery, dan reset;
+  - memalsukan IP yang tercatat di audit auth untuk request dari jalur ini.
+
+  Yang tetap berlaku: jeda per akun pada password/recovery/reset (kunci `akun` tidak bergantung IP), lockout per tantangan 2FA milik Better Auth, HMAC pada webhook (rahasia tidak ada di `openwa.env` maupun container), dan penyerang tetap harus punya password dan TOTP/passkey untuk masuk ke akun. Ancaman ini butuh kompromi `openwa` lebih dulu (image pihak ketiga yang memproses pesan dari internet).
+
+  Tindak lanjut yang benar (keputusan pemilik, belum dibuat; kode auth tidak diubah di task ini): sidecar Caddy `wa-proxy` yang dikeraskan di network `wa`, hanya meneruskan `POST /api/wa/webhook` ke web dan membuang `X-Forwarded-For`, `X-Middleware-Subrequest`, `Forwarded`, `X-Real-IP`; `allowedIps` key web di OpenWA diarahkan ke IP sidecar; web keluar dari `wa` dan bertemu sidecar di network internal terpisah. Sampai itu ada, celah di atas adalah **risiko yang diterima pemilik** (daftar periksa).
+
+- **Kompromi container `openwa`: egress.** Lewat `wa_egress` (NAT ke host, tidak difilter) `openwa` juga menjangkau:
+  - metadata instance OCI `169.254.169.254`: `user_data` instance terbaca. Backup memakai Customer Secret Key di `backup.env`, bukan instance principal, jadi tidak ada kredensial OCI yang bisa diambil dari sana (selama tidak ada dynamic group/policy untuk instance ini);
+  - VCN, termasuk VM App `10.0.0.149`, dan port yang terikat di host VM DB (layanan lain di `0.0.0.0`, `docs/ops/inventaris-vm.md` T2). Port gw tetap terlindungi `DOCKER-USER` (hanya dari `10.0.0.149`) dan mTLS.
+
+  Tidak menjangkau postgres, gw lewat network compose, atau worker. Ia bisa memakai akun bot dan membaca pesan masuk 7 hari terakhir. Pengerasan yang disarankan: bagian "Firewall dan egress".
+
 - **Kebocoran sesi** = pengambilalihan akun bot (bukan akun pengguna). Tindakan: logout sesi (Operasi), hapus perangkat di HP bot, pautkan ulang, rotasi key web dan rahasia webhook.
 - **Image pihak ketiga.** Tidak ada tanda tangan pemilik; kepercayaan = digest yang dipatok dari GHCR proyek OpenWA. Image `arm64` juga memuat paket Chromium Debian yang tidak dipakai Baileys (permukaan CVE lebih besar). Cakupan pemindaian: `docs/ops/ci-keamanan.md`.
 - **Rilis sangat sering** (0.27.1 sampai 0.29.1 dalam 5 hari). Versi dipatok; naik versi hanya lewat PR dengan membaca CHANGELOG.
@@ -385,3 +418,5 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 - [ ] Uji `hubung KODE`, catat, `batal` lulus; log tanpa teks pesan (langkah 8).
 - [ ] Izin volume `700`, grup `docker` ditinjau (Backup dan akses).
 - [ ] Keputusan backup `openwa_data` (tidak di-backup) disetujui atau diubah.
+- [ ] **Risiko yang diterima pemilik atau perlu sidecar:** `openwa` yang disusupi bisa memanggil semua route web tanpa gw dan melewati jeda auth berbasis IP serta memalsukan IP audit (Risiko, butir pertama). Pilih: terima sampai sidecar `wa-proxy` dibuat, atau buat sidecar sebelum fitur dinyalakan untuk pengguna.
+- [ ] Egress `openwa` (IMDS, VCN, port host) diterima apa adanya atau aturan `DOCKER-USER`/`INPUT` untuk `wa_egress` dijadwalkan (Firewall dan egress).
