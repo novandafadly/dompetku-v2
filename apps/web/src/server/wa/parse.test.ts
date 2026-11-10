@@ -38,6 +38,26 @@ describe('parseMessage: entry', () => {
     expect(parse(input)).toEqual(expected);
   });
 
+  // Satuan terpisah dari angka (spasi di antaranya) tetap bagian nominal.
+  it.each<[string, ParseResult]>([
+    ['25 rb makan siang', entry('expense', 25000, 'personal', 'makan siang')],
+    ['bensin 50 k', entry('expense', 50000, 'personal', 'bensin')],
+    ['1 jt servis', entry('expense', 1000000, 'personal', 'servis')],
+    ['1,5 jt gaji', entry('income', 1500000, 'personal', 'gaji')],
+    ['25 ribu kopi', entry('expense', 25000, 'personal', 'kopi')],
+    ['2 juta sewa', entry('expense', 2000000, 'personal', 'sewa')],
+    ['25 RB kopi', entry('expense', 25000, 'personal', 'kopi')],
+    ['Rp 25 rb kopi', entry('expense', 25000, 'personal', 'kopi')],
+    ['+ 50 rb bonus', entry('income', 50000, 'personal', 'bonus')],
+    ['b 80 rb belanja', entry('expense', 80000, 'shared', 'belanja')],
+    // Satuan tanpa angka di depannya tetap keterangan.
+    ['25rb rb kopi', entry('expense', 25000, 'personal', 'rb kopi')],
+    ['kopi rb 25rb', entry('expense', 25000, 'personal', 'kopi rb')],
+    ['k 25rb', entry('expense', 25000, 'personal', 'k')],
+  ])('satuan terpisah %j', (input, expected) => {
+    expect(parse(input)).toEqual(expected);
+  });
+
   it('memangkas keterangan ke 200 karakter', () => {
     const r = parse(`25rb ${'a'.repeat(300)}`);
     expect(r.kind).toBe('entry');
@@ -73,6 +93,18 @@ describe('parseMessage: reject', () => {
     ['２５rb kopi', 'bad_amount'],
     ['٢٥٠٠٠ kopi', 'bad_amount'],
     ['200jt x', 'too_large'],
+    // Satuan terpisah: bukan satuan dikenal = angka bulat + keterangan; satuan dikenal tetap
+    // tunduk pada aturan jumlah angka dan batas nominal.
+    ['2 kopi 50 rb', 'many_amounts'],
+    ['beli 2 kopi 50 rb', 'many_amounts'],
+    ['200 jt x', 'too_large'],
+    ['101 juta x', 'too_large'],
+    ['1,25 rb x', 'bad_amount'],
+    ['1.5.000 rb x', 'bad_amount'],
+    // Salah ketik satuan sesudah angka ditolak, tidak dibaca sebagai Rp25 (sama dengan `25rbu`).
+    ['25 rbu', 'bad_amount'],
+    ['25 rbu kopi', 'bad_amount'],
+    ['2 jutaan sewa', 'bad_amount'],
   ])('%j -> %s', (input, reason) => {
     expect(parse(input)).toEqual({ kind: 'reject', reason });
   });

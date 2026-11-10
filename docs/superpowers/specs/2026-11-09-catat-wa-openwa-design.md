@@ -48,7 +48,7 @@ Pemilik memilih A. B dan C tidak dibangun.
 
 Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 
-- **Nominal (wajib, tepat satu).** Diterima: `25rb`, `25k`, `25.000`, `25000`, `1,5jt`, `1.5jt`, `Rp 25.000`, `Rp25rb`. `rb`/`k` = ×1.000, `jt` = ×1.000.000. Hasil harus bilangan bulat positif rupiah (tanpa sen). Lebih dari satu token nominal, atau nominal desimal yang tidak menjadi rupiah bulat (mis. `1,25rb`): ditolak.
+- **Nominal (wajib, tepat satu).** Diterima: `25rb`, `25k`, `25.000`, `25000`, `1,5jt`, `1.5jt`, `Rp 25.000`, `Rp25rb`, juga satuan terpisah dengan spasi (`25 rb`, `50 k`, `1,5 jt`, `25 ribu`, `2 juta`). `rb`/`k`/`ribu` = ×1.000, `jt`/`juta` = ×1.000.000. Satuan hanya menempel ke token angka tepat di depannya; salah ketik satuan sesudah angka (`25 rbu`, `2 jutaan`) ditolak seperti `25rbu`, tidak dibaca sebagai Rp25. Hasil harus bilangan bulat positif rupiah (tanpa sen). Lebih dari satu token nominal, atau nominal desimal yang tidak menjadi rupiah bulat (mis. `1,25rb`): ditolak.
 - **Jenis.** Bawaan pengeluaran. Pemasukan bila ada tanda `+` di awal nominal atau pesan, atau kata penanda: `gaji`, `masuk`, `terima`, `pemasukan`.
 - **Ruang.** Bawaan Pribadi. Bersama bila kata pertama `b` atau ada kata `bersama`.
 - **Keterangan.** Sisa teks setelah nominal dan penanda dibuang, dipangkas, maksimum 200 karakter (batas `createEntrySchema`).

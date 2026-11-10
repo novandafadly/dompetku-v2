@@ -23,6 +23,13 @@ const ANY_DIGIT_RE = /\p{Nd}/u;
 const PLAIN_RE = /^(\d+|\d{1,3}(?:\.\d{3})+)$/;
 // Dengan sufiks: satu digit pecahan saja (1,5jt), sehingga hasil selalu bulat.
 const SUFFIX_RE = /^(\d+)(?:[.,](\d))?(rb|k|jt)$/;
+// Token angka tanpa satuan (boleh diawali + dan/atau rp): bulat, ribuan bertitik, atau satu
+// digit pecahan. Hanya token ini yang boleh menerima satuan terpisah.
+const AMOUNT_TOKEN_RE = /^\+?(?:rp\.?)?(?:\d+|\d{1,3}(?:\.\d{3})+|\d+[.,]\d)$/;
+const UNIT_WORD_RE = /^(?:rb|k|jt|ribu|juta)$/;
+// Kata yang diawali satuan tapi bukan satuan ("rbu", "jutaan"): digabung lalu ditolak.
+const UNIT_TYPO_RE = /^(?:rb|jt|rib|jut)\p{L}+$/u;
+const UNIT_ALIAS: Partial<Record<string, string>> = { ribu: 'rb', juta: 'jt' };
 
 function toAmount(raw: string): number | null {
   const plain = PLAIN_RE.exec(raw);
@@ -45,11 +52,20 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
   if (link) return { kind: 'link', code: (link[1] ?? '').toUpperCase() };
 
   // "rp 25.000" / "rp. 25.000": gabungkan penanda mata uang dengan token angka berikutnya.
+  // "25 rb" / "1,5 jt" / "25 ribu": gabungkan satuan dengan token angka sebelumnya, sehingga
+  // nominal tidak terbaca 1000x lebih kecil. Salah ketik satuan ("25 rbu") ikut digabung agar
+  // ditolak (bad_amount), sama dengan "25rbu".
   const tokens: string[] = [];
   for (const t of norm.split(' ')) {
     const prev = tokens[tokens.length - 1];
     if ((prev === 'rp' || prev === 'rp.') && ANY_DIGIT_RE.test(t))
       tokens[tokens.length - 1] = prev + t;
+    else if (
+      prev !== undefined &&
+      AMOUNT_TOKEN_RE.test(prev) &&
+      (UNIT_WORD_RE.test(t) || UNIT_TYPO_RE.test(t))
+    )
+      tokens[tokens.length - 1] = prev + (UNIT_ALIAS[t] ?? t);
     else tokens.push(t);
   }
 
