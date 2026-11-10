@@ -54,7 +54,8 @@ Semua perintah manual yang memanggil `docker compose` untuk mengganti layanan di
 Cek subnet lebih dulu, sebelum berkas apa pun dipasang: begitu `compose.yml` baru terpasang, deploy berikutnya membuat network `wa` dengan `172.16.26.0/24`. Subnet itu belum boleh dipakai network lain (alasan sama dengan `worker_db` di runbook S7):
 
 ```bash
-sudo systemctl stop dompetku-deploy.timer   # tidak ada deploy sampai langkah 2 selesai
+sudo systemctl stop dompetku-deploy.timer   # tidak ada deploy baru sampai langkah 2 selesai
+systemctl is-active dompetku-deploy.service  # harus "inactive"; "activating" = deploy masih berjalan, tunggu lalu ulangi
 sudo docker network inspect $(sudo docker network ls -q) -f '{{ .Name }} {{ range .IPAM.Config }}{{ .Subnet }} {{ end }}' | grep ' 172\.16\.'
 # harapan: hanya dompetku_worker_db 172.16.25.0/24
 ```
@@ -181,6 +182,7 @@ Matikan timer deploy selama memautkan, supaya deploy tidak membuat ulang contain
 
 ```bash
 sudo systemctl stop dompetku-deploy.timer
+systemctl is-active dompetku-deploy.service   # harus "inactive"; selain itu tunggu deploy selesai
 ```
 
 Buat sesi dan nyalakan (nama bebas, 3–50 huruf/angka/tanda hubung; rute memakai `id` UUID, bukan nama):
@@ -328,6 +330,7 @@ Rollback penuh pemasangan (mengembalikan berkas sebelum WA). Urutan penting: `op
 
    ```bash
    sudo systemctl stop dompetku-deploy.timer
+   systemctl is-active dompetku-deploy.service   # harus "inactive"; selain itu tunggu deploy selesai
    sudo mv /opt/dompetku/compose.yml.pre-wa /opt/dompetku/compose.yml
    sudo mv /opt/dompetku/bin/deploy.pre-wa /opt/dompetku/bin/deploy
    sudo mv /opt/dompetku/gw/Caddyfile.pre-wa /opt/dompetku/gw/Caddyfile
@@ -387,13 +390,17 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 
 - **Protokol tidak resmi.** OpenWA/Baileys meniru WhatsApp Web; melanggar ketentuan WhatsApp untuk otomatisasi. Nomor bot bisa diblokir tanpa peringatan, dan perubahan protokol di sisi WhatsApp bisa mematikan bot sampai OpenWA dirilis ulang. Mitigasi: nomor khusus, bot hanya membalas orang yang menulis lebih dulu (tanpa broadcast), app tetap jalur utama. Jalur resmi (WhatsApp Cloud API) = adaptor baru (spec §5.4).
 - **Kompromi container `openwa`: akses langsung ke web tanpa gw.** Network `wa` membuka **semua** route web (`web:3000`), bukan hanya webhook, tanpa melewati gw. gw biasanya menimpa `X-Forwarded-For` dengan IP klien dari edge; jalur ini tidak. `clientIp()` (`apps/web/src/server/auth/service.ts`) membaca nilai pertama `X-Forwarded-For` apa adanya, dan header kosong/tidak valid = `null`, sehingga `keys()` tidak memasang kunci IP. Akibatnya penyerang di `openwa` bisa:
-  - melewati jeda yang **hanya** berbasis IP: gagal TOTP saat masuk (`verifyTotpSignIn`), `signup`, dan batas laju `rl-undangan`, `rl-passkey`, `rl-verifikasi` (cukup kirim IP acak di `X-Forwarded-For`, atau tanpa header);
+  - melewati jeda yang **hanya** berbasis IP: gagal TOTP saat masuk (`verifyTotpSignIn`), `signUpOwner` (`signup`), dan batas laju `rl-undangan`, `rl-passkey` (cukup kirim IP acak di `X-Forwarded-For`, atau tanpa header). `rl-verifikasi` tidak termasuk: juga memakai kunci akun (`state.userId`) dan butuh sesi login;
   - melewati **separuh IP** dari jeda password, recovery, dan reset;
   - memalsukan IP yang tercatat di audit auth untuk request dari jalur ini.
 
-  Yang tetap berlaku: jeda per akun pada password/recovery/reset (kunci `akun` tidak bergantung IP), lockout per tantangan 2FA milik Better Auth, HMAC pada webhook (rahasia tidak ada di `openwa.env` maupun container), dan penyerang tetap harus punya password dan TOTP/passkey untuk masuk ke akun. Ancaman ini butuh kompromi `openwa` lebih dulu (image pihak ketiga yang memproses pesan dari internet).
+  Yang tetap berlaku: jeda per akun pada password/recovery/reset (kunci `akun` tidak bergantung IP), `rl-verifikasi` (kunci akun), lockout per tantangan 2FA milik Better Auth, dan penyerang tetap harus punya password dan TOTP/passkey untuk masuk ke akun. Ancaman ini butuh kompromi `openwa` lebih dulu (image pihak ketiga yang memproses pesan dari internet).
 
   Tindak lanjut yang benar (keputusan pemilik, belum dibuat; kode auth tidak diubah di task ini): sidecar Caddy `wa-proxy` yang dikeraskan di network `wa`, hanya meneruskan `POST /api/wa/webhook` ke web dan membuang `X-Forwarded-For`, `X-Middleware-Subrequest`, `Forwarded`, `X-Real-IP`; `allowedIps` key web di OpenWA diarahkan ke IP sidecar; web keluar dari `wa` dan bertemu sidecar di network internal terpisah. Sampai itu ada, celah di atas adalah **risiko yang diterima pemilik** (daftar periksa).
+
+- **Kompromi container `openwa`: webhook palsu yang sah.** HMAC webhook **tidak** melindungi dari `openwa` yang disusupi: OpenWA harus memegang rahasia webhook untuk menandatangani kiriman (tersimpan di SQLite-nya, volume `openwa_data`). Penyerang di `openwa` bisa membuat webhook bertanda tangan sah dengan pengirim nomor terhubung **mana pun**, lalu web membuat atau membatalkan (`batal`) entri atas nama user pemilik nomor itu. Sidecar `wa-proxy` tidak menutup celah ini (sidecar meneruskan webhook yang sah); yang bisa membantu hanya deteksi/alert (mis. lonjakan entri WhatsApp, entri dari nomor yang tidak sedang mengirim pesan) atau tidak memercayai `openwa` sama sekali (Cloud API resmi, spec §5.4).
+
+  Yang membatasi dampaknya: hanya nomor yang sudah dihubungkan dan diverifikasi user bisa membuat entri (nomor lain hanya mendapat petunjuk); nominal per pesan dibatasi `WA_MAX_AMOUNT` (bawaan Rp100.000.000); batas laju per nomor (`WA_RATE_PER_MIN`, bawaan 30/menit); `batal` hanya untuk catatan WhatsApp terakhir dalam 10 menit dan versi yang belum diubah; balasan bot dikirim ke nomor itu (pemilik nomor melihat apa yang tercatat, kecuali penyerang juga menahan balasan); entri tercatat di ledger dan audit, dan bisa dibatalkan/dipulihkan dari app. Tidak ada akses ke data lain lewat jalur ini (webhook tidak mengembalikan isi ledger).
 
 - **Kompromi container `openwa`: egress.** Lewat `wa_egress` (NAT ke host, tidak difilter) `openwa` juga menjangkau:
   - metadata instance OCI `169.254.169.254`: `user_data` instance terbaca. Backup memakai Customer Secret Key di `backup.env`, bukan instance principal, jadi tidak ada kredensial OCI yang bisa diambil dari sana (selama tidak ada dynamic group/policy untuk instance ini);
@@ -408,7 +415,7 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 ## Daftar periksa pemilik
 
 - [ ] SIM khusus dan HP bot siap, WhatsApp terpasang dan dipakai sebentar (langkah 1).
-- [ ] Berkas terpasang, subnet `172.16.26.0/24` bebas, gw valid dan `/api/wa/*` = `404` dari VM App, web ikut `dompetku_wa` (langkah 2).
+- [ ] Berkas terpasang, subnet `172.16.26.0/24` bebas, gw di-restart dan valid, `/api/wa/*` = `404 0` tanpa `Cache-Control` dari VM App, diulang sesudah langkah 6, web ikut `dompetku_wa` (langkah 2, 6).
 - [ ] Digest image diperiksa ulang: `arm64`, uid 997 (langkah 2). Bila ingin versi lain, PR dulu.
 - [ ] `env/openwa.env` dibuat di VM, `API_MASTER_KEY` di password manager pemilik (langkah 3).
 - [ ] `openwa` `healthy`, tanpa port host, hanya network `wa` + `wa_egress` (langkah 4).
@@ -418,5 +425,6 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 - [ ] Uji `hubung KODE`, catat, `batal` lulus; log tanpa teks pesan (langkah 8).
 - [ ] Izin volume `700`, grup `docker` ditinjau (Backup dan akses).
 - [ ] Keputusan backup `openwa_data` (tidak di-backup) disetujui atau diubah.
-- [ ] **Risiko yang diterima pemilik atau perlu sidecar:** `openwa` yang disusupi bisa memanggil semua route web tanpa gw dan melewati jeda auth berbasis IP serta memalsukan IP audit (Risiko, butir pertama). Pilih: terima sampai sidecar `wa-proxy` dibuat, atau buat sidecar sebelum fitur dinyalakan untuk pengguna.
+- [ ] **Risiko yang diterima pemilik atau perlu sidecar:** `openwa` yang disusupi bisa memanggil semua route web tanpa gw dan melewati jeda auth berbasis IP serta memalsukan IP audit (Risiko, butir kedua). Pilih: terima sampai sidecar `wa-proxy` dibuat, atau buat sidecar sebelum fitur dinyalakan untuk pengguna.
+- [ ] **Risiko yang diterima pemilik (tidak ditutup sidecar):** `openwa` yang disusupi memegang rahasia webhook dan bisa membuat/membatalkan entri atas nama nomor terhubung mana pun, dibatasi `WA_MAX_AMOUNT`, batas laju per nomor, dan bisa dibatalkan dari app (Risiko, butir ketiga). Pilih: terima, tambahkan deteksi/alert, atau jangan nyalakan fitur.
 - [ ] Egress `openwa` (IMDS, VCN, port host) diterima apa adanya atau aturan `DOCKER-USER`/`INPUT` untuk `wa_egress` dijadwalkan (Firewall dan egress).
