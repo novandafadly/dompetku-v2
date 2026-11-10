@@ -103,7 +103,7 @@ sudo install -m 644 web.env.example /opt/dompetku/deploy/web.env.example
 sudo install -m 644 openwa.env.example /opt/dompetku/deploy/openwa.env.example
 ```
 
-Image OpenWA: pastikan digest di `compose.yml` adalah rilis yang dimaksud dan ada varian `arm64`. Digest diambil dari GHCR 2026-11-10 (tag `0.27.1` = `0.27` saat itu; rilis 2026-11-02, terbaru yang berumur >= 7 hari, `docs/ops/ci-keamanan.md`):
+Image OpenWA: pastikan digest di `compose.yml` adalah rilis yang dimaksud dan ada varian `arm64`. Digest diambil dari GHCR 2026-11-10 (tag `0.27.1` = `0.27` saat itu; rilis 2026-11-02, terbaru yang berumur >= 7 hari, `docs/ops/ci-keamanan.md`; 0.27.1 punya 21 CVE Chromium/apt yang sudah diperbaiki di 0.28.0+ dan dikecualikan bertanggal sampai 2026-11-21 karena Chromium tidak dipakai (`ENGINE_TYPE: baileys`); bump ke 0.29.1 sesudah 2026-11-14 18:52 WIB; 0.30.0 ada, layak sesudah 2026-11-17):
 
 ```bash
 cd /opt/dompetku
@@ -547,7 +547,7 @@ Port sementara langkah 5B terikat ke `127.0.0.1`, alamat yang tidak dirutekan da
 - **Kompromi container `openwa`: yang tersisa.** Penyerang di `openwa` tetap bisa: memakai akun bot WhatsApp (membaca pesan masuk, termasuk teks 7 hari terakhir di SQLite; mengirim pesan ke siapa pun dari nomor bot, yang juga mempercepat pemblokiran nomor); membuat webhook palsu yang sah (butir di atas); memanggil API OpenWA-nya sendiri; menyerang parser HTTP `wa-proxy` (Caddy resmi, image dipatok digest, permukaan kecil); keluar ke internet mana pun (eksfiltrasi pesan atau kredensial bot, kendali jarak jauh; egress tidak difilter per host, lihat Firewall dan egress); me-resolve nama internal lewat resolver VCN. Ia tidak bisa membaca kredensial web: `OPENWA_API_KEY` key web hanya berlaku dari alamat `wa-proxy`, dan `WA_WEBHOOK_SECRET` memang sudah ia pegang.
 - **Kebocoran sesi** = pengambilalihan akun bot (bukan akun pengguna). Tindakan: logout sesi (Operasi), hapus perangkat di HP bot, pautkan ulang, rotasi key web dan rahasia webhook.
 - **Image pihak ketiga.** Tidak ada tanda tangan pemilik; kepercayaan = digest yang dipatok dari GHCR proyek OpenWA, rilis yang sudah berumur paling sedikit 7 hari (waktu bagi komunitas menemukan rilis yang disusupi atau rusak). Image `arm64` juga memuat paket Chromium Debian yang tidak dipakai Baileys (permukaan CVE lebih besar). Dipindai Trivy mingguan dan di setiap PR yang mengubah pin (`.github/workflows/openwa-image.yml`, `docs/ops/ci-keamanan.md`).
-- **Rilis sangat sering** (0.27.1 sampai 0.29.1 dalam 5 hari). Versi dipatok; naik versi hanya lewat PR dengan membaca CHANGELOG. `0.27.1` belum memuat perbaikan `0.28.0`/`0.29.x` (antara lain sesi Baileys di SQLite yang menahan proses saat banyak chat tersimpan, batas ukuran body JSON, log tanpa karakter kontrol); naikkan ke `0.29.1` lewat PR sesudah 2026-11-14 bila Trivy dan uji di VM hijau.
+- **Rilis sangat sering** (0.27.1 sampai 0.29.1 dalam 5 hari). Versi dipatok; naik versi hanya lewat PR dengan membaca CHANGELOG. `0.27.1` belum memuat perbaikan `0.28.0`/`0.29.x` (antara lain sesi Baileys di SQLite yang menahan proses saat banyak chat tersimpan, batas ukuran body JSON, log tanpa karakter kontrol); naikkan ke `0.29.1` lewat PR sesudah 2026-11-14 18:52 WIB bila Trivy dan uji di VM hijau; pengecualian Trivy `.trivyignore-openwa.yaml` untuk Chromium/apt 0.27.1 kedaluwarsa 2026-11-21, kosongkan saat bump.
 
 ## Daftar periksa pemilik
 
