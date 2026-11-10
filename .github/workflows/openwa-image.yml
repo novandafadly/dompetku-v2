@@ -41,6 +41,16 @@ jobs:
             exit 1
           fi
           echo "ref=$ref" >>"$GITHUB_OUTPUT"
+      # Premis pengecualian Chromium di .trivyignore-openwa.yaml: engine Baileys tidak meluncurkan
+      # browser (engine.factory.ts OpenWA memakai ENGINE_TYPE proses; env compose menang atas
+      # data/.env.generated dasbor). Bila baris ini berubah/hilang, pengecualian tidak sah: job gagal.
+      - name: Premis pengecualian (ENGINE_TYPE=baileys)
+        run: |
+          got=$(awk '/^  openwa:$/{s=1;next} /^  [^ #]/{s=0} s && /ENGINE_TYPE/' infra/db-vm/compose.yml)
+          if [[ $got != '      ENGINE_TYPE: baileys' ]]; then
+            echo "::error file=infra/db-vm/compose.yml::layanan openwa harus punya tepat satu baris 'ENGINE_TYPE: baileys' (dapat: '${got//$'\n'/ }'); pengecualian Chromium di .trivyignore-openwa.yaml bergantung padanya"
+            exit 1
+          fi
       # Image Trivy yang sama dengan job `image` di ci.yml dan release.yml (satu versi Trivy di repo).
       - name: Trivy (HIGH/CRITICAL yang sudah ada perbaikannya, linux/arm64 seperti VM DB)
         env:
