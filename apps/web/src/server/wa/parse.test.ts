@@ -256,3 +256,105 @@ describe('parseMessage: satuan terpisah, batas aturan', () => {
     else expect(r.kind).toBe('reject');
   });
 });
+
+describe('parseMessage: penanda dompet @nama', () => {
+  const walletEntry = (
+    description: string,
+    wallet: string,
+    over: Partial<Extract<ParseResult, { kind: 'entry' }>> = {},
+  ): ParseResult => ({
+    kind: 'entry',
+    type: 'expense',
+    amount: 23000,
+    space: 'personal',
+    description,
+    wallet,
+    ...over,
+  });
+
+  it.each<[string, ParseResult]>([
+    ['makan siang padang 23rb @cimb', walletEntry('makan siang padang', 'cimb')],
+    ['@cimb makan siang padang 23rb', walletEntry('makan siang padang', 'cimb')],
+    ['makan siang @cimb padang 23rb', walletEntry('makan siang padang', 'cimb')],
+    ['23rb @cimb', walletEntry('', 'cimb')],
+    ['makan @CIMB 23rb', walletEntry('makan', 'cimb')],
+    ['makan 23rb @cimb.', walletEntry('makan', 'cimb')],
+    ['makan 23rb @cimb,', walletEntry('makan', 'cimb')],
+    ['makan 23rb @bca-syariah', walletEntry('makan', 'bca-syariah')],
+    ['makan 23rb @bca2', walletEntry('makan', 'bca2')],
+    ['makan 23rb @kas_kantor', walletEntry('makan', 'kas_kantor')],
+    ['makan 23rb @dompetku', walletEntry('makan', 'dompetku')],
+    ['makan 23 rb @cimb', walletEntry('makan', 'cimb')],
+    ['makan 23 @cimb rb', walletEntry('makan', 'cimb')], // penanda tidak memutus angka + satuan
+    ['makan Rp @cimb 23.000', walletEntry('makan', 'cimb')],
+    ['makan Rp @bca2 23.000', walletEntry('makan', 'bca2')],
+    ['b 23rb makan @cimb', walletEntry('makan', 'cimb', { space: 'shared' })],
+    ['makan bersama 23rb @cimb', walletEntry('makan', 'cimb', { space: 'shared' })],
+    ['+23rb gaji @cimb', walletEntry('gaji', 'cimb', { type: 'income' })],
+    ['makan 23rb @kantor', walletEntry('makan', 'kantor')],
+  ])('%j', (input, expected) => {
+    expect(parse(input)).toEqual(expected);
+  });
+
+  it('tanpa penanda: hasil tidak memuat kunci wallet', () => {
+    const r = parse('25rb makan siang');
+    expect(r).toEqual(entry('expense', 25000, 'personal', 'makan siang'));
+    expect('wallet' in r).toBe(false);
+  });
+
+  it('@ yang bukan penanda tetap keterangan', () => {
+    expect(parse('kirim ke budi@gmail.com 25rb')).toEqual(
+      entry('expense', 25000, 'personal', 'kirim ke budi@gmail.com'),
+    );
+    expect(parse('25rb bayar @ warung')).toEqual(
+      entry('expense', 25000, 'personal', 'bayar @ warung'),
+    );
+    expect(parse('25rb @')).toEqual(entry('expense', 25000, 'personal', '@'));
+  });
+
+  it('penanda tidak dibaca sebagai nominal atau satuan', () => {
+    expect(parse('@k 25rb')).toEqual(walletEntry('', 'k', { amount: 25000 }));
+    expect(parse('25 @rb')).toEqual(walletEntry('', 'rb', { amount: 25 }));
+    expect(parse('@2 25rb')).toEqual(walletEntry('', '2', { amount: 25000 }));
+  });
+
+  it('dua penanda = many_wallets (gagal tertutup, juga bila sama)', () => {
+    expect(parse('25rb makan @cimb @bca')).toEqual({ kind: 'reject', reason: 'many_wallets' });
+    expect(parse('25rb makan @cimb @cimb')).toEqual({ kind: 'reject', reason: 'many_wallets' });
+  });
+
+  it.each(['25rb makan @cimb,x', '25rb makan @@cimb', '25rb makan @c!mb', '25rb makan @~cimb'])(
+    '%j penanda rusak = bad_wallet',
+    (input) => {
+      expect(parse(input)).toEqual({ kind: 'reject', reason: 'bad_wallet' });
+    },
+  );
+
+  it('penanda lebih panjang dari nama dompet (60) = bad_wallet, tanpa regex mahal', () => {
+    expect(parse(`25rb makan @${'a'.repeat(60)}`)).toMatchObject({
+      kind: 'entry',
+      wallet: 'a'.repeat(60),
+    });
+    expect(parse(`25rb makan @${'a'.repeat(61)}`)).toEqual({
+      kind: 'reject',
+      reason: 'bad_wallet',
+    });
+    const t0 = performance.now();
+    expect(parse(`25rb makan @${'.,'.repeat(30_000)}x`)).toEqual({
+      kind: 'reject',
+      reason: 'bad_wallet',
+    });
+    expect(performance.now() - t0).toBeLessThan(200);
+  });
+
+  it('galat nominal didahulukan dari galat penanda', () => {
+    expect(parse('makan @cimb')).toEqual({ kind: 'reject', reason: 'no_amount' });
+    expect(parse('makan 2 3 @cimb @bca')).toEqual({ kind: 'reject', reason: 'many_amounts' });
+    expect(parse('makan 200jt @cimb')).toEqual({ kind: 'reject', reason: 'too_large' });
+  });
+
+  it('batal dan hubung tidak menerima penanda', () => {
+    expect(parse('batal @cimb').kind).toBe('reject');
+    expect(parse('hubung ABC123 @cimb').kind).toBe('reject');
+  });
+});
