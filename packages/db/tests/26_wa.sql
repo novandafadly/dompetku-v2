@@ -3,7 +3,7 @@
 -- user (DEFINER sempit, EXECUTE hanya web), dedupe pesan, batal dalam 10 menit, dompet bawaan,
 -- RLS antar user, event audit sistem wa_linked/wa_unlinked. Jam dipatok 2026-03-20 10:00 WIB.
 begin;
-select plan(113);
+select plan(119);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -203,17 +203,36 @@ select throws_ok(format($$select tests.web_exec(tests.n(), %L)$$, format(
   '23514', null, 'message_id > 256 karakter ditolak');
 
 -- ===== Batal: catatan WhatsApp terakhir dalam 10 menit =====
+-- p_current = id (hash) pesan `batal` yang sedang diproses; 'cur' = pesan yang tidak ada.
+select has_function('api', 'wa_last_cancellable', array['text'], 'wa_last_cancellable(p_current text)');
+select hasnt_function('api', 'wa_last_cancellable', array[]::text[], 'tanpa versi tanpa argumen');
+-- Klaim m1 di atas masih pending; diselesaikan agar kasus di bawah tidak bergantung padanya.
+select tests.web_exec(tests.n(), $$select api.wa_finish_message('m1', 'ignored')$$);
 select tests.account(tests.n(), :'np', 'BCA', 'operasional', 100000) as bca \gset
-select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
   'belum ada pesan recorded -> null');
 select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 20000) ->> 'entry_id'$$,
   :'np', :'bca')) as e1 \gset
 select tests.web_exec(tests.n(), $$select api.wa_claim_message('m2')$$);
 select tests.web_exec(tests.n(), format($$select api.wa_finish_message('m2', 'recorded', %L)$$, :'e1'));
-select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable()::text$$)::jsonb,
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur')::text$$)::jsonb,
   jsonb_build_object('entry_id', :'e1', 'space_id', :'np', 'version', 1), 'pesan recorded terakhir -> entri, ruang, versi');
-select is(tests.web_val(tests.f(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+select is(tests.web_val(tests.f(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
   'F tidak mendapat catatan N');
+-- Pesan pending yang lebih baru (catatan masih berjalan, atau finish gagal sesudah createEntry)
+-- menghalangi batal: tidak mundur ke catatan recorded yang lebih lama.
+select tests.clock_at('2026-03-20 10:00:05+07');
+select tests.web_exec(tests.n(), $$select api.wa_claim_message('m2p')$$);
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
+  'pesan terbaru pending -> null walau ada recorded lebih lama');
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('m2p') ->> 'entry_id'$$), :'e1',
+  'pesan batal yang sedang diproses (p_current, pending) tidak dihitung');
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable(null)::text, 'null')$$), 'null',
+  'p_current NULL -> null (gagal tertutup)');
+select tests.web_exec(tests.n(), $$select api.wa_finish_message('m2p', 'rejected')$$);
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur') ->> 'entry_id'$$), :'e1',
+  'pending yang selesai rejected tidak menghalangi lagi');
+select tests.clock_at('2026-03-20 10:00+07');
 select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
     $q$select api.wa_finish_message('m1', 'recorded', %L)$q$, :'e1')),
   'DK404', null, 'F tidak bisa merujuk pesan/entri N');
@@ -224,25 +243,25 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
 -- Pesan ditolak sesudahnya tidak menggeser catatan terakhir.
 select tests.web_exec(tests.n(), $$select api.wa_claim_message('m3')$$);
 select tests.web_exec(tests.n(), $$select api.wa_finish_message('m3', 'rejected')$$);
-select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable() ->> 'entry_id'$$), :'e1',
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur') ->> 'entry_id'$$), :'e1',
   'pesan rejected tidak menggeser catatan terakhir');
 select tests.clock_at('2026-03-20 10:09:59+07');
-select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable() ->> 'entry_id'$$), :'e1', '9 menit 59 detik: masih bisa');
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur') ->> 'entry_id'$$), :'e1', '9 menit 59 detik: masih bisa');
 select tests.clock_at('2026-03-20 10:10:01+07');
-select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
   'lewat 10 menit -> null');
 select tests.clock_at('2026-03-20 10:00+07');
 select tests.web_exec(tests.n(), format(
   $$select api.update_entry(gen_random_uuid(), %L, 1, %L, 25000, null, null, null, false)$$, :'e1', :'bca'));
-select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
   'entri diubah di app (versi berubah) -> null');
 select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 15000) ->> 'entry_id'$$,
   :'np', :'bca')) as e2 \gset
 select tests.web_exec(tests.n(), $$select api.wa_claim_message('m4')$$);
 select tests.web_exec(tests.n(), format($$select api.wa_finish_message('m4', 'recorded', %L)$$, :'e2'));
-select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable() ->> 'entry_id'$$), :'e2', 'pesan baru -> entri baru');
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur') ->> 'entry_id'$$), :'e2', 'pesan baru -> entri baru');
 select tests.web_exec(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'e2'));
-select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
   'entri sudah dihapus (void) -> null');
 select tests.web_exec(tests.n(), $$select api.wa_finish_message('m4', 'cancelled', null)$$);
 select is(tests.owner_val(null, $$select status || ' ' || coalesce(entry_id::text, 'null') from app.wa_messages where message_id = 'm4'$$),
@@ -258,12 +277,12 @@ select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid
   :'np', :'bca')) as e6 \gset
 select tests.web_exec(tests.n(), $$select api.wa_claim_message('m11')$$);
 select tests.web_exec(tests.n(), format($$select api.wa_finish_message('m11', 'recorded', %L)$$, :'e6'));
-select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable() ->> 'entry_id'$$), :'e6',
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable('cur') ->> 'entry_id'$$), :'e6',
   'dua catatan segar: yang terbaru bisa dibatalkan');
 select tests.web_exec(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'e6'));
 select tests.web_exec(tests.n(), $$select api.wa_finish_message('m11', 'cancelled')$$);
-select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
-  'sesudah batal, catatan lebih lama (masih 10 menit, versi sama) tidak ikut terbatalkan');
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable('cur')::text, 'null')$$), 'null',
+  'pesan terbaru cancelled -> null: catatan lebih lama (masih 10 menit, versi sama) tidak ikut terbatalkan');
 select tests.clock_at('2026-03-20 10:00+07');
 
 -- ===== Dompet bawaan (spec 4.4) =====

@@ -368,6 +368,49 @@ describe('handleInbound (Postgres sungguhan)', () => {
     expect(r.sent[3]?.text).toBe(REPLY.cancelUnavailable);
   });
 
+  it('"batal" saat catatan yang lebih baru masih pending → tidak ada yang dibatalkan', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('25rb makan siang'));
+    const flaky = failingPools(/api\.create_entry/, 1);
+    try {
+      const m2 = msg('30rb kopi');
+      await handleInbound(rig({ pools: flaky }).deps, m2);
+      expect(await messageRow(m2.messageId)).toMatchObject({ status: 'pending' });
+    } finally {
+      await flaky.end();
+    }
+    const b = msg('batal');
+    await handleInbound(r.deps, b);
+    const rows = await entries();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ amount: 25_000, voided_at: null, version: 1 });
+    expect(r.sent.at(-1)?.text).toBe(REPLY.cancelUnavailable);
+    expect(await messageRow(b.messageId)).toMatchObject({ status: 'rejected', entry_id: null });
+  });
+
+  it('finish gagal sesudah createEntry, lalu "batal" → tidak ada yang dibatalkan', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('25rb makan siang'));
+    const flaky = failingPools(/api\.wa_finish_message/, 1);
+    try {
+      const rf = rig({ pools: flaky });
+      const m2 = msg('30rb kopi');
+      await handleInbound(rf.deps, m2);
+      expect(rf.log).toHaveBeenCalledWith('finish_failed', '08006');
+      expect(rf.sent[0]?.text).toMatch(/^✅ /);
+      expect(await messageRow(m2.messageId)).toMatchObject({ status: 'pending', entry_id: null });
+    } finally {
+      await flaky.end();
+    }
+    await handleInbound(r.deps, msg('batal'));
+    const rows = await entries();
+    expect(rows.map((x) => [x.amount, x.voided_at === null])).toEqual([
+      [25_000, true],
+      [30_000, true],
+    ]);
+    expect(r.sent.at(-1)?.text).toBe(REPLY.cancelUnavailable);
+  });
+
   it('"batal" sesudah 10 menit → tidak ada perubahan, balasan menunjuk ke app', async () => {
     const r = rig();
     const m = msg('25rb makan siang');

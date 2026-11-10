@@ -55,7 +55,7 @@ Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 - **Kategori.** Dari kamus kata kunci yang sudah ada (`app.category_keywords()`, migrasi 0107) atas keterangan; tidak cocok → saran teratas `api.suggest_categories` (riwayat 30 hari, lalu nama) untuk jenis itu di ruang itu; balasan ✅ menyebut kategorinya supaya tebakan yang salah terlihat dan bisa dibatalkan atau diubah di app. Seed kategori tidak punya "Lainnya". Kategori tidak bisa dipaksa dari teks pada v1.
 - **Dompet.** Dompet bawaan ruang untuk user itu (lihat 4.4).
 - **Tanggal.** Hari ini (WIB, `app.today()`). `kemarin` = P1.
-- **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app. "Terakhir" = pesan `recorded` atau `cancelled` terbaru: `batal` kedua sesudah `batal` pertama tidak mundur ke catatan yang lebih lama.
+- **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app. "Terakhir" = pesan `pending`, `recorded` atau `cancelled` terbaru selain `batal` itu sendiri: `batal` kedua sesudah `batal` pertama tidak mundur ke catatan yang lebih lama, dan pesan yang masih `pending` (catatan sedang berjalan, atau status akhirnya gagal disimpan) membuat `batal` dijawab "tidak bisa dibatalkan".
 - **Saldo negatif.** Pengeluaran yang membuat saldo dompet negatif (`saldo_negatif`) ditolak dari WhatsApp dengan balasan yang mengarah ke app; tidak ada penimpaan lewat chat.
 
 Contoh:
@@ -135,7 +135,7 @@ Migrasi `0123_wa_catat.sql`:
 
 - `app.wa_links` (`user_id` unik, `phone_e164` unik, `verified_at`, kode hubung sekali pakai dan kedaluwarsa); RLS: user hanya melihat barisnya.
 - `app.wa_messages` (5.3).
-- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink()`, serta `api.wa_default_account(space)`, `api.wa_claim_message(id)`, `api.wa_finish_message(id, status, entry)`, `api.wa_last_cancellable()` (INVOKER). Tanda tangan akhir: BSD §16 "Catatan WA". Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
+- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink()`, serta `api.wa_default_account(space)`, `api.wa_claim_message(id)`, `api.wa_finish_message(id, status, entry)`, `api.wa_last_cancellable(current)` (INVOKER). Tanda tangan akhir: BSD §16 "Catatan WA". Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
 - Event audit sistem baru `wa_linked` dan `wa_unlinked` menambah daftar event reserved; tes katalog diperbarui. Entri yang dicatat lewat WhatsApp tidak punya event audit; jejaknya ledger dan `wa_messages`.
 
 ### 5.6 UI

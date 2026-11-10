@@ -53,6 +53,11 @@ end $$;
 create policy own_read on app.wa_links for select to dompetku_web
   using (user_id = (select app.current_user_id()));
 -- Api: baris sendiri, atau baris yang dicari fungsi tanpa konteks user lewat GUC lokal.
+-- Invarian (policy ini diperlebar GUC): setiap fungsi api DEFINER baru yang menyentuh
+-- app.wa_links atau app.wa_link_codes WAJIB memfilter dengan uid pemanggil
+-- (private.require_user()/app.current_user_id()), atau mengisi sendiri GUC app.wa_user_id,
+-- app.wa_phone, app.wa_code_hash lalu mengosongkannya lagi sebelum kembali. GUC yang tertinggal
+-- dari fungsi lain membuat baris user lain terlihat oleh api.
 create policy own_or_lookup on app.wa_links for all to dompetku_api
   using (user_id = (select app.current_user_id())
          or user_id = (select nullif(current_setting('app.wa_user_id', true), '')::uuid)
@@ -119,6 +124,9 @@ grant execute on function private.wa_audit(uuid, text) to dompetku_api;
 -- Kode 6 karakter dari 32 simbol tanpa 0/O/1/I (5 bit per karakter, tanpa bias modulo) dari
 -- gen_random_uuid() (pg_strong_random; byte 0-5 UUID v4 acak penuh). Kode lama user ditimpa;
 -- hash bentrok dengan kode user lain (unik) = buat ulang.
+-- Hash = SHA-256 tanpa salt atas ruang 30 bit (32^6): siapa pun yang membaca code_hash bisa
+-- membalik kode dengan brute force. Diterima: kode hanya berlaku 10 menit, tabel hanya terbaca
+-- owner dan dompetku_api (tanpa grant ke web/worker), dan percobaan `hubung` dibatasi laju di web.
 create function api.wa_create_link_code() returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -298,18 +306,23 @@ begin
   end if;
 end $$;
 
--- Catatan WhatsApp terakhir user = pesan 'recorded' atau 'cancelled' terbaru. Bila 'recorded',
--- dicatat <= 10 menit lalu, entri masih hidup dan versinya sama dengan saat dicatat:
--- {entry_id, space_id, version}; selain itu NULL. Tanpa mundur ke pesan yang lebih lama: batal
--- kedua sesudah batal pertama tidak menghapus catatan sebelumnya.
-create function api.wa_last_cancellable() returns jsonb
+-- Catatan WhatsApp terakhir user = pesan 'pending', 'recorded' atau 'cancelled' terbaru selain
+-- pesan `batal` yang sedang diproses (p_current, sudah diklaim 'pending'). Hanya bila yang terbaru
+-- itu 'recorded', dicatat <= 10 menit lalu, entri masih hidup dan versinya sama dengan saat
+-- dicatat: {entry_id, space_id, version}; selain itu NULL. Pesan 'pending' (catatan yang masih
+-- berjalan, atau finish('recorded') gagal sesudah createEntry) menghalangi batal: tanpa ini batal
+-- bisa mengenai catatan yang lebih lama. Tanpa mundur ke pesan yang lebih lama: batal kedua
+-- sesudah batal pertama tidak menghapus catatan sebelumnya.
+create function api.wa_last_cancellable(p_current text) returns jsonb
 language sql stable set search_path = '' as $$
   select case when m.status = 'recorded' and m.created_at >= app.now() - interval '10 minutes'
                and e.id is not null and e.voided_at is null and e.version = m.entry_version
               then jsonb_build_object('entry_id', e.id, 'space_id', e.space_id, 'version', e.version)
          end
   from (select w.status, w.entry_id, w.entry_version, w.created_at from app.wa_messages w
-         where w.user_id = app.current_user_id() and w.status in ('recorded', 'cancelled')
+         where w.user_id = app.current_user_id()
+           and w.status in ('pending', 'recorded', 'cancelled')
+           and w.message_id <> p_current
          order by w.created_at desc, w.message_id desc
          limit 1) m
   left join app.entries e on e.id = m.entry_id
@@ -326,7 +339,7 @@ begin
     raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
   end if;
 end $$;
-drop function api.wa_last_cancellable();
+drop function api.wa_last_cancellable(text);
 drop function api.wa_finish_message(text, text, uuid);
 drop function api.wa_claim_message(text);
 drop function api.wa_default_account(uuid);

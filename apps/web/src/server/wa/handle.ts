@@ -329,7 +329,12 @@ const lastSchema = (v: unknown): { entryId: string; spaceId: string; version: nu
 async function cancel(r: Run, userId: string): Promise<void> {
   const { pools } = r.deps;
   const last = await withUser(pools.app, userId, async (c) => {
-    const { rows } = await c.query<{ r: unknown }>('select api.wa_last_cancellable() as r');
+    // p_current: pesan `batal` ini sendiri (sudah diklaim pending) tidak dihitung; pesan lain yang
+    // masih pending menghalangi batal agar tidak mengenai catatan yang lebih lama.
+    const { rows } = await c.query<{ r: unknown }>(
+      'select api.wa_last_cancellable(p_current => $1) as r',
+      [r.key],
+    );
     return lastSchema(rows[0]?.r ?? null);
   });
   const unavailable = async (code: string) => {
