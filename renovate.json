@@ -18,6 +18,14 @@
       "groupName": "patch updates",
       "automerge": false,
       "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Image OpenWA (pihak ketiga, infra/db-vm/compose.yml): rilis minimal 7 hari, tag dan digest diganti bersama, tanpa automerge. Prosedur dan cek: docs/ops/ci-keamanan.md bagian Image OpenWA.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/rmyndharis/openwa"],
+      "minimumReleaseAge": "7 days",
+      "pinDigests": true,
+      "automerge": false
     }
   ]
 }

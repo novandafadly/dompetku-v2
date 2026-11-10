@@ -156,13 +156,15 @@ services:
       disable: true
 
   openwa:
-    # Catat via WhatsApp (spec 2026-11-09 §5.1, docs/ops/runbook-wa.md). OpenWA 0.29.1 (rilis
-    # 2026-11-07), indeks multi-arch (linux/amd64 + linux/arm64) diikat digest; naik versi = ganti tag
-    # dan digest bersamaan lewat PR. Bukan bagian rilis web: deployer memasangnya bersama wa-proxy
-    # sesudah web sehat, tidak pernah menggagalkan atau me-rollback web karena openwa, dan
-    # melewatinya selama env/openwa.env belum ada (required: false agar compose untuk web dan
-    # migrate tetap jalan).
-    image: ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71d3802e6cd66ac92ff3543f2eb391d20e7db711e8641c5127644a817a
+    # Catat via WhatsApp (spec 2026-11-09 §5.1, docs/ops/runbook-wa.md). OpenWA 0.27.1 (rilis
+    # 2026-11-02): rilis terbaru yang sudah berumur >= 7 hari (minimumReleaseAge repo) saat dipatok
+    # 2026-11-10. Indeks multi-arch (linux/amd64 + linux/arm64) diikat digest; naik versi = ganti tag
+    # dan digest bersamaan lewat PR, rilis minimal 7 hari (Renovate atau manual, ci-keamanan.md); baris
+    # `image:` ini juga dibaca workflow openwa-image.yml (Trivy). Bukan bagian rilis web: deployer
+    # memasangnya bersama wa-proxy sesudah web sehat, tidak pernah menggagalkan atau me-rollback web
+    # karena openwa, dan melewatinya selama env/openwa.env belum ada (required: false agar compose
+    # untuk web dan migrate tetap jalan).
+    image: ghcr.io/rmyndharis/openwa:0.27.1@sha256:1a2d0c393a7c8a629b0b18cdb5125d9be59192480c02d56a022c249a66af9068
     profiles: [web]
     restart: unless-stopped
     env_file:
