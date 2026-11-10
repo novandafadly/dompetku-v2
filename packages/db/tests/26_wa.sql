@@ -3,7 +3,7 @@
 -- user (DEFINER sempit, EXECUTE hanya web), dedupe pesan, batal dalam 10 menit, dompet bawaan,
 -- RLS antar user, event audit sistem wa_linked/wa_unlinked. Jam dipatok 2026-03-20 10:00 WIB.
 begin;
-select plan(98);
+select plan(113);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -170,7 +170,22 @@ select is(tests.web_val(tests.f(), $$select api.wa_claim_message('m1')::text$$),
   'id milik user lain -> false, tanpa baris baru');
 select is(tests.owner_val(null, $$select count(*) || ' ' || min(status) || ' ' || min(user_id::text) || ' '
     || (min(created_at) = app.now()) from app.wa_messages where message_id = 'm1'$$),
-  '1 ignored ' || tests.n() || ' true', 'satu baris, status awal ignored, jam app.now()');
+  '1 pending ' || tests.n() || ' true', 'satu baris, status awal pending, jam app.now()');
+-- Klaim pending: dalam 30 detik tetap false; lebih tua dari 30 detik = diambil alih (sekali).
+select tests.clock_at('2026-03-20 10:00:29+07');
+select is(tests.web_val(tests.n(), $$select api.wa_claim_message('m1')::text$$), 'false',
+  'pending segar (29 detik) -> false');
+select tests.clock_at('2026-03-20 10:00+07');
+select tests.owner_exec(null, $$update app.wa_messages set created_at = app.now() - interval '31 seconds'
+  where message_id = 'm1'$$);
+select is(tests.web_val(tests.f(), $$select api.wa_claim_message('m1')::text$$), 'false',
+  'pending basi milik user lain -> false');
+select is(tests.web_val(tests.n(), $$select api.wa_claim_message('m1')::text$$), 'true',
+  'pending basi (> 30 detik) milik sendiri -> true');
+select is(tests.owner_val(null, $$select status || ' ' || (created_at = app.now()) from app.wa_messages
+    where message_id = 'm1'$$), 'pending true', 'ambil alih menyegarkan created_at');
+select is(tests.web_val(tests.n(), $$select api.wa_claim_message('m1')::text$$), 'false',
+  'sesudah diambil alih, klaim berikutnya -> false');
 select is(tests.web_val(tests.f(), $$select count(*) from app.wa_messages$$), '0', 'F tidak melihat pesan N');
 select is(tests.web_exec(tests.f(), $$update app.wa_messages set status = 'cancelled' where message_id = 'm1'$$), 0::bigint,
   'F tidak bisa mengubah pesan N');
@@ -181,7 +196,7 @@ select throws_ok($$select tests.web_exec(tests.f(), $q$select api.wa_finish_mess
   'DK404', 'wa_message_not_found', 'F tidak bisa menyelesaikan pesan N');
 select throws_ok($$select tests.web_exec(tests.n(), $q$select api.wa_finish_message('m1', 'recorded')$q$)$$,
   '23514', null, 'recorded tanpa entri ditolak');
-select throws_ok($$select tests.web_exec(tests.n(), $q$select api.wa_finish_message('m1', 'pending')$q$)$$,
+select throws_ok($$select tests.web_exec(tests.n(), $q$select api.wa_finish_message('m1', 'unknown')$q$)$$,
   '23514', null, 'status di luar daftar ditolak');
 select throws_ok(format($$select tests.web_exec(tests.n(), %L)$$, format(
     $q$select api.wa_claim_message(%L)$q$, repeat('x', 257))),
@@ -232,6 +247,24 @@ select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::
 select tests.web_exec(tests.n(), $$select api.wa_finish_message('m4', 'cancelled', null)$$);
 select is(tests.owner_val(null, $$select status || ' ' || coalesce(entry_id::text, 'null') from app.wa_messages where message_id = 'm4'$$),
   'cancelled null', 'finish mengubah status pesan sendiri');
+-- Batal kedua tidak mundur ke catatan lebih lama yang masih dalam 10 menit.
+select tests.clock_at('2026-03-20 10:01+07');
+select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000) ->> 'entry_id'$$,
+  :'np', :'bca')) as e5 \gset
+select tests.web_exec(tests.n(), $$select api.wa_claim_message('m10')$$);
+select tests.web_exec(tests.n(), format($$select api.wa_finish_message('m10', 'recorded', %L)$$, :'e5'));
+select tests.clock_at('2026-03-20 10:02+07');
+select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000) ->> 'entry_id'$$,
+  :'np', :'bca')) as e6 \gset
+select tests.web_exec(tests.n(), $$select api.wa_claim_message('m11')$$);
+select tests.web_exec(tests.n(), format($$select api.wa_finish_message('m11', 'recorded', %L)$$, :'e6'));
+select is(tests.web_val(tests.n(), $$select api.wa_last_cancellable() ->> 'entry_id'$$), :'e6',
+  'dua catatan segar: yang terbaru bisa dibatalkan');
+select tests.web_exec(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'e6'));
+select tests.web_exec(tests.n(), $$select api.wa_finish_message('m11', 'cancelled')$$);
+select is(tests.web_val(tests.n(), $$select coalesce(api.wa_last_cancellable()::text, 'null')$$), 'null',
+  'sesudah batal, catatan lebih lama (masih 10 menit, versi sama) tidak ikut terbatalkan');
+select tests.clock_at('2026-03-20 10:00+07');
 
 -- ===== Dompet bawaan (spec 4.4) =====
 select tests.account(tests.n(), :'sh', 'Rumah A', 'operasional', 500000) as sa \gset
@@ -260,6 +293,23 @@ select is(tests.web_val(tests.n(), format($$select api.wa_default_account(%L)::t
   'entri void tidak dihitung sebagai riwayat');
 select is(tests.web_val(tests.f(), format($$select coalesce(api.wa_default_account(%L)::text, 'null')$$, :'np')), 'null',
   'ruang orang lain -> null (RLS)');
+-- Kantong kantor tidak pernah jadi bawaan; cadangan memilih operasional lebih dulu (Catat).
+select tests.account(tests.f(), :'fp', 'Kantor', 'kantor', 50000) as fk \gset
+select is(tests.web_val(tests.f(), format($$select coalesce(api.wa_default_account(%L)::text, 'null')$$, :'fp')), 'null',
+  'ruang hanya berisi dompet kantor -> null');
+select tests.account(tests.f(), :'fp', 'Tabungan', 'tabungan', 50000) as ft \gset
+select tests.account(tests.f(), :'fp', 'Harian', 'operasional') as fo \gset
+select tests.owner_exec(null, format($$update app.accounts set sort_order = case id when %L then 0 when %L then 1 else 2 end
+  where space_id = %L$$, :'fk', :'ft', :'fp'));
+select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)::text$$, :'fp')), :'fo',
+  'tanpa riwayat: operasional didahulukan walau sort_order lebih besar');
+select tests.web_exec(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000)$$, :'fp', :'fk'));
+select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)::text$$, :'fp')), :'fo',
+  'dompet kantor yang terakhir dipakai tidak jadi bawaan');
+select tests.web_exec(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000)$$, :'fp', :'ft'));
+select tests.web_exec(tests.f(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000)$$, :'fp', :'fk'));
+select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)::text$$, :'fp')), :'ft',
+  'riwayat terbaru selain kantor (tabungan) dipakai');
 
 -- ===== Putuskan =====
 select throws_ok($$select tests.web_exec(null, $q$select api.wa_unlink()$q$)$$, 'DK401', 'unauthenticated',
@@ -278,6 +328,18 @@ select is(tests.owner_val(null, format($$select count(*) || ' ' || min(meta::tex
     from audit.events where event = 'wa_unlinked' and user_id = %L$$, tests.n())),
   '1 {"via": "app"}', 'event wa_unlinked sekali (putus kedua tanpa nomor = tanpa event)');
 select is(tests.web_val(tests.f(), $$select count(*) from app.wa_links$$), '1', 'nomor F tidak terpengaruh');
+
+-- ===== Klaim pesan yang sudah selesai tidak pernah diambil alih =====
+select tests.web_exec(tests.n(), format($$select api.wa_claim_message('done-' || %L)$$, st))
+from unnest(array['recorded', 'rejected', 'cancelled', 'ignored']) st;
+select tests.web_exec(tests.n(), format($$select api.wa_finish_message('done-' || %L, %L, %L::uuid)$$,
+  st, st, case when st = 'recorded' then :'e1' end))
+from unnest(array['recorded', 'rejected', 'cancelled', 'ignored']) st;
+select tests.owner_exec(null, $$update app.wa_messages set created_at = app.now() - interval '1 hour'
+  where message_id like 'done-%'$$);
+select is(tests.web_val(tests.n(), format($$select api.wa_claim_message('done-' || %L)::text$$, st)), 'false',
+  'pesan selesai (' || st || ') yang lama -> false')
+from unnest(array['recorded', 'rejected', 'cancelled', 'ignored']) st;
 
 -- ===== Audit: event sistem tidak bisa dipalsukan; tanpa nomor di payload =====
 select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(), format('select audit.log(%L)', e)),

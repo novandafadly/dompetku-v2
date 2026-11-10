@@ -32,7 +32,8 @@ create table app.wa_messages (
   user_id       uuid not null references auth."user" (id) on delete restrict,
   entry_id      uuid,
   entry_version int check (entry_version >= 1),
-  status        text not null check (status in ('recorded', 'rejected', 'cancelled', 'ignored')),
+  status        text not null
+                check (status in ('pending', 'recorded', 'rejected', 'cancelled', 'ignored')),
   created_at    timestamptz not null default now(),
   check (status <> 'recorded' or (entry_id is not null and entry_version is not null))
 );
@@ -222,7 +223,10 @@ end $$;
 
 -- ===== Dompet bawaan (spec 4.4) =====
 -- Dompet aktif di ruang ini yang paling baru dipakai user (kaki 'main' entri income/expense hidup
--- buatannya, urut created_at), selain itu dompet aktif pertama menurut sort_order, created_at, id.
+-- buatannya, urut created_at), selain itu dompet aktif pertama dengan kantong operasional lebih
+-- dulu, lalu sort_order, created_at, id (sama dengan Catat: "operasional pertama; lalu dompet
+-- pertama"). Kantong kantor tidak pernah jadi bawaan di kedua cabang: pengeluaran WA sesudah
+-- talangan tidak boleh diam-diam masuk dompet kantor (kantor_keluar, 0102).
 -- INVOKER: ruang di luar keanggotaan tidak terlihat (RLS) -> NULL.
 create function api.wa_default_account(p_space_id uuid) returns uuid
 language sql stable set search_path = '' as $$
@@ -230,7 +234,7 @@ language sql stable set search_path = '' as $$
     (select l.account_id
        from app.entries e
        join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
-       join app.accounts a on a.id = l.account_id and a.archived_at is null
+       join app.accounts a on a.id = l.account_id and a.archived_at is null and a.pocket <> 'kantor'
       where e.space_id = p_space_id
         and e.created_by = app.current_user_id()
         and e.voided_at is null
@@ -238,13 +242,15 @@ language sql stable set search_path = '' as $$
       order by e.created_at desc, e.id desc
       limit 1),
     (select a.id from app.accounts a
-      where a.space_id = p_space_id and a.archived_at is null
-      order by a.sort_order, a.created_at, a.id
+      where a.space_id = p_space_id and a.archived_at is null and a.pocket <> 'kantor'
+      order by (a.pocket <> 'operasional'), a.sort_order, a.created_at, a.id
       limit 1))
 $$;
 
 -- ===== Pesan (dedupe, status, batal) =====
--- true = id pesan baru (baris dibuat dengan status awal 'ignored'); false = sudah pernah diklaim.
+-- true = id pesan baru (baris dibuat dengan status 'pending'), atau klaim 'pending' milik sendiri
+-- yang lebih tua dari 30 detik (proses sebelumnya mati sebelum finish; created_at disegarkan agar
+-- hanya satu pengambil alih yang menang); selain itu false.
 create function api.wa_claim_message(p_message_id text) returns boolean
 language plpgsql set search_path = '' as $$
 declare
@@ -255,10 +261,16 @@ begin
     raise exception using errcode = 'DK401', message = 'unauthenticated';
   end if;
   insert into app.wa_messages (message_id, user_id, status, created_at)
-  values (p_message_id, v_uid, 'ignored', app.now())
+  values (p_message_id, v_uid, 'pending', app.now())
   on conflict (message_id) do nothing;
   get diagnostics v_n = row_count;
-  return v_n = 1;
+  if v_n = 1 then
+    return true;
+  end if;
+  update app.wa_messages m set created_at = app.now()
+   where m.message_id = p_message_id and m.user_id = v_uid and m.status = 'pending'
+     and m.created_at < app.now() - interval '30 seconds';
+  return found;
 end $$;
 
 -- Status akhir pesan sendiri. Entri harus terlihat oleh user (RLS); versinya dicatat agar batal
@@ -286,17 +298,18 @@ begin
   end if;
 end $$;
 
--- Pesan 'recorded' terakhir user: {entry_id, space_id, version} bila dicatat <= 10 menit lalu,
--- entri masih hidup dan versinya sama dengan saat dicatat; selain itu NULL (tanpa mundur ke
--- pesan yang lebih lama).
+-- Catatan WhatsApp terakhir user = pesan 'recorded' atau 'cancelled' terbaru. Bila 'recorded',
+-- dicatat <= 10 menit lalu, entri masih hidup dan versinya sama dengan saat dicatat:
+-- {entry_id, space_id, version}; selain itu NULL. Tanpa mundur ke pesan yang lebih lama: batal
+-- kedua sesudah batal pertama tidak menghapus catatan sebelumnya.
 create function api.wa_last_cancellable() returns jsonb
 language sql stable set search_path = '' as $$
-  select case when m.created_at >= app.now() - interval '10 minutes'
+  select case when m.status = 'recorded' and m.created_at >= app.now() - interval '10 minutes'
                and e.id is not null and e.voided_at is null and e.version = m.entry_version
               then jsonb_build_object('entry_id', e.id, 'space_id', e.space_id, 'version', e.version)
          end
-  from (select w.entry_id, w.entry_version, w.created_at from app.wa_messages w
-         where w.user_id = app.current_user_id() and w.status = 'recorded'
+  from (select w.status, w.entry_id, w.entry_version, w.created_at from app.wa_messages w
+         where w.user_id = app.current_user_id() and w.status in ('recorded', 'cancelled')
          order by w.created_at desc, w.message_id desc
          limit 1) m
   left join app.entries e on e.id = m.entry_id
