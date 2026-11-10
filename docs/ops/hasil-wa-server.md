@@ -4,7 +4,9 @@ Mengikuti `docs/ops/runbook-wa.md` (dari `main` `2e12c46`, PR #27). Dikerjakan a
 
 ## Status
 
-**Pemasangan dan gerbang keamanan lulus. Tugas belum selesai:** dari tiga uji akhir hanya `hubung KODE` yang lulus. `catat 25rb makan siang` dan `batal` belum lulus: kedua pesan catat ditolak `saldo_negatif` karena dompet bawaan pemilik tidak cukup saldo (log web: 2 `linked`, 2 `rejected saldo_negatif`, 0 `recorded`). Itu perilaku sengaja (spec 4.4 dan keputusan 6), bukan kegagalan pasang. Uji ulang diperlukan sesudah dompet bawaan pemilik berisi saldo atau sesudah fitur `@nama` (lihat Tindak lanjut).
+**Pemasangan, gerbang keamanan, dan ketiga uji akhir lulus** (`hubung KODE`, catat `25rb makan siang`, `batal`).
+
+Percobaan pertama catat ditolak `saldo_negatif` karena dompet bawaan pemilik tidak cukup saldo (2 pesan; perilaku sengaja, spec 4.4 dan keputusan 6, bukan kegagalan pasang). Sesudah dompet bawaan pemilik bisa dipakai (cara penyiapannya tidak tercatat di sini), uji ulang lulus dengan bukti log web berurutan (UTC, tanpa isi pesan): 16:35:32 `linked`, 16:38:09 `recorded`, 16:42:28 `cancelled`, 16:44:29 `recorded`, 16:44:38 `cancelled`. Total sejak pasang: 3 `linked`, 2 `recorded`, 2 `cancelled`, 2 `rejected saldo_negatif`. Log `wa-proxy` dan web bersih dari teks pesan, header, key, dan rahasia; galat web 0. Pemilik melaporkan uji dilakukan oleh dua orang (pemilik dan Farida); log sengaja tanpa identitas, jadi pembagiannya tidak bisa dibuktikan dari log.
 
 ## Hasil per langkah
 
@@ -18,7 +20,7 @@ Mengikuti `docs/ops/runbook-wa.md` (dari `main` `2e12c46`, PR #27). Dikerjakan a
 | 5. Sesi, pairing [PEMILIK]     | Sesi `dompetku-bot` `qr_ready` lalu `ready` lewat kode pairing (5A); 5B tidak dipakai; key web `operator` (`allowedIps` `172.16.26.2`, `allowedSessions` hanya sesi bot) tersimpan, satu key web di OpenWA                                                                                                                |
 | 6. `web.env` [PEMILIK]         | 7 variabel WA terisi (pola diverifikasi tanpa mencetak isi), `web.env.pre-wa` sebagai rollback, web dibuat ulang `healthy`                                                                                                                                                                                                |
 | 7. Webhook [PEMILIK]           | Tepat satu: `http://wa-proxy:8081/api/wa/webhook`, `message.received`, aktif, `retryCount` 3 diterima; daftar tanpa field secret; timer deploy dinyalakan lagi                                                                                                                                                            |
-| 8. Ujung ke ujung              | `hubung KODE` lulus (balasan terkirim, 2 `linked`); catat dan batal belum (lihat Status). Webhook 4 diterima (`200`) dan 4 balasan `send-text` `201`, jadi payload `message.received` teks pribadi terbaca adaptor                                                                                                        |
+| 8. Ujung ke ujung              | `hubung KODE`, catat, dan `batal` lulus (lihat Status). Pada jendela uji terakhir (30 menit) ada 5 kejadian di log web, 5 webhook `200`, dan 5 balasan `send-text` `201` di `wa-proxy`, jadi payload `message.received` teks pribadi terbaca adaptor                                                                      |
 | Izin volume dan akses          | `openwa_data` `700` uid 997, tidak ada berkas dengan izin group/other, `openwa` tetap `healthy`; grup `docker` hanya `ubuntu`                                                                                                                                                                                             |
 
 ## Pemeriksaan pemisahan (semua lulus sebelum pairing)
@@ -62,7 +64,7 @@ Mengikuti `docs/ops/runbook-wa.md` (dari `main` `2e12c46`, PR #27). Dikerjakan a
 | Key web dan `web.env`                                                             | selesai                                           |
 | Webhook tepat satu                                                                | selesai                                           |
 | Uji `hubung KODE`                                                                 | selesai                                           |
-| Uji catat `25rb makan siang` dan `batal`                                          | **belum** (ditolak `saldo_negatif`)               |
+| Uji catat `25rb makan siang` dan `batal`                                          | selesai (2 `recorded`, 2 `cancelled`)             |
 | Log web dan `wa-proxy` tanpa teks pesan dan header                                | selesai                                           |
 | Izin volume `700`, grup `docker`                                                  | selesai                                           |
 | Keputusan `openwa_data` tidak di-backup                                           | menunggu pemilik                                  |
@@ -72,7 +74,7 @@ Mengikuti `docs/ops/runbook-wa.md` (dari `main` `2e12c46`, PR #27). Dikerjakan a
 
 ## Tindak lanjut
 
-1. **Uji ulang catat dan batal** sesudah dompet bawaan berisi saldo: catat satu transaksi sungguhan di app lewat dompet yang diinginkan (mis. CIMB) agar menjadi dompet bawaan, lalu `makan siang padang 23rb` dan `batal` dari WhatsApp; hasil harus `recorded` lalu pembatalan di log web.
+1. **Run deploy berikutnya** (merge ke `main` memicu Release dan deploy): pastikan baris audit `/var/log/dompetku/deploy.log` mencatat `"openwa":"openwa_ok"` dan bot tetap membalas. `openwa_sync` belum pernah teramati.
 2. **Fitur `@nama`** (pilih dompet per pesan, `@kantor` eksplisit di ruang Pribadi; fase `dompet cimb` ditunda): desain disetujui pemilik, dikerjakan di sesi terpisah, belum dimulai di repo.
 3. PR perbaikan tmpfs `wa-proxy` (temuan 1) dan koreksi runbook (temuan 2 dan 3).
 4. Bump OpenWA ke `0.29.1` sesudah 2026-11-14 18:52 WIB (pengecualian Trivy `0.27.1` kedaluwarsa 2026-11-21).
