@@ -610,7 +610,47 @@ describe('WhatsApp diputus saat akun diamankan ulang', () => {
          and event in ('password_reset_done', 'wa_unlinked') order by id`,
       [n],
     );
-    expect(rows.map((r) => r.event)).toEqual(['password_reset_done', 'wa_unlinked']);
+    // Putus dulu, audit sesudahnya: audit yang gagal tidak melewatkan pemutusan.
+    expect(rows.map((r) => r.event)).toEqual(['wa_unlinked', 'password_reset_done']);
+  });
+
+  /**
+   * Galat DB sungguhan di jalur yang diuji: trigger sementara (superuser) yang melempar, dihapus
+   * lagi di finally agar reset() berikutnya tidak tersandung.
+   */
+  async function withFailingTrigger<T>(
+    table: string,
+    timing: string,
+    when: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    await h.admin.query(`
+      create function public.tes_gagal() returns trigger language plpgsql
+        as $$ begin raise exception 'tes: DB gagal'; end $$;
+      create trigger tes_gagal ${timing} on ${table} for each row when (${when})
+        execute function public.tes_gagal();`);
+    try {
+      return await fn();
+    } finally {
+      await h.admin.query(`drop trigger tes_gagal on ${table}; drop function public.tes_gagal();`);
+    }
+  }
+
+  it('reset kata sandi: audit gagal, nomor tetap diputus', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    await acceptAsPartner(await invite(owner));
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const f = await linkPhone(PARTNER, '+6285711112222');
+    await h.service.requestPasswordReset(new Browser().headers(), OWNER);
+    const token = linkFromLastMail(h, 'token');
+    await withFailingTrigger(
+      'audit.events',
+      'before insert',
+      "new.event = 'password_reset_done'",
+      () => h.service.resetPassword(token, 'kata-sandi-baru-yang-panjang').catch(() => null),
+    );
+    expect(await waState(n)).toBe('0/0 password_reset');
+    expect(await waState(f)).toBe('1/1 -');
   });
 
   it('reset kata sandi tanpa nomor terhubung: tanpa event wa_unlinked', async () => {
@@ -636,6 +676,44 @@ describe('WhatsApp diputus saat akun diamankan ulang', () => {
     expect(r.result.kind).toBe('ok');
     expect(await waState(n)).toBe('0/0 session_revoked');
     expect(await waState(f)).toBe('1/1 -');
+  });
+
+  it('kode pemulihan: pemutusan gagal tidak menggagalkan masuk (kode tidak hangus tanpa sesi)', async () => {
+    const { browser: owner, codes } = await bootstrapOwner(h);
+    await acceptAsPartner(await invite(owner));
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const f = await linkPhone(PARTNER, '+6285711112222');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warns = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const lost = new Browser('192.0.2.9');
+      const r = await withFailingTrigger('app.wa_links', 'before delete', 'true', () =>
+        h.service.recoverySignIn(lost.headers(), OWNER, codes[1] ?? ''),
+      );
+      expect(r.result.kind).toBe('ok');
+      lost.absorb(r.setCookie);
+      const state = (await h.service.session(lost.headers())).state;
+      expect(state?.amr).toBe('recovery');
+      expect(state?.access.kind).toBe('securing');
+      const used = await h.admin.query(
+        'select 1 from auth.recovery_codes where used_at is not null',
+      );
+      expect(used.rows).toHaveLength(1);
+      // Pemutusan gagal (transaksi di-rollback): tautan masih ada, hanya kode mesin di log.
+      expect(await waState(n)).toBe('1/1 -');
+      expect(await waState(f)).toBe('1/1 -');
+      const logged = [...errors.mock.calls, ...warns.mock.calls].map((c) => c.join(' '));
+      expect(logged).toEqual(['[wa] unlink_failed']);
+      const events = await h.admin.query<{ event: string }>(
+        `select event from audit.events where user_id = $1
+           and event in ('recovery_code_used', 'session_revoked') order by id`,
+        [n],
+      );
+      expect(events.rows.map((e) => e.event)).toEqual(['recovery_code_used', 'session_revoked']);
+    } finally {
+      errors.mockRestore();
+      warns.mockRestore();
+    }
   });
 
   it('kode pemulihan salah: nomor tetap terhubung', async () => {

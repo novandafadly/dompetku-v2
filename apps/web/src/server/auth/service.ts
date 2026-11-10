@@ -143,8 +143,13 @@ export class AuthService {
       pools,
       mailer,
       onPasswordReset: async (userId) => {
-        await this.audit(userId, 'password_reset_done');
-        await this.unlinkWhatsApp(userId, 'password_reset');
+        // Putus dulu: audit yang gagal tidak boleh melewatkan pemutusan. Audit tetap dicatat
+        // walau pemutusan gagal (galat pemutusan tetap dilempar).
+        try {
+          await this.unlinkWhatsApp(userId, 'password_reset');
+        } finally {
+          await this.audit(userId, 'password_reset_done');
+        }
       },
     });
   }
@@ -471,6 +476,13 @@ export class AuthService {
       [user.id, matched],
     );
     if (consumed.rowCount !== 1) return { result: { kind: 'invalid' }, setCookie: null };
+    // Putus WhatsApp sebelum sesi dibuat. Gagal di sini tidak boleh menggagalkan masuk: kode
+    // sudah hangus, jadi galat berarti kode terbuang tanpa sesi. Log hanya kode mesin.
+    try {
+      await this.unlinkWhatsApp(user.id, 'session_revoked');
+    } catch {
+      console.error('[wa] unlink_failed');
+    }
     await this.succeeded(keys);
     const res = await this.auth.api.recoverySignIn({
       body: { userId: user.id },
@@ -479,7 +491,6 @@ export class AuthService {
     });
     await this.audit(user.id, 'recovery_code_used', headers);
     await this.audit(user.id, 'session_revoked', headers, { reason: 'recovery' });
-    await this.unlinkWhatsApp(user.id, 'session_revoked');
     background(this.mailer.send(mails.recoveryCodeUsed(user.email)));
     return { result: { kind: 'ok' }, setCookie: res.headers };
   }
