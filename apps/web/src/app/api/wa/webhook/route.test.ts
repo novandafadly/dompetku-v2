@@ -87,6 +87,55 @@ describe('POST /api/wa/webhook', () => {
     expect(JSON.stringify(await res.json())).not.toContain('rahasia');
   });
 
+  it('503 = body generik yang sama untuk setiap jenis galat konfigurasi', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(noop);
+    const bodies: string[] = [];
+    for (const err of [
+      new Error('WA_WEBHOOK_SECRET terlalu pendek'),
+      new TypeError('x'),
+      new RangeError('postgres://u:pw@h/db'),
+    ]) {
+      readWaEnv.mockImplementation(() => {
+        throw err;
+      });
+      const res = await post(fx('message-private'));
+      expect(res.status).toBe(503);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      bodies.push(await res.text());
+    }
+    expect(bodies).toEqual(Array(3).fill('{"ok":false}'));
+    expect(handleInbound).not.toHaveBeenCalled();
+  });
+
+  describe('log config_error dibatasi', () => {
+    const broken = () =>
+      readWaEnv.mockImplementation(() => {
+        throw new Error('rusak');
+      });
+    const configLines = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.filter((c) => String(c[0]) === '[wa] config_error').length;
+
+    it('POST tak bertanda tangan berulang = paling banyak satu baris per 60 detik', async () => {
+      vi.useFakeTimers({ now: new Date('2026-11-10T00:00:00Z'), toFake: ['Date'] });
+      try {
+        broken();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(noop);
+        for (let i = 0; i < 20; i += 1) expect((await post('x', {}, false)).status).toBe(503);
+        expect(configLines(warn)).toBe(1);
+        vi.setSystemTime(new Date('2026-11-10T00:00:59.999Z'));
+        await post('x', {}, false);
+        expect(configLines(warn)).toBe(1);
+        vi.setSystemTime(new Date('2026-11-10T00:01:00Z'));
+        await post('x', {}, false);
+        await post('x', {}, false);
+        expect(configLines(warn)).toBe(2);
+        expect(warn).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it('tanda tangan hilang, salah, atau rahasia lain = 401', async () => {
     const body = fx('message-private');
     expect((await post(body, {}, false)).status).toBe(401);
@@ -213,6 +262,94 @@ describe('POST /api/wa/webhook', () => {
     expect(res.status).toBe(200);
     expect(handleInbound).toHaveBeenCalledTimes(1);
     expect(call(0)[1]).toMatchObject({ text: 'kopi ☕ 25rb' });
+  });
+
+  describe('badan streaming dibatasi 64 kB', () => {
+    function streamOf(chunks: Uint8Array[]) {
+      return new ReadableStream<Uint8Array>({
+        start(c) {
+          for (const ch of chunks) c.enqueue(ch);
+          c.close();
+        },
+      });
+    }
+    function postStream(body: ReadableStream<Uint8Array>, signature: string) {
+      return route.POST(
+        new Request('http://localhost/api/wa/webhook', {
+          method: 'POST',
+          body,
+          headers: { 'x-openwa-signature': signature },
+          duplex: 'half',
+        } as RequestInit),
+      );
+    }
+    function split(bytes: Uint8Array, size: number): Uint8Array[] {
+      const out: Uint8Array[] = [];
+      for (let i = 0; i < bytes.length; i += size) out.push(bytes.subarray(i, i + size));
+      return out;
+    }
+
+    it('stream tanpa Content-Length melewati batas = 413, berhenti membaca, cancel()', async () => {
+      let pulled = 0;
+      const cancel = vi.fn();
+      const endless = new ReadableStream<Uint8Array>({
+        // Berhenti sesudah 4 MB agar implementasi yang membaca semuanya tetap selesai (RED).
+        pull(c) {
+          pulled += 1;
+          if (pulled > 256) c.close();
+          else c.enqueue(new Uint8Array(16 * 1024));
+        },
+        cancel,
+      });
+      const res = await postStream(endless, 'sha256=00');
+      expect(res.status).toBe(413);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(pulled).toBeLessThan(10);
+      expect(handleInbound).not.toHaveBeenCalled();
+    });
+
+    it('stream tepat 64 kB lolos ke verifikasi; 64 kB + 1 = 413', async () => {
+      const exact = new Uint8Array(65536);
+      expect((await postStream(streamOf(split(exact, 7000)), sig(exact))).status).toBe(200);
+      const over = new Uint8Array(65537);
+      expect((await postStream(streamOf(split(over, 7000)), sig(over))).status).toBe(413);
+    });
+
+    it('body dipecah antar chunk (multibyte terbelah) = HMAC sah, teks utuh', async () => {
+      const j = parseFx();
+      j.data.body = 'kopi ☕ 25rb';
+      const body = new Uint8Array(Buffer.from(JSON.stringify(j), 'utf8'));
+      const res = await postStream(streamOf(split(body, 1)), sig(body));
+      expect(res.status).toBe(200);
+      expect(handleInbound).toHaveBeenCalledTimes(1);
+      expect(call(0)[1]).toMatchObject({ text: 'kopi ☕ 25rb' });
+    });
+
+    it('stream dengan satu byte diubah = 401', async () => {
+      const body = new Uint8Array(fx('message-private'));
+      const signature = sig(body);
+      const mutated = body.slice();
+      mutated[10] = (mutated[10] ?? 0) ^ 1;
+      expect((await postStream(streamOf(split(mutated, 13)), signature)).status).toBe(401);
+      expect(handleInbound).not.toHaveBeenCalled();
+    });
+
+    it('tanpa body = 401 (verifikasi atas body kosong gagal)', async () => {
+      const res = await route.POST(
+        new Request('http://localhost/api/wa/webhook', {
+          method: 'POST',
+          headers: { 'x-openwa-signature': 'sha256=00' },
+        }),
+      );
+      expect(res.status).toBe(401);
+      expect(handleInbound).not.toHaveBeenCalled();
+    });
+
+    it('tidak membaca body tanpa batas (arrayBuffer/text/json)', () => {
+      const src = readFileSync(join(process.cwd(), 'src/app/api/wa/webhook/route.ts'), 'utf8');
+      expect(src).not.toMatch(/req\.(arrayBuffer|text|json|blob|formData)\(/);
+      expect(src).toMatch(/readBodyCapped\(req, MAX_BODY_BYTES\)/);
+    });
   });
 
   describe('log pesan diabaikan', () => {

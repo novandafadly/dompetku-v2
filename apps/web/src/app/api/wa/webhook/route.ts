@@ -1,5 +1,6 @@
 import { createPools } from '@/server/db';
 import { readServerEnv } from '@/server/env';
+import { createLogThrottle, readBodyCapped } from '@/server/wa/body';
 import { readWaEnv } from '@/server/wa/config';
 import { createWaDeps, handleInbound, type WaDeps } from '@/server/wa/handle';
 import { createOpenWaTransport } from '@/server/wa/openwa';
@@ -15,6 +16,12 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 
 /** Satu instance per proses (pool + batas laju dalam memori), dibuat saat request pertama. */
 let deps: WaDeps | undefined;
+
+/**
+ * `config_error` terjadi sebelum verifikasi tanda tangan, jadi POST tanpa autentikasi bisa
+ * memicunya: paling banyak satu baris log per 60 detik per proses.
+ */
+const configErrorLog = createLogThrottle(60_000);
 
 function reply(status: number, body: Record<string, unknown> = {}): Response {
   return Response.json(body, { status, headers: NO_STORE });
@@ -42,15 +49,15 @@ export async function POST(req: Request): Promise<Response> {
   try {
     d = getDeps();
   } catch {
-    console.warn('[wa] config_error');
+    if (configErrorLog.allow()) console.warn('[wa] config_error');
     return reply(503, { ok: false });
   }
   if (!d) return reply(404);
 
   const declared = req.headers.get('content-length');
   if (declared !== null && Number(declared) > MAX_BODY_BYTES) return reply(413);
-  const bytes = new Uint8Array(await req.arrayBuffer());
-  if (bytes.length > MAX_BODY_BYTES) return reply(413);
+  const bytes = await readBodyCapped(req, MAX_BODY_BYTES);
+  if (bytes === 'too_large') return reply(413);
 
   if (!d.transport.verify(bytes, req.headers)) return reply(401);
 
