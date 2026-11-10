@@ -52,6 +52,25 @@ function amountClass(length: number): string | null {
 export const DETAIL_TITLE_ID = 'detail-transaksi-judul';
 
 /**
+ * Catatan entri: satu baris `Catatan` bila hanya satu yang ada atau isinya sama; pindah ruang yang
+ * punya catatan pribadi dan catatan Bersama berbeda menampilkan keduanya dengan label masing-masing.
+ */
+function NoteRows({ entry }: { entry: EntryVM }) {
+  const personalNote = entry.kind === 'space_transfer' ? entry.description : undefined;
+  const sharedNote = entry.sharedNote;
+  if (personalNote !== undefined && sharedNote !== undefined && personalNote !== sharedNote) {
+    return (
+      <>
+        <DetailRow term="Catatan pribadi">{personalNote}</DetailRow>
+        <DetailRow term="Catatan Bersama">{sharedNote}</DetailRow>
+      </>
+    );
+  }
+  const singleNote = personalNote ?? sharedNote;
+  return singleNote === undefined ? null : <DetailRow term="Catatan">{singleNote}</DetailRow>;
+}
+
+/**
  * Detail transaksi dari `EntryVM`, untuk kedua mode: mode nyata merendernya di server (aksi = pulau
  * klien), pembungkus demo (`EntryDetail`) memetakan entri demo ke VM lebih dulu. Markup sama
  * dengan Detail M0a; yang berbeda per mode diisi lewat slot.
@@ -150,26 +169,7 @@ export function EntryDetailView({
         <DetailRow term="Tanggal">{detailDateLabel(entry.occurredOn, today)}</DetailRow>
         <DetailRow term="Ruang">{ruangValue ?? <SpaceTag space={ruang} />}</DetailRow>
         <DetailRow term="Dicatat oleh">{by}</DetailRow>
-        {(() => {
-          const personalNote = entry.kind === 'space_transfer' ? entry.description : undefined;
-          const sharedNote = entry.sharedNote;
-          if (
-            personalNote !== undefined &&
-            sharedNote !== undefined &&
-            personalNote !== sharedNote
-          ) {
-            return (
-              <>
-                <DetailRow term="Catatan pribadi">{personalNote}</DetailRow>
-                <DetailRow term="Catatan Bersama">{sharedNote}</DetailRow>
-              </>
-            );
-          }
-          const singleNote = personalNote ?? sharedNote;
-          return singleNote === undefined ? null : (
-            <DetailRow term="Catatan">{singleNote}</DetailRow>
-          );
-        })()}
+        <NoteRows entry={entry} />
         {rows}
       </dl>
       {after}

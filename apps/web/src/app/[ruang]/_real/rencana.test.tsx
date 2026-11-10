@@ -462,7 +462,7 @@ describe('RencanaReal: Tagihan (S9-TG1)', () => {
     expect(screen.getByRole('button', { name: /^Bayar Listrik PLN, Rp\s485\.000$/ })).toBeTruthy();
     expect(screen.getByText('Lunas · 21 Okt')).toBeTruthy();
     expect(screen.getByText('Dilewati')).toBeTruthy();
-    expect(flat(document.querySelector('[data-bill-row="b3"]'))).toContain('Dilewati · Rp 485.000');
+    expect(flat(document.querySelector('[data-bill-row="b3"]'))).toMatch(/Dilewati·Rp\s485\.000/);
     expect(screen.getByRole('button', { name: 'Batalkan lewati Kartu' })).toBeTruthy();
   });
 

@@ -1,9 +1,8 @@
-import { notFound, unstable_rethrow } from 'next/navigation';
 import { laporanHref } from '@/features/laporan/href';
 import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
-import { isSpaceNotFoundError } from '@/server/ledger/errors';
 import { loadLaporan, parseLaporanParams } from '@/server/ledger/laporan';
+import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext } from '../_real/context';
 import { LaporanFailed, LaporanReal } from '../_real/laporan';
@@ -36,8 +35,7 @@ export default async function Page({
   try {
     data = await loadLaporan(ctx, { label: raw.periode, basis: raw.basis });
   } catch (e) {
-    unstable_rethrow(e);
-    if (isSpaceNotFoundError(e)) notFound();
+    rethrowOrNotFound(e);
     console.error('[laporan] gagal memuat', errorTag(e));
     const p = parseLaporanParams({ label: raw.periode, basis: raw.basis });
     return (
