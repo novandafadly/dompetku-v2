@@ -1,6 +1,7 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
 # S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools). S3: web (profil web).
-# S7: worker (profil web, image sama dengan web). WA: openwa (profil web, image pihak ketiga).
+# S7: worker (profil web, image sama dengan web). WA: openwa (profil web, image pihak ketiga) dan
+# wa-proxy (profil web, Caddy, satu-satunya jalur antara openwa dan web).
 name: dompetku
 
 services:
@@ -84,9 +85,15 @@ services:
     env_file:
       - path: ./env/web.env
         required: false
-    # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4). wa: REST openwa
-    # (OPENWA_URL=http://openwa:2785) dan webhook dari openwa ke web:3000/api/wa/webhook.
-    networks: [app, internal, wa]
+    # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4). wa_web: hanya ke
+    # wa-proxy (OPENWA_URL=http://wa-proxy:2786, hanya kirim teks) dan dari wa-proxy (webhook). Web
+    # tidak berbagi network dengan openwa. Alamat dipatok: wa-proxy hanya menerima :2786 dari alamat
+    # ini. wa_web selalu ada (tanpa wa-proxy pun web jalan normal; fitur WA saja yang tidak sampai).
+    networks:
+      app: {}
+      internal: {}
+      wa_web:
+        ipv4_address: 172.16.28.3
     read_only: true
     tmpfs:
       - /tmp:size=64m
@@ -151,9 +158,10 @@ services:
   openwa:
     # Catat via WhatsApp (spec 2026-11-09 §5.1, docs/ops/runbook-wa.md). OpenWA 0.29.1 (rilis
     # 2026-11-07), indeks multi-arch (linux/amd64 + linux/arm64) diikat digest; naik versi = ganti tag
-    # dan digest bersamaan lewat PR. Bukan bagian rilis web: deployer memasangnya sesudah web sehat,
-    # tidak pernah menggagalkan atau me-rollback web karena openwa, dan melewatinya selama
-    # env/openwa.env belum ada (required: false agar compose untuk web dan migrate tetap jalan).
+    # dan digest bersamaan lewat PR. Bukan bagian rilis web: deployer memasangnya bersama wa-proxy
+    # sesudah web sehat, tidak pernah menggagalkan atau me-rollback web karena openwa, dan
+    # melewatinya selama env/openwa.env belum ada (required: false agar compose untuk web dan
+    # migrate tetap jalan).
     image: ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71d3802e6cd66ac92ff3543f2eb391d20e7db711e8641c5127644a817a
     profiles: [web]
     restart: unless-stopped
@@ -175,10 +183,10 @@ services:
       # (deploy, reboot VM) memutus bot sampai POST /start manual.
       AUTO_START_SESSIONS: 'true'
       MAX_CONCURRENT_SESSIONS: '1'
-      # Webhook ke http://web:3000 = alamat privat, ditolak guard SSRF kecuali host ini diizinkan.
-      # Guard tetap aktif untuk tujuan lain.
+      # Webhook ke http://wa-proxy:8081 = alamat privat, ditolak guard SSRF kecuali host ini diizinkan
+      # (dipatok ke alamat hasil resolve saat webhook didaftarkan). Guard tetap aktif untuk tujuan lain.
       WEBHOOK_SSRF_PROTECT: 'true'
-      SSRF_ALLOWED_HOSTS: web
+      SSRF_ALLOWED_HOSTS: wa-proxy
       # Handler web menunggu sendText (batas 10 s) sebelum menjawab; bawaan 10000 ms memotongnya dan
       # memicu kirim ulang (aman karena idempoten, tapi balasan ganda tertunda). Harus > 10 s.
       WEBHOOK_TIMEOUT: '20000'
@@ -189,10 +197,15 @@ services:
       ENABLE_SWAGGER: 'false'
       # Dasbor hanya dibuka lewat tunnel SSH ke http://localhost (runbook); tanpa ini layar putih.
       CSP_UPGRADE_INSECURE_REQUESTS: 'false'
-    # wa: hanya openwa + web (REST masuk dari web, webhook keluar ke web:3000). wa_egress: keluar ke
-    # server WhatsApp (tidak difilter per host). Sengaja tidak ikut app/internal/worker_db/egress/
-    # worker_egress: openwa yang disusupi tidak menjangkau postgres, gw, atau worker.
-    networks: [wa, wa_egress]
+    # wa: hanya openwa + wa-proxy (REST masuk dari wa-proxy, webhook keluar ke wa-proxy:8081).
+    # wa_egress: keluar ke server WhatsApp (tidak difilter per host). Sengaja tidak ikut
+    # app/internal/wa_web/worker_db/egress/worker_egress:
+    # openwa yang disusupi tidak menjangkau web, postgres, gw, atau worker. Alamat di wa dipatok:
+    # wa-proxy hanya menerima :8081 dari alamat ini.
+    networks:
+      wa:
+        ipv4_address: 172.16.26.3
+      wa_egress: {}
     # Tanpa port host: dasbor/Swagger tidak dipublikasikan. Pemasangan nomor = kode pairing lewat
     # `docker compose exec` (tanpa port), cadangan QR = override sementara 127.0.0.1 (runbook-wa).
     read_only: true
@@ -219,6 +232,39 @@ services:
       retries: 3
       start_period: 30s
 
+  wa-proxy:
+    # Satu-satunya jalur openwa <-> web (spec 2026-11-09 §6, runbook-wa). Allowlist L7: openwa hanya
+    # bisa POST /api/wa/webhook ke web (header identitas klien dibuang), web hanya bisa POST
+    # send-text ke openwa. Image dan pengerasan sama dengan gw. Dikelola deployer bersama openwa
+    # (dilewati selama env/openwa.env belum ada, tidak pernah ikut rollback web).
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    profiles: [web]
+    restart: unless-stopped
+    volumes:
+      - ./wa-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+    tmpfs:
+      - /data
+      - /config
+    # Alamat dipatok: Caddyfile mengikat :8081 hanya ke alamat di wa dan :2786 hanya ke alamat di
+    # wa_web, lalu memeriksa alamat sumber (openwa .3 di wa, web .3 di wa_web). allowedIps key web
+    # di OpenWA = 172.16.26.2/32 (request web sampai ke OpenWA dengan alamat sumber wa-proxy).
+    networks:
+      wa:
+        ipv4_address: 172.16.26.2
+      wa_web:
+        ipv4_address: 172.16.28.2
+    read_only: true
+    # Tanpa root: port di atas 1024. NET_BIND_SERVICE tetap di bounding set hanya karena binary caddy
+    # di image resmi punya file capability itu (tanpanya exec ditolak, sama dengan gw); dengan user
+    # non-root + no-new-privileges capability itu tidak pernah aktif.
+    user: '65532:65532'
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 50
+
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).
   app: {}
@@ -241,13 +287,22 @@ networks:
   # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
   # egress (postgres).
   worker_egress: {}
-  # openwa <-> web saja (Catat via WhatsApp), tanpa akses keluar. Subnet dipatok di luar pool bawaan
-  # Docker (alasan sama dengan worker_db) dan dipakai allowedIps API key web di OpenWA (runbook-wa).
+  # openwa <-> wa-proxy saja (Catat via WhatsApp), tanpa akses keluar. Subnet dipatok di luar pool
+  # bawaan Docker (alasan sama dengan worker_db); .2 wa-proxy dan .3 openwa dipatok di layanan,
+  # alokasi dinamis (container lain yang keliru ikut) hanya dari ip_range, tidak pernah .2/.3.
   wa:
     internal: true
     ipam:
       config:
         - subnet: 172.16.26.0/24
+          ip_range: 172.16.26.128/25
+  # wa-proxy <-> web saja, tanpa akses keluar. .2 wa-proxy, .3 web (dipatok di layanan).
+  wa_web:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.28.0/24
+          ip_range: 172.16.28.128/25
   # Hanya openwa: keluar ke server WhatsApp. Tidak difilter per host (server WhatsApp tidak punya
   # daftar host stabil); terpisah dari app (gw/web), egress (postgres), worker_egress (worker).
   wa_egress: {}

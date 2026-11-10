@@ -9,9 +9,10 @@
 # sebelumnya. Env worker divalidasi dengan image rilis di preflight (tidak valid = ditolak). Worker
 # dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada, atau postgres belum ikut
 # network worker_db/pg_hba worker; tanpa env, worker lama yang masih berjalan dihentikan. Sesudah
-# web (dan worker) sehat, openwa (image pihak ketiga dipatok digest di compose.yml, runbook-wa)
-# dinaikkan dengan `compose up`; openwa tidak pernah menggagalkan atau me-rollback deploy web, tidak
-# ikut rollback, dan dilewati selama env/openwa.env belum ada. Setiap hasil = satu baris audit JSON.
+# web (dan worker) sehat, wa-proxy + openwa (image pihak ketiga dipatok digest di compose.yml,
+# runbook-wa) dinaikkan bersama dengan `compose up`; keduanya tidak pernah menggagalkan atau
+# me-rollback deploy web, tidak ikut rollback, dan dilewati (dihentikan bila masih berjalan) selama
+# env/openwa.env belum ada. Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -48,6 +49,7 @@ WORKER_INTERVAL=4               # selama 5 x 4 = 20 detik
 WORKER_DB_NETWORK=dompetku_worker_db # network postgres + worker (compose.yml S7)
 WORKER_DB_ADDRESS=172.16.25.0  # alamat aturan pg_hba dompetku_worker (subnet worker_db)
 OPENWA_SERVICE=openwa           # jembatan WhatsApp; image pihak ketiga, bukan bagian rilis web
+WA_PROXY_SERVICE=wa-proxy       # satu-satunya jalur openwa <-> web; selalu bersama openwa
 OPENWA_ENV=$ROOT/env/openwa.env # belum ada = openwa dilewati (diisi pemilik, runbook-wa)
 MIN_FREE_MB=2048
 HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
@@ -271,23 +273,27 @@ worker_was_running() {
   [[ -n $cid && $(docker inspect -f '{{ .State.Status }}' "$cid" 2>/dev/null) == running ]]
 }
 
-# openwa sesudah web (dan worker) sehat. Tidak memengaruhi kode keluar, `current`, maupun rollback:
-# semua hasil hanya dicatat di OPENWA_NOTE. compose up tidak membuat ulang container yang konfigurasinya
-# tidak berubah; image baru (digest diganti di compose.yml lewat PR) ditarik di sini. Tanpa
-# env/openwa.env openwa dimatikan pemilik: container lama dihentikan dan dihapus (volume tetap).
+# wa-proxy + openwa sesudah web (dan worker) sehat. Tidak memengaruhi kode keluar, `current`, maupun
+# rollback: semua hasil hanya dicatat di OPENWA_NOTE. compose up tidak membuat ulang container yang
+# konfigurasinya tidak berubah; image baru (digest diganti di compose.yml lewat PR) ditarik di sini.
+# Keduanya selalu bersama: compose.yml tanpa wa-proxy (openwa akan bicara langsung ke web) tidak
+# dinaikkan. Tanpa env/openwa.env fitur dimatikan pemilik: container lama keduanya dihentikan dan
+# dihapus (volume tetap). Web tidak bergantung pada wa-proxy (network wa_web selalu dibuat compose).
 openwa_sync() {
-  if ! compose config --services 2>/dev/null | grep -x "$OPENWA_SERVICE" >/dev/null; then
+  local services
+  services=$(compose config --services 2>/dev/null) || services=''
+  if ! grep -x "$OPENWA_SERVICE" >/dev/null <<<"$services" || ! grep -x "$WA_PROXY_SERVICE" >/dev/null <<<"$services"; then
     OPENWA_NOTE=openwa_service_missing
   elif [[ ! -f $OPENWA_ENV ]]; then
     OPENWA_NOTE=openwa_env_missing
-    if [[ -n $(running_cid "$OPENWA_SERVICE") ]]; then
-      if compose rm -sf "$OPENWA_SERVICE" >/dev/null; then
+    if [[ -n $(running_cid "$OPENWA_SERVICE") || -n $(running_cid "$WA_PROXY_SERVICE") ]]; then
+      if compose rm -sf "$OPENWA_SERVICE" "$WA_PROXY_SERVICE" >/dev/null; then
         OPENWA_NOTE+=' openwa_stopped'
       else
-        log 'gagal menghentikan openwa'
+        log 'gagal menghentikan openwa/wa-proxy'
       fi
     fi
-  elif compose up -d --no-deps "$OPENWA_SERVICE" >/dev/null; then
+  elif compose up -d --no-deps "$WA_PROXY_SERVICE" "$OPENWA_SERVICE" >/dev/null; then
     OPENWA_NOTE=openwa_ok
   else
     OPENWA_NOTE=openwa_up_failed

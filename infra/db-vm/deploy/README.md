@@ -1,6 +1,6 @@
 # Deployer pull-based (S3)
 
-Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, lalu (S7) mengganti `worker` dari image yang sama dan mengecek kestabilannya, dan rollback otomatis keduanya bila gagal. Sesudah itu (Catat via WhatsApp) `openwa` dinaikkan bila `env/openwa.env` ada; `openwa` tidak memengaruhi hasil deploy web.
+Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, lalu (S7) mengganti `worker` dari image yang sama dan mengecek kestabilannya, dan rollback otomatis keduanya bila gagal. Sesudah itu (Catat via WhatsApp) `wa-proxy` dan `openwa` dinaikkan bersama bila `env/openwa.env` ada; keduanya tidak memengaruhi hasil deploy web.
 
 ## Berkas
 
@@ -12,6 +12,7 @@ Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di
 | `web.env.example`                                | `/opt/dompetku/env/web.env`                                      | `600 root` |
 | `worker.env.example` (S7)                        | `/opt/dompetku/env/worker.env`                                   | `600 root` |
 | `../env/openwa.env.example` (WA)                 | `/opt/dompetku/env/openwa.env`                                   | `600 root` |
+| `../wa-proxy/Caddyfile` (WA)                     | `/opt/dompetku/wa-proxy/Caddyfile`                               | `644 root` |
 | (dari pemilik, bagian Tanda tangan image)        | `/opt/dompetku/keys/cosign.pub` (hanya kunci publik)             | `644 root` |
 | `systemd/dompetku-deploy.{service,timer}`        | `/etc/systemd/system/`                                           | `644 root` |
 | `README.md`                                      | `/opt/dompetku/deploy/README.md`                                 | `644 root` |
@@ -41,17 +42,17 @@ Worker ada di image yang sama (`/app/worker/worker.mjs`, layanan compose `worker
 
 ## OpenWA (Catat via WhatsApp)
 
-Layanan compose `openwa` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa` yang dipatok tag + digest di `compose.yml`, bukan image rilis DompetKu: tidak diverifikasi cosign (tidak ada kunci pemilik untuknya), tidak ikut `current`, dan tidak ikut rollback. Pemasangan, rahasia, dan pemasangan nomor: `docs/ops/runbook-wa.md`.
+Layanan compose `openwa` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa` yang dipatok tag + digest di `compose.yml`, bukan image rilis DompetKu: tidak diverifikasi cosign (tidak ada kunci pemilik untuknya), tidak ikut `current`, dan tidak ikut rollback. `wa-proxy` (Caddy, image yang sama dengan `gw`, `../wa-proxy/Caddyfile`) adalah satu-satunya jalur antara `openwa` dan `web`, jadi selalu dinaikkan dan dihentikan bersama `openwa`. `web` sendiri tidak bergantung pada keduanya: network `wa_web` dibuat compose untuk `web` walau `wa-proxy` tidak berjalan. Pemasangan, rahasia, dan pemasangan nomor: `docs/ops/runbook-wa.md`.
 
-1. Hanya di jalur sukses, sesudah web sehat dan worker sehat atau dilewati, dan sesudah `current` ditulis: `docker compose up -d --no-deps openwa`. Compose tidak membuat ulang container yang konfigurasinya tidak berubah; digest baru di `compose.yml` ditarik di langkah ini.
+1. Hanya di jalur sukses, sesudah web sehat dan worker sehat atau dilewati, dan sesudah `current` ditulis: `docker compose up -d --no-deps wa-proxy openwa`. Compose tidak membuat ulang container yang konfigurasinya tidak berubah; digest baru di `compose.yml` ditarik di langkah ini. Isi Caddyfile yang berubah tanpa perubahan `compose.yml` tidak dimuat ulang (Caddy `admin off`): `docker compose restart wa-proxy` (runbook-wa).
 2. Hasil di field audit `openwa` (baris audit `ok`), tidak mengubah kode keluar, `failed`, atau `detail`:
-   - `openwa_ok`: `compose up` berhasil.
-   - `openwa_up_failed`: `compose up` gagal (mis. image tidak bisa ditarik). Web tetap terpasang tanpa rollback; `HC_PING_URL/fail` dipanggil bila diisi.
-   - `openwa_env_missing`: `env/openwa.env` tidak ada; container `openwa` yang masih ada dihentikan dan dihapus (`compose rm -sf openwa`, volume `openwa_data` tetap), penanda `openwa_stopped`.
-   - `openwa_service_missing`: `compose.yml` di VM belum memuat `openwa`; tidak disentuh.
+   - `openwa_ok`: `compose up` keduanya berhasil.
+   - `openwa_up_failed`: `compose up` gagal (mis. image tidak bisa ditarik, Caddyfile `wa-proxy` tidak ada atau tidak valid). Web tetap terpasang tanpa rollback; `HC_PING_URL/fail` dipanggil bila diisi.
+   - `openwa_env_missing`: `env/openwa.env` tidak ada; container `openwa` dan `wa-proxy` yang masih ada (salah satunya cukup) dihentikan dan dihapus (`compose rm -sf openwa wa-proxy`, volume `openwa_data` tetap), penanda `openwa_stopped`.
+   - `openwa_service_missing`: `compose.yml` di VM belum memuat `openwa` atau `wa-proxy` (tanpa `wa-proxy` openwa tidak pernah dinaikkan); tidak disentuh.
    - `openwa_error`: galat tak terduga di langkah openwa; web tetap terpasang.
-   - kosong: openwa tidak disentuh (deploy ditolak, migrasi gagal, health gagal, atau rollback).
-3. Rollback web (kode 3/4) dan `failed_no_previous` tidak pernah menghentikan, mengganti, atau menyalakan `openwa`.
+   - kosong: openwa dan wa-proxy tidak disentuh (deploy ditolak, migrasi gagal, health gagal, atau rollback).
+3. Rollback web (kode 3/4) dan `failed_no_previous` tidak pernah menghentikan, mengganti, atau menyalakan `openwa` maupun `wa-proxy`.
 
 ## Kode keluar dan perilaku
 
