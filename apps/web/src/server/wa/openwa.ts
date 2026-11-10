@@ -23,18 +23,22 @@ export function createOpenWaTransport(env: WaEnv, fetchImpl: typeof fetch = fetc
     toInbound(rawBody) {
       let json: unknown;
       try {
-        json = JSON.parse(rawBody);
+        const text =
+          typeof rawBody === 'string' ? rawBody : new TextDecoder('utf-8').decode(rawBody);
+        json = JSON.parse(text);
       } catch {
         return null;
       }
       if (!isRecord(json) || json.event !== 'message.received' || !isRecord(json.data)) return null;
       const d = json.data;
       if (typeof d.id !== 'string' || !d.id || typeof d.from !== 'string' || !d.from) return null;
-      // UNVERIFIED: `kind` ('individual'|'group'|...) dan `isGroup` dari dokumen, belum diuji pada sesi hidup.
+      // Pertahanan sendiri: 'private' hanya untuk pengirim @c.us / @lid, apa pun arti `kind`/`isGroup`.
+      // UNVERIFIED: `kind` dan `isGroup` dari dokumen, belum diuji pada sesi hidup.
+      const privateSender = /^[^@\s]+@(c\.us|lid)$/.test(d.from);
       const chatType: InboundMessage['chatType'] =
-        d.isGroup === true || d.kind === 'group'
+        d.isGroup === true || d.kind === 'group' || d.from.endsWith('@g.us')
           ? 'group'
-          : d.kind === 'individual' && d.isGroup === false
+          : privateSender && d.kind === 'individual' && d.isGroup === false
             ? 'private'
             : 'other';
       return {
@@ -43,6 +47,8 @@ export function createOpenWaTransport(env: WaEnv, fetchImpl: typeof fetch = fetc
         chatType,
         fromMe: d.fromMe === true,
         text: d.type === 'text' && typeof d.body === 'string' ? d.body : null,
+        // Opt-in (RESOLVE_LID_TO_PHONE=true): digit MSISDN apa adanya; normalisasi E.164 di Task 4.
+        senderPhone: typeof d.senderPhone === 'string' && d.senderPhone ? d.senderPhone : null,
       };
     },
 
