@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { EnvError } from '../env';
 import { readWaEnv } from './config';
@@ -19,6 +21,22 @@ describe('readWaEnv', () => {
   it('batas saja (nilai contoh web.env.example) tidak menyalakan fitur', () => {
     expect(readWaEnv({ WA_MAX_AMOUNT: '25000000', WA_RATE_PER_MIN: '10' })).toBeNull();
     expect(readWaEnv({ WA_MAX_AMOUNT: 'bukan angka', WA_BOT_NUMBER: '+6281' })).toBeNull();
+  });
+  it('salinan web.env.example yang belum diisi: tidak ada variabel WA wajib terisi, fitur mati', () => {
+    const file = readFileSync(
+      join(process.cwd(), '../../infra/db-vm/deploy/web.env.example'),
+      'utf8',
+    );
+    const vars: Record<string, string> = {};
+    for (const line of file.split('\n')) {
+      const m = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+      if (m?.[1]) vars[m[1]] = m[2] ?? '';
+    }
+    for (const k of ['WA_WEBHOOK_SECRET', 'OPENWA_URL', 'OPENWA_API_KEY', 'OPENWA_SESSION'])
+      expect(vars[k], k).toBe('');
+    expect(vars.WA_MAX_AMOUNT).toBe('25000000');
+    expect(vars.WA_RATE_PER_MIN).toBe('10');
+    expect(readWaEnv(vars)).toBeNull();
   });
   it('lengkap dengan bawaan', () => {
     expect(readWaEnv(full)).toEqual({
