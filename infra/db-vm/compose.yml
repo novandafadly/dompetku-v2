@@ -87,13 +87,10 @@ services:
         required: false
     # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4). wa_web: hanya ke
     # wa-proxy (OPENWA_URL=http://wa-proxy:2786, hanya kirim teks) dan dari wa-proxy (webhook). Web
-    # tidak berbagi network dengan openwa. Alamat dipatok: wa-proxy hanya menerima :2786 dari alamat
-    # ini. wa_web selalu ada (tanpa wa-proxy pun web jalan normal; fitur WA saja yang tidak sampai).
-    networks:
-      app: {}
-      internal: {}
-      wa_web:
-        ipv4_address: 172.16.28.3
+    # tidak berbagi network dengan openwa. Alamat web di wa_web sengaja dinamis (dari ip_range
+    # 172.16.28.128/25, yang diterima wa-proxy di :2786): alamat tetap bisa menggagalkan recreate
+    # saat deploy. wa_web selalu ada (tanpa wa-proxy pun web jalan normal; fitur WA saja mati).
+    networks: [app, internal, wa_web]
     read_only: true
     tmpfs:
       - /tmp:size=64m
@@ -248,7 +245,7 @@ services:
       - /data
       - /config
     # Alamat dipatok: Caddyfile mengikat :8081 hanya ke alamat di wa dan :2786 hanya ke alamat di
-    # wa_web, lalu memeriksa alamat sumber (openwa .3 di wa, web .3 di wa_web). allowedIps key web
+    # wa_web, lalu memeriksa alamat sumber (openwa 172.16.26.3; web dari ip_range 172.16.28.128/25). allowedIps key web
     # di OpenWA = 172.16.26.2/32 (request web sampai ke OpenWA dengan alamat sumber wa-proxy).
     networks:
       wa:
@@ -298,7 +295,8 @@ networks:
       config:
         - subnet: 172.16.26.0/24
           ip_range: 172.16.26.128/25
-  # wa-proxy <-> web saja, tanpa akses keluar. .2 wa-proxy, .3 web (dipatok di layanan).
+  # wa-proxy <-> web saja, tanpa akses keluar. .2 wa-proxy (dipatok di layanan); web dinamis dari
+  # ip_range, rentang yang diterima wa-proxy di :2786.
   wa_web:
     internal: true
     ipam:

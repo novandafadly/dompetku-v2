@@ -67,9 +67,10 @@ done
 ok 'kedua Caddyfile sudah berformat caddy fmt'
 
 # --- 2. Perilaku wa-proxy --------------------------------------------------------------------
-# Alamat compose -> loopback. Port backend: web 13000, openwa 12785.
+# Alamat compose -> loopback (rentang web 172.16.28.128/25 -> 127.0.0.5/32). Port backend: web 13000,
+# openwa 12785.
 sed -e 's/172\.16\.26\.2/127.0.0.2/g; s/172\.16\.26\.3/127.0.0.3/g' \
-  -e 's/172\.16\.28\.2/127.0.0.4/g; s/172\.16\.28\.3/127.0.0.5/g' \
+  -e 's#172\.16\.28\.128/25#127.0.0.5/32#g; s/172\.16\.28\.2/127.0.0.4/g' \
   -e 's/reverse_proxy web:3000/reverse_proxy 127.0.0.1:13000/; s/reverse_proxy openwa:2785/reverse_proxy 127.0.0.1:12785/' \
   "$DBVM/wa-proxy/Caddyfile" >"$W/test.Caddyfile"
 for want in 'bind 127.0.0.2' 'bind 127.0.0.4' 'reverse_proxy 127.0.0.1:13000' 'reverse_proxy 127.0.0.1:12785'; do
@@ -80,8 +81,21 @@ cat >"$W/echo.py" <<'PY'
 import http.server, json, sys
 class H(http.server.BaseHTTPRequestHandler):
     def handle_any(self):
-        n = int(self.headers.get('content-length') or 0)
-        body = self.rfile.read(n) if n else b''
+        body = b''
+        try:
+            if 'chunked' in (self.headers.get('transfer-encoding') or '').lower():
+                while True:
+                    size = int(self.rfile.readline().split(b';')[0].strip() or b'0', 16)
+                    if size == 0:
+                        self.rfile.readline()
+                        break
+                    body += self.rfile.read(size)
+                    self.rfile.readline()
+            else:
+                n = int(self.headers.get('content-length') or 0)
+                body = self.rfile.read(n) if n else b''
+        except (ValueError, OSError):
+            pass
         rec = {'port': self.server.server_port, 'method': self.command, 'path': self.path,
                'headers': {k.lower(): v for k, v in self.headers.items()}, 'body_len': len(body)}
         with open(sys.argv[2], 'a') as f:
@@ -179,7 +193,9 @@ forwarded 'webhook 64 KB + 1' 0
 ok 'body 65536 byte lewat, 65537 byte ditolak 413 sebelum ke web'
 req 'webhook chunked besar' 413 --interface 127.0.0.3 -X POST "$WH/api/wa/webhook" \
   -H 'Transfer-Encoding: chunked' --data-binary @"$W/64k1"
-ok 'body chunked di atas 64 KB = 413'
+grep -E '"body_len": (6553[7-9]|655[4-9][0-9]|65[6-9][0-9]{2}|6[6-9][0-9]{3}|[7-9][0-9]{4}|[0-9]{6,})[,}]' \
+  "$W/backend.log" >/dev/null && fail 'web menerima body di atas 64 KiB'
+ok 'body chunked di atas 64 KiB = 413, web tidak pernah menerima body utuh'
 req 'webhook alamat lain' 404 --interface 127.0.0.9 -X POST "$WH/api/wa/webhook" -d '{}'
 forwarded 'webhook alamat lain' 0
 ok 'webhook dari alamat selain openwa = 404'

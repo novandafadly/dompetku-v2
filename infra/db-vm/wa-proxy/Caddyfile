@@ -6,7 +6,8 @@
 # masing-masing diikat ke alamat wa-proxy di satu network saja dan hanya menerima alamat sumber
 # pihak itu (alamat dipatok di compose.yml):
 #   172.16.26.2:8081 (network wa)     dari openwa 172.16.26.3: POST /api/wa/webhook -> web:3000
-#   172.16.28.2:2786 (network wa_web) dari web 172.16.28.3:    POST .../send-text   -> openwa:2785
+#   172.16.28.2:2786 (network wa_web) dari web (ip_range 172.16.28.128/25, alamat dinamis):
+#                                      POST .../send-text -> openwa:2785
 # Seandainya satu pihak tetap sampai ke listener pihak lain (mis. alamat diubah tanpa Caddyfile ini),
 # dampaknya nihil: openwa di :2786 hanya memanggil API-nya sendiri (send-text, yang memang sudah ia
 # kuasai), web di :8081 hanya memanggil webhook dirinya sendiri. Selain itu semua dijawab 404.
@@ -141,7 +142,7 @@ http://:2786 {
 	}
 
 	@send {
-		remote_ip 172.16.28.3
+		remote_ip 172.16.28.128/25
 		method POST
 		path_regexp ^/api/sessions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/messages/send-text$
 	}
@@ -154,7 +155,7 @@ http://:2786 {
 	}
 
 	@send_method {
-		remote_ip 172.16.28.3
+		remote_ip 172.16.28.128/25
 		path_regexp ^/api/sessions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/messages/send-text$
 	}
 	handle @send_method {
