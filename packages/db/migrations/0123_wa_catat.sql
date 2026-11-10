@@ -108,17 +108,23 @@ begin
 end $$;
 
 -- Owner (BYPASSRLS, satu-satunya penulis audit.events): hanya dua event WA, tanpa nomor.
-create function private.wa_audit(p_user_id uuid, p_event text) returns void
+-- via: wa_linked selalu 'whatsapp'; wa_unlinked dari daftar tertutup api.wa_unlink. Di sini hanya
+-- bentuknya yang dicek (nama event tidak ditulis sebagai literal: 00_katalog memindai literal di
+-- fungsi yang menulis audit.events sebagai nama event sistem).
+create function private.wa_audit(p_user_id uuid, p_event text, p_via text) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   if p_event not in ('wa_linked', 'wa_unlinked') then
     raise exception using errcode = 'DK422', message = 'audit_event_reserved';
   end if;
+  if p_via is null or p_via !~ '^[a-z_]{1,32}$'
+     or (p_event = 'wa_linked') <> (p_via = 'whatsapp') then
+    raise exception using errcode = 'DK422', message = 'invalid_via';
+  end if;
   insert into audit.events (user_id, event, meta)
-  values (p_user_id, p_event,
-          jsonb_build_object('via', case p_event when 'wa_linked' then 'whatsapp' else 'app' end));
+  values (p_user_id, p_event, jsonb_build_object('via', p_via));
 end $$;
-grant execute on function private.wa_audit(uuid, text) to dompetku_api;
+grant execute on function private.wa_audit(uuid, text, text) to dompetku_api;
 
 -- ===== Tautan nomor =====
 -- Kode 6 karakter dari 32 simbol tanpa 0/O/1/I (5 bit per karakter, tanpa bias modulo) dari
@@ -186,7 +192,7 @@ begin
       values (v_uid, p_phone, app.now())
       on conflict (user_id) do update set phone_e164 = excluded.phone_e164, verified_at = excluded.verified_at;
       delete from app.wa_link_codes c where c.user_id = v_uid;
-      perform private.wa_audit(v_uid, 'wa_linked');
+      perform private.wa_audit(v_uid, 'wa_linked', 'whatsapp');
     exception when unique_violation then
       v_uid := null;  -- nomor diambil user lain secara bersamaan
     end;
@@ -215,17 +221,23 @@ begin
 end $$;
 
 -- Putuskan (user): hapus nomor dan kode tertunda; audit hanya bila ada nomor yang diputus.
-create function api.wa_unlink() returns void
+-- p_via: 'app' (tombol Putuskan, bawaan), 'password_reset' / 'session_revoked' (dipanggil web
+-- atas nama user sesudah reset kata sandi atau masuk dengan kode pemulihan: sesi yang dicuri
+-- tidak boleh meninggalkan nomor penyerang tetap terhubung). Hanya mengenai baris user sendiri.
+create function api.wa_unlink(p_via text default 'app') returns void
 language plpgsql security definer set search_path = '' as $$
 declare
   v_uid uuid := private.require_user();
   v_n   int;
 begin
+  if p_via is null or p_via not in ('app', 'password_reset', 'session_revoked') then
+    raise exception using errcode = 'DK422', message = 'invalid_via';
+  end if;
   delete from app.wa_link_codes c where c.user_id = v_uid;
   delete from app.wa_links l where l.user_id = v_uid;
   get diagnostics v_n = row_count;
   if v_n > 0 then
-    perform private.wa_audit(v_uid, 'wa_unlinked');
+    perform private.wa_audit(v_uid, 'wa_unlinked', p_via);
   end if;
 end $$;
 
@@ -343,11 +355,11 @@ drop function api.wa_last_cancellable(text);
 drop function api.wa_finish_message(text, text, uuid);
 drop function api.wa_claim_message(text);
 drop function api.wa_default_account(uuid);
-drop function api.wa_unlink();
+drop function api.wa_unlink(text);
 drop function api.wa_resolve_sender(text);
 drop function api.wa_confirm_link(text, text);
 drop function api.wa_create_link_code();
-drop function private.wa_audit(uuid, text);
+drop function private.wa_audit(uuid, text, text);
 
 create or replace function audit.log(
   p_event text, p_ip inet default null, p_user_agent text default null,

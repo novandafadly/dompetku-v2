@@ -88,6 +88,7 @@ Pemetaan nomor WhatsApp ke user tidak boleh bisa dipalsukan.
 2. User mengirim `hubung KODE` dari nomor yang ingin dihubungkan ke nomor bot.
 3. Webhook mencocokkan kode, menyimpan nomor (format E.164) sebagai milik user itu, lalu membalas konfirmasi.
 4. Satu nomor hanya untuk satu user; satu user satu nomor aktif. Menghubungkan ulang mengganti nomor lama. Ada tombol "Putuskan" di app.
+5. Reset kata sandi yang selesai dan masuk dengan kode pemulihan (keduanya mencabut semua sesi) ikut memutus nomor dan menghapus kode tertunda: sesi curian bisa saja sudah menghubungkan nomor penyerang. Event `wa_unlinked` membawa `via` `password_reset` atau `session_revoked` (tombol Putuskan: `app`). User menghubungkan ulang dari app sesudah masuk lagi.
 
 Tidak ada pesan OTP yang dikirim bot ke nomor yang belum terbukti miliknya.
 
@@ -135,7 +136,7 @@ Migrasi `0123_wa_catat.sql`:
 
 - `app.wa_links` (`user_id` unik, `phone_e164` unik, `verified_at`, kode hubung sekali pakai dan kedaluwarsa); RLS: user hanya melihat barisnya.
 - `app.wa_messages` (5.3).
-- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink()`, serta `api.wa_default_account(space)`, `api.wa_claim_message(id)`, `api.wa_finish_message(id, status, entry)`, `api.wa_last_cancellable(current)` (INVOKER). Tanda tangan akhir: BSD §16 "Catatan WA". Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
+- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink(via)` (bawaan `app`; `password_reset`/`session_revoked` dari jalur auth), serta `api.wa_default_account(space)`, `api.wa_claim_message(id)`, `api.wa_finish_message(id, status, entry)`, `api.wa_last_cancellable(current)` (INVOKER). Tanda tangan akhir: BSD §16 "Catatan WA". Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
 - Event audit sistem baru `wa_linked` dan `wa_unlinked` menambah daftar event reserved; tes katalog diperbarui. Entri yang dicatat lewat WhatsApp tidak punya event audit; jejaknya ledger dan `wa_messages`.
 
 ### 5.6 UI

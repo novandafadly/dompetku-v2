@@ -3,7 +3,7 @@
 -- user (DEFINER sempit, EXECUTE hanya web), dedupe pesan, batal dalam 10 menit, dompet bawaan,
 -- RLS antar user, event audit sistem wa_linked/wa_unlinked. Jam dipatok 2026-03-20 10:00 WIB.
 begin;
-select plan(119);
+select plan(131);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -347,6 +347,32 @@ select is(tests.owner_val(null, format($$select count(*) || ' ' || min(meta::tex
     from audit.events where event = 'wa_unlinked' and user_id = %L$$, tests.n())),
   '1 {"via": "app"}', 'event wa_unlinked sekali (putus kedua tanpa nomor = tanpa event)');
 select is(tests.web_val(tests.f(), $$select count(*) from app.wa_links$$), '1', 'nomor F tidak terpengaruh');
+
+-- Putus karena keamanan akun (web memanggil atas nama user sesudah reset kata sandi / masuk dengan
+-- kode pemulihan): alasan tercatat di meta via; nilai di luar daftar tertutup ditolak.
+select has_function('api', 'wa_unlink', array['text'], 'api.wa_unlink(p_via text)');
+select hasnt_function('api', 'wa_unlink', array[]::text[], 'tanpa overload api.wa_unlink() terpisah');
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format('select api.wa_unlink(%L)', v)),
+  'DK422', 'invalid_via', 'via ditolak: ' || coalesce(v, 'null'))
+from unnest(array['whatsapp', 'APP', '', null]) v;
+select is(tests.web_val(tests.f(), $$select count(*) from app.wa_links$$), '1', 'via ditolak = nomor F tetap');
+select throws_ok(format($$select tests.api_exec(null, %L)$$,
+    format('select private.wa_audit(%L, %L, %L)', tests.n(), e, v)),
+  'DK422', 'invalid_via', 'private.wa_audit menolak ' || e || ' via ' || v)
+from (values ('wa_unlinked', 'whatsapp'), ('wa_linked', 'app')) x (e, v);
+select tests.web_exec(tests.f(), $$select api.wa_unlink('password_reset')$$);
+select is(tests.owner_val(null, format($$select (select count(*) from app.wa_links where user_id = %1$L) || ' '
+    || (select string_agg(meta::text, ',') from audit.events where event = 'wa_unlinked' and user_id = %1$L)$$,
+    tests.f())),
+  '0 {"via": "password_reset"}', 'putus via password_reset: nomor F hilang, event via password_reset');
+select tests.web_val(tests.n(), $$select api.wa_create_link_code() ->> 'code'$$) as code_n5 \gset
+select is(tests.web_val(null, format($$select api.wa_confirm_link(%L, %L)::text$$, :'code_n5', :'p3')),
+  tests.n()::text, 'N terhubung lagi');
+select tests.web_exec(tests.n(), $$select api.wa_unlink('session_revoked')$$);
+select is(tests.owner_val(null, format($$select (select count(*) from app.wa_links where user_id = %1$L) || ' '
+    || (select string_agg(meta->>'via', ',' order by at, id) from audit.events
+         where event = 'wa_unlinked' and user_id = %1$L)$$, tests.n())),
+  '0 app,session_revoked', 'putus via session_revoked tercatat sesudah via app');
 
 -- ===== Klaim pesan yang sudah selesai tidak pernah diambil alih =====
 select tests.web_exec(tests.n(), format($$select api.wa_claim_message('done-' || %L)$$, st))

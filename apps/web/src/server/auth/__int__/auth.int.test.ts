@@ -566,6 +566,91 @@ describe('jeda gagal dan lupa kata sandi', () => {
   });
 });
 
+describe('WhatsApp diputus saat akun diamankan ulang', () => {
+  // Sesi curian bisa menghubungkan nomor penyerang; reset kata sandi dan masuk dengan kode
+  // pemulihan mencabut semua sesi, jadi tautan WhatsApp ikut diputus (spec WA §4.3).
+  async function linkPhone(email: string, phone: string): Promise<string> {
+    const id = await userId(h, email);
+    await h.admin.query(
+      'insert into app.wa_links (user_id, phone_e164, verified_at) values ($1, $2, now())',
+      [id, phone],
+    );
+    await h.admin.query(
+      `insert into app.wa_link_codes (user_id, code_hash, expires_at)
+       values ($1, $2, now() + interval '10 minutes')`,
+      [id, createHash('sha256').update(id).digest('hex')],
+    );
+    return id;
+  }
+  async function waState(id: string): Promise<string> {
+    const { rows } = await h.admin.query<{ s: string }>(
+      `select (select count(*) from app.wa_links where user_id = $1) || '/'
+           || (select count(*) from app.wa_link_codes where user_id = $1) || ' '
+           || coalesce((select string_agg(meta->>'via', ',' order by id) from audit.events
+                         where event = 'wa_unlinked' and user_id = $1), '-') as s`,
+      [id],
+    );
+    return rows[0]?.s ?? '';
+  }
+
+  it('reset kata sandi: nomor + kode tertunda dihapus, audit via password_reset; user lain utuh', async () => {
+    const { browser: owner } = await bootstrapOwner(h);
+    await acceptAsPartner(await invite(owner));
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const f = await linkPhone(PARTNER, '+6285711112222');
+    await h.service.requestPasswordReset(new Browser().headers(), OWNER);
+    const token = linkFromLastMail(h, 'token');
+    expect(await h.service.resetPassword(token, 'kata-sandi-baru-yang-panjang')).toEqual({
+      kind: 'ok',
+    });
+    expect(await waState(n)).toBe('0/0 password_reset');
+    expect(await waState(f)).toBe('1/1 -');
+    const { rows } = await h.admin.query<{ event: string }>(
+      `select event from audit.events where user_id = $1
+         and event in ('password_reset_done', 'wa_unlinked') order by id`,
+      [n],
+    );
+    expect(rows.map((r) => r.event)).toEqual(['password_reset_done', 'wa_unlinked']);
+  });
+
+  it('reset kata sandi tanpa nomor terhubung: tanpa event wa_unlinked', async () => {
+    await bootstrapOwner(h);
+    const n = await userId(h, OWNER);
+    await h.service.requestPasswordReset(new Browser().headers(), OWNER);
+    expect(
+      await h.service.resetPassword(linkFromLastMail(h, 'token'), 'kata-sandi-baru-yang-panjang'),
+    ).toEqual({ kind: 'ok' });
+    expect(await waState(n)).toBe('0/0 -');
+  });
+
+  it('masuk dengan kode pemulihan: nomor diputus, audit via session_revoked; user lain utuh', async () => {
+    const { browser: owner, codes } = await bootstrapOwner(h);
+    await acceptAsPartner(await invite(owner));
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const f = await linkPhone(PARTNER, '+6285711112222');
+    const r = await h.service.recoverySignIn(
+      new Browser('192.0.2.7').headers(),
+      OWNER,
+      codes[0] ?? '',
+    );
+    expect(r.result.kind).toBe('ok');
+    expect(await waState(n)).toBe('0/0 session_revoked');
+    expect(await waState(f)).toBe('1/1 -');
+  });
+
+  it('kode pemulihan salah: nomor tetap terhubung', async () => {
+    await bootstrapOwner(h);
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const r = await h.service.recoverySignIn(
+      new Browser('192.0.2.8').headers(),
+      OWNER,
+      'AAAAA-AAAAA',
+    );
+    expect(r.result.kind).toBe('invalid');
+    expect(await waState(n)).toBe('1/1 -');
+  });
+});
+
 describe('jeda tanpa celah periksa-lalu-catat', () => {
   it('8 percobaan paralel: paling banyak 5 diperiksa, sisanya langsung dijeda', async () => {
     await bootstrapOwner(h);

@@ -142,8 +142,23 @@ export class AuthService {
       env,
       pools,
       mailer,
-      onPasswordReset: (userId) => this.audit(userId, 'password_reset_done'),
+      onPasswordReset: async (userId) => {
+        await this.audit(userId, 'password_reset_done');
+        await this.unlinkWhatsApp(userId, 'password_reset');
+      },
     });
+  }
+
+  /**
+   * Semua sesi dicabut (reset kata sandi, masuk dengan kode pemulihan): tautan WhatsApp ikut
+   * diputus, karena sesi curian bisa saja sudah menghubungkan nomor penyerang. `api.wa_unlink`
+   * hanya mengenai baris user ini dan mencatat `wa_unlinked` dengan `via` bila ada nomor.
+   */
+  private async unlinkWhatsApp(
+    userId: string,
+    via: 'password_reset' | 'session_revoked',
+  ): Promise<void> {
+    await withUser(this.pools.app, userId, (c) => c.query('select api.wa_unlink($1)', [via]));
   }
 
   // ===== Audit =====
@@ -464,6 +479,7 @@ export class AuthService {
     });
     await this.audit(user.id, 'recovery_code_used', headers);
     await this.audit(user.id, 'session_revoked', headers, { reason: 'recovery' });
+    await this.unlinkWhatsApp(user.id, 'session_revoked');
     background(this.mailer.send(mails.recoveryCodeUsed(user.email)));
     return { result: { kind: 'ok' }, setCookie: res.headers };
   }
