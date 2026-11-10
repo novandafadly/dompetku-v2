@@ -16,6 +16,10 @@ describe('readWaEnv', () => {
     expect(readWaEnv({})).toBeNull();
     expect(readWaEnv({ WA_WEBHOOK_SECRET: '  ', WA_BOT_NUMBER: '+6281' })).toBeNull();
   });
+  it('batas saja (nilai contoh web.env.example) tidak menyalakan fitur', () => {
+    expect(readWaEnv({ WA_MAX_AMOUNT: '25000000', WA_RATE_PER_MIN: '10' })).toBeNull();
+    expect(readWaEnv({ WA_MAX_AMOUNT: 'bukan angka', WA_BOT_NUMBER: '+6281' })).toBeNull();
+  });
   it('lengkap dengan bawaan', () => {
     expect(readWaEnv(full)).toEqual({
       webhookSecret: full.WA_WEBHOOK_SECRET,

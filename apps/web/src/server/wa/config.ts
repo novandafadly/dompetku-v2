@@ -18,15 +18,10 @@ export interface WaEnv {
 
 type Source = Record<string, string | undefined>;
 
-const NAMES = [
-  'WA_WEBHOOK_SECRET',
-  'OPENWA_URL',
-  'OPENWA_API_KEY',
-  'OPENWA_SESSION',
-  'WA_MAX_AMOUNT',
-  'WA_RATE_PER_MIN',
-  'WA_BOT_NUMBER',
-] as const;
+/** Variabel yang menyalakan fitur. Batas (`WA_MAX_AMOUNT`, `WA_RATE_PER_MIN`) dan `WA_BOT_NUMBER`
+ * saja tidak: `web.env.example` mengisi batas, dan fitur tetap mati sampai rahasia dan OpenWA
+ * diisi. */
+const REQUIRED = ['WA_WEBHOOK_SECRET', 'OPENWA_URL', 'OPENWA_API_KEY', 'OPENWA_SESSION'] as const;
 
 function val(env: Source, name: string): string | undefined {
   const v = env[name]?.trim();
@@ -47,12 +42,9 @@ function posInt(env: Source, name: string, fallback: number): number {
   return Number(v);
 }
 
-/** null = fitur mati (semua kosong). Sebagian terisi tapi ada yang wajib hilang = EnvError. */
+/** null = fitur mati (empat variabel wajib kosong). Sebagian terisi = EnvError. */
 export function readWaEnv(env: Source = process.env): WaEnv | null {
-  // WA_BOT_NUMBER saja tidak menyalakan fitur.
-  const configured = NAMES.filter((n) => n !== 'WA_BOT_NUMBER').some(
-    (n) => val(env, n) !== undefined,
-  );
+  const configured = REQUIRED.some((n) => val(env, n) !== undefined);
   if (!configured) return null;
   const webhookSecret = req(env, 'WA_WEBHOOK_SECRET');
   if (webhookSecret.length < 16) throw new EnvError('WA_WEBHOOK_SECRET minimal 16 karakter');
