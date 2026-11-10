@@ -289,16 +289,26 @@ networks:
   # openwa <-> wa-proxy saja (Catat via WhatsApp), tanpa akses keluar. Subnet dipatok di luar pool
   # bawaan Docker (alasan sama dengan worker_db); .2 wa-proxy dan .3 openwa dipatok di layanan,
   # alokasi dinamis (container lain yang keliru ikut) hanya dari ip_range, tidak pernah .2/.3.
+  # Gateway terisolasi: bridge tanpa alamat di host (bawaan Docker memberi .1, yang membuat port
+  # yang terikat di host, mis. sshd, bisa dicapai openwa lewat INPUT). Tanpa IPv6 apa pun isi
+  # daemon.json. firewall.sh tetap men-DROP INPUT dari subnet ini (lapis kedua).
   wa:
     internal: true
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
     ipam:
       config:
         - subnet: 172.16.26.0/24
           ip_range: 172.16.26.128/25
   # wa-proxy <-> web saja, tanpa akses keluar. .2 wa-proxy (dipatok di layanan); web dinamis dari
-  # ip_range, rentang yang diterima wa-proxy di :2786.
+  # ip_range, rentang yang diterima wa-proxy di :2786. Gateway terisolasi dan tanpa IPv6 (alasan
+  # sama dengan wa).
   wa_web:
     internal: true
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
     ipam:
       config:
         - subnet: 172.16.28.0/24
@@ -307,8 +317,10 @@ networks:
   # host WhatsApp tidak stabil). Subnet dipatok untuk firewall.sh: koneksi baru dari subnet ini ke
   # 169.254.0.0/16 (IMDS, kecuali DNS resolver VCN), 10.0.0.0/8 (VCN, VM App), 172.16.0.0/12,
   # 192.168.0.0/16, 100.64.0.0/10 dan ke alamat host sendiri (INPUT) di-DROP. Terpisah dari app
-  # (gw/web), egress (postgres), worker_egress (worker).
+  # (gw/web), egress (postgres), worker_egress (worker). IPv4 saja (aturan di atas hanya iptables),
+  # apa pun isi daemon.json.
   wa_egress:
+    enable_ipv6: false
     ipam:
       config:
         - subnet: 172.16.27.0/24

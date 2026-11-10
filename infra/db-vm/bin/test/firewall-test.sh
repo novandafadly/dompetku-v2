@@ -79,6 +79,11 @@ count() { grep -cF -- "$2" <(chain_rules "$1") || true; }
 SUBNET=$(awk '/^  wa_egress:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
 JUMP="-s $SUBNET -m conntrack --ctstate NEW -m comment --comment dompetku-wa-egress -j DOMPETKU-WA-EGRESS"
 HOST="-s $SUBNET -m conntrack --ctstate NEW -m comment --comment dompetku-wa-host -j DROP"
+# Network wa (openwa <-> wa-proxy) dan wa_web (wa-proxy <-> web): subnet dari compose.yml. Gateway
+# keduanya terisolasi (tanpa alamat host); DROP INPUT dari subnet itu lapis kedua.
+WA_SUBNET=$(awk '/^  wa:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
+WA_WEB_SUBNET=$(awk '/^  wa_web:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
+host_rule() { echo "-s $1 -m conntrack --ctstate NEW -m comment --comment dompetku-wa-host -j DROP"; }
 WANT_CHAIN="-d 169.254.169.254 -p udp --dport 53 -m comment --comment dompetku-wa-dns -j RETURN
 -d 169.254.169.254 -p tcp --dport 53 -m comment --comment dompetku-wa-dns -j RETURN
 -d 169.254.0.0/16 -m comment --comment dompetku-wa-egress -j DROP
@@ -91,15 +96,36 @@ WANT_CHAIN="-d 169.254.169.254 -p udp --dport 53 -m comment --comment dompetku-w
 grep -Fx "WA_EGRESS=$SUBNET" "$TOOL" >/dev/null || fail "WA_EGRESS di firewall.sh tidak sama dengan compose.yml ($SUBNET)"
 ok 'subnet wa_egress firewall.sh = compose.yml'
 
+[[ $WA_SUBNET == 172.16.26.0/24 && $WA_WEB_SUBNET == 172.16.28.0/24 ]] ||
+  fail "subnet wa/wa_web di compose.yml '$WA_SUBNET' '$WA_WEB_SUBNET', harapan 172.16.26.0/24 172.16.28.0/24"
+grep -Fx "WA_HOST_SRC='$SUBNET $WA_SUBNET $WA_WEB_SUBNET'" "$TOOL" >/dev/null ||
+  fail "WA_HOST_SRC di firewall.sh tidak sama dengan subnet wa_egress, wa, wa_web di compose.yml"
+ok 'subnet sumber DROP INPUT firewall.sh = wa_egress, wa, wa_web di compose.yml'
+
+# Gateway wa dan wa_web terisolasi, semua network WhatsApp tanpa IPv6 (compose.yml).
+for net in wa wa_web; do
+  awk -v n="  $net:" '$0 == n { f = 1; next } f && /^  [a-z_]+:/ { exit } f' "$COMPOSE" >"$W/net"
+  grep -F 'com.docker.network.bridge.gateway_mode_ipv4: isolated' "$W/net" >/dev/null ||
+    fail "network $net tanpa gateway_mode_ipv4 isolated"
+done
+for net in wa wa_web wa_egress; do
+  awk -v n="  $net:" '$0 == n { f = 1; next } f && /^  [a-z_]+:/ { exit } f' "$COMPOSE" >"$W/net"
+  grep -Fx '    enable_ipv6: false' "$W/net" >/dev/null || fail "network $net tanpa enable_ipv6: false"
+done
+ok 'compose.yml: gateway wa/wa_web terisolasi, wa/wa_web/wa_egress tanpa IPv6'
+
 # --- up dari keadaan bersih.
 reset
 fw up || fail "up: kode $?"
 [[ $(count DOCKER-USER 'dompetku-gw -j DROP') == 2 ]] || fail 'up: aturan gw bukan 2'
 [[ $(chain_rules DOCKER-USER | grep -cFx -- "$JUMP") == 1 ]] || fail 'up: lompatan wa_egress bukan tepat 1'
 [[ $(chain_rules DOCKER-USER | tail -n 1) == '-j RETURN' ]] || fail 'up: aturan DompetKu tidak sebelum RETURN Docker'
-[[ $(chain_rules INPUT | head -n 1) == "$HOST" ]] || fail 'up: DROP INPUT dari wa_egress bukan aturan pertama (sebelum ACCEPT 10.0.0.0/16)'
+for src in "$SUBNET" "$WA_SUBNET" "$WA_WEB_SUBNET"; do
+  [[ $(chain_rules INPUT | head -n 3 | grep -cFx -- "$(host_rule "$src")") == 1 ]] ||
+    fail "up: DROP INPUT dari $src bukan tepat 1 di tiga aturan pertama (sebelum ACCEPT 10.0.0.0/16)"
+done
 [[ $(chain_rules DOMPETKU-WA-EGRESS) == "$WANT_CHAIN" ]] || fail 'up: isi rantai egress (DNS RETURN dulu, lalu DROP) salah'
-ok 'up: gw, lompatan egress sebelum RETURN Docker, DROP INPUT pertama, DNS sebelum DROP'
+ok 'up: gw, lompatan egress sebelum RETURN Docker, DROP INPUT (wa_egress, wa, wa_web) pertama, DNS sebelum DROP'
 
 # --- idempoten.
 cp "$SIM/rules" "$W/after1"
@@ -128,8 +154,11 @@ ok 'down dua kali tanpa galat'
 
 # --- duplikat (mis. aturan tersimpan di rules.v4 lalu up lagi) dihapus semua oleh down.
 fw up
-echo "DOCKER-USER $JUMP" >>"$SIM/rules"
-echo "INPUT $HOST" >>"$SIM/rules"
+{
+  echo "DOCKER-USER $JUMP"
+  echo "INPUT $HOST"
+  echo "INPUT $(host_rule "$WA_SUBNET")"
+} >>"$SIM/rules"
 fw down || fail 'down dengan duplikat gagal'
 diff -u "$SIM/foreign" "$SIM/rules" >/dev/null || fail 'down meninggalkan duplikat'
 ok 'down menghapus duplikat lompatan dan DROP INPUT'

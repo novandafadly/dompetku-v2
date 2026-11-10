@@ -11,10 +11,14 @@
 #    sendiri di-DROP; internet (WhatsApp, TCP 443) tetap boleh. Pengecualian: DNS ke resolver VCN
 #    169.254.169.254 (resolver tertanam Docker meneruskan kueri dari namespace container ke resolver
 #    host bila resolver itu bukan loopback). Balasan koneksi yang sudah ada tidak disentuh (hanya NEW).
+# 3. Port yang terikat di host: koneksi BARU dari subnet wa_egress, wa (openwa <-> wa-proxy) dan
+#    wa_web (wa-proxy <-> web) ke host di-DROP di INPUT. Gateway wa/wa_web terisolasi di compose.yml
+#    (bridge tanpa alamat host); aturan ini lapis kedua bila opsi itu hilang atau daemon lama.
 set -eu
 EDGE=10.0.0.149
 GW=10.0.1.68
 WA_EGRESS=172.16.27.0/24
+WA_HOST_SRC='172.16.27.0/24 172.16.26.0/24 172.16.28.0/24'
 WA_DNS=169.254.169.254
 WA_BLOCKED='169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10'
 WA_CHAIN=DOMPETKU-WA-EGRESS
@@ -32,8 +36,8 @@ wa_jump() { # wa_jump <-C|-I|-D>
 }
 
 # Port yang terikat di host (bukan container) dijaga INPUT, bukan DOCKER-USER.
-wa_host() { # wa_host <-C|-I|-D>
-	iptables "$1" INPUT -s "$WA_EGRESS" -m conntrack --ctstate NEW \
+wa_host() { # wa_host <-C|-I|-D> <subnet>
+	iptables "$1" INPUT -s "$2" -m conntrack --ctstate NEW \
 		-m comment --comment dompetku-wa-host -j DROP
 }
 
@@ -56,7 +60,9 @@ up() {
 	done
 	wa_chain_fill
 	wa_jump -C 2>/dev/null || wa_jump -I
-	wa_host -C 2>/dev/null || wa_host -I
+	for src in $WA_HOST_SRC; do
+		wa_host -C "$src" 2>/dev/null || wa_host -I "$src"
+	done
 }
 
 down() {
@@ -64,7 +70,9 @@ down() {
 		while rule -C "$p" 2>/dev/null; do rule -D "$p"; done
 	done
 	while wa_jump -C 2>/dev/null; do wa_jump -D; done
-	while wa_host -C 2>/dev/null; do wa_host -D; done
+	for src in $WA_HOST_SRC; do
+		while wa_host -C "$src" 2>/dev/null; do wa_host -D "$src"; done
+	done
 	if iptables -F "$WA_CHAIN" 2>/dev/null; then
 		iptables -X "$WA_CHAIN"
 	fi
