@@ -11,7 +11,13 @@ import {
   spaceIdOf,
   type Persona,
 } from '../../ledger/__int__/harness';
-import { createAccount, createEntry, updateEntry, type LedgerCtx } from '../../ledger/write';
+import {
+  archiveAccount,
+  createAccount,
+  createEntry,
+  updateEntry,
+  type LedgerCtx,
+} from '../../ledger/write';
 import type { WaEnv } from '../config';
 import {
   createWaDeps,
@@ -190,15 +196,28 @@ async function backdate(messageId: string, interval: string): Promise<void> {
   );
 }
 
-async function wallet(ctx: LedgerCtx, pocket: 'operasional' | 'kantor' = 'operasional') {
+async function wallet(
+  ctx: LedgerCtx,
+  pocket: 'operasional' | 'tabungan' | 'kantor' = 'operasional',
+  name = `Dompet ${pocket} ${randomUUID().slice(0, 4)}`,
+  openingBalance = 1_000_000,
+) {
   const { accountId } = await createAccount(ctx, {
     clientId: randomUUID(),
-    name: `Dompet ${pocket} ${randomUUID().slice(0, 4)}`,
+    name,
     pocket,
     walletType: 'cash',
-    openingBalance: 1_000_000,
+    openingBalance,
   });
   return accountId;
+}
+
+async function nameOf(accountId: string): Promise<string> {
+  const { rows } = await h.admin.query<{ name: string }>(
+    'select name from app.accounts where id = $1',
+    [accountId],
+  );
+  return rows[0]?.name ?? '?';
 }
 
 /** Pool `dompetku_web` terpisah yang gagal (galat koneksi 08006) pada SQL yang cocok. */
@@ -276,7 +295,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
     expect(r.sent).toEqual([
       {
         to: N_PHONE,
-        text: `✅ Makan Siang & Minum ${formatRupiah(25_000)} · Pribadi · ketik batal untuk membatalkan`,
+        text: `✅ Makan Siang & Minum ${formatRupiah(25_000)} · Pribadi · ${await nameOf(nAccount)} · ketik batal untuk membatalkan`,
       },
     ]);
   });
@@ -323,7 +342,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
     const [e] = await entries();
     expect(e).toMatchObject({ kind: 'income', amount: 5_000_000, category_name: 'Gaji' });
     expect(r.sent[0]?.text).toBe(
-      `✅ Pemasukan · Gaji ${formatRupiah(5_000_000)} · Pribadi · ketik batal untuk membatalkan`,
+      `✅ Pemasukan · Gaji ${formatRupiah(5_000_000)} · Pribadi · ${await nameOf(nAccount)} · ketik batal untuk membatalkan`,
     );
   });
 
@@ -483,7 +502,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
     );
     expect(rows[0]?.space_id).toBe(nBersama.spaceId);
     expect(r.sent[0]?.text).toBe(
-      `✅ ${e?.category_name ?? '?'} ${formatRupiah(80_000)} · Bersama · ketik batal untuk membatalkan`,
+      `✅ ${e?.category_name ?? '?'} ${formatRupiah(80_000)} · Bersama · ${await nameOf(acc)} · ketik batal untuk membatalkan`,
     );
   });
 
@@ -517,7 +536,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
     const m = msg('2jt makan');
     await handleInbound(r.deps, m);
     expect(await entries()).toHaveLength(0);
-    expect(r.sent[0]?.text).toBe(REPLY.insufficient);
+    expect(r.sent[0]?.text).toBe(REPLY.insufficient(await nameOf(nAccount)));
     expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
   });
 
@@ -729,5 +748,230 @@ describe('handleInbound (Postgres sungguhan)', () => {
       expect(call[0]).toMatch(/^[a-z_]+$/);
       if (call[1] !== undefined) expect(call[1]).toMatch(/^[A-Za-z0-9_]{1,32}$/);
     }
+  });
+});
+
+describe('handleInbound: pilih dompet @nama (Postgres sungguhan)', () => {
+  let n: Persona;
+  let f: Persona;
+  let nPribadi: LedgerCtx;
+  let nBersama: LedgerCtx;
+  let bca: string;
+  let cimb: string;
+  let kantor: string;
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    const personas = await seedPersonas(h, { farida: 'bergabung' });
+    n = personas.n;
+    f = must(personas.f);
+    nPribadi = { pools: h.pools, userId: n.id, spaceId: await spaceIdOf(h, n.id, 'personal') };
+    nBersama = { pools: h.pools, userId: n.id, spaceId: await spaceIdOf(h, n.id, 'shared') };
+    bca = await wallet(nPribadi, 'operasional', 'BCA');
+    cimb = await wallet(nPribadi, 'operasional', 'CIMB Niaga');
+    kantor = await wallet(nPribadi, 'kantor', 'Kas Kantor');
+    await linkDirect(n, N_PHONE);
+  });
+
+  it('"makan siang padang 23rb @cimb" → entri di CIMB (bukan bawaan), @nama keluar dari keterangan, balasan menyebut dompet', async () => {
+    const r = rig();
+    const m = msg('makan siang padang 23rb @cimb');
+    await handleInbound(r.deps, m);
+    const rows = await entries();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      space_id: nPribadi.spaceId,
+      kind: 'expense',
+      amount: 23_000,
+      account_id: cimb,
+      description: 'makan siang padang',
+      voided_at: null,
+    });
+    expect(r.sent).toEqual([
+      {
+        to: N_PHONE,
+        text: `✅ Makan Siang & Minum ${formatRupiah(23_000)} · Pribadi · CIMB Niaga · ketik batal untuk membatalkan`,
+      },
+    ]);
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'recorded' });
+  });
+
+  it('awalan, huruf besar, di awal/tengah/akhir pesan, tanda baca penutup', async () => {
+    const r = rig();
+    for (const t of ['@CIM 10rb kopi', '10rb @cimb. kopi', 'kopi 10rb @Cimb-Niaga,']) {
+      await handleInbound(r.deps, msg(t));
+    }
+    const rows = await entries();
+    expect(rows.map((e) => e.account_id)).toEqual([cimb, cimb, cimb]);
+    expect(rows.map((e) => e.description)).toEqual(['kopi', 'kopi', 'kopi']);
+  });
+
+  it('nama persis menang atas awalan: @bca → BCA walau ada "BCA Syariah"', async () => {
+    const syariah = await wallet(nPribadi, 'operasional', 'BCA Syariah');
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @bca'));
+    await handleInbound(r.deps, msg('10rb kopi @bca-syariah'));
+    expect((await entries()).map((e) => e.account_id)).toEqual([bca, syariah]);
+  });
+
+  it('tidak ketemu → tidak ada entri, balasan memuat daftar penanda, status rejected, tidak menebak', async () => {
+    const r = rig();
+    const m = msg('23rb makan @mandiri');
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent).toEqual([
+      {
+        to: N_PHONE,
+        text: REPLY.walletNone('mandiri', 'personal', ['@bca', '@cimb-niaga', '@kas-kantor']),
+      },
+    ]);
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
+    expect(r.log).toHaveBeenCalledWith('rejected', 'wallet_none');
+  });
+
+  it('ambigu → ditolak dengan daftar; dompet terarsip tidak ikut dicocokkan', async () => {
+    const satu = await wallet(nPribadi, 'operasional', 'Cadangan Satu', 0);
+    await wallet(nPribadi, 'operasional', 'Cadangan Dua');
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @cad'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toContain('cocok dengan lebih dari satu dompet');
+    expect(r.sent[0]?.text).toContain('@cadangan-satu, @cadangan-dua');
+    expect(r.log).toHaveBeenCalledWith('rejected', 'wallet_ambiguous');
+
+    await archiveAccount(nPribadi, satu);
+    await handleInbound(r.deps, msg('10rb kopi @cad'));
+    expect((await entries()).map((e) => e.account_id)).toEqual([
+      (
+        await h.admin.query<{ id: string }>(
+          `select id from app.accounts where name = 'Cadangan Dua'`,
+        )
+      ).rows[0]?.id,
+    ]);
+    // dompet terarsip tidak tampil di daftar balasan
+    await handleInbound(r.deps, msg('10rb kopi @cadangan-satu'));
+    expect(r.sent.at(-1)?.text).not.toContain('@cadangan-satu,');
+    expect(r.sent.at(-1)?.text).toMatch(/^❌ Dompet @cadangan-satu tidak ada/);
+  });
+
+  it('Bersama: "b ... @nama" hanya mencocokkan dompet Bersama; dompet Pribadi tidak terlihat', async () => {
+    const kas = await wallet(nBersama, 'operasional', 'Dapur Rumah');
+    const r = rig();
+    await handleInbound(r.deps, msg('b 80rb belanja @dapur'));
+    expect((await entries())[0]).toMatchObject({
+      space_id: nBersama.spaceId,
+      account_id: kas,
+      amount: 80_000,
+    });
+    expect(r.sent[0]?.text).toBe(
+      `✅ ${(await entries())[0]?.category_name ?? '?'} ${formatRupiah(80_000)} · Bersama · Dapur Rumah · ketik batal untuk membatalkan`,
+    );
+
+    // @cimb ada di Pribadi, bukan di Bersama
+    await handleInbound(r.deps, msg('b 10rb belanja @cimb'));
+    expect(await entries()).toHaveLength(1);
+    expect(r.sent[1]?.text).toBe(REPLY.walletNone('cimb', 'shared', ['@dapur-rumah']));
+    // dan sebaliknya: @dapur (Bersama) tidak ada di Pribadi
+    await handleInbound(r.deps, msg('10rb belanja @dapur'));
+    expect(await entries()).toHaveLength(1);
+    expect(r.sent[2]?.text).toMatch(/^❌ Dompet @dapur tidak ada di ruang Pribadi/);
+  });
+
+  it('@kantor eksplisit boleh mencatat ke dompet kantor; bawaan tetap tidak pernah kantor', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('50rb makan siang @kantor'));
+    await handleInbound(r.deps, msg('51rb bensin @kas-kantor'));
+    expect((await entries()).map((e) => e.account_id)).toEqual([kantor, kantor]);
+    expect(r.sent[0]?.text).toContain('· Pribadi · Kas Kantor · ketik batal');
+
+    // tanpa penanda: dompet bawaan = catatan terakhir yang BUKAN kantor, bukan Kas Kantor
+    await handleInbound(r.deps, msg('10rb kopi'));
+    const last = (await entries()).at(-1);
+    expect(last?.account_id).not.toBe(kantor);
+    expect(last?.account_id).toBe(bca);
+  });
+
+  it('"b ... @kantor" ditolak: kantong kantor hanya ada di Pribadi', async () => {
+    await wallet(nBersama, 'operasional', 'Dapur Rumah');
+    const r = rig();
+    await handleInbound(r.deps, msg('b 50rb makan @kantor'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toBe(REPLY.walletNone('kantor', 'shared', ['@dapur-rumah']));
+  });
+
+  it('dompet bawaan mengikuti catatan terakhir, termasuk yang dipilih lewat @nama', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @cimb'));
+    await handleInbound(r.deps, msg('10rb kopi'));
+    expect((await entries()).map((e) => e.account_id)).toEqual([cimb, cimb]);
+  });
+
+  it('saldo kurang di dompet pilihan → ditolak, balasan menyebut dompet itu', async () => {
+    const r = rig();
+    const m = msg('2jt makan @bca');
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toBe(REPLY.insufficient('BCA'));
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
+  });
+
+  it('dompet bawaan kurang saldo: tanpa penanda ditolak, dengan @nama dompet lain lolos', async () => {
+    const kecil = await wallet(nPribadi, 'operasional', 'Kecil', 10_000);
+    const r = rig();
+    await handleInbound(r.deps, msg('1rb jajan @kecil')); // bawaan sekarang = Kecil (saldo 9.000)
+    await handleInbound(r.deps, msg('50rb makan')); // bawaan Kecil: saldo kurang
+    expect(r.sent[1]?.text).toBe(REPLY.insufficient('Kecil'));
+    await handleInbound(r.deps, msg('50rb makan @bca'));
+    expect((await entries()).map((e) => e.account_id)).toEqual([kecil, bca]);
+  });
+
+  it('dompet milik user lain tidak terlihat (RLS): @nama Farida tidak ketemu dan tidak bocor di daftar', async () => {
+    const fPribadi = {
+      pools: h.pools,
+      userId: f.id,
+      spaceId: await spaceIdOf(h, f.id, 'personal'),
+    };
+    await wallet(fPribadi, 'operasional', 'Rahasia Farida');
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @rahasia'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).not.toMatch(/farida/i);
+    expect(r.sent[0]?.text).toMatch(/^❌ Dompet @rahasia tidak ada di ruang Pribadi/);
+  });
+
+  it('dua penanda / penanda rusak → ditolak sebelum menyentuh dompet; tanpa entri', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @bca @cimb'));
+    await handleInbound(r.deps, msg('10rb kopi @bca,x'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent.map((x) => x.text)).toEqual([REPLY.manyWallets, REPLY.badWallet]);
+  });
+
+  it('@ yang bukan penanda tetap keterangan dan memakai dompet bawaan', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('25rb kirim ke budi@gmail.com'));
+    const [e] = await entries();
+    expect(e).toMatchObject({ description: 'kirim ke budi@gmail.com', amount: 25_000 });
+    expect(e?.account_id).toBe(bca);
+  });
+
+  it('pesan yang sama dua kali dengan @nama → satu entri (idempoten)', async () => {
+    const r = rig();
+    const m = msg('23rb makan @cimb');
+    await handleInbound(r.deps, m);
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(1);
+    expect(r.sent).toHaveLength(1);
+  });
+
+  it('batal sesudah entri @nama → entri dibatalkan; balasan dan log tidak memuat nama dompet', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('23rb makan @cimb'));
+    await handleInbound(r.deps, msg('batal'));
+    expect((await entries())[0]?.voided_at).not.toBeNull();
+    const logged = JSON.stringify(r.log.mock.calls);
+    for (const bad of ['cimb', 'niaga', 'CIMB', 'bca']) expect(logged).not.toContain(bad);
+    await handleInbound(r.deps, msg('23rb makan @mandiri'));
+    expect(JSON.stringify(r.log.mock.calls)).not.toContain('mandiri');
   });
 });
