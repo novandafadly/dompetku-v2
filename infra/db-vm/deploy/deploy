@@ -8,7 +8,10 @@
 # -> health -> ganti worker (image sama, S7) -> stabil -> selesai, atau rollback keduanya ke digest
 # sebelumnya. Env worker divalidasi dengan image rilis di preflight (tidak valid = ditolak). Worker
 # dilewati (bukan gagal) selama env/worker.env atau layanan worker belum ada, atau postgres belum ikut
-# network worker_db/pg_hba worker; tanpa env, worker lama yang masih berjalan dihentikan. Setiap hasil = satu baris audit JSON.
+# network worker_db/pg_hba worker; tanpa env, worker lama yang masih berjalan dihentikan. Sesudah
+# web (dan worker) sehat, openwa (image pihak ketiga dipatok digest di compose.yml, runbook-wa)
+# dinaikkan dengan `compose up`; openwa tidak pernah menggagalkan atau me-rollback deploy web, tidak
+# ikut rollback, dan dilewati selama env/openwa.env belum ada. Setiap hasil = satu baris audit JSON.
 #
 # Pemakaian:
 #   deploy                       siklus normal (timer)
@@ -44,6 +47,8 @@ WORKER_STABLE_CHECKS=5          # worker sehat = running, image baru, RestartCou
 WORKER_INTERVAL=4               # selama 5 x 4 = 20 detik
 WORKER_DB_NETWORK=dompetku_worker_db # network postgres + worker (compose.yml S7)
 WORKER_DB_ADDRESS=172.16.25.0  # alamat aturan pg_hba dompetku_worker (subnet worker_db)
+OPENWA_SERVICE=openwa           # jembatan WhatsApp; image pihak ketiga, bukan bagian rilis web
+OPENWA_ENV=$ROOT/env/openwa.env # belum ada = openwa dilewati (diisi pemilik, runbook-wa)
 MIN_FREE_MB=2048
 HC_PING_URL=''                  # opsional: Healthchecks.io, /fail dipanggil saat gagal
 GHCR_USER=''
@@ -113,14 +118,15 @@ START=$(date +%s)
 FROM_DIGEST=''
 TO_DIGEST=''
 TO_SHA=''
+OPENWA_NOTE='' # hasil openwa_sync (field audit `openwa`); kosong = openwa tidak disentuh
 
 # Satu baris JSON per hasil: file log (dibaca promtail/operator) + journald.
 audit() {
   local result=$1 detail=${2:-}
   local line
-  line=$(printf '{"ts":"%s","event":"deploy","result":"%s","from":"%s","to":"%s","sha":"%s","seconds":%d,"detail":"%s"}' \
+  line=$(printf '{"ts":"%s","event":"deploy","result":"%s","from":"%s","to":"%s","sha":"%s","seconds":%d,"detail":"%s","openwa":"%s"}' \
     "$(date -u +%FT%TZ)" "$result" "$FROM_DIGEST" "$TO_DIGEST" "$TO_SHA" "$(($(date +%s) - START))" \
-    "${detail//\"/\'}")
+    "${detail//\"/\'}" "$OPENWA_NOTE")
   printf '%s\n' "$line" >>"$LOG_FILE"
   logger -t dompetku-deploy -- "$line" 2>/dev/null || true
   printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$TO_DIGEST" "$result" "$TO_SHA" >>"$STATE_DIR/history.tsv"
@@ -265,6 +271,31 @@ worker_was_running() {
   [[ -n $cid && $(docker inspect -f '{{ .State.Status }}' "$cid" 2>/dev/null) == running ]]
 }
 
+# openwa sesudah web (dan worker) sehat. Tidak memengaruhi kode keluar, `current`, maupun rollback:
+# semua hasil hanya dicatat di OPENWA_NOTE. compose up tidak membuat ulang container yang konfigurasinya
+# tidak berubah; image baru (digest diganti di compose.yml lewat PR) ditarik di sini. Tanpa
+# env/openwa.env openwa dimatikan pemilik: container lama dihentikan dan dihapus (volume tetap).
+openwa_sync() {
+  if ! compose config --services 2>/dev/null | grep -x "$OPENWA_SERVICE" >/dev/null; then
+    OPENWA_NOTE=openwa_service_missing
+  elif [[ ! -f $OPENWA_ENV ]]; then
+    OPENWA_NOTE=openwa_env_missing
+    if [[ -n $(running_cid "$OPENWA_SERVICE") ]]; then
+      if compose rm -sf "$OPENWA_SERVICE" >/dev/null; then
+        OPENWA_NOTE+=' openwa_stopped'
+      else
+        log 'gagal menghentikan openwa'
+      fi
+    fi
+  elif compose up -d --no-deps "$OPENWA_SERVICE" >/dev/null; then
+    OPENWA_NOTE=openwa_ok
+  else
+    OPENWA_NOTE=openwa_up_failed
+    alert "openwa: compose up gagal (web $TO_SHA tetap terpasang)"
+  fi
+  log "openwa: $OPENWA_NOTE"
+}
+
 # Simpan image yang berjalan dan sebelumnya (target rollback); sisanya dihapus.
 prune_images() {
   local d
@@ -384,6 +415,7 @@ migrate || {
 succeed() {
   printf '%s %s %s\n' "$TO_DIGEST" "$TO_CREATED" "$TO_SHA" >"$STATE_DIR/current.tmp"
   mv "$STATE_DIR/current.tmp" "$STATE_DIR/current"
+  openwa_sync || OPENWA_NOTE=openwa_error
   audit ok "$WORKER_SKIP"
   log "selesai: $TO_SHA"
   prune_images

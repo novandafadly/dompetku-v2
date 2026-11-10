@@ -1,6 +1,6 @@
 # Deployer pull-based (S3)
 
-Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, lalu (S7) mengganti `worker` dari image yang sama dan mengecek kestabilannya, dan rollback otomatis keduanya bila gagal.
+Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di VM DB menarik digest tag `main` dari `ghcr.io/novandafadly/dompetku-web` tiap 5 menit, memverifikasi tanda tangan cosign dan attestation SBOM dengan kunci publik pemilik, menolak rilis lebih tua, menjalankan migrasi dbmate dari image rilis, mengganti `web`, mengecek `/api/health`, lalu (S7) mengganti `worker` dari image yang sama dan mengecek kestabilannya, dan rollback otomatis keduanya bila gagal. Sesudah itu (Catat via WhatsApp) `openwa` dinaikkan bila `env/openwa.env` ada; `openwa` tidak memengaruhi hasil deploy web.
 
 ## Berkas
 
@@ -11,6 +11,7 @@ Dasar: Spec §9.2, TRD §2.4, IPD S3, `docs/ops/runbook-s2.md`. Timer systemd di
 | `deploy.env.example`                             | `/opt/dompetku/env/deploy.env`                                   | `600 root` |
 | `web.env.example`                                | `/opt/dompetku/env/web.env`                                      | `600 root` |
 | `worker.env.example` (S7)                        | `/opt/dompetku/env/worker.env`                                   | `600 root` |
+| `../env/openwa.env.example` (WA)                 | `/opt/dompetku/env/openwa.env`                                   | `600 root` |
 | (dari pemilik, bagian Tanda tangan image)        | `/opt/dompetku/keys/cosign.pub` (hanya kunci publik)             | `644 root` |
 | `systemd/dompetku-deploy.{service,timer}`        | `/etc/systemd/system/`                                           | `644 root` |
 | `README.md`                                      | `/opt/dompetku/deploy/README.md`                                 | `644 root` |
@@ -37,6 +38,20 @@ Worker ada di image yang sama (`/app/worker/worker.mjs`, layanan compose `worker
 4. Worker gagal = digest masuk `failed`, web dikembalikan ke digest lama, worker dikembalikan ke digest lama bila sebelumnya berjalan atau dihentikan bila belum (rilis pertama yang memuat worker), kode 3, audit `rolled_back` dengan detail `health worker ...`.
 5. Worker dilewati (kode 0, web tetap terpasang), alasan di `detail` audit `ok`: `worker_env_missing` (`env/worker.env` tidak ada; worker lama yang masih berjalan dihentikan dan dihapus, detail `worker_env_missing worker_stopped`) `worker_service_missing` (`compose.yml` di VM belum memuat `worker`; worker lama tidak disentuh), atau `worker_db_not_ready` (container postgres belum ikut network `dompetku_worker_db`, atau `pg_hba_file_rules` tidak memuat aturan `dompetku_worker` untuk `172.16.25.0` atau punya baris galat; runbook S7 langkah 2 baru sebagian; worker lama tidak disentuh, tanpa rollback web). Deploy pertama sebelum pemilik mengisi env tidak gagal.
 6. Rollback manual `--allow-older` ke digest pra-S7 (tanpa `worker.mjs`): pindahkan `env/worker.env` dulu, kalau tidak ditolak di langkah 1.
+
+## OpenWA (Catat via WhatsApp)
+
+Layanan compose `openwa` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa` yang dipatok tag + digest di `compose.yml`, bukan image rilis DompetKu: tidak diverifikasi cosign (tidak ada kunci pemilik untuknya), tidak ikut `current`, dan tidak ikut rollback. Pemasangan, rahasia, dan pemasangan nomor: `docs/ops/runbook-wa.md`.
+
+1. Hanya di jalur sukses, sesudah web sehat dan worker sehat atau dilewati, dan sesudah `current` ditulis: `docker compose up -d --no-deps openwa`. Compose tidak membuat ulang container yang konfigurasinya tidak berubah; digest baru di `compose.yml` ditarik di langkah ini.
+2. Hasil di field audit `openwa` (baris audit `ok`), tidak mengubah kode keluar, `failed`, atau `detail`:
+   - `openwa_ok`: `compose up` berhasil.
+   - `openwa_up_failed`: `compose up` gagal (mis. image tidak bisa ditarik). Web tetap terpasang tanpa rollback; `HC_PING_URL/fail` dipanggil bila diisi.
+   - `openwa_env_missing`: `env/openwa.env` tidak ada; container `openwa` yang masih ada dihentikan dan dihapus (`compose rm -sf openwa`, volume `openwa_data` tetap), penanda `openwa_stopped`.
+   - `openwa_service_missing`: `compose.yml` di VM belum memuat `openwa`; tidak disentuh.
+   - `openwa_error`: galat tak terduga di langkah openwa; web tetap terpasang.
+   - kosong: openwa tidak disentuh (deploy ditolak, migrasi gagal, health gagal, atau rollback).
+3. Rollback web (kode 3/4) dan `failed_no_previous` tidak pernah menghentikan, mengganti, atau menyalakan `openwa`.
 
 ## Kode keluar dan perilaku
 

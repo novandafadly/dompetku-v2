@@ -1,6 +1,6 @@
 # Compose project dompetku di VM DB. Dipasang di /opt/dompetku/compose.yml.
 # S1: gw. S2: postgres (image sendiri) + migrate (dbmate, profil tools). S3: web (profil web).
-# S7: worker (profil web, image sama dengan web).
+# S7: worker (profil web, image sama dengan web). WA: openwa (profil web, image pihak ketiga).
 name: dompetku
 
 services:
@@ -84,8 +84,9 @@ services:
     env_file:
       - path: ./env/web.env
         required: false
-    # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4).
-    networks: [app, internal]
+    # app: dari gw dan keluar (Resend, harga). internal: ke postgres (mulai S4). wa: REST openwa
+    # (OPENWA_URL=http://openwa:2785) dan webhook dari openwa ke web:3000/api/wa/webhook.
+    networks: [app, internal, wa]
     read_only: true
     tmpfs:
       - /tmp:size=64m
@@ -147,6 +148,77 @@ services:
     healthcheck:
       disable: true
 
+  openwa:
+    # Catat via WhatsApp (spec 2026-11-09 §5.1, docs/ops/runbook-wa.md). OpenWA 0.29.1 (rilis
+    # 2026-11-07), indeks multi-arch (linux/amd64 + linux/arm64) diikat digest; naik versi = ganti tag
+    # dan digest bersamaan lewat PR. Bukan bagian rilis web: deployer memasangnya sesudah web sehat,
+    # tidak pernah menggagalkan atau me-rollback web karena openwa, dan melewatinya selama
+    # env/openwa.env belum ada (required: false agar compose untuk web dan migrate tetap jalan).
+    image: ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71d3802e6cd66ac92ff3543f2eb391d20e7db711e8641c5127644a817a
+    profiles: [web]
+    restart: unless-stopped
+    env_file:
+      - path: ./env/openwa.env
+        required: false
+    # Nilai non-rahasia yang menentukan keamanan/kebenaran dipatok di sini (menang atas env_file),
+    # supaya openwa.env yang tidak lengkap tidak diam-diam memakai bawaan lain. Rahasia di openwa.env.
+    environment:
+      NODE_ENV: production
+      PORT: '2785'
+      # Tanpa Chromium (whatsapp-web.js bawaan); SQLite di /app/data (DATABASE_NAME sengaja tidak
+      # diisi: nilainya menjadi path berkas SQLite dan di rootfs read-only membuat boot-loop).
+      ENGINE_TYPE: baileys
+      DATABASE_TYPE: sqlite
+      # Pengirim @lid mendapat senderPhone; tanpa ini nomor @lid tidak pernah bisa dihubungkan.
+      RESOLVE_LID_TO_PHONE: 'true'
+      # Bawaan production = sesi tidak dinyalakan saat boot: tanpa ini restart/recreate container
+      # (deploy, reboot VM) memutus bot sampai POST /start manual.
+      AUTO_START_SESSIONS: 'true'
+      MAX_CONCURRENT_SESSIONS: '1'
+      # Webhook ke http://web:3000 = alamat privat, ditolak guard SSRF kecuali host ini diizinkan.
+      # Guard tetap aktif untuk tujuan lain.
+      WEBHOOK_SSRF_PROTECT: 'true'
+      SSRF_ALLOWED_HOSTS: web
+      # Handler web menunggu sendText (batas 10 s) sebelum menjawab; bawaan 10000 ms memotongnya dan
+      # memicu kirim ulang (aman karena idempoten, tapi balasan ganda tertunda). Harus > 10 s.
+      WEBHOOK_TIMEOUT: '20000'
+      # Teks pesan (nominal, keterangan) tersimpan di SQLite OpenWA; bawaan 0 = selamanya.
+      MESSAGE_RETENTION_DAYS: '7'
+      # Tanpa panggilan ke api.github.com; Swagger tidak disajikan (skema + versi tanpa API key).
+      UPDATE_CHECK_ENABLED: 'false'
+      ENABLE_SWAGGER: 'false'
+      # Dasbor hanya dibuka lewat tunnel SSH ke http://localhost (runbook); tanpa ini layar putih.
+      CSP_UPGRADE_INSECURE_REQUESTS: 'false'
+    # wa: hanya openwa + web (REST masuk dari web, webhook keluar ke web:3000). wa_egress: keluar ke
+    # server WhatsApp (tidak difilter per host). Sengaja tidak ikut app/internal/worker_db/egress/
+    # worker_egress: openwa yang disusupi tidak menjangkau postgres, gw, atau worker.
+    networks: [wa, wa_egress]
+    # Tanpa port host: dasbor/Swagger tidak dipublikasikan. Pemasangan nomor = kode pairing lewat
+    # `docker compose exec` (tanpa port), cadangan QR = override sementara 127.0.0.1 (runbook-wa).
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    # Sesi WhatsApp (kredensial Baileys = kunci akun bot), SQLite, kunci admin. Hanya openwa.
+    volumes:
+      - openwa_data:/app/data
+    # User openwa image (uid/gid 997). Dengan user non-root entrypoint melewati chown + gosu, jadi
+    # tanpa cap_add. Volume baru diisi salinan /app/data image (milik 997) saat pertama dipasang.
+    user: '997:997'
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 256
+    # Urutan stop OpenWA sampai 33 s (+ webhook drain); bawaan compose upstream 75 s.
+    stop_grace_period: 75s
+    # Sama dengan HEALTHCHECK image (curl ada di image), ditulis eksplisit agar terlihat.
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', '-o', '/dev/null', 'http://127.0.0.1:2785/api/health/ready']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 networks:
   # gw <-> web (web butuh egress untuk Resend dan harga saham).
   app: {}
@@ -169,6 +241,18 @@ networks:
   # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
   # egress (postgres).
   worker_egress: {}
+  # openwa <-> web saja (Catat via WhatsApp), tanpa akses keluar. Subnet dipatok di luar pool bawaan
+  # Docker (alasan sama dengan worker_db) dan dipakai allowedIps API key web di OpenWA (runbook-wa).
+  wa:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.16.26.0/24
+  # Hanya openwa: keluar ke server WhatsApp. Tidak difilter per host (server WhatsApp tidak punya
+  # daftar host stabil); terpisah dari app (gw/web), egress (postgres), worker_egress (worker).
+  wa_egress: {}
 
 volumes:
   pgdata: {}
+  # Sesi WhatsApp + SQLite OpenWA. Siapa pun yang membaca volume ini bisa memakai akun bot.
+  openwa_data: {}

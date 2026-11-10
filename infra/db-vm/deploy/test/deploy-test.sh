@@ -22,6 +22,12 @@ DB=sha256:$(printf 'b%.0s' {1..64})
 DC=sha256:$(printf 'c%.0s' {1..64})
 DD=sha256:$(printf 'd%.0s' {1..64})
 DE=sha256:$(printf 'e%.0s' {1..64})
+DF=sha256:$(printf 'f%.0s' {1..64})
+DG=sha256:$(printf '0%.0s' {1..64})
+DH=sha256:$(printf '12%.0s' {1..32})
+DI=sha256:$(printf '13%.0s' {1..32})
+DJ=sha256:$(printf '14%.0s' {1..32})
+DK=sha256:$(printf '15%.0s' {1..32})
 SHA1=$(printf 'a%.0s' {1..40})
 SHA2=$(printf 'b%.0s' {1..40})
 SHA3=$(printf 'c%.0s' {1..40})
@@ -36,6 +42,12 @@ SHAB=$(printf '1%.0s' {1..40})
 SHAC=$(printf '2%.0s' {1..40})
 SHAD=$(printf '3%.0s' {1..40})
 SHAE=$(printf '4%.0s' {1..40})
+SHAF=$(printf '5%.0s' {1..40})
+SHAG=$(printf '6%.0s' {1..40})
+SHAH=$(printf 'ab%.0s' {1..20})
+SHAI=$(printf 'ac%.0s' {1..20})
+SHAJ=$(printf 'ad%.0s' {1..20})
+SHAK=$(printf 'ae%.0s' {1..20})
 
 mkdir -p "$W/bin" "$W/root/env" "$W/root/bin" "$W/root/keys" "$W/sim"
 touch "$W/root/compose.yml" "$W/root/compose.web.yml"
@@ -57,7 +69,9 @@ CFG
 # (digest yang worker-nya restart berulang), noworkersvc (compose.yml belum punya layanan worker),
 # workerupfail (compose up worker gagal sekali; container lama tetap berjalan), badworkerenv
 # (worker.mjs --check-config menolak worker.env), nopgworkernet (postgres belum ikut network
-# dompetku_worker_db), oldhba (pg_hba di postgres belum memuat aturan dompetku_worker).
+# dompetku_worker_db), oldhba (pg_hba di postgres belum memuat aturan dompetku_worker), openwa
+# (container openwa berjalan), noopenwasvc (compose.yml belum punya layanan openwa), openwaupfail
+# (compose up openwa gagal).
 cat >"$W/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 cat >/dev/null
@@ -112,17 +126,25 @@ case $1 in
       up)
         svc=${*: -1}
         if [[ $svc == worker && -e $SIM/workerupfail ]]; then rm "$SIM/workerupfail"; exit 1; fi
+        if [[ $svc == openwa ]]; then
+          echo "up openwa" >>"$SIM/calls"
+          [[ -e $SIM/openwaupfail ]] && exit 1
+          touch "$SIM/openwa"
+          exit 0
+        fi
         echo "up $svc $(cat "$SIM/local")" >>"$SIM/calls"
         if [[ $svc == worker ]]; then cp "$SIM/local" "$SIM/worker"; : >"$SIM/restarts"; fi ;;
       ps)
         case $3 in
           postgres) echo pgcid ;;
           worker) [[ -e $SIM/worker ]] && echo wcid || true ;;
+          openwa) [[ -e $SIM/openwa ]] && echo ocid || true ;;
           *) echo cid ;;
         esac ;;
       config)
         printf 'gw\npostgres\nweb\n'
-        [[ -e $SIM/noworkersvc ]] || echo worker ;;
+        [[ -e $SIM/noworkersvc ]] || echo worker
+        [[ -e $SIM/noopenwasvc ]] || echo openwa ;;
       exec)
         if [[ $* == *pg_stat_archiver* ]]; then echo t; fi
         if [[ $* == *pg_hba_file_rules* ]]; then
@@ -133,11 +155,13 @@ case $1 in
       rm)
         echo "rm ${*:2}" >>"$SIM/calls"
         [[ $* == *worker* ]] && rm -f "$SIM/worker"
+        [[ $* == *openwa* ]] && rm -f "$SIM/openwa"
         true ;;
       stop)
         echo "stop ${*:2}" >>"$SIM/calls"
         [[ $* == *worker* ]] && rm -f "$SIM/worker"
         [[ $* == *web* ]] && rm -f "$SIM/local"
+        [[ $* == *openwa* ]] && rm -f "$SIM/openwa"
         true ;;
     esac ;;
   inspect)
@@ -183,6 +207,12 @@ $DB $SHAB 2026-11-10T10:00:00Z
 $DC $SHAC 2026-11-11T10:00:00Z
 $DD $SHAD 2026-11-12T10:00:00Z
 $DE $SHAE 2026-11-13T10:00:00Z
+$DF $SHAF 2026-11-14T10:00:00Z
+$DG $SHAG 2026-11-15T10:00:00Z
+$DH $SHAH 2026-11-16T10:00:00Z
+$DI $SHAI 2026-11-17T10:00:00Z
+$DJ $SHAJ 2026-11-18T10:00:00Z
+$DK $SHAK 2026-11-19T10:00:00Z
 META
 : >"$SIM/unhealthy"
 : >"$SIM/crashloop"
@@ -216,6 +246,9 @@ worker_is 'worker dilewati tanpa worker.env' none
 grep -q '"result":"ok".*"detail":"worker_env_missing"' "$W/log/deploy.log" ||
   { echo 'GAGAL: audit worker_env_missing'; exit 1; }
 grep -q 'worker_env_missing' "$W/stderr" || { echo 'GAGAL: log worker_env_missing'; exit 1; }
+grep -q '^up openwa' "$SIM/calls" && { echo 'GAGAL: openwa dinaikkan tanpa openwa.env'; exit 1; }
+grep -q '"result":"ok".*"openwa":"openwa_env_missing"' "$W/log/deploy.log" ||
+  { echo 'GAGAL: audit openwa_env_missing'; exit 1; }
 check 'digest sama = tanpa aksi' 0 "$D1"
 [[ $(wc -l <"$W/log/deploy.log") == 1 ]] || { echo 'GAGAL: no-op menulis audit'; exit 1; }
 
@@ -357,6 +390,68 @@ done
 echo "$DE" >"$SIM/remote"
 check 'postgres siap lagi = worker ikut rilis' 0 "$DE"
 worker_is 'worker ikut rilis setelah postgres siap' "$DE"
+
+# OpenWA (runbook-wa): image pihak ketiga, bukan bagian rilis. Tanpa env/openwa.env dilewati; ada env =
+# compose up sesudah web dan worker; gagal tidak menggagalkan web; tidak ikut rollback web.
+openwa_audit() { # openwa_audit <nama> <nilai field openwa harapan>
+  tail -n 1 "$W/log/deploy.log" | grep -q "\"openwa\":\"$2\"" ||
+    { echo "GAGAL: $1 (audit openwa: $(tail -n 1 "$W/log/deploy.log"))"; exit 1; }
+}
+: >"$SIM/calls"
+echo "$DF" >"$SIM/remote"
+check 'openwa dilewati tanpa openwa.env, web terpasang' 0 "$DF"
+[[ $(cat "$SIM/local") == "$DF" ]] || { echo 'GAGAL: web tidak terpasang tanpa openwa.env'; exit 1; }
+[[ ! -e $SIM/openwa ]] || { echo 'GAGAL: openwa berjalan tanpa openwa.env'; exit 1; }
+grep -q 'openwa' "$SIM/calls" && { echo 'GAGAL: openwa disentuh tanpa openwa.env'; exit 1; }
+openwa_audit 'audit openwa_env_missing' openwa_env_missing
+
+echo 'API_MASTER_KEY=rahasia-uji-openwa-0123456789abcdef' >"$W/root/env/openwa.env"
+: >"$SIM/calls"
+echo "$DG" >"$SIM/remote"
+check 'openwa.env ada = openwa dinaikkan sesudah web' 0 "$DG"
+[[ -e $SIM/openwa ]] || { echo 'GAGAL: openwa tidak dinaikkan'; exit 1; }
+grep -A2 "^up web $DG\$" "$SIM/calls" | tail -n 2 | tr '\n' ' ' | grep -qx "up worker $DG up openwa " ||
+  { echo "GAGAL: urutan web, worker, openwa ($(tr '\n' ' ' <"$SIM/calls"))"; exit 1; }
+openwa_audit 'audit openwa_ok' openwa_ok
+grep -q 'rahasia-uji-openwa' "$W/log/deploy.log" "$W/stderr" && { echo 'GAGAL: isi openwa.env bocor ke log'; exit 1; }
+
+touch "$SIM/openwaupfail"
+echo "$DH" >"$SIM/remote"
+check 'compose up openwa gagal = web tetap terpasang tanpa rollback' 0 "$DH"
+[[ $(cat "$SIM/local") == "$DH" ]] || { echo 'GAGAL: web di-rollback karena openwa'; exit 1; }
+worker_is 'worker tetap rilis baru walau openwa gagal' "$DH"
+openwa_audit 'audit openwa_up_failed' openwa_up_failed
+grep -qxF "$DH" "$W/state/failed" && { echo 'GAGAL: digest dicatat failed karena openwa'; exit 1; }
+rm "$SIM/openwaupfail"
+
+# Web rilis baru rusak: rollback web (dan worker) ke DH; openwa yang berjalan tidak disentuh.
+touch "$SIM/openwa"
+: >"$SIM/calls"
+echo "$DI" >"$SIM/remote"
+echo "$DI" >"$SIM/unhealthy"
+check 'web rusak = rollback tanpa menyentuh openwa' 3 "$DH"
+[[ $(cat "$SIM/local") == "$DH" ]] || { echo 'GAGAL: web tidak kembali ke DH'; exit 1; }
+[[ -e $SIM/openwa ]] || { echo 'GAGAL: openwa dihentikan saat rollback web'; exit 1; }
+grep -q 'openwa' "$SIM/calls" && { echo 'GAGAL: openwa ikut rollback web'; exit 1; }
+openwa_audit 'audit rollback tanpa openwa' ''
+: >"$SIM/unhealthy"
+
+# compose.yml di VM belum memuat openwa: dilewati, openwa lama tidak disentuh.
+touch "$SIM/noopenwasvc"
+: >"$SIM/calls"
+echo "$DJ" >"$SIM/remote"
+check 'compose.yml tanpa layanan openwa' 0 "$DJ"
+grep -q 'openwa' "$SIM/calls" && { echo 'GAGAL: openwa disentuh tanpa layanan'; exit 1; }
+openwa_audit 'audit openwa_service_missing' openwa_service_missing
+rm "$SIM/noopenwasvc"
+
+# openwa.env dihapus saat openwa berjalan: rilis berikutnya menghentikan dan menghapus container.
+rm "$W/root/env/openwa.env"
+echo "$DK" >"$SIM/remote"
+check 'openwa.env dihapus = openwa dihentikan, web terpasang' 0 "$DK"
+[[ ! -e $SIM/openwa ]] || { echo 'GAGAL: openwa basi tidak dihentikan'; exit 1; }
+grep -q '^rm -sf openwa$' "$SIM/calls" || { echo 'GAGAL: openwa tidak dihapus'; exit 1; }
+openwa_audit 'audit openwa_stopped' 'openwa_env_missing openwa_stopped'
 
 # Tanpa digest sebelumnya: pesan menyebut hanya layanan yang disentuh.
 mv "$W/state" "$W/state.keep"

@@ -48,3 +48,15 @@ Notifikasi kegagalan **belum terverifikasi**. Menurut dokumentasi GitHub, notifi
 3. Bukti email sampai: belum ada cara murah memaksa run gagal tanpa mengubah lockfile `main`; anggap terverifikasi baru setelah run gagal pertama benar-benar menghasilkan email (cek tab Actions bila ragu).
 
 Risiko sisa yang diterima: CVE yang belum punya entri OSV, dan kode yang tidak berasal dari lockfile (mis. disalin ke bundel). Bila temuan mingguan muncul: naikkan versi di lockfile lewat PR biasa (rilis = image baru), atau catat pengecualian bertanggal di tabel osv-scanner.
+
+## Image OpenWA (Catat via WhatsApp)
+
+`openwa` di `infra/db-vm/compose.yml` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71…a817a` (indeks multi-arch, varian `linux/arm64` dipakai VM). Spec §6 meminta image ini ikut `osv-scanner` PR dan mingguan; **saat ini belum tercakup**:
+
+- `osv-scanner` di `ci.yml` dan `osv-mingguan.yml` hanya memindai `pnpm-lock.yaml` (`--lockfile=`); `osv-scanner.toml` hanya berisi pengecualian. Tidak ada pola image atau lockfile pihak ketiga yang bisa ditambah satu entri. OpenWA tidak ada di lockfile kita.
+- Trivy (job `image`) dan SBOM yang diattest hanya untuk image `dompetku-web`.
+- Proyek OpenWA sendiri menjalankan Trivy pada image rilis dan terjadwal (CHANGELOG 0.28.0), tetapi hasilnya tidak kita terima atau tinjau.
+
+Kontrol yang ada: digest dipatok (tidak mengambang), versi naik hanya lewat PR dengan membaca CHANGELOG, container dikurung (`cap_drop: ALL`, user 997, read-only, tanpa akses postgres/gw/worker, tanpa port host; `docs/ops/runbook-wa.md`).
+
+Tindak lanjut yang diusulkan (belum dibuat, butuh keputusan pemilik): job terjadwal mingguan `osv-scanner scan image` atau `trivy image` atas referensi digest di `compose.yml` (runner `ubuntu-latest` punya Docker; image publik, tanpa secret), gagal = email Actions seperti `osv-mingguan.yml`. Image `arm64` memuat paket Chromium Debian yang tidak dipakai engine Baileys; temuan di paket itu perlu dinilai terpisah dari temuan yang terjangkau.

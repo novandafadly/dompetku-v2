@@ -5,7 +5,7 @@ import { EnvError } from '../env';
 export interface WaEnv {
   /** Rahasia HMAC webhook (OpenWA mewajibkan minimal 16 karakter). */
   webhookSecret: string;
-  /** Origin OpenWA, mis. http://127.0.0.1:2785. */
+  /** Origin OpenWA; produksi http://openwa:2785 (network compose `wa`). */
   openwaUrl: string;
   apiKey: string;
   /** ID sesi OpenWA (UUID dari POST /api/sessions, bukan namanya). */
