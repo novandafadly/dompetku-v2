@@ -93,6 +93,22 @@ export async function targetSpace(ctx: ActionCtx, toRuang: Ruang): Promise<strin
   return spaceId;
 }
 
+/** Konteks action tingkat akun (tanpa ruang): hanya sesi penuh dan pool. */
+export interface AccountCtx {
+  pools: Pools;
+  userId: string;
+}
+
+/**
+ * Gerbang action tingkat akun (mis. WhatsApp): `requireDataUser()` lebih dulu; tidak menerima id
+ * user dari klien, `userId` selalu dari sesi.
+ */
+export async function accountContext(): Promise<AccountCtx> {
+  const state = await requireDataUser();
+  if (state === null) throw new PrototypeActionError();
+  return { pools: authService().pools, userId: state.userId };
+}
+
 /** Konteks untuk wrapper `server/ledger/*` (tanpa `kind`). */
 export function ledger(ctx: ActionCtx): { pools: Pools; userId: string; spaceId: string } {
   return { pools: ctx.pools, userId: ctx.userId, spaceId: ctx.spaceId };
@@ -129,10 +145,10 @@ function toActionError(name: string, e: unknown): { code: LedgerErrorCode; field
 }
 
 /** Baca: hasil `ActionResult`, tanpa refresh. */
-export async function query<T>(
+export async function query<T, C = ActionCtx>(
   name: string,
-  ctx: Promise<ActionCtx>,
-  fn: (ctx: ActionCtx) => Promise<T>,
+  ctx: Promise<C>,
+  fn: (ctx: C) => Promise<T>,
 ): Promise<ActionResult<T>> {
   try {
     return { ok: true, value: await fn(await ctx) };
@@ -147,10 +163,10 @@ export async function query<T>(
  * Action, yaitu salah pakai kode, dan salah pakai harus terdengar (dilempar), bukan disamarkan
  * menjadi `ActionResult` galat.
  */
-export async function mutate<T>(
+export async function mutate<T, C = ActionCtx>(
   name: string,
-  ctx: Promise<ActionCtx>,
-  fn: (ctx: ActionCtx) => Promise<T>,
+  ctx: Promise<C>,
+  fn: (ctx: C) => Promise<T>,
 ): Promise<ActionResult<T>> {
   const result = await query(name, ctx, fn);
   if (result.ok) refresh();

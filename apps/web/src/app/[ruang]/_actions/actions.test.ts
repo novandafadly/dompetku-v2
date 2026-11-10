@@ -426,7 +426,8 @@ describe('gerbang (Review Focus 5)', () => {
       expect(violations).toEqual([]);
       seen.push(...names);
     }
-    expect(seen.sort()).toEqual([...NAMES].sort());
+    // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
+    expect(seen.sort()).toEqual([...NAMES, 'createLinkCode', 'unlinkWa'].sort());
   });
 
   it('pemindai menolak bentuk yang melompati gerbang', () => {
@@ -524,7 +525,9 @@ function scanActionFile(file: string, src: string): { names: string[]; violation
     violations.push(`${file}: export async function tanpa 'use server'`);
   }
   for (const { name, firstLine } of fns) {
-    const shape = new RegExp(`^return ${HELPERS}\\('${name}', actionContext\\(ruang\\)`);
+    const shape = new RegExp(
+      `^return ${HELPERS}\\('${name}', (actionContext\\(ruang\\)|accountContext\\(\\))`,
+    );
     if (!shape.test(firstLine)) violations.push(`${file}:${name}: ${firstLine}`);
   }
   return { names: fns.map((f) => f.name), violations };

@@ -24,6 +24,13 @@ describe('layar di luar tab (Sampah, Kategori)', () => {
   });
 });
 
+describe('WhatsApp: bagian di luar tab', () => {
+  it('dikenali sebagai section, tanpa tab aktif', () => {
+    expect(sectionFromPathname('/pribadi/whatsapp')).toBe('whatsapp');
+    expect(tabFromPathname('/bersama/whatsapp')).toBeNull();
+  });
+});
+
 describe('buildAddWalletHref (S6-C6: Tambah dompet dari Catat dan Beranda)', () => {
   it('Dompet ruang itu dengan ?tambah=1, query yang dibawa tetap ada', () => {
     expect(buildAddWalletHref('pribadi', '')).toBe('/pribadi/dompet?tambah=1');

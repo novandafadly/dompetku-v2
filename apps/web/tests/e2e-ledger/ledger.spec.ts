@@ -625,6 +625,8 @@ for (const path of [
   'detail',
   '/pribadi/sampah',
   '/pribadi/dompet',
+  // WhatsApp (Catat WA Task 6): fitur mati di e2e, jadi keadaan "belum aktif"; pulau klien malas.
+  '/pribadi/whatsapp',
 ]) {
   test(`JS muat dingin ${path} mode nyata ≤ ${String(BUDGET_KB)} kB`, async ({
     browser,
