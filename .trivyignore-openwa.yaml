@@ -1,0 +1,5 @@
+# Pengecualian Trivy untuk image OpenWA (workflow openwa-image.yml). Terpisah dari .trivyignore.yaml
+# (image web): CVE image pihak ketiga tidak bisa kita tambal sendiri; perbaikannya = naik versi.
+# Setiap entri wajib: id, purls, expired_at <= 30 hari, statement (alasan + persetujuan pemilik).
+# Sesudah expired_at entri gugur dan CVE kembali menggagalkan pemindaian. docs/ops/ci-keamanan.md.
+vulnerabilities: []

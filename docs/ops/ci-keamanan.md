@@ -51,12 +51,25 @@ Risiko sisa yang diterima: CVE yang belum punya entri OSV, dan kode yang tidak b
 
 ## Image OpenWA (Catat via WhatsApp)
 
-`openwa` di `infra/db-vm/compose.yml` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71…a817a` (indeks multi-arch, varian `linux/arm64` dipakai VM). Spec §6 meminta image ini ikut `osv-scanner` PR dan mingguan; **saat ini belum tercakup**:
+`openwa` di `infra/db-vm/compose.yml` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa:0.27.1@sha256:1a2d0c39…af9068` (indeks multi-arch, varian `linux/arm64` dipakai VM). Image ini tidak dibangun repo ini, jadi tidak tercakup Trivy job `image`/release (hanya `dompetku-web`) maupun osv-scanner (hanya `pnpm-lock.yaml`). Spec §6 dipenuhi dengan pemindaian image tersendiri:
 
-- `osv-scanner` di `ci.yml` dan `osv-mingguan.yml` hanya memindai `pnpm-lock.yaml` (`--lockfile=`); `osv-scanner.toml` hanya berisi pengecualian. Tidak ada pola image atau lockfile pihak ketiga yang bisa ditambah satu entri. OpenWA tidak ada di lockfile kita.
-- Trivy (job `image`) dan SBOM yang diattest hanya untuk image `dompetku-web`.
-- Proyek OpenWA sendiri menjalankan Trivy pada image rilis dan terjadwal (CHANGELOG 0.28.0), tetapi hasilnya tidak kita terima atau tinjau.
+- **Workflow `.github/workflows/openwa-image.yml`** (Trivy, image `ghcr.io/aquasecurity/trivy@sha256:790fd66d…` yang sama dengan `ci.yml`/`release.yml`, satu versi Trivy di repo): Senin 02:43 UTC = 09:43 WIB, `workflow_dispatch`, dan setiap PR yang mengubah `infra/db-vm/compose.yml`, `.trivyignore-openwa.yaml`, atau workflow itu. `--platform linux/arm64 --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --scanners vuln`; tabel temuan di ringkasan run. `contents: read`, tanpa secret (image publik), `concurrency` per ref, batas 15 menit.
+- **Satu sumber pin:** referensi dibaca dari baris `image:` layanan `openwa` di `compose.yml` (harus tepat satu, bentuk `ghcr.io/rmyndharis/openwa:X.Y.Z@sha256:<64 hex>`, selain itu job gagal). Naik versi di `compose.yml` otomatis memicu pemindaian di PR-nya.
+- **Pengecualian:** `.trivyignore-openwa.yaml` (terpisah dari `.trivyignore.yaml` image web), saat ini kosong. Entri baru wajib `purls`, `expired_at` paling lama 30 hari, alasan, dan persetujuan pemilik, dicatat di tabel di bawah. Perbaikan yang benar untuk CVE image pihak ketiga = naik versi OpenWA, bukan pengecualian.
+- Image `arm64` memuat paket Chromium Debian yang tidak dipakai engine Baileys; temuan di paket itu tetap menggagalkan pemindaian (tidak dikecualikan per paket), nilai terpisah dari temuan yang terjangkau sebelum memutuskan pengecualian.
+- Belum pernah dijalankan (sesi tanpa GitHub Actions); run pertama terjadi di PR ini. Bila merah karena temuan di image yang dipatok: keputusan pemilik (pengecualian bertanggal, versi lain, atau tunda fitur). Notifikasi kegagalan jadwal: sama dengan osv-scanner mingguan (bagian di bawah, belum terverifikasi).
 
-Kontrol yang ada: digest dipatok (tidak mengambang), versi naik hanya lewat PR dengan membaca CHANGELOG, container dikurung (`cap_drop: ALL`, user 997, read-only, tanpa akses postgres/gw/worker, tanpa port host; `docs/ops/runbook-wa.md`).
+| ID      | Paket | Kedaluwarsa | Alasan |
+| ------- | ----- | ----------- | ------ |
+| (belum) |       |             |        |
 
-Tindak lanjut yang diusulkan (belum dibuat, butuh keputusan pemilik): job terjadwal mingguan `osv-scanner scan image` atau `trivy image` atas referensi digest di `compose.yml` (runner `ubuntu-latest` punya Docker; image publik, tanpa secret), gagal = email Actions seperti `osv-mingguan.yml`. Image `arm64` memuat paket Chromium Debian yang tidak dipakai engine Baileys; temuan di paket itu perlu dinilai terpisah dari temuan yang terjangkau.
+**Umur rilis dan naik versi.** Image dipatok ke rilis terbaru yang berumur paling sedikit 7 hari saat dipatok (sama dengan `minimumReleaseAge` di `renovate.json` dan pnpm). 2026-11-10: `0.29.1` (2026-11-07) dan `0.28.0`/`0.29.0` (2026-11-06) belum 7 hari; `0.27.1` (tag `v0.27.1` 2026-11-02, CHANGELOG 2026-11-02) dipilih. Fitur yang dipakai runbook ada di `0.27.1` (diperiksa di sumber tag: `RESOLVE_LID_TO_PHONE`, key `operator` dengan `allowedSessions`/`allowedIps`, `AUTO_START_SESSIONS`, `WEBHOOK_SSRF_PROTECT`/`SSRF_ALLOWED_HOSTS`, `WEBHOOK_TIMEOUT`, `MESSAGE_RETENTION_DAYS`, `UPDATE_CHECK_ENABLED`, `ENABLE_SWAGGER`, `CSP_UPGRADE_INSECURE_REQUESTS`, `POST /pairing-code`, `/api/health/ready`, uid 997, `docker-entrypoint.sh` identik dengan `0.29.1`, tanda tangan `X-OpenWA-Signature` dan `senderPhone` sama).
+
+`renovate.json` punya aturan untuk `ghcr.io/rmyndharis/openwa` (manager `docker-compose` bawaan `config:recommended`, `minimumReleaseAge` 7 hari, tanpa automerge). Apakah Renovate terpasang di repo dan mendapat tanggal rilis dari GHCR **belum terverifikasi**; prosedur manual tetap berlaku:
+
+1. Pilih tag rilis `X.Y.Z` yang berumur >= 7 hari: tanggal tag git `vX.Y.Z` (`git for-each-ref refs/tags/vX.Y.Z --format '%(creatordate:iso)'` di klon `github.com/rmyndharis/OpenWA`) dan entri `CHANGELOG.md`. Baca bagian "Upgrade notes" semua versi di antaranya.
+2. Ambil digest indeks multi-arch tag itu dari GHCR (bukan digest per arsitektur): `docker buildx imagetools inspect ghcr.io/rmyndharis/openwa:X.Y.Z` (baris `Digest:`, platform `linux/arm64` harus ada).
+3. Cek ulang di sumber tag: `Dockerfile` (uid 997, `HEALTHCHECK`), `docker-entrypoint.sh` (mode non-root), dan variabel env yang dipatok di `compose.yml`.
+4. PR yang mengganti tag dan digest bersamaan di `compose.yml` (komentar versi + tanggal ikut diubah); workflow `openwa-image.yml` memindainya di PR itu. Pasang di VM: runbook-wa "Naik versi OpenWA".
+
+Kontrol lain: digest dipatok (tidak mengambang), container dikurung (`cap_drop: ALL`, user 997, read-only, tanpa port host, hanya network `wa` ke `wa-proxy` dan `wa_egress` ke internet dengan IMDS/VCN/jaringan privat/port host diblokir `firewall.sh`; `docs/ops/runbook-wa.md`). Proyek OpenWA sendiri menjalankan Trivy pada image rilis dan terjadwal (CHANGELOG 0.28.0); hasilnya tidak kita terima, jadi tidak diandalkan.
