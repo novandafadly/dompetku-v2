@@ -1,6 +1,6 @@
 # Catat lewat WhatsApp (OpenWA): desain
 
-Status: **menunggu persetujuan pemilik** (2026-11-09). Belum ada kode. Setelah disetujui, langkah berikutnya `superpowers:writing-plans`.
+Status: **disetujui pemilik, diimplementasikan** (PR #27, 2026-11-10). Bagian ini diperbarui di tempat sesuai implementasi; daftar perubahan beserta alasannya ada di bagian 12 "Perubahan saat implementasi (2026-11-10)".
 
 ## 1. Masalah dan tujuan
 
@@ -52,10 +52,11 @@ Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 - **Jenis.** Bawaan pengeluaran. Pemasukan bila ada tanda `+` di awal nominal atau pesan, atau kata penanda: `gaji`, `masuk`, `terima`, `pemasukan`.
 - **Ruang.** Bawaan Pribadi. Bersama bila kata pertama `b` atau ada kata `bersama`.
 - **Keterangan.** Sisa teks setelah nominal dan penanda dibuang, dipangkas, maksimum 200 karakter (batas `createEntrySchema`).
-- **Kategori.** Dari kamus kata kunci yang sudah ada (`app.category_keywords()`, migrasi 0107) atas keterangan; tidak cocok → kategori "Lainnya" jenis itu di ruang itu. Kategori tidak bisa dipaksa dari teks pada v1.
+- **Kategori.** Dari kamus kata kunci yang sudah ada (`app.category_keywords()`, migrasi 0107) atas keterangan; tidak cocok → saran teratas `api.suggest_categories` (riwayat 30 hari, lalu nama) untuk jenis itu di ruang itu; balasan ✅ menyebut kategorinya supaya tebakan yang salah terlihat dan bisa dibatalkan atau diubah di app. Seed kategori tidak punya "Lainnya". Kategori tidak bisa dipaksa dari teks pada v1.
 - **Dompet.** Dompet bawaan ruang untuk user itu (lihat 4.4).
 - **Tanggal.** Hari ini (WIB, `app.today()`). `kemarin` = P1.
-- **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app.
+- **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app. "Terakhir" = pesan `recorded` atau `cancelled` terbaru: `batal` kedua sesudah `batal` pertama tidak mundur ke catatan yang lebih lama.
+- **Saldo negatif.** Pengeluaran yang membuat saldo dompet negatif (`saldo_negatif`) ditolak dari WhatsApp dengan balasan yang mengarah ke app; tidak ada penimpaan lewat chat.
 
 Contoh:
 
@@ -71,9 +72,9 @@ beli 2 kopi 50rb        → ditolak (dua angka); balasan: contoh format
 
 Satu baris, tanpa emoji dekoratif selain tanda status.
 
-- Sukses: `✅ Makan Siang & Minum Rp25.000 · Pribadi · ketik batal untuk membatalkan`
+- Sukses: `✅ Makan Siang & Minum Rp 25.000 · Pribadi · ketik batal untuk membatalkan` (nominal mengikuti `formatRupiah` repo: `Rp` + spasi tanpa putus (NBSP) + angka bertitik)
 - Tidak terbaca: `❌ Tidak terbaca. Contoh: 25rb makan siang` (tidak ada yang dicatat)
-- Dibatalkan: `↩️ Dibatalkan: Makan Siang & Minum Rp25.000`
+- Dibatalkan: `↩️ Dibatalkan: Makan Siang & Minum Rp 25.000`
 - Nomor belum terhubung: balasan satu kali per jam berisi cara menghubungkan (4.3). Tanpa data apa pun.
 - Kegagalan sistem (DB tidak terjangkau): `⚠️ Gagal menyimpan, coba lagi sebentar lagi`. Pesan sama yang dikirim ulang aman karena idempoten (5.3).
 
@@ -92,7 +93,7 @@ Tidak ada pesan OTP yang dikirim bot ke nomor yang belum terbukti miliknya.
 
 ### 4.4 Dompet bawaan
 
-Dompet bawaan per ruang adalah dompet aktif milik user yang paling baru dipakai di ruang itu; bila belum ada riwayat, dompet aktif pertama menurut urutan tampil. Ini keputusan saya (dapat diubah di plan); pengaturan eksplisit dompet bawaan WhatsApp adalah P1.
+Dompet bawaan per ruang adalah dompet aktif milik user yang paling baru dipakai di ruang itu; bila belum ada riwayat, dompet aktif pertama dengan kantong `operasional` lebih dulu, lalu menurut urutan tampil (sama dengan Catat di app). **Dompet `kantor` tidak pernah jadi bawaan**, di kedua cabang: pengeluaran sesudah talangan tidak boleh diam-diam masuk Kas Kantor. Ruang yang hanya punya dompet kantor dibalas "belum ada dompet aktif, buka app dulu". Ini keputusan saya; pengaturan eksplisit dompet bawaan WhatsApp adalah P1.
 
 ## 5. Rancangan teknis
 
@@ -101,17 +102,17 @@ Dompet bawaan per ruang adalah dompet aktif milik user yang paling baru dipakai 
 - Container **`openwa`** di compose project `dompetku` (VM DB: 3 vCPU, 17 GiB), profil `web`, image diikat digest, `linux/arm64`. Engine `baileys`, penyimpanan SQLite, tanpa Redis. Volume bernama untuk sesi dan basis data kecil. `read_only` kecuali volume dan tmpfs, `cap_drop: [ALL]`, `no-new-privileges`, `mem_limit` sekitar 512 MB (diukur saat implementasi).
 - Network baru **`wa`** (internal, subnet dipatok di luar pool bawaan, pola sama dengan `worker_db`): hanya `openwa` dan `web`. Web memanggil REST OpenWA lewat `wa`; OpenWA memanggil webhook web lewat `wa`.
 - Network baru **`wa_egress`** hanya untuk `openwa`: keluar ke server WhatsApp. Egress tidak difilter per host (server WhatsApp tidak punya daftar host stabil); `openwa` tidak berbagi network dengan postgres, gw, atau worker.
-- Dasbor dan Swagger OpenWA tidak dipublikasikan. QR dipindai lewat SSH tunnel ke port loopback sementara (langkah di runbook).
-- Webhook tidak melewati nginx/gw publik. Hanya `openwa` (network `wa`) yang bisa memanggilnya.
+- Dasbor dan Swagger OpenWA tidak dipublikasikan. Pemautan nomor utamanya lewat kode pairing (`docker compose exec`, tanpa port); cadangannya QR lewat SSH tunnel ke port loopback sementara (langkah di runbook).
+- Webhook dikirim `openwa` ke `http://web:3000` lewat network `wa`, bukan lewat nginx/gw. Karena gw meneruskan semua path ke web, gw menjawab `404` untuk `/api/wa/*` dari luar (`@wa path` di Caddyfile). `OPENWA_URL` di web harus `http://openwa:2785` (mode bridge: `127.0.0.1` menunjuk web sendiri). OpenWA dijalankan dengan `RESOLVE_LID_TO_PHONE=true` agar pengirim `@lid` membawa `senderPhone`.
 
 ### 5.2 Penerima webhook (di web)
 
 Route handler baru (mis. `/api/wa/webhook`), bukan server action. Urutan, semuanya wajib:
 
-1. Verifikasi HMAC OpenWA atas body mentah dengan rahasia dari env; salah → 401, tidak diproses. Perbandingan waktu-tetap.
+1. Verifikasi HMAC OpenWA (`X-OpenWA-Signature: sha256=<hex>`, tanpa stempel waktu) atas byte mentah body (`arrayBuffer`, bukan `text()`) dengan rahasia dari env `WA_WEBHOOK_SECRET`; salah → 401, tidak diproses. Perbandingan waktu-tetap. Sebelumnya: fitur mati (env kosong) 404, ukuran di atas 64 KiB 413.
 2. Hanya event pesan masuk, pesan pribadi (bukan grup, bukan pesan sendiri, bukan siaran/status).
-3. Cari user dari nomor pengirim lewat fungsi DB `SECURITY DEFINER` sempit (`api.wa_resolve_sender(phone)`) yang hanya mengembalikan `user_id` bila nomor terhubung dan terverifikasi. Tanpa ini, web (role `dompetku_web` di bawah RLS) tidak bisa memetakan nomor ke user.
-4. Batas laju per nomor (mis. 30 pesan/menit, nilai dipasang di env). Lewat batas → abaikan diam-diam dan catat log.
+3. Nomor pengirim = `senderPhone` bila ada, selain itu `from` (`@c.us`); `@lid` tanpa `senderPhone` diabaikan. Cari user dari nomor itu lewat fungsi DB `SECURITY DEFINER` sempit (`api.wa_resolve_sender(phone)`) yang hanya mengembalikan `user_id` bila nomor terhubung dan terverifikasi. Tanpa ini, web (role `dompetku_web` di bawah RLS) tidak bisa memetakan nomor ke user.
+4. Batas laju per nomor (30 pesan/menit, `WA_RATE_PER_MIN`; dicek sebelum pencarian pengirim). Lewat batas → abaikan diam-diam dan catat log.
 5. Parse → bangun `LedgerCtx` dengan user itu → `createEntry` lewat `withUser`/`withLedger` seperti jalur app. Tidak ada jalur tulis DB lain.
 6. Balas lewat pengirim OpenWA (5.4).
 
@@ -120,7 +121,8 @@ Nominal di atas batas WhatsApp (usulan Rp100.000.000, di env) ditolak dengan bal
 ### 5.3 Idempotensi dan pembatalan
 
 - `clientId` entri = UUID v5 deterministik dari id pesan WhatsApp. Webhook yang dikirim ulang oleh OpenWA menghasilkan `replayed: true`, bukan entri ganda.
-- Tabel baru `app.wa_messages` (migrasi sesudah 0122, nomor terakhir saat ini): `message_id` unik, `user_id`, `entry_id`, `status`, `created_at`. **Teks mentah pesan tidak disimpan.** Dipakai untuk dedupe, "catatan WhatsApp terakhir" untuk `batal`, dan pemantauan kesalahan.
+- Id pesan OpenWA di-hash (SHA-256 hex) sebelum dipakai atau disimpan (id mentah bisa memuat nomor); `clientId` = UUID v5 dari hash itu.
+- Tabel baru `app.wa_messages` (migrasi 0123): `message_id` (hash) unik, `user_id`, `entry_id`, `entry_version`, `status` (`pending`, `recorded`, `rejected`, `cancelled`, `ignored`), `created_at`. Klaim `pending` yang lebih tua dari 30 detik bisa diambil alih (pemulihan bila proses mati sebelum selesai). **Teks mentah pesan tidak disimpan.** Belum ada retensi (job purge menyusul). Dipakai untuk dedupe, "catatan WhatsApp terakhir" untuk `batal`, dan pemantauan kesalahan.
 - `batal`: `voidEntry` dengan `expectedVersion` dari entri; bila versi sudah berubah (diedit di app) atau lewat 10 menit → balasan "tidak bisa dibatalkan dari WhatsApp, buka app" dan tidak ada yang berubah.
 
 ### 5.4 Antarmuka pengirim/penerima (siap pindah ke Cloud API)
@@ -129,23 +131,24 @@ Modul `server/wa/` memiliki: `parseMessage(text)` (murni, tanpa I/O, tabel uji),
 
 ### 5.5 Data baru
 
-Migrasi (nomor berikutnya sesudah 0122, `main` per 2026-11-09):
+Migrasi `0123_wa_catat.sql`:
 
 - `app.wa_links` (`user_id` unik, `phone_e164` unik, `verified_at`, kode hubung sekali pakai dan kedaluwarsa); RLS: user hanya melihat barisnya.
 - `app.wa_messages` (5.3).
-- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink()`. Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
-- Event audit sistem baru (hubungkan/putuskan) menambah daftar event reserved; tes katalog harus diperbarui (catatan "Ditunda kecil" 7 di CLAUDE.md).
+- `api.wa_create_link_code()`, `api.wa_confirm_link(code, phone)`, `api.wa_resolve_sender(phone)`, `api.wa_unlink()`, serta `api.wa_default_account(space)`, `api.wa_claim_message(id)`, `api.wa_finish_message(id, status, entry)`, `api.wa_last_cancellable()` (INVOKER). Tanda tangan akhir: BSD §16 "Catatan WA". Fungsi yang dipanggil webhook tanpa konteks user (`confirm_link`, `resolve_sender`) `SECURITY DEFINER` dengan `search_path = ''`, hak `EXECUTE` hanya `dompetku_web`, dan diuji pgTAP (termasuk bahwa nomor tak terhubung tidak membocorkan apa pun).
+- Event audit sistem baru `wa_linked` dan `wa_unlinked` menambah daftar event reserved; tes katalog diperbarui. Entri yang dicatat lewat WhatsApp tidak punya event audit; jejaknya ledger dan `wa_messages`.
 
 ### 5.6 UI
 
-Satu bagian kecil "WhatsApp" di pengaturan: status terhubung, tombol Hubungkan (menampilkan kode), Putuskan. Tempat tepatnya ditentukan saat plan; wajib dalam budget JS 162 kB per rute (Beranda nyata 157,5 kB, headroom 0,3 kB: bagian ini harus dimuat lazy atau di rute lain). Salinan tanpa "rumah tangga". Mode demo/prototipe tidak memuat apa pun dari fitur ini.
+Satu halaman kecil `/[ruang]/whatsapp` (butir "WhatsApp" di Menu, hanya mode nyata): status terhubung, tombol Hubungkan (menampilkan kode), Putuskan. Tempat tepatnya ditentukan saat plan; wajib dalam budget JS 162 kB per rute (Beranda nyata 157,5 kB, headroom 0,3 kB: bagian ini harus dimuat lazy atau di rute lain). Salinan tanpa "rumah tangga". Mode demo/prototipe tidak memuat apa pun dari fitur ini.
 
 ## 6. Keamanan
 
 - Wajib review keamanan (uang, auth, DB) dan review akhir sebelum merge (CLAUDE.md).
-- Ancaman utama: pesan dipalsukan (HMAC + pemetaan nomor terbukti + hanya pesan pribadi); pengambilalihan nomor (user bisa memutuskan; nomor SIM hilang → putuskan di app); kebocoran sesi WhatsApp (volume hanya `openwa`, izin 0600, masuk daftar jaga akses; sesi bocor = akun bot bisa diambil alih); kompromi container `openwa` (network terpisah, tanpa akses postgres, hanya bisa memanggil webhook yang ber-HMAC dan dibatasi laju); log tidak mencatat teks pesan maupun nominal.
-- Rahasia (`OPENWA_API_KEY`, `OPENWA_WEBHOOK_SECRET`) diisi pemilik langsung di VM (`env/openwa.env`, tambahan di `web.env`), tidak lewat chat. Ada `.env.example`.
-- OpenWA pada digest tertentu; ikut `osv-scanner` PR dan mingguan.
+- Ancaman utama: pesan dipalsukan dari luar (HMAC + pemetaan nomor terbukti + hanya pesan pribadi; `/api/wa/*` 404 di gw); pengambilalihan nomor (user bisa memutuskan; nomor SIM hilang → putuskan di app); kebocoran sesi WhatsApp (volume hanya `openwa`, izin 700, masuk daftar jaga akses; sesi bocor = akun bot bisa diambil alih); tebak kode hubung (batas laju di web: 5 per jam per nomor dan 30 per jam global); log tidak mencatat teks pesan maupun nominal.
+- **Kompromi container `openwa` (dikoreksi saat implementasi, rincian di `docs/ops/runbook-wa.md` "Risiko").** Klaim awal "hanya bisa memanggil webhook ber-HMAC" tidak benar. (1) `openwa` di network `wa` menjangkau **semua** route web, melewati gw. `clientIp()` membaca `X-Forwarded-For` apa adanya (gw biasanya menimpanya), jadi jeda auth yang **hanya** berbasis IP bisa dilewati (gagal TOTP saat masuk, `signUpOwner`, `rl-undangan`, `rl-passkey`; separuh IP dari jeda password/recovery/reset) dan IP audit bisa dipalsukan. Jeda per akun, lockout 2FA, dan kewajiban password + TOTP/passkey tetap berlaku. Perbaikan yang tepat: sidecar Caddy `wa-proxy` (hanya `POST /api/wa/webhook`, header IP dibuang); belum dibuat, keputusan pemilik. (2) `openwa` memegang rahasia webhook (OpenWA harus menandatangani kiriman), jadi bisa memalsukan webhook **bertanda tangan sah** atas nama nomor terhubung mana pun. Dampaknya dibatasi `WA_MAX_AMOUNT` per entri, `WA_RATE_PER_MIN` entri per menit per nomor, `batal`/pemulihan dari app, dan balasan bot yang juga sampai ke nomor korban (membuka pemalsuan). Sidecar tidak menutup ini. (3) Lewat `wa_egress` (NAT, tanpa filter) `openwa` menjangkau metadata OCI, VCN, dan port host; aturan `DOCKER-USER` disarankan, belum dibuat.
+- Rahasia diisi pemilik langsung di VM, tidak lewat chat; ada `.env.example`. Nama dan tempatnya (berbeda dari rancangan awal): `API_MASTER_KEY` di `env/openwa.env`; `WA_WEBHOOK_SECRET` (minimal 16 karakter, dipakai web dan didaftarkan ke OpenWA lewat API, tidak disalin ke `openwa.env`), `OPENWA_API_KEY` (key operator OpenWA yang dibatasi ke sesi bot dan subnet `wa`, bukan master key), `OPENWA_URL`, `OPENWA_SESSION` (UUID sesi, bukan nama), `WA_BOT_NUMBER`, `WA_MAX_AMOUNT`, `WA_RATE_PER_MIN` di `web.env`.
+- OpenWA pada digest tertentu (`0.29.1@sha256:5d4e2d71…`). Cakupan `osv-scanner`: hanya lockfile, bukan image; pemindaian image mingguan diusulkan (`docs/ops/ci-keamanan.md`), keputusan pemilik.
 
 ## 7. Persyaratan
 
@@ -193,8 +196,30 @@ Kriteria penerimaan inti (Given/When/Then):
 
 ## 10. Catatan keputusan saya (bukan keputusan pemilik)
 
-Harap diperiksa saat membaca: batas nominal WhatsApp Rp100 juta; batas `batal` 10 menit; batas laju 30 pesan/menit; aturan dompet bawaan 4.4; tidak menyimpan teks mentah; egress `wa_egress` tidak difilter per host; `kemarin` dan `saldo` ditunda ke P1; anti tebak-kode hubung di web (5 percobaan/jam per nomor, 30/jam global), bukan di DB.
+Harap diperiksa saat membaca: batas nominal WhatsApp Rp100 juta dan batas laju 30 pesan/menit (juga batas banjir entri palsu dari `openwa` yang disusupi: pertimbangkan menurunkan bawaannya); batas `batal` 10 menit; aturan dompet bawaan 4.4 (tanpa dompet kantor; fallback `operasional`); kategori bawaan = saran teratas, bukan "Lainnya"; `saldo_negatif` ditolak dari WhatsApp; tidak menyimpan teks mentah dan id pesan di-hash; egress `wa_egress` tidak difilter per host; `kemarin` dan `saldo` ditunda ke P1; anti tebak-kode hubung di web (5 percobaan/jam per nomor, 30/jam global; batas global bisa dipakai untuk mengunci semua orang satu jam), bukan di DB; `wa_messages` belum punya retensi.
 
 ## 11. Eksekusi
 
 Sesuai CLAUDE.md: branch fitur dari `main` terbaru (`claude/<milestone>-wa-catat`), plan via `superpowers:writing-plans`, eksekusi subagent-driven (logika uang/RLS/DB memakai model terkuat), gerbang `lint typecheck test format:check`, `build`, e2e, review task dan review keamanan sebelum merge. Merge = deploy dan migrasi di produksi.
+
+## 12. Perubahan saat implementasi (2026-11-10)
+
+Teks bagian di atas sudah diperbarui di tempat. Daftar perubahan dan alasannya:
+
+| Bagian | Perubahan | Alasan |
+|---|---|---|
+| 4.1 | Kategori tanpa kecocokan kamus = saran teratas `api.suggest_categories`, bukan "Lainnya"; balasan ✅ menyebut kategori | Seed 0106 tidak punya kategori "Lainnya" dan `createEntrySchema` mewajibkan kategori; migrasi seed akan mengubah ruang yang sudah ada di produksi. Balasan + `batal` menutup risiko tebakan salah |
+| 4.1 | `batal` kedua tidak mundur ke catatan lama; `saldo_negatif` ditolak dari WhatsApp | Temuan review Task 2 (batal berantai membatalkan catatan yang tidak dimaksud); app menawarkan konfirmasi saldo negatif, chat tidak bisa memberi konfirmasi yang aman |
+| 4.2 | Nominal di balasan mengikuti `formatRupiah` repo: `Rp 25.000` (NBSP) | Satu sumber format uang; contoh spec `Rp25.000` tidak sama dengan keluaran app |
+| 4.4 | Dompet bawaan tidak pernah `kantor`; fallback memilih `operasional` dulu | Review Task 2: pengeluaran sesudah talangan akan diam-diam masuk Kas Kantor; sama dengan aturan Catat di app |
+| 5.2 | Pengirim = `senderPhone ?? from`; `@lid` tanpa `senderPhone` diabaikan; OpenWA dijalankan dengan `RESOLVE_LID_TO_PHONE=true` | Pengirim `@lid` tidak membawa nomor; tanpa ini mereka tidak pernah bisa menghubungkan nomor |
+| 5.2 | HMAC atas byte mentah (`arrayBuffer`) | `Request.text()` menghapus BOM dan mengganti byte tidak sah; HMAC akan berbeda dari pengirim |
+| 5.3 | Id pesan di-hash sebelum disimpan; status `pending` + ambil alih 30 detik; kolom `entry_version` | Id OpenWA bisa memuat nomor; menutup jendela crash antara klaim dan `createEntry`; `batal` hanya bila versi entri belum berubah |
+| 5.1, 6 | Rahasia bernama `WA_WEBHOOK_SECRET` (bukan `OPENWA_WEBHOOK_SECRET`), hanya di `web.env`; web memakai key operator OpenWA yang dibatasi, bukan master key; `OPENWA_URL` = `http://openwa:2785`; `OPENWA_SESSION` = UUID sesi | Kode memakai prefiks `WA_`; satu salinan rahasia mengurangi paparan; mode bridge; rute OpenWA memakai UUID sesi |
+| 5.1 | gw menjawab 404 untuk `/api/wa/*` | gw meneruskan semua path ke web, jadi webhook terjangkau dari internet tanpa blokir ini |
+| 5.5 | `app.wa_links` dan kode hubung dipisah menjadi `wa_links` + `wa_link_codes` (hanya hash); tiga tabel dan sembilan fungsi, bukan empat fungsi; tanpa event audit untuk entri WhatsApp | Kode tidak boleh tersimpan polos; fungsi INVOKER tambahan dibutuhkan handler; entri WhatsApp dijejak lewat ledger + `wa_messages` |
+| 6 | Model ancaman `openwa` yang disusupi dikoreksi (akses semua route web, bypass jeda IP, webhook palsu bertanda tangan sah, egress) | Review Task 7: klaim "hanya bisa memanggil webhook ber-HMAC" salah. Keputusan pemilik: terima atau bangun sidecar `wa-proxy`; menurunkan `WA_MAX_AMOUNT`/`WA_RATE_PER_MIN` |
+| 6 | Anti tebak-kode: batas laju 5/jam per nomor dan 30/jam global ada di web | DB tidak membatasi percobaan; batas global bisa mengunci semua orang satu jam (utang) |
+| 6 | Pemindaian image OpenWA tidak otomatis | `osv-scanner` repo hanya membaca lockfile; job mingguan untuk image diusulkan, perlu keputusan pemilik |
+| 5.3 | `wa_messages` tanpa retensi | Job purge belum dibuat (utang) |
+| 5.6 | UI = halaman `/[ruang]/whatsapp` lewat Menu, pulau klien dimuat malas (rute 148,3 kB) | Beranda nyata hanya punya headroom 0,3 kB |
