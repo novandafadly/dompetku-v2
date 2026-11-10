@@ -260,7 +260,7 @@ const PICK_SQL = `
 const DEFAULT_ACCOUNT_SQL = `
   select a.id, a.name
     from app.accounts a
-   where a.id = api.wa_default_account(p_space_id => $1)`;
+   where a.id = (select api.wa_default_account(p_space_id => $1))`;
 
 /**
  * Dompet aktif ruang itu (RLS: hanya ruang anggota), untuk mencocokkan penanda `@nama`. Kantong
