@@ -26,6 +26,14 @@ describe('WhatsappReal', () => {
     expect(island).not.toHaveBeenCalled();
   });
 
+  it('nomor bot belum diatur: keadaan tenang, tanpa pengelola dan tanpa Hubungkan', () => {
+    island.mockClear();
+    render(<WhatsappReal ruang="pribadi" status={{ state: 'nobot' }} />);
+    expect(screen.getByText('Nomor bot belum diatur.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Buat kode|Hubung/ })).toBeNull();
+    expect(island).not.toHaveBeenCalled();
+  });
+
   it('aktif: pulau menerima status yang sudah tersamar; H1 bisa difokus', () => {
     island.mockClear();
     const status = { state: 'linked', masked: '+62 812••••89', botNumber: null } as const;

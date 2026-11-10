@@ -23,6 +23,7 @@ const POOLS = { auth: {}, app: { tag: 'app' } } as unknown as Pools;
 const USER = '11111111-1111-4111-8111-111111111111';
 const ctx: WaCtx = { pools: POOLS, userId: USER };
 const ENV = { botNumber: '+62 811 0000 111' };
+const BOT = '628110000111';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -67,13 +68,31 @@ describe('loadWaLink', () => {
 
   it('belum terhubung: unlinked + nomor bot', async () => {
     m.query.mockResolvedValue({ rows: [] });
-    expect(await loadWaLink(ctx)).toEqual({ state: 'unlinked', botNumber: ENV.botNumber });
+    expect(await loadWaLink(ctx)).toEqual({ state: 'unlinked', botNumber: BOT });
+  });
+
+  it('nomor bot kosong atau tak sah, belum terhubung: nobot (tanpa Hubungkan)', async () => {
+    m.query.mockResolvedValue({ rows: [] });
+    m.readWaEnv.mockReturnValue({ botNumber: null });
+    expect(await loadWaLink(ctx)).toEqual({ state: 'nobot' });
+    m.readWaEnv.mockReturnValue({ botNumber: 'abc' });
+    expect(await loadWaLink(ctx)).toEqual({ state: 'nobot' });
+  });
+
+  it('nomor bot kosong tapi sudah terhubung: tetap linked agar bisa diputus', async () => {
+    m.query.mockResolvedValue({ rows: [{ phone_e164: '+6281234567889' }] });
+    m.readWaEnv.mockReturnValue({ botNumber: null });
+    expect(await loadWaLink(ctx)).toEqual({
+      state: 'linked',
+      masked: '+62 812••••89',
+      botNumber: null,
+    });
   });
 
   it('terhubung: hanya versi tersamar yang keluar, lewat withUser pool app', async () => {
     m.query.mockResolvedValue({ rows: [{ phone_e164: '+6281234567889' }] });
     const res = await loadWaLink(ctx);
-    expect(res).toEqual({ state: 'linked', masked: '+62 812••••89', botNumber: ENV.botNumber });
+    expect(res).toEqual({ state: 'linked', masked: '+62 812••••89', botNumber: BOT });
     expect(JSON.stringify(res)).not.toContain('6281234567889');
     expect(m.withUser).toHaveBeenCalledWith(POOLS.app, USER, expect.any(Function));
     // Kueri tanpa filter user: RLS baris sendiri yang membatasi, bukan parameter dari luar.
@@ -97,6 +116,12 @@ describe('createWaLinkCode', () => {
 
   it('fitur mati: WaDisabledError, DB tidak disentuh', async () => {
     m.readWaEnv.mockReturnValue(null);
+    await expect(createWaLinkCode(ctx)).rejects.toBeInstanceOf(WaDisabledError);
+    expect(m.withUser).not.toHaveBeenCalled();
+  });
+
+  it('nomor bot belum diatur: ditolak seperti mati', async () => {
+    m.readWaEnv.mockReturnValue({ botNumber: null });
     await expect(createWaLinkCode(ctx)).rejects.toBeInstanceOf(WaDisabledError);
     expect(m.withUser).not.toHaveBeenCalled();
   });

@@ -65,11 +65,11 @@ describe('halaman WhatsApp (DB sungguhan)', () => {
   it('loadWaLink: belum terhubung, lalu terhubung dengan nomor tersamar', async () => {
     expect(await loadWaLink(ctxOf(n))).toEqual({
       state: 'unlinked',
-      botNumber: '+62 811 0000 111',
+      botNumber: '628110000111',
     });
     await link(n, N_PHONE);
     const s = await loadWaLink(ctxOf(n));
-    expect(s).toEqual({ state: 'linked', masked: '+62 812••••90', botNumber: '+62 811 0000 111' });
+    expect(s).toEqual({ state: 'linked', masked: '+62 812••••90', botNumber: '628110000111' });
     expect(JSON.stringify(s)).not.toContain('81234567890');
   });
 

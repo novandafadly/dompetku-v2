@@ -32,7 +32,13 @@ export function WhatsappReal({ ruang, status }: { ruang: Ruang; status: WaLinkSt
   return (
     <section className={WA_WIDTH}>
       <WaHeader ruang={ruang} />
-      {status.state === 'off' ? (
+      {status.state === 'nobot' ? (
+        <EmptyState
+          icon={<DeviceMobileIcon size={24} />}
+          title="Nomor bot belum diatur."
+          description="Hubungi pemilik DompetKu untuk mengisinya, lalu kembali ke sini."
+        />
+      ) : status.state === 'off' ? (
         <EmptyState
           icon={<DeviceMobileIcon size={24} />}
           title="Catat lewat WhatsApp belum aktif."

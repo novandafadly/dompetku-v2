@@ -6,8 +6,12 @@ import { WaLinkView, formatRemaining, type WaViewStatus } from './wa-link-view';
 const t = vi.hoisted(() => ({ toast: vi.fn() }));
 vi.mock('@/components/ui/toast', () => ({ toast: t.toast }));
 
-const unlinked: WaViewStatus = { state: 'unlinked', botNumber: '+62 811 0000 111' };
-const linked: WaViewStatus = { state: 'linked', masked: '+62 812••••89', botNumber: null };
+const unlinked: WaViewStatus = { state: 'unlinked', botNumber: '628110000111' };
+const linked: WaViewStatus = {
+  state: 'linked',
+  masked: '+62 812••••89',
+  botNumber: '628110000111',
+};
 
 function setup(status: WaViewStatus, over: Partial<Parameters<typeof WaLinkView>[0]> = {}) {
   const createCode = vi.fn().mockResolvedValue({
@@ -16,16 +20,12 @@ function setup(status: WaViewStatus, over: Partial<Parameters<typeof WaLinkView>
   });
   const unlink = vi.fn().mockResolvedValue({ ok: true, value: undefined });
   const refresh = vi.fn();
-  render(
-    <WaLinkView
-      status={status}
-      createCode={createCode}
-      unlink={unlink}
-      refresh={refresh}
-      {...over}
-    />,
-  );
-  return { createCode, unlink, refresh };
+  const props = { createCode, unlink, refresh, ...over };
+  const view = render(<WaLinkView status={status} {...props} />);
+  const rerender = (next: WaViewStatus) => {
+    view.rerender(<WaLinkView status={next} {...props} />);
+  };
+  return { createCode, unlink, refresh, rerender };
 }
 
 beforeEach(() => {
@@ -61,16 +61,13 @@ describe('WaLinkView: belum terhubung', () => {
     await user.click(screen.getByRole('button', { name: 'Buat kode hubung' }));
     expect(createCode).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('wa-code')).toHaveTextContent('K7M2QX');
-    expect(screen.getByText('+62 811 0000 111')).toBeTruthy();
+    expect(screen.getByText('+62 811-0000-111')).toBeTruthy();
+    const open = screen.getByRole('link', { name: 'Buka WhatsApp' });
+    expect(open).toHaveAttribute('href', 'https://wa.me/628110000111?text=hubung%20K7M2QX');
+    expect(open).toHaveAttribute('target', '_blank');
+    expect(open).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByRole('timer')).toHaveTextContent(/Berlaku (10:00|9:5\d) lagi/);
     expect(screen.getByRole('button', { name: 'Salin pesan' })).toBeTruthy();
-  });
-
-  it('tanpa nomor bot: instruksi tetap tampil tanpa nomor', async () => {
-    const user = userEvent.setup();
-    setup({ state: 'unlinked', botNumber: null });
-    await user.click(screen.getByRole('button', { name: 'Buat kode hubung' }));
-    expect(await screen.findByText('nomor bot DompetKu')).toBeTruthy();
   });
 
   it('hitung mundur berjalan lalu kode kedaluwarsa dan hilang dari layar', async () => {
@@ -88,8 +85,36 @@ describe('WaLinkView: belum terhubung', () => {
       await vi.advanceTimersByTimeAsync(3100);
     });
     expect(screen.getByRole('heading', { name: 'Kode kedaluwarsa' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Buka WhatsApp' })).toBeNull();
     expect(screen.queryByTestId('wa-code')).toBeNull();
     expect(screen.queryByRole('timer')).toBeNull();
+  });
+
+  it('wilayah status tetap ada: kode siap lalu kedaluwarsa diumumkan, detik tidak', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    setup(unlinked, {
+      createCode: vi.fn().mockResolvedValue({
+        ok: true,
+        value: { code: 'K7M2QX', expiresAt: new Date(Date.now() + 3000).toISOString() },
+      }),
+    });
+    const region = screen.getByTestId('wa-announce');
+    expect(region).toHaveAttribute('role', 'status');
+    expect(region).toHaveTextContent('');
+    await user.click(screen.getByRole('button', { name: 'Buat kode hubung' }));
+    await screen.findByTestId('wa-code');
+    expect(screen.getByTestId('wa-announce')).toBe(region);
+    expect(region).toHaveTextContent('Kode siap. Berlaku 10 menit.');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(region).toHaveTextContent('Kode siap. Berlaku 10 menit.');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2200);
+    });
+    expect(screen.getByTestId('wa-announce')).toBe(region);
+    expect(region).toHaveTextContent('Kode kedaluwarsa. Buat kode baru.');
   });
 
   it('Salin pesan menulis "hubung KODE" ke papan klip dan memberi kabar', async () => {
@@ -147,6 +172,45 @@ describe('WaLinkView: terhubung', () => {
     expect(screen.getByText('+62 812••••89')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ganti nomor' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Putuskan' })).toBeTruthy();
+  });
+
+  it('Ganti nomor lalu nomor baru terhubung: kode lama dan hitung mundur hilang', async () => {
+    const user = userEvent.setup();
+    const { rerender } = setup(linked);
+    await user.click(screen.getByRole('button', { name: 'Ganti nomor' }));
+    await screen.findByTestId('wa-code');
+    rerender({ state: 'linked', masked: '+62 857••••22', botNumber: '628110000111' });
+    expect(screen.queryByTestId('wa-code')).toBeNull();
+    expect(screen.queryByRole('timer')).toBeNull();
+    expect(screen.getByText('+62 857••••22')).toBeTruthy();
+  });
+
+  it('putus lalu hubungkan lagi dalam satu mount: status terhubung dari server menang', async () => {
+    const user = userEvent.setup();
+    const { rerender } = setup(linked);
+    await user.click(screen.getByRole('button', { name: 'Putuskan' }));
+    await screen.findByRole('alertdialog');
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Putuskan' }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Belum terhubung' })).toBeTruthy();
+    });
+    // Refresh server: belum terhubung.
+    rerender(unlinked);
+    await user.click(screen.getByRole('button', { name: 'Buat kode hubung' }));
+    await screen.findByTestId('wa-code');
+    // Kode dikirim dari WhatsApp; refresh membawa status terhubung.
+    rerender({ state: 'linked', masked: '+62 812••••89', botNumber: '628110000111' });
+    expect(screen.getByRole('heading', { name: 'Terhubung' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Putuskan' })).toBeTruthy();
+    expect(screen.queryByTestId('wa-code')).toBeNull();
+  });
+
+  it('nomor bot kosong tapi terhubung: bisa Putuskan, tanpa Ganti nomor', () => {
+    setup({ state: 'linked', masked: '+62 812••••89', botNumber: null });
+    expect(screen.getByRole('button', { name: 'Putuskan' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ganti nomor' })).toBeNull();
   });
 
   it('Putuskan minta konfirmasi dulu; Kembali tidak memanggil action', async () => {

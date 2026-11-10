@@ -1,12 +1,13 @@
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Button, buttonClass } from '@/components/ui/button';
 import { DeviceMobileIcon } from '@/components/ui/icons/device-mobile';
 import { card, heroCard } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import type { ActionResult, LedgerErrorCode } from '@/features/ledger/types';
+import { botChatHref, formatBotNumber } from './bot-number';
 import { LINK_CODE_MINUTES, WA_TITLE_ID } from './ids';
 
 /**
@@ -16,7 +17,7 @@ import { LINK_CODE_MINUTES, WA_TITLE_ID } from './ids';
  */
 
 export type WaViewStatus =
-  | { state: 'unlinked'; botNumber: string | null }
+  | { state: 'unlinked'; botNumber: string }
   | { state: 'linked'; masked: string; botNumber: string | null };
 
 export interface WaLinkViewProps {
@@ -81,12 +82,24 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
   const [confirm, setConfirm] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
-  const [gone, setGone] = useState(false);
+  // Putus berhasil: tampil "Belum terhubung" seketika, sampai status dari server menyusul.
+  const [unlinkedLocal, setUnlinkedLocal] = useState(false);
+  const [focusTitle, setFocusTitle] = useState(0);
   const dialogMounted = useOpenedOnce(confirm);
   const [remaining, syncClock] = useRemaining(issued?.expiresAt ?? null);
   const expired = issued !== null && remaining === 0;
   const masked = status.state === 'linked' ? status.masked : null;
-  const linked = masked !== null && !gone;
+  const linked = masked !== null && !unlinkedLocal;
+
+  // Status dari server berubah (putus, terhubung, ganti nomor): kode lama dan penanda lokal
+  // tidak berlaku lagi. Diturunkan saat render dari prop, bukan efek.
+  const statusKey = `${status.state}:${masked ?? ''}`;
+  const [seenKey, setSeenKey] = useState(statusKey);
+  if (seenKey !== statusKey) {
+    setSeenKey(statusKey);
+    setUnlinkedLocal(false);
+    setIssued(null);
+  }
 
   // Kembali ke tab ini sesudah mengirim kode dari WhatsApp: ambil status terbaru.
   useEffect(() => {
@@ -100,16 +113,9 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
     };
   }, [issued, expired, refresh]);
 
-  // Status berubah jadi terhubung (kode terpakai): kode tidak perlu ditampilkan lagi.
-  const wasLinked = useRef(linked);
-  useEffect(() => {
-    if (linked && !wasLinked.current) setIssued(null);
-    wasLinked.current = linked;
-  }, [linked]);
-
   // Sesudah putus, tombol Putuskan hilang: fokus ke judul begitu dialog lepas.
   useEffect(() => {
-    if (!gone) return;
+    if (focusTitle === 0) return;
     let tries = 0;
     const timer = window.setInterval(() => {
       tries += 1;
@@ -121,7 +127,7 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
     return () => {
       window.clearInterval(timer);
     };
-  }, [gone]);
+  }, [focusTitle]);
 
   const onCreate = useCallback(async () => {
     if (creating) return;
@@ -153,15 +159,17 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
     setUnlinking(false);
     if (res.ok) {
       setConfirm(false);
-      setGone(true);
+      setUnlinkedLocal(true);
       setIssued(null);
+      setFocusTitle((n) => n + 1);
       toast({ message: 'WhatsApp diputuskan' });
       return;
     }
     setUnlinkError(unlinkFailedText(res.error.code));
   }
 
-  const botTarget = status.botNumber ?? 'nomor bot DompetKu';
+  const botDigits = status.botNumber;
+  const canIssue = botDigits !== null;
 
   return (
     <div className="flex flex-col gap-3 tablet:gap-4">
@@ -188,16 +196,18 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
             : 'Hubungkan nomormu untuk mencatat lewat WhatsApp, misalnya 25rb makan siang.'}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant={linked ? 'secondary' : 'primary'}
-            aria-disabled={creating || undefined}
-            aria-busy={creating || undefined}
-            onClick={() => {
-              void onCreate();
-            }}
-          >
-            {creating ? 'Membuat kode…' : linked ? 'Ganti nomor' : 'Buat kode hubung'}
-          </Button>
+          {canIssue ? (
+            <Button
+              variant={linked ? 'secondary' : 'primary'}
+              aria-disabled={creating || undefined}
+              aria-busy={creating || undefined}
+              onClick={() => {
+                void onCreate();
+              }}
+            >
+              {creating ? 'Membuat kode…' : linked ? 'Ganti nomor' : 'Buat kode hubung'}
+            </Button>
+          ) : null}
           {linked ? (
             <Button
               variant="danger"
@@ -217,6 +227,15 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
         )}
       </section>
 
+      {/* Wilayah status tetap terpasang: kode siap dan kedaluwarsa diumumkan, detik tidak. */}
+      <p role="status" data-testid="wa-announce" className="sr-only">
+        {issued === null
+          ? ''
+          : expired
+            ? 'Kode kedaluwarsa. Buat kode baru.'
+            : `Kode siap. Berlaku ${String(LINK_CODE_MINUTES)} menit.`}
+      </p>
+
       {issued === null ? null : (
         <section aria-labelledby="wa-code" className={`flex flex-col gap-3 p-4 ${card}`}>
           <h2 id="wa-code" className="text-body font-bold text-text">
@@ -230,9 +249,22 @@ export function WaLinkView({ status, createCode, unlink, refresh }: WaLinkViewPr
             <>
               <CodeBlock code={issued.code} />
               <p className="text-label font-medium text-text-soft text-pretty">
-                Kirim ke <span className="font-bold text-text">{botTarget}</span> dari nomor yang
-                ingin dihubungkan.
+                Kirim ke{' '}
+                <span className="font-bold text-text tabular-nums">
+                  {botDigits === null ? '' : formatBotNumber(botDigits)}
+                </span>{' '}
+                dari nomor yang ingin dihubungkan.
               </p>
+              {botDigits === null ? null : (
+                <a
+                  href={botChatHref(botDigits, issued.code)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`self-start ${buttonClass('secondary', 'sm')}`}
+                >
+                  Buka WhatsApp
+                </a>
+              )}
               <p role="timer" className="text-label font-semibold text-text-soft tabular-nums">
                 Berlaku {formatRemaining(remaining ?? 0)} lagi
               </p>
