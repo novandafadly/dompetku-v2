@@ -1,5 +1,5 @@
 [Unit]
-Description=DompetKu: batasi port gw ke VM App (DOCKER-USER)
+Description=DompetKu: port gw hanya dari VM App, egress openwa hanya ke internet (iptables)
 After=docker.service
 PartOf=docker.service
 

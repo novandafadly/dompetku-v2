@@ -198,8 +198,8 @@ services:
       # Dasbor hanya dibuka lewat tunnel SSH ke http://localhost (runbook); tanpa ini layar putih.
       CSP_UPGRADE_INSECURE_REQUESTS: 'false'
     # wa: hanya openwa + wa-proxy (REST masuk dari wa-proxy, webhook keluar ke wa-proxy:8081).
-    # wa_egress: keluar ke server WhatsApp (tidak difilter per host). Sengaja tidak ikut
-    # app/internal/wa_web/worker_db/egress/worker_egress:
+    # wa_egress: keluar ke internet saja (WhatsApp); IMDS, VCN, jaringan privat, dan port host
+    # diblokir firewall.sh. Sengaja tidak ikut app/internal/wa_web/worker_db/egress/worker_egress:
     # openwa yang disusupi tidak menjangkau web, postgres, gw, atau worker. Alamat di wa dipatok:
     # wa-proxy hanya menerima :8081 dari alamat ini.
     networks:
@@ -303,9 +303,15 @@ networks:
       config:
         - subnet: 172.16.28.0/24
           ip_range: 172.16.28.128/25
-  # Hanya openwa: keluar ke server WhatsApp. Tidak difilter per host (server WhatsApp tidak punya
-  # daftar host stabil); terpisah dari app (gw/web), egress (postgres), worker_egress (worker).
-  wa_egress: {}
+  # Hanya openwa: keluar ke internet (server WhatsApp, TCP 443; tidak difilter per host karena daftar
+  # host WhatsApp tidak stabil). Subnet dipatok untuk firewall.sh: koneksi baru dari subnet ini ke
+  # 169.254.0.0/16 (IMDS, kecuali DNS resolver VCN), 10.0.0.0/8 (VCN, VM App), 172.16.0.0/12,
+  # 192.168.0.0/16, 100.64.0.0/10 dan ke alamat host sendiri (INPUT) di-DROP. Terpisah dari app
+  # (gw/web), egress (postgres), worker_egress (worker).
+  wa_egress:
+    ipam:
+      config:
+        - subnet: 172.16.27.0/24
 
 volumes:
   pgdata: {}
