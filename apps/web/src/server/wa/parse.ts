@@ -28,13 +28,15 @@ const SUFFIX_RE = /^(\d+)(?:[.,](\d))?(rb|k|jt)$/;
 const AMOUNT_TOKEN_RE = /^\+?(?:rp\.?)?(?:\d+|\d{1,3}(?:\.\d{3})+|\d+[.,]\d)$/;
 const UNIT_WORD_RE = /^(?:rb|k|jt|ribu|juta)$/;
 // Token yang DIAWALI satuan (dicek pada unitKey): `rb`/`jt`/`rib`/`jut`, slang `reb` (rebu,
-// rebuan) dan `ewu` dengan apa pun sesudahnya, atau `k`/`m` (miliar) yang tidak diikuti huruf.
+// rebuan), `ewu`, `miliar`/`milyar`/`triliun`/`trilyun` dengan apa pun sesudahnya, atau
+// `k`/`m`/`mil` (miliar) yang tidak diikuti huruf (`3 milo` tetap keterangan).
 // Token seperti ini digabung ke angka di depannya; bila bukan satuan persis ("rb,", "k.",
 // "rb-an", "ｒｂ", "rbu", "rebu", "2 m", "рб") hasil gabungan gagal di SUFFIX_RE sehingga
 // ditolak (bad_amount), tidak dibaca 1000x lebih kecil. `kopi`/`ke`/`mie` (k/m + huruf) tetap
 // keterangan. Kata keterangan yang kebetulan diawali `rib`/`jut`/`reb`/`ewu` tepat sesudah angka
 // tanpa satuan ("2 rebus") ikut ditolak: gagal tertutup, pengguna menulis ulang.
-const UNIT_START_RE = /^(?:rb|jt|rib|jut|reb|ewu|k(?!\p{L})|m(?!\p{L}))/u;
+const UNIT_START_RE =
+  /^(?:rb|jt|rib|jut|reb|ewu|miliar|milyar|triliun|trilyun|mil(?!\p{L})|k(?!\p{L})|m(?!\p{L}))/u;
 const FORMAT_CHARS_RE = /\p{Cf}/gu;
 const COMBINING_RE = /\p{M}/gu;
 // Huruf Kiril/Yunani yang mirip atau sebunyi dengan huruf satuan, hanya untuk unitKey (keterangan

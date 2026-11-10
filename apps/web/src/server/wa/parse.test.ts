@@ -132,6 +132,15 @@ describe('parseMessage: reject', () => {
     ['2 m rumah', 'bad_amount'],
     ['2 m.', 'bad_amount'],
     ['2 M', 'bad_amount'],
+    // Miliar/triliun ditulis lengkap atau disingkat `mil`: gagal tertutup, bukan Rp2.
+    ['2 miliar', 'bad_amount'],
+    ['2 miliar rumah', 'bad_amount'],
+    ['2 milyar', 'bad_amount'],
+    ['2 mil', 'bad_amount'],
+    ['2 mil.', 'bad_amount'],
+    ['1 triliun', 'bad_amount'],
+    ['1 trilyun', 'bad_amount'],
+    ['2 Miliar', 'bad_amount'],
     // Huruf mirip dari aksara lain (Kiril, Yunani) dan huruf beraksen: gagal tertutup.
     ['25 рб', 'bad_amount'],
     ['25 РБ kopi', 'bad_amount'],
@@ -168,6 +177,11 @@ describe('parseMessage: satuan terpisah, batas aturan', () => {
     ['2 mie ayam 25 rb', { kind: 'reject', reason: 'many_amounts' }],
     ['25 rb mie ayam', entry('expense', 25000, 'personal', 'mie ayam')],
     ['3 martabak', entry('expense', 3, 'personal', 'martabak')],
+    ['5 meter', entry('expense', 5, 'personal', 'meter')],
+    ['100 meja', entry('expense', 100, 'personal', 'meja')],
+    // `mil` hanya sendirian; kata lain yang diawali `mil` tetap keterangan.
+    ['3 milo', entry('expense', 3, 'personal', 'milo')],
+    ['2 tri', entry('expense', 2, 'personal', 'tri')],
     ['15 rb makan', entry('expense', 15000, 'personal', 'makan')],
     // Kata Kiril/aksen yang tidak diawali satuan tetap keterangan.
     ['5 кофе', entry('expense', 5, 'personal', 'кофе')],
@@ -230,6 +244,11 @@ describe('parseMessage: satuan terpisah, batas aturan', () => {
     '25 ríbu',
     '25 ŕb',
     '50 κ',
+    '2 miliar',
+    '2 milyar',
+    '2 mil',
+    '1 triliun',
+    '1 trilyun',
   ];
   it.each(ADVERSARIAL)('%j tidak tercatat < Rp1.000', (input) => {
     const r = parse(input);
