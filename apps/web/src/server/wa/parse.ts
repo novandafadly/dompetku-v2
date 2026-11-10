@@ -27,17 +27,50 @@ const SUFFIX_RE = /^(\d+)(?:[.,](\d))?(rb|k|jt)$/;
 // digit pecahan. Hanya token ini yang boleh menerima satuan terpisah.
 const AMOUNT_TOKEN_RE = /^\+?(?:rp\.?)?(?:\d+|\d{1,3}(?:\.\d{3})+|\d+[.,]\d)$/;
 const UNIT_WORD_RE = /^(?:rb|k|jt|ribu|juta)$/;
-// Token yang DIAWALI satuan (dicek sesudah NFKC dan tanpa karakter format tak terlihat):
-// `rb`/`jt`/`rib`/`jut` dengan apa pun sesudahnya, atau `k` yang tidak diikuti huruf.
+// Token yang DIAWALI satuan (dicek pada unitKey): `rb`/`jt`/`rib`/`jut`, slang `reb` (rebu,
+// rebuan) dan `ewu` dengan apa pun sesudahnya, atau `k`/`m` (miliar) yang tidak diikuti huruf.
 // Token seperti ini digabung ke angka di depannya; bila bukan satuan persis ("rb,", "k.",
-// "rb-an", "ｒｂ", "rbu") hasil gabungan gagal di SUFFIX_RE sehingga ditolak (bad_amount),
-// tidak dibaca 1000x lebih kecil. `kopi`/`ke` (k + huruf) tetap keterangan.
-const UNIT_START_RE = /^(?:rb|jt|rib|jut|k(?!\p{L}))/u;
+// "rb-an", "ｒｂ", "rbu", "rebu", "2 m", "рб") hasil gabungan gagal di SUFFIX_RE sehingga
+// ditolak (bad_amount), tidak dibaca 1000x lebih kecil. `kopi`/`ke`/`mie` (k/m + huruf) tetap
+// keterangan. Kata keterangan yang kebetulan diawali `rib`/`jut`/`reb`/`ewu` tepat sesudah angka
+// tanpa satuan ("2 rebus") ikut ditolak: gagal tertutup, pengguna menulis ulang.
+const UNIT_START_RE = /^(?:rb|jt|rib|jut|reb|ewu|k(?!\p{L})|m(?!\p{L}))/u;
 const FORMAT_CHARS_RE = /\p{Cf}/gu;
+const COMBINING_RE = /\p{M}/gu;
+// Huruf Kiril/Yunani yang mirip atau sebunyi dengan huruf satuan, hanya untuk unitKey (keterangan
+// tidak diubah). в -> w agar `еву` = `ewu`.
+const CONFUSABLE: Partial<Record<string, string>> = {
+  р: 'r',
+  б: 'b',
+  к: 'k',
+  м: 'm',
+  е: 'e',
+  в: 'w',
+  и: 'i',
+  у: 'u',
+  т: 't',
+  ј: 'j',
+  κ: 'k',
+  μ: 'm',
+  ρ: 'r',
+  ε: 'e',
+};
+const CONFUSABLE_RE = new RegExp(`[${Object.keys(CONFUSABLE).join('')}]`, 'gu');
 const UNIT_ALIAS: Partial<Record<string, string>> = { ribu: 'rb', juta: 'jt' };
 
+/** NFKC, huruf kecil, tanpa karakter format tak terlihat dan tanda diakritik, huruf mirip -> Latin. */
+function unitKey(token: string): string {
+  return token
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(FORMAT_CHARS_RE, '')
+    .normalize('NFD')
+    .replace(COMBINING_RE, '')
+    .replace(CONFUSABLE_RE, (c) => CONFUSABLE[c] ?? c);
+}
+
 function startsWithUnit(token: string): boolean {
-  return UNIT_START_RE.test(token.normalize('NFKC').toLowerCase().replace(FORMAT_CHARS_RE, ''));
+  return UNIT_START_RE.test(unitKey(token));
 }
 
 function toAmount(raw: string): number | null {
