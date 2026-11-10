@@ -166,6 +166,18 @@ export class AuthService {
     await withUser(this.pools.app, userId, (c) => c.query('select api.wa_unlink($1)', [via]));
   }
 
+  /**
+   * Pemutusan di jalur masuk dengan kode pemulihan: gagal tidak boleh menggagalkan masuk (kode
+   * sudah hangus, galat berarti kode terbuang tanpa sesi). Log hanya kode mesin.
+   */
+  private async unlinkWhatsAppBestEffort(userId: string): Promise<void> {
+    try {
+      await this.unlinkWhatsApp(userId, 'session_revoked');
+    } catch {
+      console.error('[wa] unlink_failed');
+    }
+  }
+
   // ===== Audit =====
 
   /** audit.log: user_id dari konteks (tidak bisa dipalsukan), meta daftar tertutup (BSD §10). */
@@ -476,19 +488,16 @@ export class AuthService {
       [user.id, matched],
     );
     if (consumed.rowCount !== 1) return { result: { kind: 'invalid' }, setCookie: null };
-    // Putus WhatsApp sebelum sesi dibuat. Gagal di sini tidak boleh menggagalkan masuk: kode
-    // sudah hangus, jadi galat berarti kode terbuang tanpa sesi. Log hanya kode mesin.
-    try {
-      await this.unlinkWhatsApp(user.id, 'session_revoked');
-    } catch {
-      console.error('[wa] unlink_failed');
-    }
+    // Putus WhatsApp sebelum sesi dibuat, lalu sekali lagi sesudah recoverySignIn menghapus sesi
+    // lama: sesi curian yang masih hidup di antara keduanya bisa membuat kode hubung baru.
+    await this.unlinkWhatsAppBestEffort(user.id);
     await this.succeeded(keys);
     const res = await this.auth.api.recoverySignIn({
       body: { userId: user.id },
       headers,
       returnHeaders: true,
     });
+    await this.unlinkWhatsAppBestEffort(user.id);
     await this.audit(user.id, 'recovery_code_used', headers);
     await this.audit(user.id, 'session_revoked', headers, { reason: 'recovery' });
     background(this.mailer.send(mails.recoveryCodeUsed(user.email)));

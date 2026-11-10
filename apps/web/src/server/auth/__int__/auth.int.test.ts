@@ -703,7 +703,8 @@ describe('WhatsApp diputus saat akun diamankan ulang', () => {
       expect(await waState(n)).toBe('1/1 -');
       expect(await waState(f)).toBe('1/1 -');
       const logged = [...errors.mock.calls, ...warns.mock.calls].map((c) => c.join(' '));
-      expect(logged).toEqual(['[wa] unlink_failed']);
+      // Dua percobaan (sebelum dan sesudah sesi lama dihapus), keduanya gagal.
+      expect(logged).toEqual(['[wa] unlink_failed', '[wa] unlink_failed']);
       const events = await h.admin.query<{ event: string }>(
         `select event from audit.events where user_id = $1
            and event in ('recovery_code_used', 'session_revoked') order by id`,
@@ -713,6 +714,35 @@ describe('WhatsApp diputus saat akun diamankan ulang', () => {
     } finally {
       errors.mockRestore();
       warns.mockRestore();
+    }
+  });
+
+  it('kode pemulihan: kode hubung yang dibuat sesi curian sebelum sesi dicabut ikut dihapus', async () => {
+    const { codes } = await bootstrapOwner(h);
+    const n = await linkPhone(OWNER, '+6281234567890');
+    const api = h.service.auth.api;
+    const original = api.recoverySignIn.bind(api);
+    // Jendela antara pemutusan pertama dan penghapusan sesi: sesi lama masih hidup dan
+    // membuat kode hubung baru (createLinkCode).
+    const spy = vi.spyOn(api, 'recoverySignIn').mockImplementationOnce(async (...args) => {
+      await h.admin.query(
+        `insert into app.wa_link_codes (user_id, code_hash, expires_at)
+         values ($1, $2, now() + interval '10 minutes')`,
+        [n, createHash('sha256').update(`curian-${n}`).digest('hex')],
+      );
+      return original(...args);
+    });
+    try {
+      const r = await h.service.recoverySignIn(
+        new Browser('192.0.2.10').headers(),
+        OWNER,
+        codes[2] ?? '',
+      );
+      expect(r.result.kind).toBe('ok');
+      expect(spy).toHaveBeenCalledOnce();
+      expect(await waState(n)).toBe('0/0 session_revoked');
+    } finally {
+      spy.mockRestore();
     }
   });
 
