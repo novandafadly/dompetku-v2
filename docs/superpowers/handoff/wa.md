@@ -20,8 +20,11 @@ Dokumen ini untuk sesi agen berikutnya dan untuk pemilik. Baca sampai habis sebe
 | 7 | container `openwa` (image `0.29.1@sha256:5d4e2d71…`, network `wa` + `wa_egress`), gw `404` untuk `/api/wa/*`, deployer, `deploy-test.sh` 31 skenario, runbook | 1dbd5f1, 8b32a59, a254601 |
 | 8 | BSD §16, spec, runbook, README `packages/db`, `CLAUDE.md`, handoff ini, gerbang penuh | fabe285 dan commit dokumen sesudahnya |
 | Akhir | perbaikan review akhir: satuan terpisah (`25 rb`, `1,5 jt`, `25 ribu`) di parser; `api.wa_last_cancellable(p_current)` sadar pesan `pending` (0123 diubah di tempat); log `[wa] ignored <alasan>` di webhook; label `Pemasukan ·` di balasan ✅; `[wa] config_error` dari `waEnabled()`; contoh `web.env` `WA_MAX_AMOUNT=25000000`/`WA_RATE_PER_MIN=10`; prosedur pembersihan entri palsu di runbook | f618b5b, 08eb2c7, 7839f46, f92cda1, dan commit dokumen sesudahnya |
+| 9 | putaran keamanan (kode): satuan terpisah gagal tertutup (`25 rb,`, `50 k.`, `25 rb-an`, `25 ｒｂ` = `bad_amount`); body webhook dibaca streaming dengan batas keras 64 KiB; log `[wa] config_error` dibatasi 60 detik; `OPENWA_URL` kosong di `web.env.example`; nomor WhatsApp diputus saat reset kata sandi dan masuk dengan kode pemulihan (`api.wa_unlink(p_via)`, 0123 diubah di tempat) | 637af87, 70e5c24, c18df20, a18ebf5, dan commit dokumen sesudahnya |
 
 ## Angka akhir (gerbang di HEAD, PG 16 lokal; CI memakai PG 17)
+
+Sesudah Task 9 (2026-11-10): pgTAP 1865 asersi di 28 berkas (`26_wa` 131), `test:registry` 7, unit web 2560 (2559 lulus + 1 gagal `rencana.test.tsx` yang sama), `test:int` web 233 (`auth.int` +4: putus WhatsApp saat reset/pemulihan), `e2e:auth` 22, lint/typecheck/format:check/build hijau, round trip rollback semua lalu up = skema identik. e2e prototipe/ledger/bersama dan worker tidak dijalankan ulang (tidak ada UI atau worker yang berubah).
 
 Sesudah perbaikan akhir (2026-11-10): pgTAP 1853 asersi di 28 berkas (`26_wa` 119), `test:registry` 7, unit web 2488 (2487 lulus + 1 gagal `rencana.test.tsx` yang sama), `test:int` web 229 (`handle.int` 30, `link.int` 6), `deploy-test.sh` 31, lint/typecheck/format:check/build hijau, round trip down/up 0123 = skema identik. e2e tidak dijalankan ulang (tidak ada UI yang berubah); worker tidak disentuh. Angka di bawah = gerbang Task 8 sebelum perbaikan akhir.
 
@@ -42,7 +45,7 @@ Semua langkah rinci (perintah persis) ada di `docs/ops/runbook-wa.md`, "Daftar p
 2. **Sebelum merge:** CI hijau di head PR #27 (job `db`, `auth`, `infra`, `image`, build, e2e). Putuskan butir "Keputusan pemilik" di bawah; yang bersifat "terima atau perbaiki" sebaiknya sebelum fitur dinyalakan, tidak harus sebelum merge.
 3. **Sesudah merge** (deploy + migrasi 0123 otomatis): pasang berkas ke VM (`compose.yml`, `bin/deploy`, `gw/Caddyfile`), cek subnet `172.16.26.0/24` bebas, **`caddy validate`** Caddyfile di VM sebelum `docker compose restart gw` (tidak ada binary caddy di sandbox, jadi blok `/api/wa/*` baru dibaca, belum divalidasi mesin), cek `/api/wa/*` = `404` tanpa `Cache-Control` dari VM App.
 4. **Cek digest image** di VM (arm64, uid 997, `curl` ada) sebelum menaikkan `openwa`.
-5. **Isi rahasia langsung di VM, tidak lewat chat:** `env/openwa.env` (`API_MASTER_KEY`), tambahan `web.env` (`WA_WEBHOOK_SECRET`, `OPENWA_URL=http://openwa:2785`, `OPENWA_API_KEY`, `OPENWA_SESSION`, `WA_BOT_NUMBER`, `WA_MAX_AMOUNT=25000000`/`WA_RATE_PER_MIN=10` dari `web.env.example`, kosong = bawaan kode 100000000/30).
+5. **Isi rahasia langsung di VM, tidak lewat chat:** `env/openwa.env` (`API_MASTER_KEY`), tambahan `web.env` (`WA_WEBHOOK_SECRET`, `OPENWA_URL` (kosong di `web.env.example`; nilai dari runbook langkah 6), `OPENWA_API_KEY`, `OPENWA_SESSION`, `WA_BOT_NUMBER`, `WA_MAX_AMOUNT=25000000`/`WA_RATE_PER_MIN=10` dari `web.env.example`, kosong = bawaan kode 100000000/30).
 6. **Pairing nomor bot:** kode pairing (utama) atau QR lewat tunnel (cadangan), matikan timer deploy selama memautkan, nyalakan lagi sesudahnya.
 7. **Daftarkan webhook** tepat satu ke `http://web:3000/api/wa/webhook` dengan rahasia yang sama.
 8. **Hubungkan di app** (Menu > WhatsApp > Buat kode hubung), kirim `hubung KODE` dari nomor masing-masing; **uji pesan pertama** (`25rb makan siang`, `batal`); log tidak boleh memuat teks pesan.
@@ -72,13 +75,13 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 
 - [ ] Sidecar `wa-proxy` dan keputusan pemilik di atas (butir 1, 2, 5): `docs/ops/runbook-wa.md` "Risiko", "Firewall dan egress".
 - [ ] Anti-tebak `hubung` global (`apps/web/src/server/wa/ratelimit.ts:58`): 6 nomor x 5 percobaan mengunci semua orang satu jam; jatah per nomor ikut terpakai saat terkunci global. Saran: global hanya dihitung dari percobaan ke-2 satu nomor dalam jendela, cek global sebelum mengonsumsi per nomor.
-- [ ] Batas ukuran body route tidak berlaku untuk body chunked/tanpa `Content-Length`: seluruh body dibaca dulu (`apps/web/src/app/api/wa/webhook/route.ts:41-44`). Baca streaming dengan batas (~12 baris). Dijadikan Penting bila gw tidak memblokir `/api/wa/*` dari luar.
+- [x] Batas ukuran body untuk body chunked/tanpa `Content-Length`: body dibaca streaming dengan batas keras 64 KiB (`apps/web/src/server/wa/body.ts` `readBodyCapped`), Task 9. Log `[wa] config_error` sebelum verifikasi dibatasi 60 detik (Task 9).
 - [ ] `createPools` membangun dua pool, dan `readServerEnv()` memvalidasi seluruh env sehingga typo env lain = 503 (`route.ts:27`, `:36`).
 - [ ] `createLinkCode` tanpa batas laju per user (`apps/web/src/app/[ruang]/_actions/wa.ts:15`); kode baru menimpa kode lama.
 - [ ] `wa_messages`: kolom `created_at` bisa diisi masa depan lewat grant INSERT/UPDATE semua kolom (`0123_wa_catat.sql:75`); ganti dengan grant kolom.
-- [ ] `wa_finish_message` belum memeriksa `e.created_by = v_uid` untuk entri (`0123_wa_catat.sql:288-294`).
+- [ ] `wa_finish_message` belum memeriksa `e.created_by = v_uid` untuk entri (`0123_wa_catat.sql:308-312`).
 - [x] SHA-256 tanpa garam atas kode 30 bit dan invarian policy `own_or_lookup` yang dilebarkan GUC: dikomentari di `0123_wa_catat.sql` (perbaikan akhir).
-- [ ] Tautan WA tetap hidup setelah cabut semua sesi/reset sandi (butuh step-up atau unlink otomatis).
+- [x] Tautan WA tetap hidup setelah cabut semua sesi/reset sandi: diputus otomatis di dua titik yang mencabut semua sesi (`onPasswordReset` dan `recoverySignIn` di `apps/web/src/server/auth/service.ts`), Task 9. Sisa: (a) bila `api.wa_unlink` gagal sesudah Better Auth mengganti kata sandi, user melihat galat padahal kata sandi sudah berganti dan nomor masih terhubung (ulang reset atau Putuskan dari app); (b) jalur galat `totp_no_token` (semua sesi dihapus karena token baru tidak terbaca) dan `revokeOtherSessions` saat menambah faktor tidak memutus nomor (bukan respons keamanan akun); (c) pesan `/masuk?sandi-diganti` belum menyebut bahwa WhatsApp ikut diputus.
 - [ ] `deploy`: `timeout` pada `pull`/`up` openwa agar exit 124 menjadi `openwa_up_failed` (`infra/db-vm/deploy/deploy:278-293`); `deploy-test.sh` belum menegaskan bahwa `openwa_up_failed` memicu alert/HC `/fail` (`deploy-test.sh:418-425`).
 - [ ] Aturan `DOCKER-USER` DROP dari subnet `wa_egress` (`infra/db-vm/firewall.sh` atau setara; perlu subnet `wa_egress` yang dipatok).
 - [ ] Image arm64 memuat Chromium Debian yang tidak dipakai Baileys (permukaan CVE); job pemindaian image.
@@ -87,8 +90,8 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 
 - [ ] **Retensi `wa_messages` belum ada** (tumbuh terus, kecil): job purge worker > N hari, tidak boleh menghapus baris `recorded` yang masih dalam jendela `batal`.
 - [ ] Retensi `wa_messages`: jendela purge harus berada di dalam retensi idempotensi `client_id` ledger, kalau tidak pesan bertanda tangan lama yang diputar ulang bisa tercatat lagi.
-- [ ] Down migrasi gagal bila `audit.events` sudah memuat `wa_linked`/`wa_unlinked` (`0123_wa_catat.sql:355-360`): hapus baris itu dulu atau catat.
-- [ ] `wa_default_account` memindai `entries` tanpa indeks `(space_id, created_by, created_at)` (`0123_wa_catat.sql:231-247`); ukur sebelum menambah indeks.
+- [ ] Down migrasi gagal bila `audit.events` sudah memuat `wa_linked`/`wa_unlinked` (`0123_wa_catat.sql:380-382`): hapus baris itu dulu atau catat.
+- [ ] `wa_default_account` memindai `entries` tanpa indeks `(space_id, created_by, created_at)` (`0123_wa_catat.sql:251-267`); ukur sebelum menambah indeks.
 - [ ] Nomor SIM yang didaur ulang: nomor milik A memblokir B sampai A memutuskan (ruling Task 2).
 - [ ] `message_id` PK global: id yang sama milik user lain = klaim false (diam).
 - [ ] `wa_create_link_code` mewajibkan profil (user belum diprovisi = `DK401`).
@@ -108,7 +111,7 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 
 ### Parser (`apps/web/src/server/wa/parse.ts`)
 
-- [ ] Tanda baca di ujung token nominal (`25rb,`, `25rb.`) = `bad_amount` (`parse.ts:27-40` `toAmount`, `:78-86`); pesan WhatsApp nyata sering memilikinya.
+- [ ] Tanda baca di ujung token nominal (`25rb,`, `25rb.`, juga satuan terpisah `25 rb,`/`50 k.` sejak Task 9) = `bad_amount` dengan balasan contoh: gagal tertutup, disengaja. Pesan WhatsApp nyata sering memilikinya; melonggarkan (membuang `[.,;:!?]` di ujung token satuan persis) adalah keputusan UX, bukan perbaikan keamanan.
 - [ ] `slice(0, MAX_DESCRIPTION)` dalam unit UTF-16 bisa memotong pasangan surrogat (`parse.ts:105`).
 - [ ] `+` dihitung pemasukan di mana pun, bukan hanya di awal (`parse.ts:69-72`, `:81`).
 - [ ] Tes belum ada untuk `gaji +5jt`, `Rp.25.000`, `0,5rb`, tanda baca ujung (`parse.test.ts`). (`25 rb` dan satuan terpisah lain: selesai, perbaikan akhir.)
@@ -119,7 +122,7 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 - [ ] `sendText`: `redirect: 'error'`, batalkan body yang tidak dibaca, ubah pesan timeout (`openwa.ts:59-71`).
 - [ ] Tandai asumsi `data.id`/`data.from` sebagai `// UNVERIFIED` (`openwa.ts:34-36`); verifikasi payload pada sesi hidup saat pasang (langkah 8).
 - [ ] Tes belum ada: heks huruf besar, header ganda, heks ganjil, body multibyte, `sendText` dengan `to` buruk, `status@broadcast`, `WA_RATE_PER_MIN` tak sah. (`try/catch` kosong di `config.test.ts`: selesai, perbaikan akhir.)
-- [ ] Tes route: Content-Length non-numerik/negatif, `verify`/`toInbound` yang melempar = 500, 503 tidak di-cache, asersi `warn` pada kasus 503/handler error, heks huruf besar (`route.test.ts`).
+- [ ] Tes route: Content-Length non-numerik/negatif, `verify`/`toInbound` yang melempar = 500, heks huruf besar (`route.test.ts`). (503 `no-store` + body generik dan batas log `config_error`: selesai, Task 9.)
 
 ### UI (`/[ruang]/whatsapp`)
 
