@@ -1,0 +1,19 @@
+{
+  "event": "message.received",
+  "timestamp": "2026-11-09T10:00:00.000Z",
+  "sessionId": "8f3c2b1a-9d4e-4c7a-8b2f-1e6d5a4c3b2a",
+  "idempotencyKey": "msg_8f3c2b1a-9d4e-4c7a-8b2f-1e6d5a4c3b2a_3EB0ABC123_f1e2d3c4-b5a6-7890-1234-567890abcdef",
+  "deliveryId": "dlv_550e8400-e29b-41d4-a716-446655440000",
+  "data": {
+    "id": "false_628123456789@c.us_3EB0ABC123",
+    "from": "628123456789@c.us",
+    "to": "628987654321@c.us",
+    "chatId": "628123456789@c.us",
+    "body": "makan siang 25rb",
+    "type": "text",
+    "timestamp": 1762682400,
+    "fromMe": false,
+    "isGroup": false,
+    "kind": "individual"
+  }
+}
