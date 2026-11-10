@@ -3,7 +3,7 @@ import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 import { describe, expect, it } from 'vitest';
 import { config } from './proxy';
 
-const matches = (url: string, headers?: Record<string, string>) =>
+const matches = (url: string, headers: Record<string, string> = {}) =>
   unstable_doesMiddlewareMatch({ config, url, headers });
 
 describe('matcher proxy', () => {
