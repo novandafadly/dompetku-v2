@@ -256,7 +256,7 @@ sudo bash -c 'set -eu; f=/opt/dompetku/env/web.env.new; umask 077; s=$(openssl r
   { grep -v -e "^WA_WEBHOOK_SECRET=" -e "^OPENWA_URL=" -e "^OPENWA_SESSION=" "$f"
     printf "WA_WEBHOOK_SECRET=%s\nOPENWA_URL=http://openwa:2785\nOPENWA_SESSION=%s\n" "$s" "'"$SID"'"; } >"$f.tmp"
   chmod 600 "$f.tmp"; mv "$f.tmp" "$f"'
-sudo nano /opt/dompetku/env/web.env.new   # isi WA_BOT_NUMBER=<angka E.164 tanpa +>; WA_MAX_AMOUNT/WA_RATE_PER_MIN boleh kosong (bawaan 100000000 dan 30)
+sudo nano /opt/dompetku/env/web.env.new   # isi WA_BOT_NUMBER=<angka E.164 tanpa +>; WA_MAX_AMOUNT=25000000 dan WA_RATE_PER_MIN=10 dari contoh dibiarkan, kecuali pemilik memutuskan lain (kosong = bawaan kode 100000000 dan 30)
 f=/opt/dompetku/env/web.env.new
 sudo grep -c '^WA_WEBHOOK_SECRET=[0-9a-f]\{64\}$' "$f"                              # 1
 sudo grep -c '^OPENWA_URL=http://openwa:2785$' "$f"                                  # 1
@@ -300,10 +300,13 @@ sudo systemctl start dompetku-deploy.timer
    sudo docker compose --profile web logs --since 10m openwa | grep -i webhook  # tanpa 401/timeout berulang
    ```
 
+   Tidak ada balasan dan tidak ada log `[wa]` sama sekali = bentuk payload OpenWA tidak cocok dengan yang dibaca web (`kind`/`isGroup` di fixture **UNVERIFIED**), atau webhook tidak sampai (cek log openwa). Log `[wa] ignored <alasan>` menunjukkan pesan dikenali tapi diabaikan: `not_message` (event bukan pesan, atau JSON tidak terbaca), `not_private` (grup, broadcast, atau pengirim bukan `@c.us`/`@lid`), `from_me` (pesan bot sendiri), `not_text` (media/stiker tanpa teks). Pesan pribadi berteks dari HP pemilik yang tetap menghasilkan `not_private` atau `not_message` = bentuk payload versi OpenWA ini berbeda; laporkan sebagai bug adaptor (`apps/web/src/server/wa/openwa.ts`).
+
 5. Nomor yang tidak terhubung (mis. HP lain) mengirim pesan: balasan petunjuk "belum terhubung" paling banyak sekali per jam, tanpa entri.
 
 ## Operasi
 
+- **Bot tidak membalas:** `sudo docker compose --profile web logs --since 10m web | grep '\[wa\]'`. Tidak ada balasan dan tidak ada log `[wa]` = bentuk payload OpenWA tidak cocok (`kind`/`isGroup` **UNVERIFIED**) atau webhook tidak sampai (log openwa, langkah 7); log `[wa] ignored <alasan>` = pesan dikenali tapi diabaikan (alasan: langkah 8 butir 4); `[wa] config_error` = `web.env` WA tidak lengkap/salah; `[wa] rate_limited`, `[wa] unlinked_quiet` = sengaja diam.
 - **Status sesi:** `owa GET "/api/sessions/$SID" </dev/null` (`ready` = tersambung). `SID` = `OPENWA_SESSION` di `web.env` (`sudo sed -n 's/^OPENWA_SESSION=//p' /opt/dompetku/env/web.env`; bukan rahasia).
 - **Sesi putus** (status `disconnected`/`failed`, atau HP bot menghapus perangkat tertaut): coba `owa POST "/api/sessions/$SID/start" </dev/null`. Bila kembali `qr_ready`, pautan hilang: ulangi langkah 5A (atau 5B) dengan `SID` yang sama. Key web dan webhook tetap berlaku (terikat ke `SID`).
 - **Putuskan nomor bot** (mis. HP/SIM bot hilang, ganti nomor): `owa POST "/api/sessions/$SID/logout" </dev/null` (menghapus kredensial sesi di volume dan perangkat tertaut), juga hapus perangkat di HP bot bila masih ada. Nomor pengguna yang terhubung diputus dari app (menu WhatsApp → Putuskan), bukan di OpenWA.
@@ -400,9 +403,29 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 
 - **Kompromi container `openwa`: webhook palsu yang sah.** HMAC webhook **tidak** melindungi dari `openwa` yang disusupi: OpenWA harus memegang rahasia webhook untuk menandatangani kiriman (tersimpan di SQLite-nya, volume `openwa_data`). Penyerang di `openwa` bisa membuat webhook bertanda tangan sah dengan pengirim nomor terhubung **mana pun**, lalu web membuat atau membatalkan (`batal`) entri atas nama user pemilik nomor itu. Sidecar `wa-proxy` tidak menutup celah ini (sidecar meneruskan webhook yang sah); yang bisa membantu hanya deteksi/alert (mis. lonjakan entri WhatsApp, entri dari nomor yang tidak sedang mengirim pesan) atau tidak memercayai `openwa` sama sekali (Cloud API resmi, spec §5.4).
 
-  Yang membatasi dampaknya: hanya nomor yang sudah dihubungkan dan diverifikasi user bisa membuat entri (nomor lain hanya mendapat petunjuk); nominal per pesan dibatasi `WA_MAX_AMOUNT` (bawaan Rp100.000.000); batas laju per nomor (`WA_RATE_PER_MIN`, bawaan 30/menit); `batal` hanya untuk catatan WhatsApp terakhir dalam 10 menit dan versi yang belum diubah; balasan bot juga dikirim ke nomor korban, jadi pemilik nomor melihat balasan ✅ yang mengejutkan dan itu membuka pemalsuan (kecuali penyerang juga menahan balasan); entri tercatat di ledger dan `app.wa_messages` (entri WhatsApp tidak punya event audit), dan bisa dibatalkan/dipulihkan dari app. Tidak ada akses ke data lain lewat jalur ini (webhook tidak mengembalikan isi ledger).
+  Yang membatasi dampaknya: hanya nomor yang sudah dihubungkan dan diverifikasi user bisa membuat entri (nomor lain hanya mendapat petunjuk); nominal per pesan dibatasi `WA_MAX_AMOUNT` (contoh `web.env.example`: Rp25.000.000; bawaan kode bila kosong Rp100.000.000); batas laju per nomor (`WA_RATE_PER_MIN`, contoh: 10/menit; bawaan kode 30/menit); `batal` hanya untuk catatan WhatsApp terakhir dalam 10 menit dan versi yang belum diubah; balasan bot juga dikirim ke nomor korban, jadi pemilik nomor melihat balasan ✅ yang mengejutkan dan itu membuka pemalsuan (kecuali penyerang juga menahan balasan); entri tercatat di ledger dan `app.wa_messages` (entri WhatsApp tidak punya event audit), dan bisa dibatalkan/dipulihkan dari app. Tidak ada akses ke data lain lewat jalur ini (webhook tidak mengembalikan isi ledger).
 
-  Batas banjir entri palsu: sampai `WA_RATE_PER_MIN` entri per menit per nomor terhubung (bawaan 30), masing-masing sampai `WA_MAX_AMOUNT` (bawaan Rp100.000.000). Menurunkan bawaan itu (mis. `WA_MAX_AMOUNT` Rp10.000.000, `WA_RATE_PER_MIN` lebih kecil) adalah keputusan pemilik; nilainya diisi di `web.env`.
+  Batas banjir entri palsu: sampai `WA_RATE_PER_MIN` entri per menit per nomor terhubung, masing-masing sampai `WA_MAX_AMOUNT`. `web.env.example` dikirim dengan `WA_MAX_AMOUNT=25000000` dan `WA_RATE_PER_MIN=10` (paling banyak 10 entri palsu per menit per nomor, masing-masing paling besar Rp25.000.000); bawaan kode bila variabel kosong tetap Rp100.000.000 dan 30 (spec). Naikkan di `web.env` hanya bila memang mencatat nominal lebih besar lewat WhatsApp; nominal lebih besar dicatat lewat app (balasan "Gunakan app"). Membersihkan banjir: "Membersihkan entri WhatsApp palsu" di bawah.
+
+- **Membersihkan entri WhatsApp palsu** (sesudah `openwa` dimatikan: Rollback "Fitur mati", dan sesudah nomor yang terdampak diputus dari app). Cari dulu, hanya baca. `<T>` = waktu mulai yang dicurigai (mis. `2026-11-20 14:00+07`); jalankan lewat alat akses manual (`docs/ops/akses-db-manual.md`, tercatat di audit) dengan SQL dari stdin:
+
+  ```bash
+  sudo /opt/dompetku/bin/dompetku-psql -- "cek entri wa palsu" <<'SQL'
+  begin read only;
+  select m.created_at, m.entry_id, e.space_kind, e.kind, abs(l.amount) as nominal, e.occurred_on,
+         left(e.description, 40) as keterangan, p.display_name as pencatat, e.voided_at is not null as dibatalkan
+    from app.wa_messages m
+    join app.entries e on e.id = m.entry_id
+    join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
+    left join app.profiles p on p.user_id = m.user_id
+   where m.status = 'recorded' and m.entry_id is not null
+     and m.created_at > '<T>'::timestamptz
+   order by m.created_at;
+  rollback;
+  SQL
+  ```
+
+  `app.wa_messages` tidak menyimpan teks pesan, jadi daftar ini = semua entri yang dibuat lewat WhatsApp sejak `<T>` (asli maupun palsu); cocokkan dengan pemilik nomor. Pesan `pending` (`status = 'pending'`, `entry_id` kosong) bisa juga sudah membuat entri bila status akhirnya gagal disimpan; entri seperti itu tidak muncul di sini, cari di Transaksi pada jam yang sama. Membatalkan: dari app, oleh anggota ruang itu, per entri (Transaksi → entri → Batalkan transaksi); entri masuk Sampah dan bisa dipulihkan dari sana. **Tidak ada pembatalan massal**, dan jangan mengubah `app.entries` lewat SQL (melewati saldo, riwayat, dan idempotensi ledger). Banyak entri = minta pemilik ruang membatalkannya satu per satu dari daftar di atas.
 
 - **Kompromi container `openwa`: egress.** Lewat `wa_egress` (NAT ke host, tidak difilter) `openwa` juga menjangkau:
   - metadata instance OCI `169.254.169.254`: `user_data` instance terbaca. Backup memakai Customer Secret Key di `backup.env`, bukan instance principal, jadi tidak ada kredensial OCI yang bisa diambil dari sana (selama tidak ada dynamic group/policy untuk instance ini);
