@@ -28,9 +28,14 @@
 		}
 		max_header_size 16KB
 	}
+	# Log bawaan (termasuk galat proxy http.log.error, mis. 502 saat backend mati) memuat request
+	# beserta headernya; Caddy hanya menyamarkan Cookie/Authorization. Header dibuang di sini juga.
 	log {
 		output stdout
-		format json
+		format filter {
+			request>headers delete
+			wrap json
+		}
 	}
 }
 

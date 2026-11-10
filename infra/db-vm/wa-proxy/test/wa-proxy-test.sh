@@ -114,8 +114,10 @@ PY
 : >"$W/backend.log"
 python3 -I "$W/echo.py" 13000 "$W/backend.log" 2>/dev/null &
 PIDS+=($!)
+BACKENDS=($!)
 python3 -I "$W/echo.py" 12785 "$W/backend.log" 2>/dev/null &
 PIDS+=($!)
+BACKENDS+=($!)
 if [[ -n ${CADDY_BIN:-} ]]; then
   XDG_DATA_HOME=$W/data XDG_CONFIG_HOME=$W/config "$CADDY_BIN" run --config "$W/test.Caddyfile" \
     --adapter caddyfile >"$W/caddy.log" 2>&1 &
@@ -257,5 +259,21 @@ for s in owa_k1_uji 'sha256=00' '"headers"' '62812@c.us' 'message.received'; do
   ! grep -F -- "$s" "$W/caddy.log" >/dev/null || fail "log akses memuat '$s'"
 done
 ok 'log akses JSON tanpa header dan body'
+
+# Backend mati (502): Caddy mencatat galat proxy lewat logger http.log.error, bukan log akses. Log itu
+# pun tidak boleh memuat header (kunci API web, tanda tangan webhook), di kedua listener.
+kill "${BACKENDS[@]}"
+wait "${BACKENDS[@]}" 2>/dev/null || true
+req 'webhook backend mati' 502 --interface 127.0.0.3 -X POST "$WH/api/wa/webhook" \
+  -H 'X-OpenWA-Signature: sha256=SIGSECRET_9f8e7d' -H 'X-API-Key: owa_SECRETKEY_wh' -d '{"event":"message.received"}'
+req 'send-text backend mati' 502 --interface 127.0.0.5 -X POST "$ST/api/sessions/$UUID/messages/send-text" \
+  -H 'X-API-Key: owa_SECRETKEY_123' -H 'Content-Type: application/json' -d '{"chatId":"62812@c.us","text":"hai"}'
+sleep 0.2
+[[ -n ${CTR:-} ]] && docker logs "$CTR" >"$W/caddy.log" 2>&1
+[[ $(grep -cF '"logger":"http.log.error' "$W/caddy.log" || true) -ge 2 ]] || fail 'log galat 502 tidak ada untuk kedua listener'
+for s in owa_SECRETKEY_123 owa_SECRETKEY_wh SIGSECRET_9f8e7d '"headers"' 'X-Api-Key' 'X-Openwa-Signature' '62812@c.us'; do
+  ! grep -iF -- "$s" "$W/caddy.log" >/dev/null || fail "log (galat 502) memuat '$s'"
+done
+ok 'backend mati (502): log galat kedua listener tanpa header (kunci API, tanda tangan) dan body'
 
 echo "$pass skenario lulus"
