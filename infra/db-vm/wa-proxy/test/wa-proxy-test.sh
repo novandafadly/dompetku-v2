@@ -143,7 +143,7 @@ req() {
   got=$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' -m 15 "$@" || true)
   sleep 0.1
   after=$(wc -l <"$W/backend.log")
-  [[ $got == "$want" ]] || fail "$name: kode $got, harapan $want"
+  [[ -z $want || $got == "$want" ]] || fail "$name: kode $got, harapan $want"
   FORWARDED=$((after - before))
 }
 forwarded() { [[ $FORWARDED == "$2" ]] || fail "$1: $FORWARDED request sampai ke backend, harapan $2"; }
@@ -174,6 +174,19 @@ ok 'POST /api/wa/webhook diteruskan; XFF, Forwarded, X-Real-IP, X-Middleware-*, 
 req 'webhook query' 200 --interface 127.0.0.3 -X POST "$WH/api/wa/%77ebhook?_rsc=1&x=2" -d '{}'
 last_has 'webhook query' '"path": "/api/wa/webhook"'
 ok 'path kanonik tanpa query string sampai ke web'
+# Varian path yang diterima matcher (huruf besar, //, segmen titik) sampai ke web hanya sebagai satu
+# bentuk: /api/wa/webhook persis.
+n_fwd=0
+for p in /API/WA/WEBHOOK /Api/Wa/Webhook /api/wa//webhook //api/wa/webhook /api/wa/./webhook \
+  /api/wa/x/../webhook /api/./wa/webhook /api/wa/webhook/. /api/wa/%2e/webhook; do
+  req "varian $p" "" --interface 127.0.0.3 --path-as-is -X POST "$WH$p" -d '{}' 2>/dev/null || true
+  if [[ $FORWARDED != 0 ]]; then
+    n_fwd=$((n_fwd + 1))
+    last | grep -F '"path": "/api/wa/webhook",' >/dev/null || fail "varian $p sampai ke web sebagai: $(last)"
+  fi
+done
+[[ $n_fwd -ge 3 ]] || fail "hanya $n_fwd varian path yang diteruskan (uji tidak bermakna)"
+ok "varian path yang diterima matcher ($n_fwd) sampai ke web persis /api/wa/webhook"
 for m in GET PUT DELETE PATCH; do
   req "webhook $m" 405 --interface 127.0.0.3 -X "$m" "$WH/api/wa/webhook"
   forwarded "webhook $m" 0

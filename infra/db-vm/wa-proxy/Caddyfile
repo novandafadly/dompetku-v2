@@ -107,8 +107,9 @@ http://:8081 {
 	handle @webhook {
 		import strip_untrusted
 		request_header -X-API-Key
-		# Path kanonik tanpa query string (mis. %77ebhook, ?_rsc=): web hanya melihat satu bentuk.
-		rewrite * {path}?
+		# Path tetap tanpa query string: varian yang diterima matcher (huruf besar, //, segmen titik,
+		# %77ebhook, ?_rsc=) sampai ke web hanya sebagai satu bentuk.
+		rewrite * /api/wa/webhook?
 		reverse_proxy web:3000 {
 			import no_forwarded
 		}
