@@ -3,3 +3,11 @@
 3c7a8fea687e9cbe2f9bd672799dd92c0ca56f1f:packages/db/tests/15_talangan.sql:generic-api-key:4
 # playwright.bersama.config.ts:49 di 3519298 = BETTER_AUTH_SECRET tiruan e2e ('e2e-bersama-bukan-rahasia-…'), hanya untuk server e2e lokal, sama dengan config auth/ledger.
 3519298e07c59d188fc7b9005de893e66c3cb2d6:apps/web/playwright.bersama.config.ts:generic-api-key:49
+# idempotencyKey di fixture OpenWA (apps/web/src/server/wa/__fixtures__/*.json:5) = nilai tiruan buatan tangan ('msg_8f3c2b1a-…_3EB0ABC123_…') untuk tes parser webhook, bukan secret; tidak pernah dipakai di produksi.
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/session-status.json:generic-api-key:5
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/message-lid.json:generic-api-key:5
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/message-image.json:generic-api-key:5
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/message-fromme.json:generic-api-key:5
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/message-private.json:generic-api-key:5
+cac624f5cc598e65a3987fe7d293e85754d27983:apps/web/src/server/wa/__fixtures__/message-group.json:generic-api-key:5
+820cfb056da26bcd299de76a1d4fac910ebb1f74:apps/web/src/server/wa/__fixtures__/message-lid-senderphone.json:generic-api-key:5
