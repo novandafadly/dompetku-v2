@@ -55,7 +55,7 @@ Cek subnet lebih dulu, sebelum berkas apa pun dipasang: begitu `compose.yml` bar
 
 ```bash
 sudo systemctl stop dompetku-deploy.timer   # tidak ada deploy baru sampai langkah 2 selesai
-systemctl is-active dompetku-deploy.service  # harus "inactive"; "activating" = deploy masih berjalan, tunggu lalu ulangi
+systemctl is-active dompetku-deploy.service  # "inactive" = lanjut; "activating" = deploy berjalan, tunggu lalu ulangi; "failed" = deploy terakhir gagal, boleh lanjut
 sudo docker network inspect $(sudo docker network ls -q) -f '{{ .Name }} {{ range .IPAM.Config }}{{ .Subnet }} {{ end }}' | grep ' 172\.16\.'
 # harapan: hanya dompetku_worker_db 172.16.25.0/24
 ```
@@ -182,7 +182,7 @@ Matikan timer deploy selama memautkan, supaya deploy tidak membuat ulang contain
 
 ```bash
 sudo systemctl stop dompetku-deploy.timer
-systemctl is-active dompetku-deploy.service   # harus "inactive"; selain itu tunggu deploy selesai
+systemctl is-active dompetku-deploy.service  # "inactive" = lanjut; "activating" = deploy berjalan, tunggu lalu ulangi; "failed" = deploy terakhir gagal, boleh lanjut
 ```
 
 Buat sesi dan nyalakan (nama bebas, 3–50 huruf/angka/tanda hubung; rute memakai `id` UUID, bukan nama):
@@ -330,7 +330,7 @@ Rollback penuh pemasangan (mengembalikan berkas sebelum WA). Urutan penting: `op
 
    ```bash
    sudo systemctl stop dompetku-deploy.timer
-   systemctl is-active dompetku-deploy.service   # harus "inactive"; selain itu tunggu deploy selesai
+   systemctl is-active dompetku-deploy.service  # "inactive" = lanjut; "activating" = deploy berjalan, tunggu lalu ulangi; "failed" = deploy terakhir gagal, boleh lanjut
    sudo mv /opt/dompetku/compose.yml.pre-wa /opt/dompetku/compose.yml
    sudo mv /opt/dompetku/bin/deploy.pre-wa /opt/dompetku/bin/deploy
    sudo mv /opt/dompetku/gw/Caddyfile.pre-wa /opt/dompetku/gw/Caddyfile
@@ -400,7 +400,9 @@ Akses (masuk daftar akses yang ditinjau pemilik bersama `env/*.env`):
 
 - **Kompromi container `openwa`: webhook palsu yang sah.** HMAC webhook **tidak** melindungi dari `openwa` yang disusupi: OpenWA harus memegang rahasia webhook untuk menandatangani kiriman (tersimpan di SQLite-nya, volume `openwa_data`). Penyerang di `openwa` bisa membuat webhook bertanda tangan sah dengan pengirim nomor terhubung **mana pun**, lalu web membuat atau membatalkan (`batal`) entri atas nama user pemilik nomor itu. Sidecar `wa-proxy` tidak menutup celah ini (sidecar meneruskan webhook yang sah); yang bisa membantu hanya deteksi/alert (mis. lonjakan entri WhatsApp, entri dari nomor yang tidak sedang mengirim pesan) atau tidak memercayai `openwa` sama sekali (Cloud API resmi, spec §5.4).
 
-  Yang membatasi dampaknya: hanya nomor yang sudah dihubungkan dan diverifikasi user bisa membuat entri (nomor lain hanya mendapat petunjuk); nominal per pesan dibatasi `WA_MAX_AMOUNT` (bawaan Rp100.000.000); batas laju per nomor (`WA_RATE_PER_MIN`, bawaan 30/menit); `batal` hanya untuk catatan WhatsApp terakhir dalam 10 menit dan versi yang belum diubah; balasan bot dikirim ke nomor itu (pemilik nomor melihat apa yang tercatat, kecuali penyerang juga menahan balasan); entri tercatat di ledger dan audit, dan bisa dibatalkan/dipulihkan dari app. Tidak ada akses ke data lain lewat jalur ini (webhook tidak mengembalikan isi ledger).
+  Yang membatasi dampaknya: hanya nomor yang sudah dihubungkan dan diverifikasi user bisa membuat entri (nomor lain hanya mendapat petunjuk); nominal per pesan dibatasi `WA_MAX_AMOUNT` (bawaan Rp100.000.000); batas laju per nomor (`WA_RATE_PER_MIN`, bawaan 30/menit); `batal` hanya untuk catatan WhatsApp terakhir dalam 10 menit dan versi yang belum diubah; balasan bot juga dikirim ke nomor korban, jadi pemilik nomor melihat balasan ✅ yang mengejutkan dan itu membuka pemalsuan (kecuali penyerang juga menahan balasan); entri tercatat di ledger dan `app.wa_messages` (entri WhatsApp tidak punya event audit), dan bisa dibatalkan/dipulihkan dari app. Tidak ada akses ke data lain lewat jalur ini (webhook tidak mengembalikan isi ledger).
+
+  Batas banjir entri palsu: sampai `WA_RATE_PER_MIN` entri per menit per nomor terhubung (bawaan 30), masing-masing sampai `WA_MAX_AMOUNT` (bawaan Rp100.000.000). Menurunkan bawaan itu (mis. `WA_MAX_AMOUNT` Rp10.000.000, `WA_RATE_PER_MIN` lebih kecil) adalah keputusan pemilik; nilainya diisi di `web.env`.
 
 - **Kompromi container `openwa`: egress.** Lewat `wa_egress` (NAT ke host, tidak difilter) `openwa` juga menjangkau:
   - metadata instance OCI `169.254.169.254`: `user_data` instance terbaca. Backup memakai Customer Secret Key di `backup.env`, bukan instance principal, jadi tidak ada kredensial OCI yang bisa diambil dari sana (selama tidak ada dynamic group/policy untuk instance ini);
