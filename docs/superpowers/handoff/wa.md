@@ -114,7 +114,7 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 - [ ] `RateLimiter.size()` dan `createLinkLimiter` adalah ekspor di luar brief (diterima); batas laju hidup di memori satu proses (hilang saat restart, tidak dibagi antar instans).
 - [ ] Handler dan route: `handleInbound` di-`await` sebelum jawaban 200 sementara `sendText` batas 10 detik (`openwa.ts:65`) bisa melewati batas waktu webhook OpenWA (`WEBHOOK_TIMEOUT=20000` di compose) dan memicu kirim ulang; aman (idempoten), tapi pertimbangkan balas sesudah 200.
 - [ ] Banjir entri palsu: batas `WA_RATE_PER_MIN` x `WA_MAX_AMOUNT` (keputusan pemilik butir 2; contoh `web.env` 10 x Rp25.000.000). Tidak ada pembatalan massal dari app.
-- [ ] P1 spec: perintah `saldo`, tanggal `kemarin`, pengaturan dompet bawaan WhatsApp, pemantauan sesi OpenWA (worker + Healthchecks; sesi putus = alert).
+- [ ] P1 spec: perintah `saldo`, tanggal `kemarin` (selesai 2026-11-11 sebagai tanggal bebas), pengaturan dompet bawaan WhatsApp, pemantauan sesi OpenWA (worker + Healthchecks; sesi putus = alert).
 - [ ] Pesan `@lid` tanpa `senderPhone` diabaikan diam-diam (`handle.ts:421-426`); bergantung pada `RESOLVE_LID_TO_PHONE=true` (dipatok di compose).
 
 ### Parser (`apps/web/src/server/wa/parse.ts`)

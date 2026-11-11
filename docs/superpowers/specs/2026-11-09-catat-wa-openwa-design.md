@@ -54,7 +54,12 @@ Satu pesan = satu catatan. Teks dinormalisasi: huruf kecil, spasi rapat.
 - **Keterangan.** Sisa teks setelah nominal dan penanda dibuang, dipangkas, maksimum 200 karakter (batas `createEntrySchema`).
 - **Kategori.** Dari kamus kata kunci yang sudah ada (`app.category_keywords()`, migrasi 0107) atas keterangan; tidak cocok → saran teratas `api.suggest_categories` (riwayat 30 hari, lalu nama) untuk jenis itu di ruang itu; balasan ✅ menyebut kategorinya supaya tebakan yang salah terlihat dan bisa dibatalkan atau diubah di app. Seed kategori tidak punya "Lainnya". Kategori tidak bisa dipaksa dari teks pada v1.
 - **Dompet.** Penanda `@nama` di mana pun dalam pesan memilih dompet (lihat 4.4); tanpa penanda, dompet bawaan ruang untuk user itu.
-- **Tanggal.** Hari ini (WIB, `app.today()`). `kemarin` = P1.
+- **Tanggal.** Bawaan hari ini (WIB, `app.today()`). Tanggal lain (permintaan pemilik 2026-11-11, "perlu tanggal bebas"), di mana pun dalam pesan, dibuang dari keterangan:
+  - `kemarin` / `kmrn` / `kemaren` = H-1.
+  - `tgl` atau `tanggal` + salah satu: `D` (`tgl 9`), `D/M` atau `D-M` (`tgl 9/11`), `D/M/YYYY` atau `D-M-YY` (`tgl 9/11/2025`), `YYYY-MM-DD`, atau `D` + nama bulan (`tgl 9 nov`, `tgl 3 agustus`; `jan`..`des`, `agu`/`agt`/`ags`, `sep`/`sept`). Tanggal ISO telanjang (`2025-11-09`) juga dikenali tanpa `tgl`. Bentuk angka tanpa `tgl` **bukan** tanggal (`1/2 porsi`).
+  - Penyelesaian terhadap hari ini DB: `tgl D` = kejadian terakhir yang tidak melewati hari ini (bulan ini, atau bulan terdekat yang punya tanggal itu); `tgl D/M` atau `D bulan` = tahun ini bila sudah terjadi, bila belum dan jaraknya <= 183 hari = ditolak "Tanggal belum terjadi" (salah ketik tidak diam-diam mundur setahun), bila lebih jauh = tahun lalu (`tgl 28/12` di awal Januari). Tahun eksplisit dipakai apa adanya. Masa depan ditolak; batas bawah ledger 2000-01-01; sebelum `opened_on` dompet ditolak (`before_opening`, balasan menyebut dompet).
+  - Rusak (`tgl` tanpa tanggal valid, `tgl 31/2`, `tgl 9/13`) = ditolak `bad_date`; lebih dari satu tanggal (juga bila sama) = ditolak `many_dates`; gagal tertutup, tidak ada yang dicatat. Tahun sesudah nama bulan tidak dibaca (`tgl 9 nov 2000` = tgl 9, Rp2.000) karena bentrok dengan nominal tanpa satuan; tahun lewat `D/M/YYYY` atau ISO.
+  - Balasan ✅ menyebut tanggal bila bukan hari ini (`dayLabel`: `Kemarin`, `Sab, 9 Nov`, tahun bila bukan tahun ini). Kata `kemarin` di keterangan ("bayar utang kemarin") ikut dibaca sebagai tanggal; balasan memperlihatkannya dan `batal` membatalkan.
 - **Batal.** Pesan persis `batal` (tanpa nominal) membatalkan catatan WhatsApp terakhir milik pengirim bila masih dalam 10 menit dan belum diubah di app. "Terakhir" = pesan `pending`, `recorded` atau `cancelled` terbaru selain `batal` itu sendiri: `batal` kedua sesudah `batal` pertama tidak mundur ke catatan yang lebih lama, dan pesan yang masih `pending` (catatan sedang berjalan, atau status akhirnya gagal disimpan) membuat `batal` dijawab "tidak bisa dibatalkan".
 - **Saldo negatif.** Pengeluaran yang membuat saldo dompet negatif (`saldo_negatif`) ditolak dari WhatsApp dengan balasan yang mengarah ke app; tidak ada penimpaan lewat chat.
 
@@ -175,7 +180,7 @@ Satu halaman kecil `/[ruang]/whatsapp` (butir "WhatsApp" di Menu, hanya mode nya
 
 **P1**
 
-- `kemarin` / tanggal sederhana.
+- ~~`kemarin` / tanggal sederhana~~ (selesai 2026-11-11 sebagai tanggal bebas, lihat 4.1).
 - Perintah `saldo`.
 - Pengaturan dompet bawaan untuk WhatsApp.
 - Pemantauan status sesi OpenWA (worker memanggil statusnya, ping Healthchecks; sesi putus = alert, bukan hilang diam-diam).
@@ -252,3 +257,4 @@ Teks bagian di atas sudah diperbarui di tempat. Daftar perubahan dan alasannya:
 | 4.1 | Slang `reb`/`ewu`, `m`/`mil` sendirian, `miliar`/`milyar`/`triliun`/`trilyun`, huruf Kiril/Yunani mirip dan beraksen sesudah angka = `bad_amount` | `25 rebu`, `25 ewu`, `2 m`, `25 рб`, `25 ríbu` tercatat 1000x (atau 10⁹x) lebih kecil (fix wave 2) |
 | 6 | Image OpenWA `0.27.1` (rilis 2026-11-02), bukan `0.29.1` | `minimumReleaseAge` 7 hari repo diberlakukan juga untuk image; fitur yang dipakai ada di `0.27.1` (Task 10) |
 | 4.1, 4.2, 4.4 | Penanda `@nama` memilih dompet per pesan; balasan ✅ selalu menyebut dompet; balasan saldo kurang menyebut dompet; `@kantor` eksplisit boleh | Pemilik tidak bisa memilih dompet (mis. CIMB) dan mendapat "saldo tidak cukup" bila dompet bawaan kurang (permintaan pemilik 2026-11-10). Tanpa migrasi: pencocokan di web (`wallet.ts`) atas `app.accounts` di bawah RLS |
+| 4.1, 4.2 | Penanda tanggal (`kemarin`, `tgl ...`) memilih `occurredOn`; balasan ✅ menyebut tanggal bila bukan hari ini; `before_opening` dan masa depan punya balasan sendiri | Permintaan pemilik 2026-11-11 (tanggal bebas). Tanpa migrasi: `createEntry` sudah menerima `occurredOn`; hari ini dari `app.today()` agar sama dengan `private.check_date` |
