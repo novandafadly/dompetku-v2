@@ -145,7 +145,7 @@ test('ubah: kategori terkunci, nominal dan Wajib tersimpan; tag Wajib tampil', a
   expect(rows).toEqual([{ amount: '1500000', wajib: true }]);
 });
 
-test('category_not_root: kategori berubah jadi subkategori di tab lain', async ({ page }) => {
+test('kategori berubah jadi subkategori di tab lain (parent_budget_required)', async ({ page }) => {
   await page.goto('/pribadi/rencana');
   const hiburan = await categoryId('personal', 'Hiburan');
   const belanja = await categoryId('personal', 'Belanja');

@@ -10,14 +10,15 @@
 -- kemunculan yang sama = tepat satu berhasil (already_posted), bayar saat void entri bayar belum
 -- commit = already_posted tanpa menunggu, materialisasi paralel = satu kemunculan per bulan (on
 -- conflict do nothing), ubah tagihan paralel bayar dan arsip paralel batalkan lewati = menunggu kunci
--- tagihan, tanpa deadlock.
+-- tagihan, tanpa deadlock. Pohon anggaran (0125): dua rincian paralel melewati induk = tepat satu
+-- sub_exceeds_parent; hapus induk paralel rincian baru = parent_budget_required tanpa rincian yatim.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- ID: B8, C2, C4, C9, T15
 begin;
-select plan(73);
+select plan(79);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -369,6 +370,41 @@ select matches(tests.peer_result('b'), '^ERROR: .*category_in_obligation', 'pind
 select tests.peer_exec('b', 'rollback');
 select is(tests.owner_val(null, format($$select coalesce(parent_id::text, '-') from app.categories where id = %L$$, :'k_bensin')),
   '-', 'Bensin & Parkir tetap induk');
+
+-- ===== Pohon anggaran (S10, 0125): penulisan satu ruang diserialkan kunci advisory 'dompetku.budget:' =====
+-- Iuran Lingkungan (induk) punya anggaran Maret 2027 1.000.000; Sayur & Buah (sudah pindah ke bawah
+-- Iuran di atas) dan Sub Konkuren adalah rinciannya.
+select tests.peer_val('adm', format($$insert into app.categories (space_id, parent_id, type, name, icon)
+  values (%L, %L, 'expense', 'Sub Konkuren', 'Receipt') returning id$$, :'sh', :'k_iuran')) as k_sub2 \gset
+create function pg_temp.sb(p_uid uuid, p_space uuid, p_cat uuid, p_amount bigint) returns text
+language sql as $$
+  select pg_temp.api(p_uid, format($q$select api.set_budget(%L, %L, '2027-03-01'::date, %s)$q$, p_space, p_cat, p_amount))
+$$;
+select tests.peer_val('adm', pg_temp.sb(tests.n(), :'sh', :'k_iuran', 1000000));
+-- Dua rincian paralel (600.000 + 600.000 > 1.000.000): yang kedua menunggu kunci, lalu melihat yang pertama.
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.sb(tests.n(), :'sh', :'k_sayur', 600000));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.sb(tests.f(), :'sh', :'k_sub2', 600000));
+select ok(tests.peer_blocked('kb'), 'rincian kedua menunggu kunci anggaran ruang selama rincian pertama belum commit');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*sub_exceeds_parent', 'dua rincian paralel melewati induk = tepat satu sub_exceeds_parent');
+select tests.peer_exec('kb', 'rollback');
+select is(tests.owner_val(null, format($$select coalesce(sum(b.amount), 0) from app.budgets b
+  join app.categories c on c.id = b.category_id
+  where b.space_id = %L and b.month = '2027-03-01' and c.parent_id = %L$$, :'sh', :'k_iuran')), '600000',
+  'jumlah rincian tidak melewati induk');
+-- Hapus induk (belum commit) paralel rincian baru: rincian menunggu, lalu induk sudah tiada.
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.api(tests.n(), format($$select api.delete_budget(%L, %L, '2027-03-01')$$, :'sh', :'k_iuran')));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.sb(tests.f(), :'sh', :'k_sub2', 100000));
+select ok(tests.peer_blocked('kb'), 'rincian baru menunggu hapus anggaran induk yang belum commit');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*parent_budget_required', 'rincian sesudah induk dihapus = parent_budget_required');
+select tests.peer_exec('kb', 'rollback');
+select is(tests.owner_val(null, format($$select count(*) from app.budgets where space_id = %L and month = '2027-03-01'$$, :'sh')),
+  '0', 'tanpa rincian yatim: hapus induk menghapus rinciannya');
 
 -- ===== Tagihan (S9, 0118) =====
 -- Jam nyata (env prod): tagihan jatuh tempo hari ini (tanggal = hari ini, mulai hari ini).

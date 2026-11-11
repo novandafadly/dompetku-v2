@@ -9,7 +9,7 @@
 -- bersama). Persona N, F, Luar (tests.x(), tanpa ruang); kanari KANARI-N-TAGIHAN, KANARI-N-KATEGORI.
 -- ID: B1, B2, B13, T13, T17
 begin;
-select plan(73);
+select plan(71);
 select tests.fixture();
 select tests.clock_at('2026-11-26 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -156,10 +156,7 @@ select is(pg_temp.set(tests.n(), :'sh', :'ntrans', '2026-11-01', 1000), 'DK404:c
   'kategori ruang lain (Pribadi N di Bersama) = DK404 category_not_found');
 select is(pg_temp.set(tests.n(), :'sh', gen_random_uuid(), '2026-11-01', 1000), 'DK404:category_not_found:category_id',
   'kategori tidak ada = DK404');
-select is(pg_temp.set(tests.n(), :'sh', :'sayur', '2026-11-01', 1000), 'DK422:category_not_root:',
-  'subkategori = DK422 category_not_root (K5)');
-select is(pg_temp.set(tests.n(), :'sh', :'hobi', '2026-11-01', 1000), 'DK422:category_not_root:',
-  'induk yang sudah dipindah jadi anak = category_not_root, bukan 23503');
+-- Subkategori dan 'induk yang dipindah jadi anak' sah sejak S10 (0125): lihat 27_anggaran_sub.sql.
 select is(pg_temp.set(tests.n(), :'sh', :'arsipkosong', '2026-11-01', 1000), 'DK422:category_archived:',
   'kategori terarsip = DK422 category_archived');
 select is(pg_temp.rows(:'sh', '2026-11-01'), 'Belanja Dapur:1000000:false', 'penolakan tanpa efek');

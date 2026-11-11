@@ -35,6 +35,10 @@ const RULES = new Set<LedgerErrorCode>([
   'obligation_double',
   'category_in_obligation',
   'category_not_root',
+  // S10: anggaran rincian (0125).
+  'parent_budget_required',
+  'sub_exceeds_parent',
+  'sub_not_wajib',
   'already_posted',
   'bill_archived',
   'bill_account_kantor',

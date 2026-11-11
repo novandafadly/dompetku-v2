@@ -214,6 +214,7 @@ function Form({
         categoryRef.current?.focus();
         break;
       case 'category_not_root':
+      case 'parent_budget_required': // pemilih hanya induk: terjadi bila kategori jadi rincian di tab lain
         setErrors({ category: RENCANA_COPY.errNotRoot });
         categoryRef.current?.focus();
         break;

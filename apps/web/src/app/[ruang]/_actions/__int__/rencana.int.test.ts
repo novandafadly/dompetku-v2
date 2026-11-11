@@ -173,7 +173,7 @@ describe('action Rencana terhadap DB', () => {
     expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12' })).toEqual(nf);
   });
 
-  it('copyBudgetsAction (K13): salin lalu idempoten; subkategori = category_not_root', async () => {
+  it('copyBudgetsAction (K13): salin lalu idempoten; rincian tanpa anggaran induk = parent_budget_required', async () => {
     expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12' })).toEqual({
       ok: true,
       value: { copied: 3, skippedExisting: 0, skippedConflict: 0, skippedArchived: 0 },
@@ -190,7 +190,7 @@ describe('action Rencana terhadap DB', () => {
         amount: 100_000,
         wajib: false,
       }),
-    ).toEqual({ ok: false, error: { code: 'category_not_root' } });
+    ).toEqual({ ok: false, error: { code: 'parent_budget_required' } });
     expect(
       await a.deleteBudgetAction('pribadi', { categoryId: fx.ids.makan, month: '2026-12' }),
     ).toEqual({ ok: true, value: undefined });

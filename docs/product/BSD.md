@@ -2697,7 +2697,7 @@ Semua tes isolasi berjalan sebagai `dompetku_web`/`dompetku_api` dengan helper `
 24. Saldo awal: hanya bisa diubah ≤ 7 hari; tidak bisa di-void.
 25. Cocokkan saldo: saldo akhir = target; selisih 0 tidak membuat entri.
 26. Kewajiban XOR: anggaran wajib + tagihan pada kategori induk/anak yang sama di bulan yang sama = `DK422 obligation_double`, dari kedua arah; memindah induk kategori yang dipakai tagihan atau anggaran = `category_in_obligation`.
-27. Anggaran pada subkategori = ditolak FK.
+27. Anggaran pada subkategori (S10, 0125; menggantikan "ditolak FK"): sah hanya bila induknya beranggaran di label yang sama (`parent_budget_required`), jumlah rincian ≤ anggaran induk di dua arah (`sub_exceeds_parent`), rincian tidak wajib (`sub_not_wajib`); hapus anggaran induk menghapus rinciannya; `budget_progress`, `safe_to_spend`, dan Laporan hanya menghitung induk.
 28. Kategori 3 level atau tipe anak ≠ induk = ditolak.
 29. `month_summary`, `safe_to_spend`, `budget_progress`, `net_worth` pada fixture `golden.json` (dihitung manual) cocok, termasuk transfer dari dan ke dompet kantor dengan fee (`transfer` per entri, fee kantor di `kantor_keluar`).
 30. Void/restore pasangan: kedua kaki berubah bersama; restore setelah 90 hari = `DK422`; void atau restore yang menyentuh dompet terarsip = `account_archived`.

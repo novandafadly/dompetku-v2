@@ -92,8 +92,9 @@ select set_eq($$
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
-        'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA');
+        'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
+        'private.tg_budget_tree', 'private.tg_budget_cascade'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
