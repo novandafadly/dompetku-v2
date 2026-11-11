@@ -407,6 +407,33 @@ describe('parseMessage: tanggal', () => {
     expect(parse(input)).toEqual(expected);
   });
 
+  it('tahun sesudah nama bulan ditolak (bad_date), bukan dibaca sebagai nominal', () => {
+    expect(parse('makan siang tgl 9 nov 2025')).toEqual({ kind: 'reject', reason: 'bad_date' });
+    expect(parse('25rb makan tgl 9 nov 2025')).toEqual({ kind: 'reject', reason: 'bad_date' });
+    expect(parse('25rb makan tgl 9 nov 1999')).toEqual({ kind: 'reject', reason: 'bad_date' });
+    // angka lain sesudah bulan tetap nominal
+    expect(parse('tgl 9 nov 25000')).toMatchObject({
+      amount: 25000,
+      date: { kind: 'dm', day: 9, month: 11 },
+    });
+  });
+
+  it('kemarin lusa / kemarin dulu = H-2; kata lain sesudah kemarin tetap keterangan', () => {
+    expect(parse('makan 23rb kemarin lusa')).toEqual(dated('makan', { kind: 'ago', days: 2 }));
+    expect(parse('makan 23rb kmrn dulu')).toEqual(dated('makan', { kind: 'ago', days: 2 }));
+    expect(parse('makan 23rb kemarin siang')).toEqual(dated('makan siang', ago1));
+  });
+
+  it('nama bulan dicari sebagai properti sendiri (constructor, __proto__ bukan bulan)', () => {
+    expect(parse('25rb tgl 5 constructor')).toEqual(
+      dated('constructor', { kind: 'day', day: 5 }, { amount: 25000 }),
+    );
+    expect(parse('25rb tgl 5 __proto__')).toMatchObject({
+      kind: 'entry',
+      date: { kind: 'day', day: 5 },
+    });
+  });
+
   it('kata sesudah tgl-hari yang bukan bulan tetap keterangan', () => {
     expect(parse('makan 23rb tgl 9 xyz')).toEqual(dated('makan xyz', { kind: 'day', day: 9 }));
   });

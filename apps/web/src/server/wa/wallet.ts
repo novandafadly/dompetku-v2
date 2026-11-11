@@ -45,10 +45,17 @@ function words(text: string): string[] {
 export function matchWallet(marker: string, accounts: readonly WalletOption[]): WalletMatch {
   const mk = key(marker);
   if (mk === '') return { kind: 'none' };
+  // Penanda 1 huruf hanya boleh nama persis: awalan/kata sependek itu terlalu mudah memilih dompet
+  // "unik" yang tidak dimaksud (`@t`, `@k`, `@o`).
   const tiers: ((a: WalletOption) => boolean)[] = [
     (a) => key(a.name) === mk,
-    (a) => key(a.name).startsWith(mk),
-    (a) => words(a.name).some((w) => w.startsWith(mk)) || a.pocket.startsWith(mk),
+    ...(mk.length < 2
+      ? []
+      : [
+          (a: WalletOption) => key(a.name).startsWith(mk),
+          (a: WalletOption) =>
+            words(a.name).some((w) => w.startsWith(mk)) || a.pocket.startsWith(mk),
+        ]),
   ];
   for (const test of tiers) {
     const hit = accounts.filter(test);

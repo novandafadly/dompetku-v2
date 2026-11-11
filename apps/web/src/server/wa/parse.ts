@@ -79,6 +79,8 @@ const ISO_DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
 const DMY_RE = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})$/;
 const DM_RE = /^(\d{1,2})[/-](\d{1,2})$/;
 const D_RE = /^\d{1,2}$/;
+const YEAR_RE = /^(?:19|20)\d{2}$/;
+const AGO2_WORDS = new Set(['lusa', 'dulu']);
 const MONTHS: Record<string, number> = {
   jan: 1,
   januari: 1,
@@ -192,8 +194,12 @@ function readDate(words: readonly string[], j: number): { spec: DateSpec; used: 
   if (!D_RE.test(t)) return null;
   const day = Number(t);
   if (day < 1 || day > 31) return null;
-  const month = MONTHS[dateToken(words[j + 1]) ?? ''];
+  const next = dateToken(words[j + 1]) ?? '';
+  const month = Object.hasOwn(MONTHS, next) ? MONTHS[next] : undefined;
   if (month !== undefined) {
+    // Tahun sesudah nama bulan tidak dibaca (bentrok dengan nominal tanpa satuan): ditolak dengan
+    // petunjuk, bukan dibaca sebagai nominal ("tgl 9 nov 2025" tanpa nominal lain = Rp2.025).
+    if (YEAR_RE.test(dateToken(words[j + 2]) ?? '')) return null;
     return validDayMonth(day, month) ? { spec: { kind: 'dm', day, month }, used: 2 } : null;
   }
   return { spec: { kind: 'day', day }, used: 1 };
@@ -215,7 +221,13 @@ function extractDate(words: readonly string[]): {
     const t = dateToken(w);
     if (t !== null && AGO_WORDS.has(t)) {
       count += 1;
-      date = { kind: 'ago', days: 1 };
+      // "kemarin lusa" / "kemarin dulu" = H-2 (dua kata, satu tanggal).
+      if (AGO2_WORDS.has(dateToken(words[i + 1]) ?? '')) {
+        date = { kind: 'ago', days: 2 };
+        i += 1;
+      } else {
+        date = { kind: 'ago', days: 1 };
+      }
     } else if (t !== null && readIso(t)) {
       count += 1;
       date = readIso(t) ?? undefined;
