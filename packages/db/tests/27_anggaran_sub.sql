@@ -6,7 +6,7 @@
 -- Jam dipatok 2026-11-26 10:00 WIB; payday_rule = 25 (label Nov = 23 Okt..24 Nov).
 -- ID: B2, B13, T13, T17
 begin;
-select plan(49);
+select plan(51);
 select tests.fixture();
 select tests.clock_at('2026-11-26 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -189,14 +189,8 @@ select pg_temp.ent(tests.n(), :'kas', 60000, :'dapur', '2026-11-24') is not null
 select pg_temp.ent(tests.n(), :'kas', 15000, :'daging', '2026-11-10') is not null as x \gset
 select is(pg_temp.prog(tests.n(), :'sh', '2026-11-01'), 'Belanja Dapur:1000000:false:100000:10:900000',
   'budget_progress hanya induk; realisasi induk = induk + Sayur 25.000 + Daging 15.000 = 100.000');
-create function pg_temp.sts(p_uid uuid, p_space uuid) returns text
-language sql as $$
-  select tests.web_val(p_uid, format($q$select to_jsonb(s)::text from api.safe_to_spend(%L, '2026-11-26'::date) s$q$, p_space))
-$$;
-select pg_temp.sts(tests.n(), :'sh') as sts_dengan \gset
 select pg_temp.err(tests.n(), format($$select api.delete_budget(%L, %L, '2026-11-01')$$, :'sh', :'sayur')) as x \gset
 select pg_temp.err(tests.n(), format($$select api.delete_budget(%L, %L, '2026-11-01')$$, :'sh', :'daging')) as x \gset
-select is(pg_temp.sts(tests.n(), :'sh'), :'sts_dengan', 'safe_to_spend sama dengan dan tanpa anggaran rincian');
 select is(pg_temp.rows(:'sh', '2026-11-01'), 'Belanja Dapur:1000000:false', 'hapus rincian: induk tetap');
 
 -- ===== Hapus induk menghapus rincian label itu (K2) =====
@@ -233,6 +227,25 @@ select is(pg_temp.rows(:'sh', '2026-12-01'),
   'Belanja Dapur:550000:false,Kopi:100000:false,Makan di Luar:300000:false,Sayur & Buah:100000:false,Warteg:200000:false',
   'Daging tidak tersalin; tidak ada yang ditimpa');
 select is(pg_temp.copy(tests.n(), :'sh', '2026-11-01', '2026-12-01'), '0:5:1:0', 'dijalankan ulang: copied 0 (idempoten)');
+
+-- ===== DELETE massal oleh owner atas induk + rincian (tanpa galat, tanpa yatim) =====
+select pg_temp.set(tests.n(), :'sh', :'dapur', '2027-02-01', 100000) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'sayur', '2027-02-01', 50000) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'daging', '2027-02-01', 50000) as x \gset
+select tests.owner_exec(null, format($$delete from app.budgets where space_id = %L and month = '2027-02-01'$$, :'sh'));
+select is(pg_temp.rows(:'sh', '2027-02-01'), '-', 'DELETE massal induk + rincian oleh owner: semua terhapus tanpa galat');
+
+-- ===== copy_budgets: induk terarsip =====
+select pg_temp.mk('Hobi Arsip', null) as hobi \gset
+select pg_temp.mk('Hobi Sub', :'hobi') as hobisub \gset
+select pg_temp.set(tests.n(), :'sh', :'hobi', '2026-11-01', 100000) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'hobisub', '2026-11-01', 50000) as x \gset
+select pg_temp.call(tests.n(), format($$select api.archive_category(%L)$$, :'hobi'));
+select is(pg_temp.copy(tests.n(), :'sh', '2026-11-01', '2027-04-01'), '6:0:0:2',
+  'induk terarsip dan rinciannya (arsip induk mengarsipkan anak) dilewati = skipped_archived 2; 6 lainnya tersalin');
+select is(pg_temp.rows(:'sh', '2027-04-01'),
+  'Belanja Dapur:1000000:false,Daging:500000:false,Kopi:100000:false,Makan di Luar:300000:false,'
+  'Sayur & Buah:400000:false,Warteg:200000:false', 'hanya keluarga yang aktif tersalin; tidak ada rincian yatim');
 
 select * from finish();
 rollback;

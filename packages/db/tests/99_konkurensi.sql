@@ -18,7 +18,7 @@
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- ID: B8, C2, C4, C9, T15
 begin;
-select plan(79);
+select plan(82);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -405,6 +405,26 @@ select matches(tests.peer_result('kb'), '^ERROR: .*parent_budget_required', 'rin
 select tests.peer_exec('kb', 'rollback');
 select is(tests.owner_val(null, format($$select count(*) from app.budgets where space_id = %L and month = '2027-03-01'$$, :'sh')),
   '0', 'tanpa rincian yatim: hapus induk menghapus rinciannya');
+
+-- Turunkan induk paralel naikkan rincian (April 2027: induk 1.000.000, rincian 500.000): yang kedua
+-- menunggu kunci lalu dinilai atas induk baru (600.000): 500.000 + 200.000 > 600.000.
+create function pg_temp.sbm(p_uid uuid, p_space uuid, p_cat uuid, p_month text, p_amount bigint) returns text
+language sql as $$
+  select pg_temp.api(p_uid, format($q$select api.set_budget(%L, %L, %L::date, %s)$q$, p_space, p_cat, p_month, p_amount))
+$$;
+select tests.peer_val('adm', pg_temp.sbm(tests.n(), :'sh', :'k_iuran', '2027-04-01', 1000000));
+select tests.peer_val('adm', pg_temp.sbm(tests.n(), :'sh', :'k_sayur', '2027-04-01', 500000));
+select tests.peer_exec('ka', 'begin');
+select tests.peer_val('ka', pg_temp.sbm(tests.n(), :'sh', :'k_iuran', '2027-04-01', 600000));
+select tests.peer_exec('kb', 'begin');
+select tests.peer_send('kb', pg_temp.sbm(tests.f(), :'sh', :'k_sub2', '2027-04-01', 200000));
+select ok(tests.peer_blocked('kb'), 'naikkan rincian menunggu penurunan induk yang belum commit');
+select tests.peer_exec('ka', 'commit');
+select matches(tests.peer_result('kb'), '^ERROR: .*sub_exceeds_parent', 'rincian dinilai atas induk yang baru diturunkan = sub_exceeds_parent');
+select tests.peer_exec('kb', 'rollback');
+select is(tests.owner_val(null, format($$select string_agg(c.name || ':' || b.amount, ',' order by c.name) from app.budgets b
+  join app.categories c on c.id = b.category_id where b.space_id = %L and b.month = '2027-04-01'$$, :'sh')),
+  'Iuran Lingkungan:600000,Sayur & Buah:500000', 'induk 600.000 dan rincian 500.000 tersimpan, rincian kedua ditolak');
 
 -- ===== Tagihan (S9, 0118) =====
 -- Jam nyata (env prod): tagihan jatuh tempo hari ini (tanggal = hari ini, mulai hari ini).

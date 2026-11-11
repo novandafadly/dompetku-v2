@@ -24,7 +24,7 @@
 | K1 | Hubungan anggaran sub dengan induk | Sub = **rincian di dalam** anggaran induk: sub hanya boleh ada bila induk punya anggaran di label yang sama (`DK422 parent_budget_required`), `Σ sub ≤ induk` (`DK422 sub_exceeds_parent`, juga saat induk diturunkan di bawah Σ sub). Hanya anggaran induk dihitung di "aman dipakai" dan Laporan. | BSD §15.1: anggaran sub tidak menambah total induk; menghindari dobel. |
 | K2 | Menghapus anggaran induk yang punya sub | Ikut menghapus anggaran sub label itu (UI memberi teks konfirmasi). | Alternatif (tolak) memaksa hapus satu-satu. |
 | K3 | `wajib` pada sub | Ditolak (`DK422 sub_not_wajib`); wajib hanya induk (XOR dengan tagihan tetap di induk). | XOR sudah dinilai di induk; sub wajib membuka celah dobel. |
-| K4 | "Penyesuaian" salin anggaran | Persen bilangan bulat −90..+100 untuk semua baris, dibulatkan ke Rp1.000 terdekat (minimal Rp1.000); sesudah salin, tiap baris diubah lewat editor yang ada. Sub disalin sesudah induknya dan ikut persen yang sama (jadi `Σ sub ≤ induk` tetap). | Sederhana, uang dihitung di SQL. |
+| K4 | "Penyesuaian" salin anggaran | Persen bilangan bulat −90..+100 untuk semua baris, dibulatkan ke Rp1.000: anggaran induk ke atas, rincian ke bawah (minimal Rp1.000), supaya `Σ rincian ≤ induk` terjaga setelah pembulatan (hasil review Task 2); induk ditulis lebih dulu; sesudah salin, tiap baris diubah lewat editor yang ada. Sub disalin sesudah induknya dan ikut persen yang sama (jadi `Σ sub ≤ induk` tetap). | Sederhana, uang dihitung di SQL. |
 | K5 | Isi CSV | Satu baris per entri hidup pada periode Laporan (basis gajian/kalender), kolom: tanggal, jenis, kelas laporan, dompet, kategori induk, subkategori, nominal bertanda (integer rupiah), catatan, pencatat (nama tampil). Ruang Bersama tidak pernah memuat entri Pribadi (B13). Batas 50.000 baris (`DK422 export_too_large`). Pencatatan audit `export` (meta jumlah baris + rentang, tanpa isi). | Cocok dengan Laporan secara terbukti (Σ per kelas = angka Laporan). |
 | K6 | Tombol Ekspor | Di header Laporan (membawa periode + basis yang sedang dilihat); item "Export" di menu tetap "Segera". | Konteks periode terbawa. |
 | K7 | Retensi `wa_messages` | 14 hari (di bawah retensi idempotensi 30 hari; pesan lama yang diputar ulang tetap tertahan idempotensi ledger), job `purge_wa_messages` 01:35 WIB. Baris `pending` tidak dihapus. | Handoff wa.md "Data dan DB". |
@@ -58,6 +58,8 @@
 
 ### Task 2: Anggaran subkategori, skema dan fungsi tulis (migrasi `0125`) — model terkuat
 
+**Selesai 2026-11-11** (commit `4b0a0bc` + perbaikan hasil review independen: asersi 21 memeriksa pesan, asersi `safe_to_spend` tautologis dibuang, tes DELETE massal owner, `copy_budgets` induk terarsip, konkurensi turunkan-induk vs naikkan-rincian; pgTAP 1928). Catatan: rincian dari sheet lama (stale) bisa tersimpan tanpa terlihat sampai `budget_overview` menampilkan rincian (Task 3) dan sheet punya `case 'sub_exceeds_parent'` (Task 5).
+
 **Files:** Create `0125_anggaran_sub.sql`, `tests/27_anggaran_sub.sql`; Modify tes BSD butir 27 (`docs/product/BSD.md` §13 #27 dan tes yang menegaskannya, mis. `21_kewajiban.sql`), `00_katalog.sql`.
 
 - [ ] Test-first (pgTAP): sub tanpa anggaran induk ditolak (`parent_budget_required`); `Σ sub ≤ induk` di tiga arah (set sub, turunkan induk, salin); `sub_not_wajib`; hapus induk menghapus sub label itu; kategori terarsip/ruang lain/pemasukan = `DK404`/`DK422` seperti induk; `assert_member` lebih dulu (tanpa oracle XOR); pindah induk kategori yang punya anggaran tetap `category_in_obligation`; XOR wajib vs tagihan tetap di induk (sub tidak mengubah hasil); konkurensi dua `set_budget` sub paralel tidak melanggar `Σ sub ≤ induk` (kunci advisory per ruang `dompetku.budget:<space>`, di `99_konkurensi.sql` bila perlu).
@@ -70,7 +72,7 @@
 **Files:** Create `0126_anggaran_sub_baca_salin.sql`; extend `27_anggaran_sub.sql`, `17_dq.sql`.
 
 - [ ] `api.budget_overview`: tambah kolom `parent_id`, `sub_allocated` (induk: Σ anggaran rinciannya; 0 bila tidak ada) dan `max_amount` (rincian, termasuk yang belum beranggaran: anggaran induk − Σ anggaran rincian saudaranya; UI tidak menghitung uang, `docs/design/s10-bingkai.md`); baris sub (anak kategori induk yang dipilih) dengan `spent` per `category_id` (bukan `root_category_id`); induk tetap realisasi total (induk + semua sub); urutan: induk lalu sub-subnya. Induk terarsip yang punya anggaran tetap tampil dengan sub-sub beranggaran.
-- [ ] `api.copy_budgets(p_space_id, p_from_month, p_to_month, p_adjust_pct int default 0)`: drop tanda tangan lama (tiga argumen) lalu buat ulang; urut induk dulu lalu sub (urut `category_id` di tiap kelompok); `p_adjust_pct` di luar −90..+100 = `DK400`; nominal = `max(1000, round(amount × (100+pct)/100 / 1000) × 1000)` dihitung bigint di SQL; sub yang induknya dilewati (`skipped_*`) ikut dilewati (`skipped_parent`, kolom hasil baru); idempoten (jalan ulang = copied 0).
+- [ ] `api.copy_budgets(p_space_id, p_from_month, p_to_month, p_adjust_pct int default 0)`: drop tanda tangan lama (tiga argumen) lalu buat ulang; urut induk dulu lalu sub (urut `category_id` di tiap kelompok); `p_adjust_pct` di luar −90..+100 = `DK400`; nominal induk = `max(1000, ceil(amount × (100+pct)/100 / 1000) × 1000)`, rincian = `max(1000, floor(...))`, dihitung bigint di SQL (pembulatan induk ke atas dan rincian ke bawah menjamin Σ rincian ≤ induk; bila tetap melanggar, mis. batas minimal, rincian dilewati sebagai `skipped_conflict`, bukan diam-diam); sub yang induknya dilewati (`skipped_*`) ikut dilewati (`skipped_parent`, kolom hasil baru); idempoten (jalan ulang = copied 0).
 - [ ] DQ14 (error): sub beranggaran tanpa anggaran induk label sama, atau `Σ sub > induk`; tambahkan ke `private.dq_run` dan `17_dq.sql` (daftar DQ01..DQ14), `INFO_ONLY` tidak berubah.
 - [ ] pgTAP: golden baru (`support/golden-s10.{sql,json}`) untuk overview dengan sub dan salin ±persen; `budget_progress`/`safe_to_spend` tidak berubah.
 
@@ -79,6 +81,7 @@
 **Files:** Modify `server/ledger/rencana.ts`, `_actions/rencana.ts`, `features/rencana/types.ts`, tes unit/`__int__`.
 
 - [ ] Zod: `setBudgetSchema` menerima kategori sub; `copyBudgetsSchema` menerima `adjustPct` (int −90..100, bawaan 0); `BudgetOverviewVM` + `parentId`; galat baru dipetakan di `server/ledger/errors.ts` (`parent_budget_required`, `sub_exceeds_parent`, `sub_not_wajib`).
+- [ ] `budget-sheet.tsx`: tambahkan `case 'sub_exceeds_parent'` (dan `sub_not_wajib`) agar tidak jatuh ke galat umum (Task 5 memakai salinan bingkai).
 - [ ] Hasil `copyBudgets` memuat `skippedParent`; tes `__int__` untuk sub, `Σ sub`, penyesuaian, galat.
 
 ### Task 5: UI Rencana: anggaran rincian (sonnet + lensa desain)

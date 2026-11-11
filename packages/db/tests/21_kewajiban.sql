@@ -161,7 +161,7 @@ from (values
   ('berakhir sebelum mulai', pg_temp.bill_sql(:'sh', :'internet', '2026-11-01', '2026-10-31'))
 ) v (t, q);
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'sayur', '2026-11-01', false)),
-  'DK422', null, 'anggaran pada subkategori tanpa anggaran induk ditolak (S10, menggantikan FK is_root BSD §13 #27)');
+  'DK422', 'parent_budget_required', 'anggaran pada subkategori tanpa anggaran induk ditolak (S10, menggantikan FK is_root BSD §13 #27)');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'kontrib', '2026-11-01', false)),
   '23503', null, 'anggaran pada kategori pemasukan ditolak FK');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'nlangganan', '2026-11-01', false)),
