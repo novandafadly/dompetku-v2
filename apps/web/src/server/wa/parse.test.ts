@@ -411,7 +411,15 @@ describe('parseMessage: tanggal', () => {
     expect(parse('makan siang tgl 9 nov 2025')).toEqual({ kind: 'reject', reason: 'bad_date' });
     expect(parse('25rb makan tgl 9 nov 2025')).toEqual({ kind: 'reject', reason: 'bad_date' });
     expect(parse('25rb makan tgl 9 nov 1999')).toEqual({ kind: 'reject', reason: 'bad_date' });
-    // angka lain sesudah bulan tetap nominal
+    // angka lain sesudah bulan tetap nominal; YEAR_RE hanya persis 4 digit 19xx/20xx
+    expect(parse('tgl 9 nov 2500')).toMatchObject({ amount: 2500 });
+    expect(parse('tgl 9 nov 2025rb')).toMatchObject({ amount: 2_025_000 });
+    expect(parse('tgl 9 2000')).toMatchObject({ amount: 2000, date: { kind: 'day', day: 9 } });
+    expect(parse('tgl 9 2025')).toMatchObject({ amount: 2025, date: { kind: 'day', day: 9 } });
+    expect(parse('2000 makan tgl 9 nov')).toMatchObject({
+      amount: 2000,
+      date: { kind: 'dm', day: 9, month: 11 },
+    });
     expect(parse('tgl 9 nov 25000')).toMatchObject({
       amount: 25000,
       date: { kind: 'dm', day: 9, month: 11 },

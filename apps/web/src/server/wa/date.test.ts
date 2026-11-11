@@ -64,6 +64,16 @@ describe('resolveDate', () => {
       reason: 'invalid',
     });
   });
+  it('dm: 29 Februari, kabisat terakhir masih dalam 366 hari = ok; lebih lama = too_old', () => {
+    expect(r({ kind: 'dm', day: 29, month: 2 }, '2029-02-20')).toEqual({
+      ok: true,
+      iso: '2028-02-29',
+    });
+    expect(r({ kind: 'dm', day: 29, month: 2 }, '2027-08-01')).toEqual({
+      ok: false,
+      reason: 'too_old',
+    });
+  });
   it('batas mundur 366 hari (semua bentuk): tepat 366 boleh, 367 too_old', () => {
     expect(r({ kind: 'full', year: 2025, month: 11, day: 10 })).toEqual({
       ok: true,
