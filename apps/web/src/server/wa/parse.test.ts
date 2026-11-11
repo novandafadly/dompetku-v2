@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMessage, type ParseResult } from './parse';
+import { parseMessage, type DateSpec, type ParseResult } from './parse';
 
 const MAX = 100_000_000;
 const parse = (t: string) => parseMessage(t, { maxAmount: MAX });
@@ -356,5 +356,119 @@ describe('parseMessage: penanda dompet @nama', () => {
   it('batal dan hubung tidak menerima penanda', () => {
     expect(parse('batal @cimb').kind).toBe('reject');
     expect(parse('hubung ABC123 @cimb').kind).toBe('reject');
+  });
+});
+
+describe('parseMessage: tanggal', () => {
+  const dated = (
+    description: string,
+    date: DateSpec,
+    over: Partial<Extract<ParseResult, { kind: 'entry' }>> = {},
+  ): ParseResult => ({
+    kind: 'entry',
+    type: 'expense',
+    amount: 23000,
+    space: 'personal',
+    description,
+    date,
+    ...over,
+  });
+  const ago1 = { kind: 'ago', days: 1 } as const;
+
+  it.each<[string, ParseResult]>([
+    ['makan 23rb kemarin', dated('makan', ago1)],
+    ['kemarin makan 23rb', dated('makan', ago1)],
+    ['makan kmrn 23rb', dated('makan', ago1)],
+    ['makan kemaren 23rb', dated('makan', ago1)],
+    ['Makan 23rb KEMARIN.', dated('makan', ago1)],
+    ['makan 23rb tgl 9', dated('makan', { kind: 'day', day: 9 })],
+    ['makan 23rb tanggal 9', dated('makan', { kind: 'day', day: 9 })],
+    ['tgl 09 makan 23rb', dated('makan', { kind: 'day', day: 9 })],
+    ['makan 23rb tgl 9/11', dated('makan', { kind: 'dm', day: 9, month: 11 })],
+    ['makan 23rb tgl 9-11', dated('makan', { kind: 'dm', day: 9, month: 11 })],
+    ['makan 23rb tgl 9/11.', dated('makan', { kind: 'dm', day: 9, month: 11 })],
+    ['makan 23rb tgl 9/11/2025', dated('makan', { kind: 'full', year: 2025, month: 11, day: 9 })],
+    ['makan 23rb tgl 9-11-25', dated('makan', { kind: 'full', year: 2025, month: 11, day: 9 })],
+    ['makan 23rb tgl 2025-11-09', dated('makan', { kind: 'full', year: 2025, month: 11, day: 9 })],
+    ['makan 23rb 2025-11-09', dated('makan', { kind: 'full', year: 2025, month: 11, day: 9 })],
+    ['makan 23rb tgl 9 nov', dated('makan', { kind: 'dm', day: 9, month: 11 })],
+    ['makan 23rb tgl 9 November', dated('makan', { kind: 'dm', day: 9, month: 11 })],
+    ['makan 23rb tgl 3 agu', dated('makan', { kind: 'dm', day: 3, month: 8 })],
+    ['makan 23rb tgl 3 mei', dated('makan', { kind: 'dm', day: 3, month: 5 })],
+    ['makan 23rb tgl 29/2', dated('makan', { kind: 'dm', day: 29, month: 2 })],
+    ['makan tgl 9 23rb', dated('makan', { kind: 'day', day: 9 })],
+    [
+      'b 23rb makan tgl 9/11',
+      dated('makan', { kind: 'dm', day: 9, month: 11 }, { space: 'shared' }),
+    ],
+    ['+23rb gaji tgl 25', dated('gaji', { kind: 'day', day: 25 }, { type: 'income' })],
+    ['makan 23rb @cimb kemarin', dated('makan', ago1, { wallet: 'cimb' })],
+  ])('%j', (input, expected) => {
+    expect(parse(input)).toEqual(expected);
+  });
+
+  it('kata sesudah tgl-hari yang bukan bulan tetap keterangan', () => {
+    expect(parse('makan 23rb tgl 9 xyz')).toEqual(dated('makan xyz', { kind: 'day', day: 9 }));
+  });
+
+  it('tanpa tanggal: tidak ada kunci date', () => {
+    expect('date' in parse('25rb makan siang')).toBe(false);
+  });
+
+  it('angka tanggal tidak dihitung sebagai nominal', () => {
+    expect(parse('tgl 9 25rb')).toMatchObject({ amount: 25000, date: { kind: 'day', day: 9 } });
+    expect(parse('25rb tgl 9/11')).toMatchObject({ amount: 25000 });
+    expect(parse('25 rb tgl 9/11')).toMatchObject({ amount: 25000 });
+    expect(parse('tgl 9 25')).toMatchObject({ amount: 25, date: { kind: 'day', day: 9 } });
+  });
+
+  it('nominal sesudah tgl-hari tetap nominal, bukan bagian tanggal (tgl 9 2000 = Rp2000 tgl 9)', () => {
+    expect(parse('tgl 9 2000')).toMatchObject({ amount: 2000, date: { kind: 'day', day: 9 } });
+  });
+
+  it('pecahan tanpa tgl bukan tanggal (gagal tertutup sebagai nominal)', () => {
+    expect(parse('makan 1/2 porsi 25rb')).toEqual({ kind: 'reject', reason: 'many_amounts' });
+    expect(parse('25rb makan 9/11').kind).toBe('reject');
+  });
+
+  it.each([
+    'makan 23rb tgl',
+    'makan 23rb tgl abc',
+    'makan 23rb tgl 0',
+    'makan 23rb tgl 32',
+    'makan 23rb tgl 31/4',
+    'makan 23rb tgl 30/2',
+    'makan 23rb tgl 9/13',
+    'makan 23rb tgl 9/0',
+    'makan 23rb tgl 29/2/2025',
+    'makan 23rb tgl 2025-02-30',
+    'makan 23rb tgl 9/11/20255',
+    'makan 23rb tgl 9//11',
+    'makan 23rb tgl ' + 'a'.repeat(5000),
+  ])('%j tanggal rusak = bad_date', (input) => {
+    expect(parse(input)).toEqual({ kind: 'reject', reason: 'bad_date' });
+  });
+
+  it('dua tanggal = many_dates (juga bila sama)', () => {
+    expect(parse('makan 23rb kemarin tgl 9')).toEqual({ kind: 'reject', reason: 'many_dates' });
+    expect(parse('makan 23rb kemarin kmrn')).toEqual({ kind: 'reject', reason: 'many_dates' });
+    expect(parse('makan 23rb tgl 9 tgl 9')).toEqual({ kind: 'reject', reason: 'many_dates' });
+  });
+
+  it('galat tanggal didahulukan dari galat nominal; batal/hubung tidak menerima tanggal', () => {
+    expect(parse('makan kemarin')).toEqual({ kind: 'reject', reason: 'no_amount' });
+    expect(parse('batal kemarin').kind).toBe('reject');
+  });
+
+  it('kata mirip bukan tanggal: tgl di dalam kata, kemarinan', () => {
+    expect(parse('25rb mintgl 9')).toMatchObject({ kind: 'reject' });
+    expect(parse('25rb kemarinan')).toEqual(entry('expense', 25000, 'personal', 'kemarinan'));
+  });
+
+  it('tidak lambat pada token panjang', () => {
+    const t0 = performance.now();
+    parse(`25rb tgl ${'.'.repeat(60_000)}`);
+    parse(`25rb ${'9/'.repeat(30_000)}`);
+    expect(performance.now() - t0).toBeLessThan(300);
   });
 });

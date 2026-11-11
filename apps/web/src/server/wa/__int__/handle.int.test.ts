@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { formatRupiah } from '@dompetku/domain';
+import { addDays, dayLabel, formatRupiah, todayWIB } from '@dompetku/domain';
 import type pg from 'pg';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPools, withAnon, withUser, type Pools } from '../../db';
@@ -165,13 +165,14 @@ interface EntryRow {
   account_id: string;
   voided_at: Date | null;
   version: number;
+  occurred_on: string;
 }
 
 /** Entri income/expense (tanpa saldo awal), dibaca superuser. */
 async function entries(): Promise<EntryRow[]> {
   const { rows } = await h.admin.query<EntryRow>(
     `select e.id, e.space_id, e.kind::text, abs(l.amount)::int as amount, c.name as category_name,
-            c.type::text as category_type, e.description, l.account_id, e.voided_at, e.version
+            c.type::text as category_type, e.description, l.account_id, e.voided_at, e.version, e.occurred_on::text as occurred_on
        from app.entries e
        join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
        left join app.categories c on c.id = e.category_id
@@ -973,5 +974,137 @@ describe('handleInbound: pilih dompet @nama (Postgres sungguhan)', () => {
     for (const bad of ['cimb', 'niaga', 'CIMB', 'bca']) expect(logged).not.toContain(bad);
     await handleInbound(r.deps, msg('23rb makan @mandiri'));
     expect(JSON.stringify(r.log.mock.calls)).not.toContain('mandiri');
+  });
+});
+
+describe('handleInbound: tanggal (Postgres sungguhan)', () => {
+  let n: Persona;
+  let nPribadi: LedgerCtx;
+  let acc: string;
+  const today = () => todayWIB();
+  const dm = (iso: string) =>
+    `${String(Number(iso.slice(8, 10)))}/${String(Number(iso.slice(5, 7)))}`;
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    const personas = await seedPersonas(h, { farida: 'bergabung' });
+    n = personas.n;
+    nPribadi = { pools: h.pools, userId: n.id, spaceId: await spaceIdOf(h, n.id, 'personal') };
+    acc = await wallet(nPribadi, 'operasional', 'CIMB');
+    // Dompet baru dibuka hari ini; tanggal sebelum `opened_on` ditolak ledger (before_opening).
+    await h.admin.query(`update app.accounts set opened_on = $2::date where id = $1`, [
+      acc,
+      addDays(today(), -400),
+    ]);
+    await linkDirect(n, N_PHONE);
+  });
+
+  it('"kemarin": entri bertanggal kemarin, balasan menyebut tanggal, kata kemarin keluar dari keterangan', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('makan siang padang 23rb kemarin'));
+    const [e] = await entries();
+    const y = addDays(today(), -1);
+    expect(e).toMatchObject({
+      occurred_on: y,
+      description: 'makan siang padang',
+      account_id: acc,
+      amount: 23_000,
+    });
+    expect(r.sent[0]?.text).toBe(
+      `✅ Makan Siang & Minum ${formatRupiah(23_000)} · Pribadi · CIMB · Kemarin · ketik batal untuk membatalkan`,
+    );
+  });
+
+  it('tanpa tanggal tetap hari ini; "tgl <hari ini>" juga hari ini tanpa label', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi'));
+    await handleInbound(r.deps, msg(`10rb kopi tgl ${String(Number(today().slice(8, 10)))}`));
+    const rows = await entries();
+    expect(rows.map((e) => e.occurred_on)).toEqual([today(), today()]);
+    expect(r.sent[1]?.text).not.toMatch(/Kemarin| · \w{3}, /);
+    expect(r.sent[1]?.text).toBe(r.sent[0]?.text);
+  });
+
+  it('bentuk tanggal bebas: tgl D/M, tgl D, tgl D bulan, ISO, D/M/YYYY', async () => {
+    const d3 = addDays(today(), -3);
+    const d40 = addDays(today(), -40);
+    const r = rig();
+    const names = [
+      'jan',
+      'feb',
+      'mar',
+      'apr',
+      'mei',
+      'jun',
+      'jul',
+      'agu',
+      'sep',
+      'okt',
+      'nov',
+      'des',
+    ];
+    const inputs = [
+      `10rb a tgl ${dm(d3)}`,
+      `10rb b tgl ${String(Number(d3.slice(8, 10)))}`,
+      `10rb c tgl ${String(Number(d3.slice(8, 10)))} ${names[Number(d3.slice(5, 7)) - 1] ?? ''}`,
+      `10rb d ${d40}`,
+      `10rb e tgl ${dm(d40)}/${d40.slice(0, 4)}`,
+    ];
+    for (const t of inputs) await handleInbound(r.deps, msg(t));
+    const rows = await entries();
+    expect(rows.map((e) => e.description)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(rows.map((e) => e.occurred_on)).toEqual([d3, d3, d3, d40, d40]);
+    expect(r.sent[3]?.text).toContain(dayLabel(d40, today()));
+  });
+
+  it('masa depan ditolak, tanpa entri, balasan jelas', async () => {
+    const r = rig();
+    const m = msg(`10rb kopi tgl ${dm(addDays(today(), 1))}/${addDays(today(), 1).slice(0, 4)}`);
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toBe(REPLY.futureDate);
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
+    expect(r.log).toHaveBeenCalledWith('rejected', 'date_future');
+  });
+
+  it('tanggal rusak / dua tanggal: ditolak', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi tgl 31/2'));
+    await handleInbound(r.deps, msg('10rb kopi kemarin tgl 5'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent.map((x) => x.text)).toEqual([REPLY.badDate, REPLY.manyDates]);
+  });
+
+  it('sebelum dompet dibuka: ditolak dengan balasan yang menyebut dompet', async () => {
+    const m = msg('10rb kopi tgl 2020-01-01');
+    const r = rig();
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toBe(REPLY.beforeOpening('CIMB'));
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
+  });
+
+  it('sebelum 2000: ditolak; @dompet dan tanggal bisa digabung; idempoten; batal membatalkan entri bertanggal lama', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi 1999-12-31'));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent[0]?.text).toBe(REPLY.badDate);
+
+    const m = msg('10rb kopi @cimb kemarin');
+    await handleInbound(r.deps, m);
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(1);
+    expect(r.sent).toHaveLength(2);
+    await handleInbound(r.deps, msg('batal'));
+    expect((await entries())[0]?.voided_at).not.toBeNull();
+  });
+
+  it('log tidak memuat teks tanggal', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi tgl 9/11'));
+    await handleInbound(r.deps, msg('10rb kopi kemarin'));
+    await handleInbound(r.deps, msg('10rb kopi tgl 31/2'));
+    const logged = JSON.stringify(r.log.mock.calls);
+    for (const bad of ['tgl', 'kemarin', '9/11', '31/2']) expect(logged).not.toContain(bad);
   });
 });
