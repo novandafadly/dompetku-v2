@@ -51,7 +51,7 @@
 
 ### Task 1: Bingkai desain S10 (gerbang awal, tanpa kode)
 
-**Files:** Create `docs/design/s10-bingkai.md` (format `s9-bingkai.md`).
+**Files:** Create `docs/design/s10-bingkai.md` (format `s9-bingkai.md`). **Selesai 2026-11-11** (S10-SB1/SB2 rincian, S10-RV1/RV2 review + salin penyesuaian, S10-EX1 ekspor, salinan final, galat tanpa nominal; critique dan Delivery Gate diisi di Task 10).
 
 - [ ] Tulis bingkai: (a) editor anggaran dengan sub (baris sub menjorok di bawah induk, "Tambah anggaran rincian", sisa induk = induk − Σ sub, konfirmasi hapus induk); (b) layar Review bulanan `/[ruang]/rencana/review` (ringkasan: pemasukan, pengeluaran, selisih periode lalu vs sebelumnya; per kategori: rencana vs realisasi; tombol "Salin ke periode ini" dengan pilihan penyesuaian persen); (c) tombol Ekspor di header Laporan (keadaan memuat, galat, `export_too_large`); (d) keadaan kosong, 320 px, terang/gelap, salinan tanpa "rumah tangga".
 - [ ] Antislop mode DURING + Delivery Gate sebagai daftar periksa; critique tersimpan di dokumen sama.
@@ -69,7 +69,7 @@
 
 **Files:** Create `0126_anggaran_sub_baca_salin.sql`; extend `27_anggaran_sub.sql`, `17_dq.sql`.
 
-- [ ] `api.budget_overview`: tambah kolom `parent_id`; baris sub (anak kategori induk yang dipilih) dengan `spent` per `category_id` (bukan `root_category_id`); induk tetap realisasi total (induk + semua sub); urutan: induk lalu sub-subnya. Induk terarsip yang punya anggaran tetap tampil dengan sub-sub beranggaran.
+- [ ] `api.budget_overview`: tambah kolom `parent_id`, `sub_allocated` (induk: Σ anggaran rinciannya; 0 bila tidak ada) dan `max_amount` (rincian, termasuk yang belum beranggaran: anggaran induk − Σ anggaran rincian saudaranya; UI tidak menghitung uang, `docs/design/s10-bingkai.md`); baris sub (anak kategori induk yang dipilih) dengan `spent` per `category_id` (bukan `root_category_id`); induk tetap realisasi total (induk + semua sub); urutan: induk lalu sub-subnya. Induk terarsip yang punya anggaran tetap tampil dengan sub-sub beranggaran.
 - [ ] `api.copy_budgets(p_space_id, p_from_month, p_to_month, p_adjust_pct int default 0)`: drop tanda tangan lama (tiga argumen) lalu buat ulang; urut induk dulu lalu sub (urut `category_id` di tiap kelompok); `p_adjust_pct` di luar −90..+100 = `DK400`; nominal = `max(1000, round(amount × (100+pct)/100 / 1000) × 1000)` dihitung bigint di SQL; sub yang induknya dilewati (`skipped_*`) ikut dilewati (`skipped_parent`, kolom hasil baru); idempoten (jalan ulang = copied 0).
 - [ ] DQ14 (error): sub beranggaran tanpa anggaran induk label sama, atau `Σ sub > induk`; tambahkan ke `private.dq_run` dan `17_dq.sql` (daftar DQ01..DQ14), `INFO_ONLY` tidak berubah.
 - [ ] pgTAP: golden baru (`support/golden-s10.{sql,json}`) untuk overview dengan sub dan salin ±persen; `budget_progress`/`safe_to_spend` tidak berubah.
