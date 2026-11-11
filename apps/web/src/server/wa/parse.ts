@@ -1,5 +1,15 @@
 // Parser pesan Catat WhatsApp (spec 4.1). Murni: tanpa I/O.
 
+/**
+ * Tanggal dari teks, belum dipadukan dengan hari ini (parser murni; `resolveDate` di `date.ts`
+ * memakai `app.today()` dari DB). `full` sudah divalidasi kalender.
+ */
+export type DateSpec =
+  | { kind: 'ago'; days: number }
+  | { kind: 'day'; day: number }
+  | { kind: 'dm'; day: number; month: number }
+  | { kind: 'full'; year: number; month: number; day: number };
+
 export type ParseResult =
   | {
       kind: 'entry';
@@ -9,6 +19,8 @@ export type ParseResult =
       description: string;
       /** Penanda `@nama` (huruf kecil, tanpa `@`); kunci tidak ada bila pesan tanpa penanda. */
       wallet?: string;
+      /** Penanda tanggal (kemarin, tgl ...); kunci tidak ada bila pesan tanpa tanggal. */
+      date?: DateSpec;
     }
   | { kind: 'cancel' }
   | { kind: 'link'; code: string }
@@ -21,7 +33,9 @@ export type ParseResult =
         | 'bad_amount'
         | 'too_large'
         | 'many_wallets'
-        | 'bad_wallet';
+        | 'bad_wallet'
+        | 'many_dates'
+        | 'bad_date';
     };
 
 const MAX_DESCRIPTION = 200;
@@ -54,6 +68,45 @@ const UNIT_START_RE =
 const WALLET_MAX = 60;
 const WALLET_TRAIL_RE = /[.,;:!?]+$/;
 const WALLET_RE = /^[\p{L}\p{N}_-]+$/u;
+// Tanggal (spec 4.1): `kemarin`/`kmrn`/`kemaren`, `tgl|tanggal` + (D | D/M | D-M | D/M/YYYY | D-M-YY |
+// YYYY-MM-DD | D <nama bulan>), dan ISO telanjang (2026-11-09). Bentuk angka tanpa `tgl` bukan
+// tanggal ("1/2 porsi"). Token lebih dari 20 karakter tidak mungkin tanggal dan tidak disentuh regex.
+const DATE_TOKEN_MAX = 20;
+const DATE_TRAIL_RE = /[.,;:!?]+$/;
+const AGO_WORDS = new Set(['kemarin', 'kmrn', 'kemaren']);
+const DATE_KEYWORDS = new Set(['tgl', 'tanggal']);
+const ISO_DATE_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+const DMY_RE = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})$/;
+const DM_RE = /^(\d{1,2})[/-](\d{1,2})$/;
+const D_RE = /^\d{1,2}$/;
+const MONTHS: Record<string, number> = {
+  jan: 1,
+  januari: 1,
+  feb: 2,
+  februari: 2,
+  mar: 3,
+  maret: 3,
+  apr: 4,
+  april: 4,
+  mei: 5,
+  jun: 6,
+  juni: 6,
+  jul: 7,
+  juli: 7,
+  agu: 8,
+  agt: 8,
+  ags: 8,
+  agustus: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  okt: 10,
+  oktober: 10,
+  nov: 11,
+  november: 11,
+  des: 12,
+  desember: 12,
+};
 const FORMAT_CHARS_RE = /\p{Cf}/gu;
 const COMBINING_RE = /\p{M}/gu;
 // Huruf Kiril/Yunani yang mirip atau sebunyi dengan huruf satuan, hanya untuk unitKey (keterangan
@@ -90,6 +143,97 @@ function unitKey(token: string): string {
 
 function startsWithUnit(token: string): boolean {
   return UNIT_START_RE.test(unitKey(token));
+}
+
+function dateToken(raw: string | undefined): string | null {
+  if (raw === undefined || raw.length > DATE_TOKEN_MAX) return null;
+  return raw.replace(DATE_TRAIL_RE, '');
+}
+
+/** Hari valid untuk bulan itu; Februari boleh 29 (tahun belum diketahui). */
+function validDayMonth(day: number, month: number): boolean {
+  return (
+    month >= 1 && month <= 12 && day >= 1 && day <= new Date(Date.UTC(2024, month, 0)).getUTCDate()
+  );
+}
+
+function fullDate(year: number, month: number, day: number): DateSpec | null {
+  if (month < 1 || month > 12 || day < 1) return null;
+  if (day > new Date(Date.UTC(year, month, 0)).getUTCDate()) return null;
+  return { kind: 'full', year, month, day };
+}
+
+function readIso(t: string): DateSpec | null {
+  const m = ISO_DATE_RE.exec(t);
+  return m ? fullDate(Number(m[1]), Number(m[2]), Number(m[3])) : null;
+}
+
+/** Tanggal sesudah `tgl`/`tanggal` mulai di `words[j]`; `used` = jumlah token yang dipakai. */
+function readDate(words: readonly string[], j: number): { spec: DateSpec; used: number } | null {
+  const t = dateToken(words[j]);
+  if (t === null) return null;
+  const iso = readIso(t);
+  if (iso) return { spec: iso, used: 1 };
+  const dmy = DMY_RE.exec(t);
+  if (dmy) {
+    const y = dmy[3] ?? '';
+    const spec = fullDate(
+      y.length === 2 ? 2000 + Number(y) : Number(y),
+      Number(dmy[2]),
+      Number(dmy[1]),
+    );
+    return spec ? { spec, used: 1 } : null;
+  }
+  const dm = DM_RE.exec(t);
+  if (dm) {
+    const [day, month] = [Number(dm[1]), Number(dm[2])];
+    return validDayMonth(day, month) ? { spec: { kind: 'dm', day, month }, used: 1 } : null;
+  }
+  if (!D_RE.test(t)) return null;
+  const day = Number(t);
+  if (day < 1 || day > 31) return null;
+  const month = MONTHS[dateToken(words[j + 1]) ?? ''];
+  if (month !== undefined) {
+    return validDayMonth(day, month) ? { spec: { kind: 'dm', day, month }, used: 2 } : null;
+  }
+  return { spec: { kind: 'day', day }, used: 1 };
+}
+
+/** Ambil penanda tanggal dari aliran kata; sisa kata dikembalikan (tanggal tidak jadi keterangan). */
+function extractDate(words: readonly string[]): {
+  rest: string[];
+  date?: DateSpec;
+  count: number;
+  bad: boolean;
+} {
+  const rest: string[] = [];
+  let date: DateSpec | undefined;
+  let count = 0;
+  let bad = false;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i] ?? '';
+    const t = dateToken(w);
+    if (t !== null && AGO_WORDS.has(t)) {
+      count += 1;
+      date = { kind: 'ago', days: 1 };
+    } else if (t !== null && readIso(t)) {
+      count += 1;
+      date = readIso(t) ?? undefined;
+    } else if (t !== null && DATE_KEYWORDS.has(t)) {
+      count += 1;
+      const r = readDate(words, i + 1);
+      if (r) {
+        date = r.spec;
+        i += r.used;
+      } else {
+        bad = true;
+        i += 1; // buang token sesudah `tgl` agar tidak terbaca sebagai nominal
+      }
+    } else {
+      rest.push(w);
+    }
+  }
+  return date === undefined ? { rest, count, bad } : { rest, date, count, bad };
 }
 
 function toAmount(raw: string): number | null {
@@ -129,13 +273,18 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
     }
   }
 
+  // Tanggal diambil sesudah penanda dompet dan sebelum nominal: angkanya tidak boleh terbaca nominal.
+  const ex = extractDate(words);
+  if (ex.count > 1) return { kind: 'reject', reason: 'many_dates' };
+  if (ex.bad) return { kind: 'reject', reason: 'bad_date' };
+
   // "rp 25.000" / "rp. 25.000": gabungkan penanda mata uang dengan token angka berikutnya.
   // "25 rb" / "1,5 jt" / "25 ribu": gabungkan satuan dengan token angka sebelumnya, sehingga
   // nominal tidak terbaca 1000x lebih kecil. Token yang hanya diawali satuan ("25 rbu",
   // "25 rb,", "50 k.", "25 ｒｂ") ikut digabung apa adanya agar ditolak (bad_amount), sama
   // dengan "25rbu": gagal tertutup.
   const tokens: string[] = [];
-  for (const t of words) {
+  for (const t of ex.rest) {
     const prev = tokens[tokens.length - 1];
     if ((prev === 'rp' || prev === 'rp.') && ANY_DIGIT_RE.test(t))
       tokens[tokens.length - 1] = prev + t;
@@ -197,5 +346,6 @@ export function parseMessage(text: string, opts: { maxAmount: number }): ParseRe
     space: shared || sharedWord ? 'shared' : 'personal',
     description: rest.join(' ').slice(0, MAX_DESCRIPTION).trimEnd(),
     ...(wallet === undefined ? {} : { wallet }),
+    ...(ex.date === undefined ? {} : { date: ex.date }),
   };
 }
