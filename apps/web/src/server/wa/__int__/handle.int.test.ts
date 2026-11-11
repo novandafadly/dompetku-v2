@@ -1116,6 +1116,11 @@ describe('handleInbound: tanggal (Postgres sungguhan)', () => {
     await handleInbound(r.deps, m);
     expect(await entries()).toHaveLength(1);
     expect(r.sent[0]?.text).toBe(REPLY.maybeRecorded);
+    // Klaim dibiarkan pending (bukan rejected), jadi `batal` tidak mundur ke catatan WA lama.
+    expect(await messageRow(m.messageId)).toMatchObject({ status: 'pending' });
+    await handleInbound(r.deps, msg('batal'));
+    expect(r.sent[1]?.text).toBe(REPLY.cancelUnavailable);
+    expect((await entries())[0]?.voided_at).toBeNull();
   });
 
   it('sebelum 2000: ditolak; @dompet dan tanggal bisa digabung; idempoten; batal membatalkan entri bertanggal lama', async () => {

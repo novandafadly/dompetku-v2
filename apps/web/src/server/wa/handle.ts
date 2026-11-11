@@ -75,7 +75,7 @@ export const REPLY = {
   insufficient: (wallet: string) => `❌ Saldo ${wallet} tidak cukup. Catat dari app.`,
   /** Penanda `@nama` rusak atau lebih dari satu: tidak ada yang dicatat. */
   badDate:
-    '❌ Tanggal tidak terbaca. Contoh: 25rb makan kemarin, atau 25rb makan tgl 9/11 (dengan tahun: tgl 9/11/2025)',
+    '❌ Tanggal tidak terbaca. Contoh: 25rb makan kemarin, atau 25rb makan tgl 9/11. Tulis nominal dengan rb (2rb), bukan 2000.',
   tooOld: '❌ Tanggal terlalu lama (lebih dari setahun). Catat dari app.',
   /** Kunci idempotensi sama, isi beda (tanggal relatif berubah lintas tengah malam): kemungkinan sudah tercatat. */
   maybeRecorded: '⚠️ Pesan ini mungkin sudah tercatat. Cek di app sebelum mengirim ulang.',
@@ -445,6 +445,14 @@ async function record(
   } catch (e) {
     const code = finalRejection(e);
     if (code === null) throw e;
+    if (code === 'idem_mismatch') {
+      // Kunci idempotensi sama, isi beda: entri pertama sudah ada. Klaim dibiarkan `pending` (bukan
+      // `rejected`): `batal` berikutnya dijawab "tidak bisa dibatalkan" dan tidak mundur ke catatan
+      // WhatsApp yang lebih lama (`wa_last_cancellable` tidak menghitung `rejected`).
+      r.log('rejected', code);
+      await reply(r, REPLY.maybeRecorded);
+      return;
+    }
     await finish(r, userId, 'rejected');
     r.log('rejected', code);
     await reply(
@@ -453,9 +461,7 @@ async function record(
         ? REPLY.insufficient(account.name)
         : code === 'before_opening'
           ? REPLY.beforeOpening(account.name)
-          : code === 'idem_mismatch'
-            ? REPLY.maybeRecorded
-            : REPLY.notRecorded,
+          : REPLY.notRecorded,
     );
     return;
   }
