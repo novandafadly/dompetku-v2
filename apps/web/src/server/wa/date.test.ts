@@ -35,13 +35,21 @@ describe('resolveDate', () => {
       iso: '2025-08-20',
     });
   });
-  it('dm: 29 Februari mencari tahun kabisat terakhir', () => {
-    expect(r({ kind: 'dm', day: 29, month: 2 })).toEqual({ ok: true, iso: '2024-02-29' });
+  it('dm: 29 Februari tanpa tahun kabisat dalam setahun terakhir = too_old; kabisat berikutnya dekat = future', () => {
+    expect(r({ kind: 'dm', day: 29, month: 2 })).toEqual({ ok: false, reason: 'too_old' });
+    expect(r({ kind: 'dm', day: 29, month: 2 }, '2027-11-11')).toEqual({
+      ok: false,
+      reason: 'future',
+    });
+    expect(r({ kind: 'dm', day: 29, month: 2 }, '2024-03-05')).toEqual({
+      ok: true,
+      iso: '2024-02-29',
+    });
   });
   it('full: apa adanya; masa depan ditolak; sebelum 2000 ditolak', () => {
-    expect(r({ kind: 'full', year: 2025, month: 3, day: 7 })).toEqual({
+    expect(r({ kind: 'full', year: 2026, month: 3, day: 7 })).toEqual({
       ok: true,
-      iso: '2025-03-07',
+      iso: '2026-03-07',
     });
     expect(r({ kind: 'full', year: 2026, month: 11, day: 11 })).toEqual({
       ok: true,
@@ -52,6 +60,31 @@ describe('resolveDate', () => {
       reason: 'future',
     });
     expect(r({ kind: 'full', year: 1999, month: 12, day: 31 })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+  });
+  it('batas mundur 366 hari (semua bentuk): tepat 366 boleh, 367 too_old', () => {
+    expect(r({ kind: 'full', year: 2025, month: 11, day: 10 })).toEqual({
+      ok: true,
+      iso: '2025-11-10',
+    });
+    expect(r({ kind: 'full', year: 2025, month: 11, day: 9 })).toEqual({
+      ok: false,
+      reason: 'too_old',
+    });
+    expect(r({ kind: 'full', year: 2015, month: 11, day: 9 })).toEqual({
+      ok: false,
+      reason: 'too_old',
+    });
+    expect(r({ kind: 'ago', days: 2 })).toEqual({ ok: true, iso: '2026-11-09' });
+    expect(r({ kind: 'dm', day: 5, month: 11 }, '2027-11-11')).toEqual({
+      ok: true,
+      iso: '2027-11-05',
+    });
+  });
+  it('tahun < 1000 tidak lolos sebagai masa depan (dipad): tetap ditolak sebagai invalid', () => {
+    expect(r({ kind: 'full', year: 50, month: 1, day: 1 })).toEqual({
       ok: false,
       reason: 'invalid',
     });

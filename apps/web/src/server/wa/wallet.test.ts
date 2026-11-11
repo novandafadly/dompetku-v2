@@ -54,6 +54,15 @@ describe('matchWallet', () => {
       wallet: kantorName,
     });
   });
+  it('penanda 1 huruf hanya cocok nama persis, tidak awalan atau kata (salah ketik pendek tidak memilih)', () => {
+    expect(matchWallet('t', ALL)).toEqual({ kind: 'none' });
+    expect(matchWallet('k', ALL)).toEqual({ kind: 'none' });
+    expect(matchWallet('o', ALL)).toEqual({ kind: 'none' });
+    const satu = w('12', 'X');
+    expect(matchWallet('x', [satu, BCA])).toEqual({ kind: 'found', wallet: satu });
+    expect(matchWallet('ti', ALL)).toEqual({ kind: 'none' });
+    expect(matchWallet('tu', ALL)).toEqual({ kind: 'found', wallet: TUNAI });
+  });
   it('tidak ada kecocokan, atau penanda kosong sesudah normalisasi', () => {
     expect(matchWallet('mandiri', ALL)).toEqual({ kind: 'none' });
     expect(matchWallet('--', ALL)).toEqual({ kind: 'none' });

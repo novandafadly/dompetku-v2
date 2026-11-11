@@ -74,7 +74,11 @@ export const REPLY = {
   noSpace: (space: SpaceKind) => `❌ Ruang ${RUANG_LABEL[space]} belum tersedia. Buka app dulu.`,
   insufficient: (wallet: string) => `❌ Saldo ${wallet} tidak cukup. Catat dari app.`,
   /** Penanda `@nama` rusak atau lebih dari satu: tidak ada yang dicatat. */
-  badDate: '❌ Tanggal tidak terbaca. Contoh: 25rb makan kemarin, atau 25rb makan tgl 9/11',
+  badDate:
+    '❌ Tanggal tidak terbaca. Contoh: 25rb makan kemarin, atau 25rb makan tgl 9/11 (dengan tahun: tgl 9/11/2025)',
+  tooOld: '❌ Tanggal terlalu lama (lebih dari setahun). Catat dari app.',
+  /** Kunci idempotensi sama, isi beda (tanggal relatif berubah lintas tengah malam): kemungkinan sudah tercatat. */
+  maybeRecorded: '⚠️ Pesan ini mungkin sudah tercatat. Cek di app sebelum mengirim ulang.',
   manyDates: '❌ Satu pesan satu tanggal. Contoh: 25rb makan kemarin',
   futureDate: '❌ Tanggal belum terjadi. Contoh: 25rb makan kemarin',
   beforeOpening: (wallet: string) => `❌ Tanggal itu sebelum ${wallet} dibuka. Catat dari app.`,
@@ -389,14 +393,21 @@ async function record(
     const res = resolveDate(p.date, today);
     if (!res.ok) {
       await finish(r, userId, 'rejected');
-      r.log('rejected', res.reason === 'future' ? 'date_future' : 'date_invalid');
-      await reply(r, res.reason === 'future' ? REPLY.futureDate : REPLY.badDate);
+      r.log('rejected', `date_${res.reason}`);
+      await reply(
+        r,
+        res.reason === 'future'
+          ? REPLY.futureDate
+          : res.reason === 'too_old'
+            ? REPLY.tooOld
+            : REPLY.badDate,
+      );
       return;
     }
-    if (res.iso !== today) {
-      occurredOn = res.iso;
-      dateLabel = dayLabel(res.iso, today);
-    }
+    // Selalu dikirim (juga bila = hari ini): tanpa itu tengah malam di antara `dbToday` dan
+    // `createEntry` menggeser entri ke tanggal baru.
+    occurredOn = res.iso;
+    if (res.iso !== today) dateLabel = dayLabel(res.iso, today);
   }
 
   const chosen = await pick(ctx, p.type, p.amount, p.description, p.wallet);
@@ -442,7 +453,9 @@ async function record(
         ? REPLY.insufficient(account.name)
         : code === 'before_opening'
           ? REPLY.beforeOpening(account.name)
-          : REPLY.notRecorded,
+          : code === 'idem_mismatch'
+            ? REPLY.maybeRecorded
+            : REPLY.notRecorded,
     );
     return;
   }

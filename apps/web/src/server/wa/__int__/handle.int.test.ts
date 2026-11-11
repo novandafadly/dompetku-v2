@@ -1076,12 +1076,46 @@ describe('handleInbound: tanggal (Postgres sungguhan)', () => {
   });
 
   it('sebelum dompet dibuka: ditolak dengan balasan yang menyebut dompet', async () => {
-    const m = msg('10rb kopi tgl 2020-01-01');
+    await wallet(nPribadi, 'operasional', 'Baru'); // dibuka hari ini
+    const m = msg('10rb kopi kemarin @baru');
     const r = rig();
     await handleInbound(r.deps, m);
     expect(await entries()).toHaveLength(0);
-    expect(r.sent[0]?.text).toBe(REPLY.beforeOpening('CIMB'));
+    expect(r.sent[0]?.text).toBe(REPLY.beforeOpening('Baru'));
     expect(await messageRow(m.messageId)).toMatchObject({ status: 'rejected' });
+  });
+
+  it('lebih dari setahun ke belakang: ditolak "terlalu lama" (juga tahun salah ketik)', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi tgl 9/11/2015'));
+    await handleInbound(r.deps, msg(`10rb kopi ${addDays(today(), -367)}`));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent.map((x) => x.text)).toEqual([REPLY.tooOld, REPLY.tooOld]);
+    expect(r.log).toHaveBeenCalledWith('rejected', 'date_too_old');
+    // tepat 366 hari masih boleh
+    await handleInbound(r.deps, msg(`10rb kopi ${addDays(today(), -366)}`));
+    expect((await entries()).map((e) => e.occurred_on)).toEqual([addDays(today(), -366)]);
+  });
+
+  it('replay pesan yang tanggal relatifnya sudah berubah (kunci sama, tanggal beda) → balasan "mungkin sudah tercatat", tanpa entri ganda', async () => {
+    const m = msg('25rb makan kemarin');
+    // Entri pertama sudah tersimpan dengan tanggal H-2 (seolah diproses sebelum tengah malam).
+    const { rows } = await h.admin.query<{ id: string }>(
+      `select id from app.categories where space_id = $1 and type = 'expense' and archived_at is null limit 1`,
+      [nPribadi.spaceId],
+    );
+    await createEntry(nPribadi, {
+      clientId: uuidV5(WA_CLIENT_NAMESPACE, sha(m.messageId)),
+      accountId: acc,
+      kind: 'expense',
+      amount: 25_000,
+      categoryId: rows[0]?.id ?? '',
+      occurredOn: addDays(today(), -2),
+    });
+    const r = rig();
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(1);
+    expect(r.sent[0]?.text).toBe(REPLY.maybeRecorded);
   });
 
   it('sebelum 2000: ditolak; @dompet dan tanggal bisa digabung; idempoten; batal membatalkan entri bertanggal lama', async () => {
