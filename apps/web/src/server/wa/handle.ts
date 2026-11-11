@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { formatRupiah, type Rupiah } from '@dompetku/domain';
+import { dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { ZodError } from 'zod';
 import { withAnon, withUser, type Pools } from '../db';
 import { toLedgerError } from '../ledger/errors';
@@ -9,7 +9,8 @@ import { withLedger } from '../ledger/retry';
 import { resolveSpace, SpaceNotFoundError } from '../ledger/space';
 import { createEntry, voidEntry, type LedgerCtx } from '../ledger/write';
 import type { WaEnv } from './config';
-import { parseMessage, type ParseResult } from './parse';
+import { resolveDate } from './date';
+import { parseMessage, type DateSpec, type ParseResult } from './parse';
 import { toE164 } from './phone';
 import { createLinkLimiter, createRateLimiter, type RateLimiter } from './ratelimit';
 import type { InboundMessage, WaTransport } from './transport';
@@ -56,8 +57,10 @@ export const REPLY = {
     amount: Rupiah,
     space: SpaceKind,
     wallet: string,
+    /** Label tanggal (`dayLabel`) hanya bila bukan hari ini, supaya salah baca tanggal terlihat. */
+    date?: string,
   ) =>
-    `✅ ${type === 'income' ? 'Pemasukan · ' : ''}${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ${wallet} · ketik batal untuk membatalkan`,
+    `✅ ${type === 'income' ? 'Pemasukan · ' : ''}${category} ${formatRupiah(amount)} · ${RUANG_LABEL[space]} · ${wallet}${date === undefined ? '' : ` · ${date}`} · ketik batal untuk membatalkan`,
   cancelled: (category: string, amount: Rupiah) =>
     `↩️ Dibatalkan: ${category} ${formatRupiah(amount)}`,
   unreadable: '❌ Tidak terbaca. Contoh: 25rb makan siang',
@@ -71,6 +74,10 @@ export const REPLY = {
   noSpace: (space: SpaceKind) => `❌ Ruang ${RUANG_LABEL[space]} belum tersedia. Buka app dulu.`,
   insufficient: (wallet: string) => `❌ Saldo ${wallet} tidak cukup. Catat dari app.`,
   /** Penanda `@nama` rusak atau lebih dari satu: tidak ada yang dicatat. */
+  badDate: '❌ Tanggal tidak terbaca. Contoh: 25rb makan kemarin, atau 25rb makan tgl 9/11',
+  manyDates: '❌ Satu pesan satu tanggal. Contoh: 25rb makan kemarin',
+  futureDate: '❌ Tanggal belum terjadi. Contoh: 25rb makan kemarin',
+  beforeOpening: (wallet: string) => `❌ Tanggal itu sebelum ${wallet} dibuka. Catat dari app.`,
   badWallet: '❌ Penanda dompet tidak terbaca. Contoh: 25rb makan siang @cimb',
   manyWallets: '❌ Satu pesan satu dompet. Contoh: 25rb makan siang @cimb',
   /** Gagal tertutup: dompet tidak ditebak. Daftar = penanda siap ketik semua dompet aktif ruang itu. */
@@ -285,6 +292,16 @@ function handles(accounts: readonly WalletOption[]): string[] {
   return accounts.flatMap((a) => walletHandle(a.name) ?? []);
 }
 
+/** Hari ini menurut DB (`app.today()`, WIB): satu sumber dengan penolakan tanggal masa depan ledger. */
+async function dbToday(ctx: LedgerCtx): Promise<IsoDate> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    const { rows } = await c.query<{ d: string }>('select app.today()::text as d');
+    const d = rows[0]?.d;
+    if (d === undefined) throw new Error('app.today kosong');
+    return d;
+  });
+}
+
 async function pick(
   ctx: LedgerCtx,
   type: 'income' | 'expense',
@@ -346,6 +363,7 @@ async function record(
     space: SpaceKind;
     description: string;
     wallet?: string;
+    date?: DateSpec;
   },
 ): Promise<void> {
   const { pools } = r.deps;
@@ -361,6 +379,26 @@ async function record(
     return;
   }
   const ctx: LedgerCtx = { pools, userId, spaceId };
+
+  // Tanggal dipadukan dengan hari ini DB sebelum dompet/kategori; masa depan ditolak di sini
+  // dengan teks sendiri (ledger menolaknya juga, sebagai `invalid`).
+  let occurredOn: IsoDate | undefined;
+  let dateLabel: string | undefined;
+  if (p.date !== undefined) {
+    const today = await dbToday(ctx);
+    const res = resolveDate(p.date, today);
+    if (!res.ok) {
+      await finish(r, userId, 'rejected');
+      r.log('rejected', res.reason === 'future' ? 'date_future' : 'date_invalid');
+      await reply(r, res.reason === 'future' ? REPLY.futureDate : REPLY.badDate);
+      return;
+    }
+    if (res.iso !== today) {
+      occurredOn = res.iso;
+      dateLabel = dayLabel(res.iso, today);
+    }
+  }
+
   const chosen = await pick(ctx, p.type, p.amount, p.description, p.wallet);
   if (chosen.walletError !== null && p.wallet !== undefined) {
     const { kind, options } = chosen.walletError;
@@ -390,6 +428,7 @@ async function record(
       kind: p.type,
       amount: p.amount,
       categoryId: chosen.categoryId,
+      occurredOn,
       description: p.description === '' ? undefined : p.description,
     }));
   } catch (e) {
@@ -397,13 +436,23 @@ async function record(
     if (code === null) throw e;
     await finish(r, userId, 'rejected');
     r.log('rejected', code);
-    await reply(r, code === 'saldo_negatif' ? REPLY.insufficient(account.name) : REPLY.notRecorded);
+    await reply(
+      r,
+      code === 'saldo_negatif'
+        ? REPLY.insufficient(account.name)
+        : code === 'before_opening'
+          ? REPLY.beforeOpening(account.name)
+          : REPLY.notRecorded,
+    );
     return;
   }
   // Entri sudah tersimpan: balasan ✅ walau finish gagal (kirim ulang id sama = replayed).
   await finish(r, userId, 'recorded', entryId);
   r.log('recorded');
-  await reply(r, REPLY.recorded(p.type, chosen.categoryName, p.amount, p.space, account.name));
+  await reply(
+    r,
+    REPLY.recorded(p.type, chosen.categoryName, p.amount, p.space, account.name, dateLabel),
+  );
 }
 
 const lastSchema = (v: unknown): { entryId: string; spaceId: string; version: number } | null => {
@@ -497,6 +546,10 @@ function rejectReply(reason: Extract<ParseResult, { kind: 'reject' }>['reason'])
       return REPLY.manyWallets;
     case 'bad_wallet':
       return REPLY.badWallet;
+    case 'many_dates':
+      return REPLY.manyDates;
+    case 'bad_date':
+      return REPLY.badDate;
     default:
       return REPLY.unreadable;
   }
