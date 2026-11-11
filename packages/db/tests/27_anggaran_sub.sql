@@ -6,7 +6,7 @@
 -- Jam dipatok 2026-11-26 10:00 WIB; payday_rule = 25 (label Nov = 23 Okt..24 Nov).
 -- ID: B2, B13, T13, T17
 begin;
-select plan(51);
+select plan(62);
 select tests.fixture();
 select tests.clock_at('2026-11-26 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -246,6 +246,61 @@ select is(pg_temp.copy(tests.n(), :'sh', '2026-11-01', '2027-04-01'), '6:0:0:2',
 select is(pg_temp.rows(:'sh', '2027-04-01'),
   'Belanja Dapur:1000000:false,Daging:500000:false,Kopi:100000:false,Makan di Luar:300000:false,'
   'Sayur & Buah:400000:false,Warteg:200000:false', 'hanya keluarga yang aktif tersalin; tidak ada rincian yatim');
+
+-- ===== budget_overview dengan rincian (0126) =====
+select pg_temp.mk('Roti', :'dapur') as roti \gset
+-- nama:anggaran:realisasi:sub_allocated:max_amount ('-' = NULL); hanya baris beranggaran atau rincian.
+create function pg_temp.ov(p_uid uuid, p_space uuid, p_month text) returns text
+language sql as $$
+  select tests.web_val(p_uid, format($q$select string_agg(o.name || ':' || coalesce(o.budget::text, '-') || ':' || o.spent
+      || ':' || coalesce(o.sub_allocated::text, '-') || ':' || coalesce(o.max_amount::text, '-'), ',' order by o.n)
+    from api.budget_overview(%L, %L::date) with ordinality
+      as o (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, parent_id, sub_allocated, max_amount, n)
+    where o.budget is not null or o.parent_id is not null$q$, p_space, p_month))
+$$;
+select is(pg_temp.ov(tests.n(), :'sh', '2026-11-01'),
+  'Belanja Dapur:1000000:100000:900000:-,Daging:500000:15000:-:600000,Roti:-:0:-:100000,Sayur & Buah:400000:25000:-:500000,'
+  'Makan di Luar:300000:0:300000:-,Kopi:100000:0:-:100000,Warteg:200000:0:-:200000,'
+  'Hobi Arsip:100000:0:50000:-,Hobi Sub:50000:0:-:100000',
+  'overview: induk lalu rinciannya; realisasi induk = induk + rincian, rincian = kategori itu; sub_allocated dan max_amount dari SQL; rincian aktif tanpa anggaran (Roti) = kandidat; rincian terarsip tanpa anggaran tidak tampil');
+select is(pg_temp.ov(tests.n(), :'sh', '2026-12-01'),
+  'Belanja Dapur:550000:0:100000:-,Daging:-:0:-:450000,Roti:-:0:-:450000,Sayur & Buah:100000:0:-:550000,'
+  'Makan di Luar:300000:0:300000:-,Kopi:100000:0:-:100000,Warteg:200000:0:-:200000',
+  'overview Des: max_amount = induk 550.000 - rincian saudara (Daging, Roti: belum beranggaran) untuk Sayur; Daging/Roti 550.000 - Sayur 100.000');
+
+-- ===== copy_budgets dengan penyesuaian persen (K4; induk ke atas, rincian ke bawah) =====
+select is(pg_temp.copy(tests.n(), :'sh', '2026-11-01', '2027-05-01'), '6:0:0:2',
+  'penyesuaian 0 (bawaan): tersalin persis, keluarga Hobi terarsip dilewati');
+select pg_temp.err(tests.n(), format($$select api.delete_budget(%L, %L, '2027-05-01')$$, :'sh', :'dapur')) as x \gset
+select pg_temp.err(tests.n(), format($$select api.delete_budget(%L, %L, '2027-05-01')$$, :'sh', :'makan')) as x \gset
+select is(tests.web_val(tests.n(), format($q$select copied || ':' || skipped_existing || ':' || skipped_conflict
+    || ':' || skipped_archived || ':' || skipped_parent from api.copy_budgets(%L, '2026-11-01', '2027-05-01', 10)$q$, :'sh')),
+  '6:0:0:2:0', 'penyesuaian +10%: enam tersalin lagi (label tujuan dikosongkan dulu)');
+select is(pg_temp.rows(:'sh', '2027-05-01'),
+  'Belanja Dapur:1100000:false,Daging:550000:false,Kopi:110000:false,Makan di Luar:330000:false,'
+  'Sayur & Buah:440000:false,Warteg:220000:false',
+  '+10%: induk 1.100.000 (ke atas), rincian 550.000 + 440.000 = 990.000 <= induk; Makan 330.000 = Warteg 220.000 + Kopi 110.000');
+select pg_temp.set(tests.n(), :'sh', :'dapur', '2027-06-01', 100100) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'sayur', '2027-06-01', 50050) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'daging', '2027-06-01', 50050) as x \gset
+select is(tests.web_val(tests.n(), format($q$select copied || ':' || skipped_conflict from api.copy_budgets(%L, '2027-06-01', '2027-07-01', 33)$q$, :'sh')),
+  '3:0', 'penyesuaian +33% atas nominal bukan kelipatan 1.000: semua tersalin');
+select is(pg_temp.rows(:'sh', '2027-07-01'), 'Belanja Dapur:134000:false,Daging:66000:false,Sayur & Buah:66000:false',
+  'induk 133.133 -> 134.000 (ke atas); rincian 66.566,5 -> 66.000 (ke bawah); 132.000 <= 134.000');
+select is(pg_temp.err(tests.n(), format($$select api.copy_budgets(%L, '2026-11-01', '2027-08-01', 101)$$, :'sh')),
+  'DK400:invalid_argument:adjust_pct', 'persen > 100 ditolak');
+select is(pg_temp.err(tests.n(), format($$select api.copy_budgets(%L, '2026-11-01', '2027-08-01', -91)$$, :'sh')),
+  'DK400:invalid_argument:adjust_pct', 'persen < -90 ditolak');
+select is(pg_temp.err(tests.n(), format($$select api.copy_budgets(%L, '2026-11-01', '2027-08-01', null)$$, :'sh')),
+  'DK400:invalid_argument:adjust_pct', 'persen NULL ditolak');
+-- Induk tidak bisa disalin (wajib bentrok tagihan di tujuan): rinciannya dihitung skipped_parent.
+select pg_temp.set(tests.n(), :'sh', :'dapur', '2027-08-01', 100000, true) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'sayur', '2027-08-01', 50000) as x \gset
+select pg_temp.err(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Tagihan Dapur', 100000, %L,
+    20::smallint, '2027-09-01'::date)$$, :'sh', :'dapur')) as x \gset
+select is(tests.web_val(tests.n(), format($q$select copied || ':' || skipped_existing || ':' || skipped_conflict
+    || ':' || skipped_archived || ':' || skipped_parent from api.copy_budgets(%L, '2027-08-01', '2027-09-01')$q$, :'sh')),
+  '0:0:1:0:1', 'induk wajib bentrok tagihan tujuan = skipped_conflict; rinciannya = skipped_parent (tanpa anggaran induk)');
 
 select * from finish();
 rollback;

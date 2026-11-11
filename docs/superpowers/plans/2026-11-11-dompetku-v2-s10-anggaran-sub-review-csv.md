@@ -69,6 +69,8 @@
 
 ### Task 3: Baca anggaran sub, salin dengan penyesuaian, DQ14 (migrasi `0126`) — model terkuat
 
+**Selesai 2026-11-11** (migrasi `0126`, pgTAP 1943; golden dihitung tangan di `27_anggaran_sub.sql`, tanpa berkas golden terpisah). `budgetOverviewTx`/`budgetTotalsTx` menyaring baris rincian sampai Task 4 membawanya ke VM (tanpa itu urutan `n` bergeser dan total kartu menghitung dua kali).
+
 **Files:** Create `0126_anggaran_sub_baca_salin.sql`; extend `27_anggaran_sub.sql`, `17_dq.sql`.
 
 - [ ] `api.budget_overview`: tambah kolom `parent_id`, `sub_allocated` (induk: Σ anggaran rinciannya; 0 bila tidak ada) dan `max_amount` (rincian, termasuk yang belum beranggaran: anggaran induk − Σ anggaran rincian saudaranya; UI tidak menghitung uang, `docs/design/s10-bingkai.md`); baris sub (anak kategori induk yang dipilih) dengan `spent` per `category_id` (bukan `root_category_id`); induk tetap realisasi total (induk + semua sub); urutan: induk lalu sub-subnya. Induk terarsip yang punya anggaran tetap tampil dengan sub-sub beranggaran.

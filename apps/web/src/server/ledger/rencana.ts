@@ -145,7 +145,10 @@ async function assertRowInSpace(
 }
 
 // ===== Baca =====
-/** `api.budget_overview` untuk label `labelMonth` (tanggal 1): induk pengeluaran + anggaran. */
+/**
+ * `api.budget_overview` untuk label `labelMonth` (tanggal 1): induk pengeluaran + anggaran. Baris
+ * rincian (`parent_id` terisi, 0126) disaring dulu; Task 4 S10 membawanya ke VM.
+ */
 export async function budgetOverviewTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
@@ -155,7 +158,9 @@ export async function budgetOverviewTx(
     `select b.category_id, b.name, b.icon, b.budget, b.wajib, b.spent, b.pct, b.remaining,
             b.archived
        from api.budget_overview(p_space_id => $1, p_month => $2::date) with ordinality
-            as b (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, n)
+            as b (category_id, name, icon, budget, wajib, spent, pct, remaining, archived,
+                  parent_id, sub_allocated, max_amount, n)
+      where b.parent_id is null
       order by b.n`,
     [ctx.spaceId, labelMonth],
   );
@@ -201,7 +206,7 @@ export async function budgetTotalsTx(
                  then least(floor(sum(b.spent) * 100.0 / sum(b.budget)), 2147483647)::int
                  else 0 end as total_pct
        from api.budget_overview(p_space_id => $1, p_month => $2::date) b
-      where b.budget is not null`,
+      where b.budget is not null and b.parent_id is null`,
     [ctx.spaceId, labelMonth],
   );
   const r = totalsRow.parse(rows[0]);

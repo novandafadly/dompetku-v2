@@ -81,7 +81,7 @@ language sql as $$
       || o.wajib || ':' || o.spent || ':' || coalesce(o.pct::text, '-') || ':' || coalesce(o.remaining::text, '-')
       || ':' || o.archived, ',' order by o.n)
     from api.budget_overview(%L, %L::date) with ordinality
-      as o (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, n)$q$, p_space, p_month))
+      as o (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, parent_id, sub_allocated, max_amount, n)$q$, p_space, p_month))
 $$;
 -- Anggaran tersimpan: nama:amount:wajib, urut nama (dibaca owner).
 create function pg_temp.rows(p_space uuid, p_month text) returns text
@@ -252,9 +252,10 @@ select is(pg_temp.prog(tests.n(), :'np', '2026-11-01'),
 select is(pg_temp.over(tests.n(), :'sh', '2026-11-01'),
   'Sewa Rumah:-:false:0:-:-:false,Listrik & Air:-:false:0:-:-:false,Internet:150000:true:0:0:150000:false,'
   || 'Iuran Lingkungan:-:false:0:-:-:false,Belanja Dapur:1000000:false:185000:18:815000:false,'
+  || 'Hobi Rumah:-:false:0:-:-:false,Sayur & Buah:-:false:25000:-:-:false,'
   || 'Makan di Luar:300000:true:310000:103:-10000:false,Bensin & Parkir:200000:false:0:0:200000:false,'
   || 'Arsip Anggaran:10000:false:0:0:10000:true',
-  'overview Nov: induk pengeluaran aktif (tanpa anggaran = NULL), terarsip hanya bila beranggaran; tanpa sub, pemasukan, Hobi Rumah');
+  'overview Nov: induk pengeluaran aktif (tanpa anggaran = NULL), terarsip hanya bila beranggaran; rincian aktif dari induk beranggaran ikut (kandidat Tambah rincian, S10), tanpa pemasukan');
 select is(pg_temp.over(tests.f(), :'sh', '2026-12-01'),
   'Sewa Rumah:-:false:0:-:-:false,Listrik & Air:-:false:0:-:-:false,Internet:-:false:0:-:-:false,'
   || 'Iuran Lingkungan:-:false:0:-:-:false,Belanja Dapur:-:false:0:-:-:false,'

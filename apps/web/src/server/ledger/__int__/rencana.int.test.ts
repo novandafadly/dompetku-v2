@@ -364,6 +364,24 @@ describe('Rencana dan Laporan: angka sama dengan Beranda [T17]', () => {
   });
 });
 
+describe('Anggaran rincian (S10, 0126): tidak dihitung dua kali di Rencana', () => {
+  it('rincian beranggaran tidak menjadi baris induk dan tidak masuk total kartu', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const month = GOLDEN.labelMonth.slice(0, 7);
+    const before = await loadRencana(ctx);
+    const { rows } = await h.admin.query<{ id: string }>(
+      `insert into app.categories (space_id, parent_id, type, name, icon)
+       values ($1, $2, 'expense', 'Rincian Uji', 'Receipt') returning id`,
+      [ctx.spaceId, fx.ids.kesehatan],
+    );
+    const sub = rows[0]?.id ?? '';
+    await setBudget(ctx, { categoryId: sub, month, amount: 100_000, wajib: false });
+    const after = await loadRencana(ctx);
+    expect(after.budgets.map((b) => b.categoryId)).toEqual(before.budgets.map((b) => b.categoryId));
+    expect(after.totals).toEqual(before.totals);
+  });
+});
+
 describe('Bersama tanpa data Pribadi [B13]', () => {
   it('Rencana, Laporan, dan Beranda Bersama untuk N dan F tanpa kanari Pribadi [B13]', async () => {
     for (const p of [fx.n, fx.f]) {
