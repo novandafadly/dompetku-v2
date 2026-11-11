@@ -145,6 +145,97 @@ test('ubah: kategori terkunci, nominal dan Wajib tersimpan; tag Wajib tampil', a
   expect(rows).toEqual([{ amount: '1500000', wajib: true }]);
 });
 
+test('anggaran rincian (S10): Tambah rincian, batas induk, hapus induk menghapus rincian', async ({
+  page,
+}) => {
+  const sid = await spaceId('personal');
+  const [induk] = await adminQuery<{ id: string }>(
+    `insert into app.categories (space_id, type, name, icon) values ($1, 'expense', 'Rincian Uji', 'Receipt')
+     returning id::text`,
+    [sid],
+  );
+  const parent = induk?.id ?? '';
+  for (const n of ['Sub A', 'Sub B'])
+    await adminQuery(
+      `insert into app.categories (space_id, parent_id, type, name, icon)
+       values ($1, $2, 'expense', $3, 'Receipt')`,
+      [sid, parent, n],
+    );
+  const subSheet = page.getByRole('dialog', { name: /^Anggaran rincian\s*Pribadi$/ });
+  try {
+    await page.goto('/pribadi/rencana');
+    const sheet = await openSheet(page, () =>
+      main(page)
+        .getByRole('region', { name: 'Belum dianggarkan' })
+        .locator('[data-budget-row]')
+        .filter({ hasText: 'Rincian Uji' }),
+    );
+    await sheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('500000');
+    await save(page, sheet, 'Anggaran Rincian Uji disimpan · Pribadi');
+    // Induk beranggaran + subkategori aktif tanpa anggaran = ada Tambah rincian.
+    const add = main(page).getByRole('button', { name: 'Tambah rincian untuk Rincian Uji' });
+    const openSub = async () => {
+      await expect(async () => {
+        if ((await subSheet.count()) === 0) await add.click();
+        await expect(subSheet.getByRole('textbox', { name: 'Anggaran periode ini' })).toBeVisible({
+          timeout: 2_000,
+        });
+      }).toPass();
+    };
+    await openSub();
+    await expect(subSheet.getByRole('switch', { name: 'Wajib' })).toHaveCount(0);
+    await subSheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: 'Sub A' });
+    await expect(subSheet).toContainText('Maksimal Rp 500.000');
+    await subSheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('400000');
+    await subSheet.getByRole('button', { name: 'Simpan anggaran' }).click();
+    await expect(toasts(page).getByText('Anggaran Sub A disimpan · Pribadi')).toBeVisible();
+    const list = main(page).getByRole('list', { name: 'Rincian Rincian Uji' });
+    await expect(list).toContainText('Sub A');
+    await expect(row(page, 'Rincian Uji').first()).toContainText(
+      'Dibagi ke 1 rincian · Rp 400.000',
+    );
+    // Sub B melewati sisa induk (400.000 + 200.000 > 500.000): galat tanpa nominal, tidak tersimpan.
+    await openSub();
+    await subSheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: 'Sub B' });
+    await expect(subSheet).toContainText('Maksimal Rp 100.000');
+    await subSheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('200000');
+    await subSheet.getByRole('button', { name: 'Simpan anggaran' }).click();
+    const alert = subSheet
+      .getByRole('alert')
+      .filter({ hasText: 'Rincian melebihi anggaran induk.' });
+    await expect(alert).toBeVisible();
+    await expect(alert).not.toContainText(/\d/);
+    await page.keyboard.press('Escape');
+    // Induk tidak bisa lebih kecil dari jumlah rincian; hapus induk menghapus rinciannya.
+    const parentSheet = await openSheet(page, () => row(page, 'Rincian Uji').first());
+    await expect(parentSheet).toContainText('Dibagi ke rincian Rp 400.000');
+    await parentSheet.getByRole('textbox', { name: 'Anggaran periode ini' }).fill('300000');
+    await parentSheet.getByRole('button', { name: 'Simpan anggaran' }).click();
+    await expect(
+      parentSheet.getByText(
+        'Anggaran induk tidak boleh lebih kecil dari jumlah anggaran rinciannya.',
+      ),
+    ).toBeVisible();
+    await parentSheet.getByRole('button', { name: 'Hapus anggaran' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Hapus anggaran Rincian Uji?' });
+    await expect(dialog).toContainText('Anggaran 1 rinciannya ikut dihapus.');
+    await dialog.getByRole('button', { name: 'Hapus anggaran' }).click();
+    await expect(toasts(page).getByText('Anggaran Rincian Uji dihapus · Pribadi')).toBeVisible();
+    const left = await adminQuery(
+      'select 1 from app.budgets where category_id in (select id from app.categories where space_id = $1 and (id = $2 or parent_id = $2))',
+      [sid, parent],
+    );
+    expect(left).toHaveLength(0);
+  } finally {
+    await adminQuery(
+      'delete from app.budgets where space_id = $1 and category_id in (select id from app.categories where id = $2 or parent_id = $2)',
+      [sid, parent],
+    );
+    await adminQuery('delete from app.categories where parent_id = $1', [parent]);
+    await adminQuery('delete from app.categories where id = $1', [parent]);
+  }
+});
+
 test('kategori berubah jadi subkategori di tab lain (parent_budget_required)', async ({ page }) => {
   await page.goto('/pribadi/rencana');
   const hiburan = await categoryId('personal', 'Hiburan');

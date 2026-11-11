@@ -25,9 +25,12 @@ const BAR: Record<BudgetLevel, string> = {
   over: 'bg-danger',
 };
 
-function Bar({ level, pct }: { level: BudgetLevel; pct: number }) {
+function Bar({ level, pct, thin = false }: { level: BudgetLevel; pct: number; thin?: boolean }) {
   return (
-    <span aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-sm bg-surface-2">
+    <span
+      aria-hidden="true"
+      className={`${thin ? 'h-1' : 'h-1.5'} w-full overflow-hidden rounded-sm bg-surface-2`}
+    >
       <span
         className={`block h-full ${BAR[level]}`}
         style={{ width: `${String(Math.min(Math.max(pct, 0), 100))}%` }}
@@ -65,10 +68,13 @@ function Status({ level, pct, over }: { level: BudgetLevel; pct: number; over: n
 export function BudgetItemView({
   row,
   caret = true,
+  rincian,
 }: {
   row: BudgetOverviewVM;
   /** Isyarat baris membuka sheet; Beranda (baca saja) mematikannya. */
   caret?: boolean;
+  /** S10: induk yang dibagi ke rincian (jumlah dan Σ anggaran rincian dari SQL). */
+  rincian?: { count: number; allocated: number } | undefined;
 }) {
   const budget = row.budget ?? 0;
   const level = budgetLevel(row);
@@ -100,6 +106,38 @@ export function BudgetItemView({
             <MoneyText value={remaining} size="inherit" />
           </>
         )}
+      </span>
+      {rincian === undefined ? null : (
+        <span className="text-caption font-medium text-text-muted">
+          {RENCANA_COPY.subSummary(rincian.count)} ·{' '}
+          <MoneyText value={rincian.allocated} size="inherit" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Isi satu baris anggaran rincian (S10-SB1): nama, status (tangga yang sama dengan induk), bilah
+ * 4 px, `Rp … dari Rp …`. Tanpa `Wajib` (rincian tidak pernah wajib).
+ */
+export function BudgetSubItemView({ row }: { row: BudgetOverviewVM }) {
+  const level = budgetLevel(row);
+  return (
+    <span className="flex w-full flex-col gap-1.5 text-left">
+      <span className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+        <span className="flex min-w-0 items-center gap-2 text-label/tight font-semibold text-text">
+          <span data-budget-name className="line-clamp-2 break-words leading-snug">
+            {row.name}
+          </span>
+          <CaretRightIcon size={16} className="shrink-0 text-text-muted" />
+        </span>
+        <Status level={level} pct={row.pct ?? 0} over={-(row.remaining ?? 0)} />
+      </span>
+      <Bar level={level} pct={row.pct ?? 0} thin />
+      <span className="text-meta font-medium text-text-muted">
+        <MoneyText value={row.spent} size="inherit" /> dari{' '}
+        <MoneyText value={row.budget ?? 0} size="inherit" />
       </span>
     </span>
   );

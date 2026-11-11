@@ -134,3 +134,11 @@ Tiap task UI (5, 6, 8) menugaskan satu reviewer terpisah memeriksa: tangga statu
 ## Design critique dan Delivery Gate
 
 Diisi di Task 10 sesudah UI selesai (daftar periksa antislop dijalankan manual bila skill tidak tersedia, seperti S7 sampai S9).
+
+## Penyimpangan Task 5 dari bingkai (diputuskan agen, 2026-11-11; hasil design review terpisah)
+
+1. **Kotak Induk** menampilkan `Anggaran Rp …` (bukan nominal saja) dan label `Induk` terhubung ke kotaknya (`aria-labelledby`).
+2. **`Maksimal Rp …` baris sendiri** di bawah hint periode (bukan di ujung hint yang sama), supaya aturan paling menentukan tidak terpencil di 320 px; bila `maxAmount = 0` teksnya `Anggaran induk sudah habis dibagi ke rincian lain.` (kasus tepi yang tidak dibahas bingkai; `Tambah rincian` tetap tampil selama ada kandidat).
+3. **`Tambah rincian`** mendapat `hover-pointer:bg-hover` (sama dengan baris di atasnya). Jarak ≥ 8 antar baris induk, rincian, dan `Tambah rincian` memakai pengecualian yang sama dengan S9 (pemisah = padding baris, target ≥ 44: rincian 64, tombol 44).
+4. **Nama rincian sangat panjang**: caret ke tepi kanan saat status turun ke baris kedua (kosmetik, tidak ada yang terpotong).
+5. Belum dipotret: tangga `near/full/over` pada rincian dan `Rp 12.345.678.900` di baris rincian (komponen `Status` dan `Bar` dipakai bersama induk). Tercatat sebagai utang kecil untuk critique Task 10.

@@ -91,6 +91,8 @@
 
 ### Task 5: UI Rencana: anggaran rincian (sonnet + lensa desain)
 
+**Selesai 2026-11-11:** `BudgetSubItemView`, daftar rincian bersarang + `Dibagi ke n rincian`, `Tambah rincian` (`AddSubButton`), sheet rincian/induk (Induk terkunci, tanpa Wajib, `Maksimal`, hint Σ, konfirmasi hapus dengan jumlah rincian, galat S10), e2e `anggaran rincian`, screenshot `docs/design/s10/` (`screens-s10-rencana.spec.ts`, `SCREENS=1`), design review terpisah (penyimpangan di bingkai). Budget JS rute nyata lulus (≤ 162).
+
 **Files:** Modify `features/rencana/{budget-sheet.tsx,budget-row-view.tsx,copy.ts}`, `_real/rencana.tsx`, `rencana-client.tsx`; tes unit + e2e:ledger.
 
 - [ ] Baris sub menjorok di bawah induk; sheet editor menampilkan "Sisa induk"; tombol "Tambah anggaran rincian" hanya bila induk beranggaran; teks konfirmasi saat hapus induk beranggaran-sub (K2); galat Task 4 berbahasa awam.

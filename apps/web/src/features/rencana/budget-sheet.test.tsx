@@ -335,3 +335,112 @@ describe('BudgetSheet: Bersama', () => {
     });
   });
 });
+
+describe('BudgetSheet (S10-SB2): anggaran rincian', () => {
+  const SUBS: BudgetOverviewVM[] = [
+    row({
+      categoryId: 'k-nasi',
+      name: 'Nasi',
+      parentId: 'k-sewa',
+      budget: 300_000,
+      spent: 100_000,
+      pct: 33,
+      remaining: 200_000,
+      maxAmount: 2_200_000,
+    }),
+    row({ categoryId: 'k-kopi', name: 'Kopi', parentId: 'k-sewa', maxAmount: 2_500_000 }),
+    row({ categoryId: 'k-lain', name: 'Lain', parentId: 'k-internet', maxAmount: 1 }),
+  ];
+  const parentRows = ROWS.map((r) =>
+    r.categoryId === 'k-sewa' ? { ...r, subAllocated: 300_000 } : r,
+  );
+  const sub = () => ({ rows: parentRows, subRows: SUBS });
+  const dialogName = /^Anggaran rincian\s*Pribadi$/;
+
+  it('Tambah rincian: induk terkunci, hanya rincian induk itu yang belum beranggaran, tanpa Wajib, ada Maksimal', async () => {
+    setup({ ...sub(), parentId: 'k-sewa' });
+    expect(await screen.findByRole('dialog', { name: dialogName })).toBeTruthy();
+    expect(screen.getByText('Induk')).toBeTruthy();
+    expect(screen.getByText('Sewa Rumah')).toBeTruthy();
+    expect(
+      within(category())
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Pilih kategori', 'Kopi']);
+    expect(screen.queryByRole('switch', { name: 'Wajib' })).toBeNull();
+    expect(screen.queryByText(/Maksimal/)).toBeNull();
+    await userEvent.setup().selectOptions(category(), 'k-kopi');
+    expect(screen.getByText(/Maksimal Rp\s2\.500\.000/)).toBeTruthy();
+  });
+
+  it('induk sudah habis dibagi (maxAmount 0): hint jelas, bukan Maksimal Rp 0', async () => {
+    const penuh = SUBS.map((r) => (r.categoryId === 'k-kopi' ? { ...r, maxAmount: 0 } : r));
+    setup({ rows: parentRows, subRows: penuh, parentId: 'k-sewa' });
+    await userEvent.setup().selectOptions(category(), 'k-kopi');
+    expect(screen.getByText('Anggaran induk sudah habis dibagi ke rincian lain.')).toBeTruthy();
+    expect(screen.queryByText(/Maksimal/)).toBeNull();
+  });
+
+  it('simpan rincian mengirim kategori rincian dengan wajib false', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = setup({ ...sub(), parentId: 'k-sewa' });
+    await user.selectOptions(category(), 'k-kopi');
+    await user.type(amount(), '100000');
+    await user.click(save());
+    expect(onSubmit).toHaveBeenCalledWith({ categoryId: 'k-kopi', amount: 100_000, wajib: false });
+  });
+
+  it('mengubah rincian: induk dan kategori terkunci, Hapus tersedia', async () => {
+    setup({ ...sub(), categoryId: 'k-nasi' });
+    expect(await screen.findByRole('dialog', { name: dialogName })).toBeTruthy();
+    expect(screen.getAllByText('Nasi').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('switch', { name: 'Wajib' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Hapus anggaran' })).toBeTruthy();
+    expect(screen.getByText(/Maksimal Rp\s2\.200\.000/)).toBeTruthy();
+  });
+
+  it('sub_exceeds_parent: galat di kolom Nominal tanpa nominal, fokus ke Nominal', async () => {
+    const user = userEvent.setup();
+    setup({ ...sub(), parentId: 'k-sewa' }, { ok: false, code: 'sub_exceeds_parent' });
+    await user.selectOptions(category(), 'k-kopi');
+    await user.type(amount(), '9999999');
+    await user.click(save());
+    const msg = await screen.findByText(/^Rincian melebihi anggaran induk\./);
+    expect(msg.textContent).not.toMatch(/\d/);
+    expect(amount()).toHaveFocus();
+  });
+
+  it('parent_budget_required di sheet rincian: sebut induk, bukan "bukan kategori induk"', async () => {
+    const user = userEvent.setup();
+    setup({ ...sub(), parentId: 'k-sewa' }, { ok: false, code: 'parent_budget_required' });
+    await user.selectOptions(category(), 'k-kopi');
+    await user.type(amount(), '1000');
+    await user.click(save());
+    expect(await screen.findByText('Atur anggaran Sewa Rumah dulu, baru rinciannya.')).toBeTruthy();
+  });
+
+  it('sheet induk beranggaran rincian: batas bawah dan konfirmasi hapus menyebut rincian', async () => {
+    const user = userEvent.setup();
+    setup({ ...sub(), categoryId: 'k-sewa' });
+    expect(
+      await screen.findByText(
+        /^Dibagi ke rincian Rp\s300\.000; anggaran induk tidak bisa lebih kecil dari itu\.$/,
+      ),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Hapus anggaran' }));
+    expect(
+      await screen.findByText('Anggaran 1 rinciannya ikut dihapus. Pengeluaran tetap tercatat.'),
+    ).toBeTruthy();
+  });
+
+  it('sheet induk: sub_exceeds_parent = induk tidak boleh lebih kecil dari jumlah rincian', async () => {
+    const user = userEvent.setup();
+    setup({ ...sub(), categoryId: 'k-sewa' }, { ok: false, code: 'sub_exceeds_parent' });
+    await user.click(save());
+    expect(
+      await screen.findByText(
+        'Anggaran induk tidak boleh lebih kecil dari jumlah anggaran rinciannya.',
+      ),
+    ).toBeTruthy();
+  });
+});

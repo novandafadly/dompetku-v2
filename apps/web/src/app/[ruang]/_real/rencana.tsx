@@ -14,6 +14,7 @@ import type { Ruang } from '@/features/ledger/types';
 import { PageHeader } from '@/features/shell/page-header';
 import {
   BudgetItemView,
+  BudgetSubItemView,
   BudgetTotalCard,
   UnbudgetedItemView,
 } from '@/features/rencana/budget-row-view';
@@ -21,6 +22,8 @@ import { ArchivedBillView, BillAmountColumn, BillBodyView } from '@/features/ren
 import { groupBills, rowAction, type BillItem } from '@/features/rencana/bills';
 import {
   budgetedRows,
+  budgetedSubs,
+  candidateSubs,
   periodSubtitle,
   RENCANA_COPY,
   splitPeriodLabel,
@@ -30,6 +33,7 @@ import {
 import type { RencanaData } from '@/features/rencana/types';
 import {
   AddBillIsland,
+  AddSubIsland,
   BillBodyIsland,
   PayIsland,
   UnskipIsland,
@@ -57,6 +61,11 @@ const ROW =
   focusRing;
 const BUDGET_ROW = `${ROW} min-h-19 py-3`;
 const UNBUDGETED_ROW = `${ROW} min-h-15.5`;
+// Rincian (S10): menjorok 16 px dengan garis kiri 2 px; selebar sisa kartu sampai tepi kanan.
+const SUB_LIST = 'ml-4 border-l-2 border-hairline';
+const SUB_ROW = `flex w-[calc(100%+1rem)] -mr-4 min-h-16 items-center py-2.5 pr-4 pl-3 hover-pointer:bg-hover active:bg-hover ${focusRing}`;
+const ADD_SUB =
+  'ml-4 flex min-h-11 items-center gap-1.5 border-l-2 border-hairline pl-3 text-meta font-bold text-accent-text hover-pointer:bg-hover active:bg-hover';
 // Badan baris tagihan: ubin + nama + sub; kolom kanan (nominal + Bayar) di luar tombol.
 const BILL_BODY = `flex min-h-18 min-w-0 flex-[1_1_15rem] items-center gap-3 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 
@@ -137,13 +146,42 @@ function Anggaran({ data }: { data: RencanaData }) {
           <BudgetTotalCard totals={data.totals} labelledBy="rencana-total" />
           <ListCard title={RENCANA_COPY.budgeted} icon={<CalendarCheckIcon size={18} />}>
             <ul>
-              {budgeted.map((row) => (
-                <li key={row.categoryId} className={rowDivider}>
-                  <BudgetRowIsland categoryId={row.categoryId} className={BUDGET_ROW}>
-                    <BudgetItemView row={row} />
-                  </BudgetRowIsland>
-                </li>
-              ))}
+              {budgeted.map((row) => {
+                const subs = budgetedSubs(data.subBudgets, row.categoryId);
+                const candidates = candidateSubs(data.subBudgets, row.categoryId);
+                return (
+                  <li key={row.categoryId} className={rowDivider}>
+                    <BudgetRowIsland categoryId={row.categoryId} className={BUDGET_ROW}>
+                      <BudgetItemView
+                        row={row}
+                        rincian={
+                          subs.length > 0 && row.subAllocated !== null
+                            ? { count: subs.length, allocated: row.subAllocated }
+                            : undefined
+                        }
+                      />
+                    </BudgetRowIsland>
+                    {subs.length > 0 ? (
+                      <ul aria-label={RENCANA_COPY.subListLabel(row.name)} className={SUB_LIST}>
+                        {subs.map((sub) => (
+                          <li key={sub.categoryId}>
+                            <BudgetRowIsland categoryId={sub.categoryId} className={SUB_ROW}>
+                              <BudgetSubItemView row={sub} />
+                            </BudgetRowIsland>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {candidates.length > 0 ? (
+                      <AddSubIsland
+                        parentId={row.categoryId}
+                        parentName={row.name}
+                        className={ADD_SUB}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </ListCard>
         </>
@@ -306,6 +344,7 @@ export function RencanaReal({
       month={data.period.labelMonth.slice(0, 7)}
       range={splitPeriodLabel(data.period.label).range}
       rows={data.budgets}
+      subRows={data.subBudgets}
       previous={data.previous.amounts}
       billNameByRoot={billNameByRoot}
       bill={{

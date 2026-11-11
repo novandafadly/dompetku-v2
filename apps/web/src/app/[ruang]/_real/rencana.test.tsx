@@ -31,6 +31,19 @@ vi.mock('./rencana-islands', () => ({
       {label}
     </button>
   ),
+  AddSubIsland: ({
+    parentId,
+    parentName,
+    className,
+  }: {
+    parentId: string;
+    parentName: string;
+    className: string;
+  }) => (
+    <button type="button" data-add-sub={parentId} className={className}>
+      Tambah rincian untuk {parentName}
+    </button>
+  ),
   CopyBudgetsIsland: () => <button type="button">Salin anggaran periode lalu</button>,
   CopyConflictIsland: () => null,
   BillBodyIsland: ({
@@ -168,6 +181,56 @@ const view = (
       data={d}
     />,
   );
+
+describe('RencanaReal: anggaran rincian (S10-SB1)', () => {
+  const subs = [
+    row({
+      categoryId: 'k-ojek',
+      name: 'Ojek',
+      parentId: 'k-motor',
+      budget: 200_000,
+      spent: 190_000,
+      pct: 95,
+      remaining: 10_000,
+      maxAmount: 500_000,
+    }),
+    row({ categoryId: 'k-parkir', name: 'Parkir', parentId: 'k-motor', maxAmount: 300_000 }),
+  ];
+  const parents = BUDGETS.map((b) =>
+    b.categoryId === 'k-motor' ? { ...b, subAllocated: 200_000 } : b,
+  );
+
+  it('rincian bersarang di bawah induknya: daftar berlabel, baris membuka sheet, tanpa Wajib, baris ringkasan induk', () => {
+    view(data({ budgets: parents, subBudgets: subs }));
+    const list = screen.getByRole('list', { name: 'Rincian Transportasi' });
+    const rows = within(list).getAllByRole('button');
+    expect(rows.map((r) => r.getAttribute('data-budget-row'))).toEqual(['k-ojek']);
+    expect(rows[0]?.textContent).toContain('95% terpakai');
+    expect(rows[0]?.textContent).not.toContain('Wajib');
+    const induk = screen
+      .getAllByRole('button')
+      .find((b) => b.getAttribute('data-budget-row') === 'k-motor');
+    expect(flat(induk)).toContain('Dibagi ke 1 rincian · Rp 200.000');
+    // Induk tanpa rincian tidak membawa daftar maupun ringkasan.
+    expect(screen.queryByRole('list', { name: 'Rincian Makan Siang & Minum' })).toBeNull();
+  });
+
+  it('Tambah rincian hanya untuk induk yang masih punya subkategori aktif tanpa anggaran', () => {
+    view(data({ budgets: parents, subBudgets: subs }));
+    expect(screen.getByRole('button', { name: 'Tambah rincian untuk Transportasi' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^Tambah rincian untuk/ })).toHaveLength(1);
+  });
+
+  it('semua rincian sudah beranggaran: tanpa Tambah rincian', () => {
+    view(data({ budgets: parents, subBudgets: subs.slice(0, 1) }));
+    expect(screen.queryByRole('button', { name: /^Tambah rincian untuk/ })).toBeNull();
+  });
+
+  it('pulau Host menerima subRows', () => {
+    view(data({ budgets: parents, subBudgets: subs }));
+    expect(host).toHaveBeenLastCalledWith(expect.objectContaining({ subRows: subs }));
+  });
+});
 
 describe('RencanaReal: daftar Anggaran (S9-AN1)', () => {
   it('judul periode, kartu total, Dianggarkan (urut persen), Belum dianggarkan, tombol Atur anggaran', () => {

@@ -120,7 +120,9 @@ function WajibSwitch({
 }
 
 function Form({
-  rows,
+  options,
+  all,
+  parent,
   editing,
   initialCategoryId,
   range,
@@ -136,7 +138,12 @@ function Form({
 }: {
   saving: boolean;
   setSaving: (saving: boolean) => void;
-  rows: readonly BudgetOverviewVM[];
+  /** Kategori yang boleh dipilih untuk anggaran baru (induk, atau rincian dari satu induk). */
+  options: readonly BudgetOverviewVM[];
+  /** Semua baris (induk + rincian) untuk mencari kategori terpilih. */
+  all: readonly BudgetOverviewVM[];
+  /** Induk bila sheet rincian (K1: rincian di dalam anggaran induk); `null` = sheet induk. */
+  parent: BudgetOverviewVM | null;
   editing: BudgetOverviewVM | null;
   initialCategoryId: string | null;
   range: string;
@@ -148,7 +155,7 @@ function Form({
   amountRef: React.RefObject<HTMLInputElement | null>;
   onDone: (row: BudgetOverviewVM) => void;
 }) {
-  const options = rows.filter((r) => r.budget === null && !r.archived);
+  const subMode = parent !== null;
   const [categoryId, setCategoryId] = useState(
     editing?.categoryId ??
       (initialCategoryId !== null && options.some((o) => o.categoryId === initialCategoryId)
@@ -167,8 +174,12 @@ function Form({
   const amountErrorId = useId();
   const wajibErrorId = useId();
   const wajibHintId = useId();
+  const subHintId = useId();
+  const parentLabelId = useId();
+  const maxHintId = useId();
   const archived = editing?.archived === true;
-  const chosen = rows.find((r) => r.categoryId === categoryId) ?? null;
+  const chosen = all.find((r) => r.categoryId === categoryId) ?? null;
+  const maxAmount = (editing ?? chosen)?.maxAmount ?? null;
   const prev = chosen === null ? undefined : previous[chosen.categoryId];
   const noOptions = editing === null && options.length === 0;
 
@@ -191,7 +202,7 @@ function Form({
     setSaving(true);
     let res: BudgetResult;
     try {
-      res = await onSubmit({ categoryId, amount, wajib });
+      res = await onSubmit({ categoryId, amount, wajib: subMode ? false : wajib });
     } catch {
       res = { ok: false, code: 'network' };
     } finally {
@@ -213,10 +224,25 @@ function Form({
         setErrors({ category: categoryArchivedBudgetText(chosen?.name ?? 'Kategori ini') });
         categoryRef.current?.focus();
         break;
+      case 'parent_budget_required':
+        // Sheet rincian: anggaran induk dihapus di tab lain. Sheet induk: pemilih hanya induk, jadi
+        // ini terjadi bila kategori berubah jadi rincian di tab lain (sama dengan category_not_root).
+        setErrors({
+          category: subMode ? RENCANA_COPY.errParentRequired(parent.name) : RENCANA_COPY.errNotRoot,
+        });
+        categoryRef.current?.focus();
+        break;
       case 'category_not_root':
-      case 'parent_budget_required': // pemilih hanya induk: terjadi bila kategori jadi rincian di tab lain
         setErrors({ category: RENCANA_COPY.errNotRoot });
         categoryRef.current?.focus();
+        break;
+      case 'sub_exceeds_parent':
+        setErrors({ amount: subMode ? RENCANA_COPY.errSubExceeds : RENCANA_COPY.errParentLower });
+        amountRef.current?.focus();
+        break;
+      case 'sub_not_wajib':
+        setErrors({ amount: RENCANA_COPY.errSubNotWajib });
+        amountRef.current?.focus();
         break;
       case 'invalid': {
         const f = res.field ?? '';
@@ -260,6 +286,22 @@ function Form({
         // label di atasnya ikut terlihat.
         className="flex flex-col gap-3 [&_:is(input,select,textarea)]:scroll-mt-10"
       >
+        {parent === null ? null : (
+          <div className="flex flex-col gap-1.5">
+            <span id={parentLabelId} className="text-label font-semibold text-text-soft">
+              {RENCANA_COPY.parent}
+            </span>
+            <p
+              aria-labelledby={parentLabelId}
+              className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 rounded-lg border border-hairline bg-surface-2 px-3.5 py-1.5 text-body font-semibold text-text"
+            >
+              <span className="truncate">{parent.name}</span>
+              <span className="text-meta font-medium text-text-soft">
+                {RENCANA_COPY.parentBudget} {formatRupiah(parent.budget ?? 0)}
+              </span>
+            </p>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <FieldLabel htmlFor={categoryId_}>{RENCANA_COPY.category}</FieldLabel>
           {editing === null ? (
@@ -324,31 +366,45 @@ function Form({
             {range}
             {prev === undefined ? '' : ` · Periode lalu: ${formatRupiah(prev)}`}
           </FieldHint>
+          {subMode && maxAmount !== null ? (
+            <FieldHint id={maxHintId}>
+              {maxAmount === 0
+                ? RENCANA_COPY.parentFull
+                : `${RENCANA_COPY.maxHint} ${formatRupiah(maxAmount)}`}
+            </FieldHint>
+          ) : null}
+          {!subMode && editing !== null && (editing.subAllocated ?? 0) > 0 ? (
+            <FieldHint id={subHintId}>
+              {RENCANA_COPY.subAllocatedHint(formatRupiah(editing.subAllocated ?? 0))}
+            </FieldHint>
+          ) : null}
           {errors.amount === undefined ? null : (
             <div role="alert">
               <FieldError id={amountErrorId}>{errors.amount}</FieldError>
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5 pb-2">
-          <WajibSwitch
-            checked={wajib}
-            onChange={(v) => {
-              setWajib(v);
-              setErrors((x) => ({ ...x, wajib: undefined }));
-            }}
-            hintId={wajibHintId}
-            errorId={errors.wajib === undefined ? undefined : wajibErrorId}
-            invalid={errors.wajib !== undefined}
-            buttonRef={wajibRef}
-            disabled={saving || archived}
-          />
-          {errors.wajib === undefined ? null : (
-            <div role="alert">
-              <FieldError id={wajibErrorId}>{errors.wajib}</FieldError>
-            </div>
-          )}
-        </div>
+        {subMode ? null : (
+          <div className="flex flex-col gap-1.5 pb-2">
+            <WajibSwitch
+              checked={wajib}
+              onChange={(v) => {
+                setWajib(v);
+                setErrors((x) => ({ ...x, wajib: undefined }));
+              }}
+              hintId={wajibHintId}
+              errorId={errors.wajib === undefined ? undefined : wajibErrorId}
+              invalid={errors.wajib !== undefined}
+              buttonRef={wajibRef}
+              disabled={saving || archived}
+            />
+            {errors.wajib === undefined ? null : (
+              <div role="alert">
+                <FieldError id={wajibErrorId}>{errors.wajib}</FieldError>
+              </div>
+            )}
+          </div>
+        )}
       </form>
       {archived ? (
         <p className="text-label font-medium text-text-soft">{RENCANA_COPY.archivedNote}</p>
@@ -407,6 +463,8 @@ export function BudgetSheet({
   onOpenChange,
   ruang,
   rows,
+  subRows = [],
+  parentId = null,
   categoryId,
   range,
   previous,
@@ -420,6 +478,10 @@ export function BudgetSheet({
   ruang: Ruang;
   /** Semua kategori induk pengeluaran (`budget_overview`). */
   rows: readonly BudgetOverviewVM[];
+  /** Rincian (S10): beranggaran, atau aktif dari induk beranggaran. */
+  subRows?: readonly BudgetOverviewVM[] | undefined;
+  /** `Tambah rincian`: induk yang dikunci untuk anggaran rincian baru. */
+  parentId?: string | null | undefined;
   /** Kategori yang dibuka dari baris; `null` = sheet kosong. */
   categoryId: string | null;
   /** `23 Okt – 24 Nov`. */
@@ -436,10 +498,26 @@ export function BudgetSheet({
 }) {
   const categoryRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
-  const editing =
+  const find = (list: readonly BudgetOverviewVM[]) =>
     categoryId === null
       ? null
-      : (rows.find((r) => r.categoryId === categoryId && r.budget !== null) ?? null);
+      : (list.find((r) => r.categoryId === categoryId && r.budget !== null) ?? null);
+  const subEditing = find(subRows);
+  const editing = subEditing ?? find(rows);
+  // Sheet rincian: mengubah rincian yang ada, atau membuat rincian baru dari `Tambah rincian`.
+  const parent =
+    subEditing === null && !(parentId !== null && editing === null)
+      ? null
+      : (rows.find((r) => r.categoryId === (subEditing?.parentId ?? parentId)) ?? null);
+  const options = (
+    parent === null
+      ? rows.filter((r) => r.budget === null && !r.archived)
+      : subRows.filter((r) => r.parentId === parent.categoryId && r.budget === null && !r.archived)
+  ) as readonly BudgetOverviewVM[];
+  const subCount =
+    editing === null || parent !== null
+      ? 0
+      : subRows.filter((r) => r.parentId === editing.categoryId && r.budget !== null).length;
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -477,19 +555,15 @@ export function BudgetSheet({
           // Esc/overlay/Tutup tidak menutup selama menyimpan.
           if (!saving && !removeBusy) onOpenChange(next);
         }}
-        title={RENCANA_COPY.sheetTitle(ruang)}
+        title={parent === null ? RENCANA_COPY.sheetTitle(ruang) : RENCANA_COPY.subSheetTitle(ruang)}
         titleContent={
           <>
-            Anggaran
+            {parent === null ? 'Anggaran' : RENCANA_COPY.subTitle}
             <SpaceTag space={ruang} />
           </>
         }
         tint={ruang}
-        initialFocus={
-          editing === null && rows.some((r) => r.budget === null && !r.archived)
-            ? categoryRef
-            : amountRef
-        }
+        initialFocus={editing === null && options.length > 0 ? categoryRef : amountRef}
         footer={
           editing?.archived === true ? undefined : (
             <Button
@@ -519,7 +593,9 @@ export function BudgetSheet({
         <Form
           saving={saving}
           setSaving={setSaving}
-          rows={rows}
+          options={options}
+          all={[...rows, ...subRows]}
+          parent={parent}
           editing={editing}
           initialCategoryId={categoryId}
           range={range}
@@ -547,7 +623,9 @@ export function BudgetSheet({
           }}
           icon={<TrashIcon size={22} />}
           title={RENCANA_COPY.removeTitle(editing.name)}
-          description={RENCANA_COPY.removeBody}
+          description={
+            subCount > 0 ? RENCANA_COPY.removeBodySub(subCount) : RENCANA_COPY.removeBody
+          }
           confirmLabel={RENCANA_COPY.remove}
           cancelLabel={RENCANA_COPY.back}
           holdOpen
