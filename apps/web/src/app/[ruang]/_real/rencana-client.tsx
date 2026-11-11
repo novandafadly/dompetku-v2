@@ -407,6 +407,7 @@ export function CopyBudgetsButton() {
         skippedExisting: number;
         skippedConflict: number;
         skippedArchived: number;
+        skippedParent: number;
       }>;
       try {
         res = await copyBudgetsAction(ruang, { toMonth: month });
@@ -421,7 +422,7 @@ export function CopyBudgetsButton() {
         return;
       }
       const v = res.value;
-      const skipped = v.skippedExisting + v.skippedConflict + v.skippedArchived;
+      const skipped = v.skippedExisting + v.skippedConflict + v.skippedArchived + v.skippedParent;
       setConflict(v.skippedConflict);
       restoreFocus(null);
       toast({

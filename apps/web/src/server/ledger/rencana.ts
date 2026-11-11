@@ -55,7 +55,11 @@ export const setBudgetSchema = z.object({
 });
 export const deleteBudgetSchema = z.object({ categoryId: id, month });
 /** K13: salin dari periode sebelum `toMonth` (label) ke `toMonth`. */
-export const copyBudgetsSchema = z.object({ toMonth: month });
+export const copyBudgetsSchema = z.object({
+  toMonth: month,
+  /** Penyesuaian persen semua baris (S10, K4); SQL membulatkan ke Rp1.000. */
+  adjustPct: z.number().int().min(-90).max(100).default(0),
+});
 
 export const createBillSchema = z
   .object({
@@ -104,6 +108,9 @@ const budgetRow = z.object({
   pct: z.number().int().nullable(),
   remaining: z.number().int().nullable(),
   archived: z.boolean(),
+  parent_id: z.guid().nullable(),
+  sub_allocated: z.number().int().nullable(),
+  max_amount: z.number().int().nullable(),
 });
 
 const copyResult = z.object({
@@ -111,6 +118,7 @@ const copyResult = z.object({
   skipped_existing: z.number().int().min(0),
   skipped_conflict: z.number().int().min(0),
   skipped_archived: z.number().int().min(0),
+  skipped_parent: z.number().int().min(0),
 });
 const billResult = z.object({ bill_id: z.uuid() });
 const payResult = z.object({
@@ -145,10 +153,7 @@ async function assertRowInSpace(
 }
 
 // ===== Baca =====
-/**
- * `api.budget_overview` untuk label `labelMonth` (tanggal 1): induk pengeluaran + anggaran. Baris
- * rincian (`parent_id` terisi, 0126) disaring dulu; Task 4 S10 membawanya ke VM.
- */
+/** `api.budget_overview` untuk label `labelMonth` (tanggal 1): induk dan rincian, urut induk → rincian. */
 export async function budgetOverviewTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
@@ -156,11 +161,10 @@ export async function budgetOverviewTx(
 ): Promise<BudgetOverviewVM[]> {
   const { rows } = await c.query<Record<string, unknown>>(
     `select b.category_id, b.name, b.icon, b.budget, b.wajib, b.spent, b.pct, b.remaining,
-            b.archived
+            b.archived, b.parent_id, b.sub_allocated, b.max_amount
        from api.budget_overview(p_space_id => $1, p_month => $2::date) with ordinality
             as b (category_id, name, icon, budget, wajib, spent, pct, remaining, archived,
                   parent_id, sub_allocated, max_amount, n)
-      where b.parent_id is null
       order by b.n`,
     [ctx.spaceId, labelMonth],
   );
@@ -176,6 +180,9 @@ export async function budgetOverviewTx(
       pct: r.pct,
       remaining: r.remaining,
       archived: r.archived,
+      parentId: r.parent_id,
+      subAllocated: r.sub_allocated,
+      maxAmount: r.max_amount,
     };
   });
 }
@@ -189,7 +196,8 @@ const totalsRow = z.object({
 
 /**
  * Total kartu Anggaran, dijumlah di SQL (BSD §1.1) dari baris `api.budget_overview` yang sama:
- * hanya kategori beranggaran (wajib dan terarsip yang masih beranggaran ikut); realisasi = kolom
+ * hanya induk beranggaran (rincian sudah termasuk di induknya, jangan dijumlah dua kali; wajib dan
+ * terarsip yang masih beranggaran ikut); realisasi = kolom
  * `spent` per baris (wajib: tanpa bayar tagihan periode lain). `pct` = floor(Σ spent × 100 / Σ
  * budget), 0 bila tanpa anggaran.
  */
@@ -385,7 +393,9 @@ export async function loadRencana(
   const [read, shell] = await Promise.all([
     withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
       const period = await payPeriodTx(c, ctx);
-      const budgets = await budgetOverviewTx(c, ctx, period.labelMonth);
+      const overview = await budgetOverviewTx(c, ctx, period.labelMonth);
+      const budgets = overview.filter((b) => b.parentId === null);
+      const subBudgets = overview.filter((b) => b.parentId !== null);
       const totals = await budgetTotalsTx(c, ctx, period.labelMonth);
       const prevMonth = first(addMonths(period.labelMonth.slice(0, 7), -1));
       const previous = previousOf(prevMonth, await budgetOverviewTx(c, ctx, prevMonth));
@@ -400,7 +410,7 @@ export async function loadRencana(
           categories: await listCategoriesTx(c, ctx),
         };
       }
-      return { period, budgets, totals, previous, bills, due, upcoming, today, own };
+      return { period, budgets, subBudgets, totals, previous, bills, due, upcoming, today, own };
     }),
     given ?? null,
   ]);
@@ -454,20 +464,23 @@ export interface CopyBudgetsValue {
   skippedExisting: number;
   skippedConflict: number;
   skippedArchived: number;
+  /** Rincian yang induknya tidak ada di periode tujuan (S10). */
+  skippedParent: number;
 }
 
 /** `api.copy_budgets` (K13): periode label sebelum `toMonth` → `toMonth`; tidak menimpa. */
 export async function copyBudgets(
   ctx: LedgerCtx,
-  i: { toMonth: string },
+  i: z.input<typeof copyBudgetsSchema>,
 ): Promise<CopyBudgetsValue> {
   const v = copyBudgetsSchema.parse(i);
   const r = await callApi(
     ctx,
     null,
     `select to_jsonb(k) as r
-       from api.copy_budgets(p_space_id => $1, p_from_month => $2::date, p_to_month => $3::date) k`,
-    [ctx.spaceId, first(addMonths(v.toMonth, -1)), first(v.toMonth)],
+       from api.copy_budgets(p_space_id => $1, p_from_month => $2::date, p_to_month => $3::date,
+                             p_adjust_pct => $4::int) k`,
+    [ctx.spaceId, first(addMonths(v.toMonth, -1)), first(v.toMonth), v.adjustPct],
     copyResult,
   );
   return {
@@ -475,6 +488,7 @@ export async function copyBudgets(
     skippedExisting: r.skipped_existing,
     skippedConflict: r.skipped_conflict,
     skippedArchived: r.skipped_archived,
+    skippedParent: r.skipped_parent,
   };
 }
 

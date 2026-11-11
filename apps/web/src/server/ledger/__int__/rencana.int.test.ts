@@ -364,8 +364,8 @@ describe('Rencana dan Laporan: angka sama dengan Beranda [T17]', () => {
   });
 });
 
-describe('Anggaran rincian (S10, 0126): tidak dihitung dua kali di Rencana', () => {
-  it('rincian beranggaran tidak menjadi baris induk dan tidak masuk total kartu', async () => {
+describe('Anggaran rincian (S10, 0126): subBudgets terpisah, tidak dihitung dua kali', () => {
+  it('rincian beranggaran masuk subBudgets, bukan budgets, dan tidak masuk total kartu', async () => {
     const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
     const month = GOLDEN.labelMonth.slice(0, 7);
     const before = await loadRencana(ctx);
@@ -379,6 +379,19 @@ describe('Anggaran rincian (S10, 0126): tidak dihitung dua kali di Rencana', () 
     const after = await loadRencana(ctx);
     expect(after.budgets.map((b) => b.categoryId)).toEqual(before.budgets.map((b) => b.categoryId));
     expect(after.totals).toEqual(before.totals);
+    // Rincian ada di subBudgets: Kesehatan 500.000 wajib, rincian 100.000 -> batas atas 500.000.
+    expect(after.subBudgets).toEqual([
+      expect.objectContaining({
+        categoryId: sub,
+        parentId: fx.ids.kesehatan,
+        budget: 100_000,
+        maxAmount: 500_000,
+        subAllocated: null,
+      }),
+    ]);
+    expect(after.budgets.find((b) => b.categoryId === fx.ids.kesehatan)?.subAllocated).toBe(
+      100_000,
+    );
   });
 });
 

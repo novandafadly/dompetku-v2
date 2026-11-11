@@ -24,6 +24,12 @@ export interface BudgetOverviewVM {
   remaining: Rupiah | null;
   /** Kategori terarsip yang masih beranggaran di periode ini (UI hanya menawarkan Hapus). */
   archived: boolean;
+  /** S10: induknya bila ini rincian (subkategori); `null` = induk. */
+  parentId: string | null;
+  /** Induk: jumlah anggaran rinciannya di periode ini (SQL); `null` untuk rincian. */
+  subAllocated: Rupiah | null;
+  /** Rincian: batas atas yang masih boleh diisi (anggaran induk − rincian saudara, SQL); `null` untuk induk. */
+  maxAmount: Rupiah | null;
 }
 
 /** Satu tagihan ruang ini (`api.bill_list`) + nama kategori/dompet ruang yang sama. */
@@ -89,7 +95,10 @@ export interface RencanaData {
   /** Periode berjalan (anggaran berlabel `period.labelMonth`). */
   period: PeriodVM;
   previous: PreviousBudgetsVM;
+  /** Kategori induk (S9). */
   budgets: BudgetOverviewVM[];
+  /** Rincian (S10): beranggaran, atau aktif dari induk beranggaran (kandidat Tambah rincian). */
+  subBudgets: BudgetOverviewVM[];
   /** Total kartu Anggaran, dari SQL. */
   totals: BudgetTotalsVM;
   bills: BillListVM[];

@@ -80,6 +80,8 @@
 
 ### Task 4: Server dan action Rencana (sub + salin penyesuaian)
 
+**Selesai 2026-11-11:** `BudgetOverviewVM` + `parentId`/`subAllocated`/`maxAmount`, `RencanaData.subBudgets` (rincian) terpisah dari `budgets` (induk); total kartu tetap induk saja; `copyBudgetsSchema.adjustPct` (−90..100, bawaan 0) dan `skippedParent`; `previousOf` menghitung rincian; kode galat S10 dipetakan sejak Task 2. Tes: unit 2748, `test:int` 264 (+2).
+
 **Files:** Modify `server/ledger/rencana.ts`, `_actions/rencana.ts`, `features/rencana/types.ts`, tes unit/`__int__`.
 
 - [ ] Zod: `setBudgetSchema` menerima kategori sub; `copyBudgetsSchema` menerima `adjustPct` (int −90..100, bawaan 0); `BudgetOverviewVM` + `parentId`; galat baru dipetakan di `server/ledger/errors.ts` (`parent_budget_required`, `sub_exceeds_parent`, `sub_not_wajib`).

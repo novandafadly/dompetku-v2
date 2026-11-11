@@ -93,6 +93,9 @@ const row = (over: Partial<BudgetOverviewVM> & Pick<BudgetOverviewVM, 'categoryI
     pct: null,
     remaining: null,
     archived: false,
+    parentId: null,
+    subAllocated: null,
+    maxAmount: null,
     ...over,
   }) satisfies BudgetOverviewVM;
 
@@ -100,6 +103,7 @@ const data = (over: Partial<RencanaData> = {}): RencanaData => ({
   period: PERIOD,
   previous: { labelMonth: '2026-10-01', budgetCount: 0, wajibCount: 0, amounts: {} },
   budgets: [],
+  subBudgets: [],
   totals: { budget: 0, spent: 0, remaining: 0, pct: 0 },
   bills: [],
   due: [],

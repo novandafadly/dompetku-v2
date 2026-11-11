@@ -51,6 +51,9 @@ const row = (over: Partial<BudgetOverviewVM> & Pick<BudgetOverviewVM, 'categoryI
     pct: null,
     remaining: null,
     archived: false,
+    parentId: null,
+    subAllocated: null,
+    maxAmount: null,
     ...over,
   }) satisfies BudgetOverviewVM;
 
@@ -214,7 +217,13 @@ describe('catatan bentrok (M7)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 1, skippedExisting: 0, skippedConflict: 2, skippedArchived: 0 },
+      value: {
+        copied: 1,
+        skippedExisting: 0,
+        skippedConflict: 2,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     setup();
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -233,7 +242,13 @@ describe('CopyBudgetsButton (K13)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 3, skippedExisting: 0, skippedConflict: 1, skippedArchived: 1 },
+      value: {
+        copied: 3,
+        skippedExisting: 0,
+        skippedConflict: 1,
+        skippedArchived: 1,
+        skippedParent: 0,
+      },
     });
     setup();
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -254,7 +269,13 @@ describe('CopyBudgetsButton (K13)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 0, skippedExisting: 2, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 0,
+        skippedExisting: 2,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     setup('bersama');
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -299,7 +320,13 @@ describe('CopyBudgetsButton (K13)', () => {
     expect(actions.copyBudgetsAction).toHaveBeenCalledTimes(1);
     resolve({
       ok: true,
-      value: { copied: 1, skippedExisting: 0, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 1,
+        skippedExisting: 0,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     await waitFor(() => {
       expect(toastSpy).toHaveBeenCalled();
