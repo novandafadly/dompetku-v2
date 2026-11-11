@@ -16,6 +16,7 @@ import {
   maskPhone,
   unlinkWa,
   WaDisabledError,
+  WaRateLimitedError,
   type WaCtx,
 } from './link';
 
@@ -138,6 +139,20 @@ describe('createWaLinkCode', () => {
     m.readWaEnv.mockReturnValue({ botNumber: null });
     await expect(createWaLinkCode(ctx)).rejects.toBeInstanceOf(WaDisabledError);
     expect(m.withUser).not.toHaveBeenCalled();
+  });
+
+  it('10 kode per jam per user; user lain tidak terpengaruh', async () => {
+    m.query.mockResolvedValue({
+      rows: [{ r: { code: 'K7M2QX', expires_at: '2026-11-10T01:00:00+00:00' } }],
+    });
+    const heavy = { pools: POOLS, userId: 'user-rate-limit-1' };
+    for (let i = 0; i < 10; i++) await createWaLinkCode(heavy);
+    m.withUser.mockClear();
+    await expect(createWaLinkCode(heavy)).rejects.toBeInstanceOf(WaRateLimitedError);
+    expect(m.withUser).not.toHaveBeenCalled();
+    await expect(
+      createWaLinkCode({ pools: POOLS, userId: 'user-rate-limit-2' }),
+    ).resolves.toBeTruthy();
   });
 
   it('hasil DB tak dikenali ditolak (Zod), bukan ditampilkan', async () => {
