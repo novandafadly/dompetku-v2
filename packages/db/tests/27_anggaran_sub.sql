@@ -6,7 +6,7 @@
 -- Jam dipatok 2026-11-26 10:00 WIB; payday_rule = 25 (label Nov = 23 Okt..24 Nov).
 -- ID: B2, B13, T13, T17
 begin;
-select plan(62);
+select plan(66);
 select tests.fixture();
 select tests.clock_at('2026-11-26 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -301,6 +301,21 @@ select pg_temp.err(tests.n(), format($$select api.create_bill(gen_random_uuid(),
 select is(tests.web_val(tests.n(), format($q$select copied || ':' || skipped_existing || ':' || skipped_conflict
     || ':' || skipped_archived || ':' || skipped_parent from api.copy_budgets(%L, '2027-08-01', '2027-09-01')$q$, :'sh')),
   '0:0:1:0:1', 'induk wajib bentrok tagihan tujuan = skipped_conflict; rinciannya = skipped_parent (tanpa anggaran induk)');
+
+-- Rincian yang jatuh di bawah Rp1.000 tidak dinaikkan paksa (bisa melewati induk): dilewati.
+select pg_temp.mk('Uji Bulat', null) as bulat \gset
+select pg_temp.mk('Bulat A', :'bulat') as bulata, pg_temp.mk('Bulat B', :'bulat') as bulatb \gset
+select pg_temp.set(tests.n(), :'sh', :'bulat', '2027-10-01', 1000) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'bulata', '2027-10-01', 500) as x \gset
+select pg_temp.set(tests.n(), :'sh', :'bulatb', '2027-10-01', 500) as x \gset
+select is(tests.web_val(tests.n(), format($q$select copied || ':' || skipped_existing || ':' || skipped_conflict
+    || ':' || skipped_archived || ':' || skipped_parent from api.copy_budgets(%L, '2027-10-01', '2027-11-01', -50)$q$, :'sh')),
+  '1:0:2:0:0', '-50%: induk 500 -> 1.000 (ke atas); rincian 250 -> 0 (ke bawah) dilewati sebagai skipped_conflict, bukan dipaksa 1.000');
+select is(pg_temp.rows(:'sh', '2027-11-01'), 'Uji Bulat:1000:false', 'hanya induk tersalin');
+select pg_temp.set(tests.n(), :'sh', :'bulat', '2027-12-01', 100000) as x \gset
+select is(tests.web_val(tests.n(), format($q$select copied from api.copy_budgets(%L, '2027-12-01', '2028-01-01', -90)$q$, :'sh')), '1',
+  'batas -90% diterima');
+select is(pg_temp.rows(:'sh', '2028-01-01'), 'Uji Bulat:10000:false', '-90% atas 100.000 = 10.000');
 
 select * from finish();
 rollback;

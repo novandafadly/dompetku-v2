@@ -69,12 +69,12 @@
 
 ### Task 3: Baca anggaran sub, salin dengan penyesuaian, DQ14 (migrasi `0126`) — model terkuat
 
-**Selesai 2026-11-11** (migrasi `0126`, pgTAP 1943; golden dihitung tangan di `27_anggaran_sub.sql`, tanpa berkas golden terpisah). `budgetOverviewTx`/`budgetTotalsTx` menyaring baris rincian sampai Task 4 membawanya ke VM (tanpa itu urutan `n` bergeser dan total kartu menghitung dua kali).
+**Selesai 2026-11-11** (migrasi `0126`, review independen bersih + perbaikan pembulatan rincian < Rp1.000; pgTAP 1947; golden dihitung tangan di `27_anggaran_sub.sql`, tanpa berkas golden terpisah). `budgetOverviewTx`/`budgetTotalsTx` menyaring baris rincian sampai Task 4 membawanya ke VM (tanpa itu urutan `n` bergeser dan total kartu menghitung dua kali).
 
 **Files:** Create `0126_anggaran_sub_baca_salin.sql`; extend `27_anggaran_sub.sql`, `17_dq.sql`.
 
 - [ ] `api.budget_overview`: tambah kolom `parent_id`, `sub_allocated` (induk: Σ anggaran rinciannya; 0 bila tidak ada) dan `max_amount` (rincian, termasuk yang belum beranggaran: anggaran induk − Σ anggaran rincian saudaranya; UI tidak menghitung uang, `docs/design/s10-bingkai.md`); baris sub (anak kategori induk yang dipilih) dengan `spent` per `category_id` (bukan `root_category_id`); induk tetap realisasi total (induk + semua sub); urutan: induk lalu sub-subnya. Induk terarsip yang punya anggaran tetap tampil dengan sub-sub beranggaran.
-- [ ] `api.copy_budgets(p_space_id, p_from_month, p_to_month, p_adjust_pct int default 0)`: drop tanda tangan lama (tiga argumen) lalu buat ulang; urut induk dulu lalu sub (urut `category_id` di tiap kelompok); `p_adjust_pct` di luar −90..+100 = `DK400`; nominal induk = `max(1000, ceil(amount × (100+pct)/100 / 1000) × 1000)`, rincian = `max(1000, floor(...))`, dihitung bigint di SQL (pembulatan induk ke atas dan rincian ke bawah menjamin Σ rincian ≤ induk; bila tetap melanggar, mis. batas minimal, rincian dilewati sebagai `skipped_conflict`, bukan diam-diam); sub yang induknya dilewati (`skipped_*`) ikut dilewati (`skipped_parent`, kolom hasil baru); idempoten (jalan ulang = copied 0).
+- [ ] `api.copy_budgets(p_space_id, p_from_month, p_to_month, p_adjust_pct int default 0)`: drop tanda tangan lama (tiga argumen) lalu buat ulang; urut induk dulu lalu sub (urut `category_id` di tiap kelompok); `p_adjust_pct` di luar −90..+100 = `DK400`; nominal induk = `ceil(amount × (100+pct)/100 / 1000) × 1000`, rincian = `floor(...) × 1000` (di bawah Rp1.000 dilewati sebagai `skipped_conflict`, tidak dinaikkan paksa), dihitung bigint di SQL (pembulatan induk ke atas dan rincian ke bawah menjamin Σ rincian ≤ induk; bila tetap melanggar, rincian dilewati sebagai `skipped_conflict`, bukan diam-diam); sub yang induknya dilewati (`skipped_*`) ikut dilewati (`skipped_parent`, kolom hasil baru); idempoten (jalan ulang = copied 0).
 - [ ] DQ14 (error): sub beranggaran tanpa anggaran induk label sama, atau `Σ sub > induk`; tambahkan ke `private.dq_run` dan `17_dq.sql` (daftar DQ01..DQ14), `INFO_ONLY` tidak berubah.
 - [ ] pgTAP: golden baru (`support/golden-s10.{sql,json}`) untuk overview dengan sub dan salin ±persen; `budget_progress`/`safe_to_spend` tidak berubah.
 
@@ -84,6 +84,7 @@
 
 - [ ] Zod: `setBudgetSchema` menerima kategori sub; `copyBudgetsSchema` menerima `adjustPct` (int −90..100, bawaan 0); `BudgetOverviewVM` + `parentId`; galat baru dipetakan di `server/ledger/errors.ts` (`parent_budget_required`, `sub_exceeds_parent`, `sub_not_wajib`).
 - [ ] `budget-sheet.tsx`: tambahkan `case 'sub_exceeds_parent'` (dan `sub_not_wajib`) agar tidak jatuh ke galat umum (Task 5 memakai salinan bingkai).
+- [ ] `copyResult`/`copyBudgets` meneruskan `skipped_parent`; `previousOf()` menghitung juga baris rincian (`copy_budgets` menyalin rincian; sekarang `budgetOverviewTx` menyaringnya, hasil review Task 3).
 - [ ] Hasil `copyBudgets` memuat `skippedParent`; tes `__int__` untuk sub, `Σ sub`, penyesuaian, galat.
 
 ### Task 5: UI Rencana: anggaran rincian (sonnet + lensa desain)

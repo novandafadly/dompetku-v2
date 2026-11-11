@@ -10,8 +10,8 @@
 --   induk tetap induk + semua rincian. Urutan: induk lalu rinciannya.
 -- - api.copy_budgets(ruang, dari, ke, p_adjust_pct default 0): penyesuaian persen -90..100 (DK400
 --   adjust_pct di luar itu), dibulatkan ke Rp1.000 hanya bila persen <> 0 (induk ke atas, rincian ke
---   bawah, minimal Rp1.000); kolom hasil baru skipped_parent (rincian yang induknya tidak ada di
---   tujuan); rincian yang melewati induk tujuan = skipped_conflict.
+--   bawah); kolom hasil baru skipped_parent (rincian yang induknya tidak ada di tujuan); rincian
+--   yang melewati induk tujuan atau jatuh di bawah Rp1.000 = skipped_conflict.
 -- - private.dq_run: + DQ14 (error) pohon anggaran.
 
 drop function api.budget_overview(uuid, date);
@@ -133,16 +133,21 @@ begin
       v_arch := v_arch + 1;
       continue;
     end if;
-    -- Penyesuaian persen: 0 = nominal persis. Selain itu dibulatkan ke Rp1.000 (minimal Rp1.000,
-    -- maksimal batas tabel): induk ke atas, rincian ke bawah, sehingga jumlah rincian tidak
-    -- melewati induk akibat pembulatan.
+    -- Penyesuaian persen: 0 = nominal persis. Selain itu dibulatkan ke Rp1.000 (maksimal batas
+    -- tabel): induk ke atas, rincian ke bawah, sehingga jumlah rincian tidak melewati induk akibat
+    -- pembulatan. Rincian yang jatuh di bawah Rp1.000 tidak dinaikkan paksa (itu bisa melewati
+    -- induk): dilewati sebagai skipped_conflict.
     v_amt := case
       when p_adjust_pct = 0 then v_r.amount
-      when v_r.is_sub then greatest(1000, least(10000000000000,
-             floor(v_r.amount::numeric * (100 + p_adjust_pct) / 100000)::bigint * 1000))
-      else greatest(1000, least(10000000000000,
-             ceil(v_r.amount::numeric * (100 + p_adjust_pct) / 100000)::bigint * 1000))
+      when v_r.is_sub then least(10000000000000,
+             floor(v_r.amount::numeric * (100 + p_adjust_pct) / 100000)::bigint * 1000)
+      else least(10000000000000,
+             ceil(v_r.amount::numeric * (100 + p_adjust_pct) / 100000)::bigint * 1000)
     end;
+    if v_amt < 1000 and p_adjust_pct <> 0 then
+      v_conflict := v_conflict + 1;
+      continue;
+    end if;
     begin
       insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by, updated_at)
       values (p_space_id, v_r.category_id, p_to_month, v_amt, v_r.wajib, v_uid, app.now())
