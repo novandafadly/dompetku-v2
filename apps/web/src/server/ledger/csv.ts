@@ -36,9 +36,13 @@ const BOM = String.fromCharCode(0xfeff);
 
 const FORMULA_START = /^[=+\-@\t\r]/;
 
-/** Sel teks: escape rumus, lalu kutip bila memuat `"`, `,`, CR, atau LF. */
+/**
+ * Sel teks: escape rumus di awal sel dan sesudah `;`, lalu kutip bila memuat `"`, `,`, CR, atau LF.
+ * `;` karena Excel locale Indonesia memakai `;` sebagai pemisah daftar: sel berisi `x;=cmd` pecah
+ * di sana dan bagian sesudahnya menjadi awal sel (kutip RFC 4180 tidak dikenali di tengah field).
+ */
 export function csvText(value: string | null | undefined): string {
-  let v = value ?? '';
+  let v = (value ?? '').replace(/;([=+\-@\t\r])/g, ";'$1");
   if (FORMULA_START.test(v)) v = `'${v}`;
   return /["\r\n,]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v;
 }

@@ -508,8 +508,9 @@ describe('Ekspor CSV (S10 Task 7): angka sama dengan Laporan [T17], tanpa data P
       }
       expect(ex.csv).not.toContain(String(KANARI.nRp));
       const after = await h.admin.query<{ n: number; meta: string }>(
-        `select count(*)::int as n, max(meta::text) as meta from audit.events
-          where event = 'export' and user_id = $1`,
+        `select (select count(*)::int from audit.events where event = 'export' and user_id = $1) as n,
+                (select meta::text from audit.events where event = 'export' and user_id = $1
+                  order by id desc limit 1) as meta`,
         [p.id],
       );
       expect((after.rows[0]?.n ?? 0) - (before.rows[0]?.n ?? 0)).toBe(1);
@@ -522,8 +523,18 @@ describe('Ekspor CSV (S10 Task 7): angka sama dengan Laporan [T17], tanpa data P
 
   it('Luar dan Pribadi pasangan: not_found, tanpa event', async () => {
     const nP = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
-    const err = await failure(exportLaporanCsv({ ...nP, userId: fx.f.id }, {}));
-    expect(toLedgerError(err)).toEqual({ code: 'not_found' });
+    const events = async () =>
+      (
+        await h.admin.query<{ n: number }>(
+          "select count(*)::int as n from audit.events where event = 'export'",
+        )
+      ).rows[0]?.n;
+    const before = await events();
+    for (const userId of [fx.f.id, fx.luar.id]) {
+      const err = await failure(exportLaporanCsv({ ...nP, userId }, {}));
+      expect(toLedgerError(err)).toEqual({ code: 'not_found' });
+    }
+    expect(await events()).toBe(before);
   });
 });
 

@@ -13,7 +13,8 @@
 --   dulu (Pribadi pasangan dan Luar = DK404, tanpa konteks = DK401); hanya ruang ini, jadi ekspor
 --   Bersama tidak pernah memuat entri Pribadi (B13).
 -- - Rentang: dari <= sampai, paling lama 3660 hari (DK400 invalid_argument detail period).
--- - Batas baris (DK422 export_too_large), dihitung sebelum membaca isi: app.settings
+-- - Batas baris (DK422 export_too_large), dihitung sebelum membaca isi (tanpa LIMIT: pemotongan
+--   diam-diam bila ada commit di antara hitungan dan pembacaan lebih buruk daripada selisih kecil): app.settings
 --   'export_max_rows' (bawaan 50.000; tes menurunkannya supaya tidak perlu menyisipkan 50.000 baris).
 -- - Nama pencatat dari app.space_roster (DEFINER, hanya anggota ruang ini): profil pasangan tidak
 --   terbaca langsung oleh RLS profil.
@@ -57,8 +58,7 @@ begin
     left join app.categories pc on pc.space_id = r.space_id and pc.id = c.parent_id
     left join app.space_roster(p_space_id) ro on ro.user_id = r.created_by
    where r.space_id = p_space_id and r.occurred_on between p_from and p_to
-   order by r.occurred_on, r.entry_id, r.role
-   limit v_max;
+   order by r.occurred_on, r.entry_id, r.role;
 end $$;
 
 select private.own_api_functions();
