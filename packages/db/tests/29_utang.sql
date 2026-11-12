@@ -6,7 +6,7 @@
 -- Jam dipatok 2026-03-20 WIB.
 -- ID: B10, I6
 begin;
-select plan(67);
+select plan(80);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -120,6 +120,22 @@ select throws_ok(format($$select pg_temp.debt(tests.n(), %L, %L, 'borrowed', 100
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
   $q$update app.debts set contact_id = %L where id = %L$q$, :'budi', :'d1')),
   'DK422', 'contact_archived', 'ganti kontak utang ke kontak terarsip ditolak');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.f(), format(
+  $q$insert into app.debts (space_id, contact_id, direction, principal, mode, opened_on, created_by, updated_by)
+     values (%L, %L, 'borrowed', 1000, 'baru', '2026-03-01', %L, %L)$q$, :'np', :'budi', tests.f(), tests.f())),
+  'DK404', 'contact_not_found', 'kontak terarsip ruang lain juga DK404 (tanpa oracle arsip/keberadaan)');
+-- Pokok, arah, mode, dan ruang tidak bisa diubah (K4: batal lalu catat ulang); kontak boleh.
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+  $q$update app.debts set principal = 900000 where id = %L$q$, :'d1')), 'DK422', 'debt_immutable', 'pokok tidak bisa diubah');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+  $q$update app.debts set direction = 'lent' where id = %L$q$, :'d1')), 'DK422', 'debt_immutable', 'arah tidak bisa diubah');
+select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
+  $q$update app.debts set mode = 'berjalan' where id = %L$q$, :'d1')), 'DK422', 'debt_immutable', 'mode tidak bisa diubah');
+select throws_ok(format($$select tests.owner_exec(null, %L)$$, format(
+  $q$update app.debts set space_id = %L where id = %L$q$, :'fp', :'d1')), 'DK422', 'debt_immutable', 'ruang tidak bisa diubah');
+select pg_temp.contact(tests.n(), :'np', 'Tono') as tono \gset
+select is(tests.api_exec(tests.n(), format($$update app.debts set contact_id = %L where id = %L$$, :'tono', :'d1')),
+  1::bigint, 'ganti kontak ke kontak aktif boleh (K4)');
 select throws_ok(format($$select pg_temp.debt(tests.n(), %L, %L, 'borrowed', 0)$$, :'np', :'budi2'),
   '23514', null, 'pokok 0 ditolak');
 select throws_ok(format($$select pg_temp.debt(tests.n(), %L, %L, 'borrowed', 10000000000001)$$, :'np', :'budi2'),
@@ -144,8 +160,8 @@ select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.n(), format(
 select pg_temp.contact(tests.n(), :'np', 'Sari') as sari \gset
 select pg_temp.debt(tests.n(), :'np', :'sari', 'lent', 300000) as d2 \gset
 select tests.api_exec(tests.n(), format($$update app.contacts set archived_at = now() where id = %L$$, :'sari'));
-select is(tests.api_exec(tests.n(), format($$update app.debts set title = 'Pinjaman Sari', updated_at = now()
-  where id = %L$$, :'d2')), 1::bigint, 'utang dengan kontak terarsip tetap bisa diubah judulnya');
+select is(tests.api_exec(tests.n(), format($$update app.debts set title = 'Pinjaman Sari', contact_id = contact_id,
+  updated_at = now() where id = %L$$, :'d2')), 1::bigint, 'utang dengan kontak terarsip tetap bisa diubah judulnya (kontak ditulis ulang sama)');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
   $q$update app.debts set title = ' ' where id = %L$q$, :'d2')), '23514', null, 'judul kosong ditolak');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
@@ -155,10 +171,6 @@ select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
 -- ===== Bentuk entri (private.assert_entry_shape) =====
 select pg_temp.debt(tests.n(), :'np', :'budi2', 'borrowed', 400000, 'berjalan') as d3 \gset
 select pg_temp.debt(tests.f(), :'fp', :'fbudi', 'lent', 50000) as fd \gset
-select lives_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, 1000000, '2026-03-01')$$, :'d1', :'bca'),
-  'pokok utang (borrowed) = line main positif');
-select lives_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, -300000, '2026-03-01')$$, :'d2', :'tab'),
-  'pokok piutang (lent) = line main negatif, dompet tabungan boleh');
 select throws_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, -1000000)$$, :'d1', :'bca'),
   'DK500', 'entry_shape_invalid', 'pokok utang negatif ditolak');
 select throws_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, 300000)$$, :'d2', :'bca'),
@@ -173,6 +185,15 @@ select throws_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, 999999
   'DK500', 'entry_shape_invalid', 'nominal pokok harus sama dengan principal');
 select throws_ok(format($$select pg_temp.dentry(%L, 'debt_payment', %L, -100000)$$, :'d1', :'kan'),
   'DK500', 'entry_shape_invalid', 'dompet Kantor ditolak (K6)');
+select pg_temp.debt(tests.n(), :'np', :'budi2', 'lent', 70000) as d4 \gset
+select throws_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, -70000)$$, :'d4', :'kan'),
+  'DK500', 'entry_shape_invalid', 'piutang dari dompet Kantor ditolak (K6)');
+select pg_temp.dentry(:'d1', 'debt_principal', :'bca', 1000000, '2026-03-01') as pk1 \gset
+select isnt(:'pk1'::uuid, null::uuid, 'pokok utang (borrowed) = line main positif');
+select lives_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, -300000, '2026-03-01')$$, :'d2', :'tab'),
+  'pokok piutang (lent) = line main negatif, dompet tabungan boleh');
+select throws_ok(format($$select pg_temp.dentry(%L, 'debt_principal', %L, 1000000)$$, :'d1', :'bca'),
+  '23505', null, 'satu pokok hidup per utang');
 select throws_ok(format($$select pg_temp.dentry(%L, 'debt_payment', %L, -100000, '2026-03-10', %L)$$, :'d1', :'bca',
   format($q$insert into app.entry_lines (entry_id, space_id, role, account_id, amount) values (:id, %L, 'fee', %L, -1000);$q$,
          :'np', :'bca')),
@@ -215,12 +236,18 @@ select is(tests.balance(:'bca'), '2850000', 'saldo BCA = awal + pokok − cicila
 select is(tests.web_val(tests.f(), format($$select count(*) from app.debt_balances where space_id = %L$$, :'np')),
   '0', 'Farida tidak melihat sisa utang Novanda (view security_invoker)');
 select is(tests.api_val(tests.n(), format($$select count(*) from app.debt_balances where space_id = %L$$, :'np')),
-  '3', 'dompetku_api membaca sisa utang ruang sendiri');
+  '4', 'dompetku_api membaca sisa utang ruang sendiri');
 -- Utang terhapus: entri hidup baru ditolak; entri batal boleh tetap ada.
 select tests.api_exec(tests.n(), format($$update app.debts set voided_at = now(), voided_by = %L where id = %L$$,
   tests.n(), :'d3'));
 select throws_ok(format($$select pg_temp.dentry(%L, 'debt_payment', %L, -10000)$$, :'d3', :'bca'),
   'DK500', 'entry_shape_invalid', 'entri hidup untuk utang terhapus ditolak');
+select lives_ok(format($$select tests.owner_exec(null, %L)$$, format($q$do $d$ begin
+    set constraints all deferred;
+    update app.entries set voided_at = now(), voided_by = created_by, version = version + 1 where id = %L;
+    set constraints all immediate;
+    set constraints all deferred;
+  end $d$$q$, :'p4')), 'entri batal boleh tetap ada pada utang terhapus');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), format(
   $q$update app.debts set voided_at = now() where id = %L$q$, :'d1')), '23514', null,
   'voided_at dan voided_by berpasangan');
@@ -232,12 +259,27 @@ select is(tests.web_val(null, $$select app.report_class('debt_payment', 'main', 
   'cicilan = x_pelunasan_utang');
 select is(tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ03'$$), '0',
   'DQ03: entri utang yang sah tidak dihitung');
--- Utang terhapus d3 masih punya cicilan hidup p4: bukan pelanggaran bentuk (DQ05, Task 4).
-savepoint dq;
-select tests.raw_exec(format($$update app.entry_lines set amount = 50000 where entry_id = %L$$, :'p4'));
-select is(tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ03'$$), '1',
+-- Paritas DQ03 dengan assert_entry_shape: tiap kerusakan lewat raw_exec, dibatalkan blok exception.
+create function pg_temp.dq03(p_sql text) returns text
+language plpgsql as $f$
+declare v text;
+begin
+  perform tests.raw_exec(p_sql);
+  v := tests.worker_val(null, $q$select violations from jobs.dq_reconcile() where check_id = 'DQ03'$q$);
+  raise exception using errcode = 'P0001', message = 'dq03=' || v;
+exception when sqlstate 'P0001' then
+  return split_part(sqlerrm, '=', 2);  -- blok exception membatalkan kerusakan
+end $f$;
+select is(pg_temp.dq03(format($$update app.entry_lines set amount = 200000 where entry_id = %L$$, :'p1')), '1',
   'DQ03: cicilan utang bertanda salah terdeteksi');
-rollback to savepoint dq;
+select is(pg_temp.dq03(format($$update app.entry_lines set amount = 999999 where entry_id = %L$$, :'pk1')), '1',
+  'DQ03: nominal pokok berbeda dengan principal terdeteksi');
+select is(pg_temp.dq03(format($$update app.entry_lines set account_id = %L where entry_id = %L$$, :'kan', :'p1')), '1',
+  'DQ03: entri utang di dompet Kantor terdeteksi');
+select is(pg_temp.dq03(format($$update app.debts set mode = 'berjalan' where id = %L$$, :'d1')), '1',
+  'DQ03: entri pokok pada utang berjalan terdeteksi');
+select is(pg_temp.dq03(format($$update app.debts set voided_at = now(), voided_by = created_by where id = %L$$, :'d1')), '2',
+  'DQ03: pokok dan cicilan hidup pada utang terhapus terdeteksi');
 
 -- ===== I6: pokok dan cicilan bukan pemasukan/pengeluaran =====
 -- Pembanding: ruang kedua tanpa entri utang tidak praktis, jadi nilai dihitung ulang sesudah semua entri
@@ -263,13 +305,12 @@ select pg_temp.angka() as hidup \gset
 select is(tests.web_val(tests.n(), format($$select string_agg(report_class || ':' || direction || '=' || amount
   || '#' || entry_count, ',' order by report_class, direction)
   from api.excluded_summary(%L, '2026-03-01', '2026-03-31') where report_class like '%%utang'$$, :'np')),
-  'x_pelunasan_utang:in=100000#1,x_pelunasan_utang:out=250000#2,x_pokok_utang:in=1000000#1,x_pokok_utang:out=300000#1',
+  'x_pelunasan_utang:in=100000#1,x_pelunasan_utang:out=200000#1,x_pokok_utang:in=1000000#1,x_pokok_utang:out=300000#1',
   'Laporan "Tidak termasuk": pokok dan cicilan per arah (cicilan batal tidak dihitung)');
 select is(tests.web_val(tests.n(), format($$select string_agg(kind || ':' || report_class || ':' || amount, ','
   order by occurred_on, amount) from api.export_entries(%L, '2026-03-01', '2026-03-31') where kind like 'debt%%'$$, :'np')),
   'debt_principal:x_pokok_utang:-300000,debt_principal:x_pokok_utang:1000000,'
-  || 'debt_payment:x_pelunasan_utang:-200000,debt_payment:x_pelunasan_utang:100000,'
-  || 'debt_payment:x_pelunasan_utang:-50000',
+  || 'debt_payment:x_pelunasan_utang:-200000,debt_payment:x_pelunasan_utang:100000',
   'ekspor memuat kaki utang dengan kelas baru');
 select is(tests.web_val(tests.n(), format($$select count(*) from api.period_summary(%L, '2026-03-01', '2026-03-31')
   where report_class is null$$, :'np')), '0', 'period_summary tanpa kelas NULL');

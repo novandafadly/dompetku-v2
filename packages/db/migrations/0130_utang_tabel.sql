@@ -11,13 +11,21 @@
 -- - app.debts: direction borrowed (saya berutang) | lent (piutang); title opsional 1..80 ("Untuk
 --   apa"); principal 1..1e13; mode baru (ada entri pokok) | berjalan (K2: tanpa entri pokok, saldo dan
 --   Laporan nol efek). Kontak lewat FK komposit (space_id, contact_id): ruang yang sama.
---   private.tg_debt_contact (BEFORE INSERT / UPDATE OF contact_id): kontak harus ada di ruang yang
---   sama (DK404 contact_not_found, sama untuk kontak ruang lain: tanpa membocorkan keberadaannya)
---   dan aktif (DK422 contact_archived). Baris kontak dikunci FOR SHARE, jadi arsip kontak yang
---   belum commit dan utang baru untuk kontak itu saling menunggu (READ COMMITTED membaca ulang).
---   Arsip kontak sesudahnya tidak mengubah utang lama (trigger hanya saat contact_id ditulis).
+--   private.tg_debt_guard (BEFORE INSERT OR UPDATE):
+--   * principal, direction, mode, space_id tidak bisa diubah (DK422 debt_immutable; K4: batal lalu
+--     catat ulang). Judul, catatan, kontak boleh.
+--   * Kontak baru (INSERT, atau UPDATE yang benar-benar mengganti contact_id) harus terlihat di ruang
+--     utang (DK404 contact_not_found) dan aktif (DK422 contact_archived). UPDATE yang menulis ulang
+--     kontak yang sama dilewati: utang lama pada kontak terarsip tetap bisa diubah judulnya.
+--   * SECURITY INVOKER (bukan DEFINER): trigger BEFORE berjalan sebelum WITH CHECK RLS, jadi versi
+--     DEFINER (BYPASSRLS) bisa menjawab contact_archived untuk kontak ruang orang lain (oracle
+--     keberadaan/arsip). Sebagai pemanggil, kontak ruang lain tidak terlihat = DK404 seragam.
+--     dompetku_api punya SELECT + UPDATE di contacts dan policy member_write FOR ALL, cukup untuk
+--     FOR SHARE. Baris kontak dikunci FOR SHARE, jadi arsip kontak yang belum commit dan utang baru
+--     untuk kontak itu saling menunggu (READ COMMITTED membaca ulang).
 --   Hapus utang = voided_at/voided_by (K5, api di 0131); tanpa kolom sisa tersimpan.
 -- - app.entries.debt_id: FK komposit (space_id, debt_id) -> debts; CHECK kind utang <=> debt_id,
+--   indeks unik entries_debt_principal_live (satu pokok hidup per utang),
 --   CHECK kind utang hanya Pribadi (B10, pertahanan berlapis di atas FK ke debts yang Pribadi).
 -- - private.assert_entry_shape (+ cabang utang): satu line main, tanpa counter/fee, dompet bukan
 --   Kantor (K6); pokok: borrowed main > 0, lent main < 0, hanya mode baru, |main| = principal;
@@ -85,10 +93,19 @@ create index on app.debts (created_by);
 create index on app.debts (updated_by);
 create index on app.debts (voided_by);
 
-create function private.tg_debt_contact() returns trigger
-language plpgsql security definer set search_path = '' as $$
+create function private.tg_debt_guard() returns trigger
+language plpgsql set search_path = '' as $$
 declare v_archived timestamptz;
 begin
+  if tg_op = 'UPDATE' then
+    if (new.principal, new.direction, new.mode, new.space_id)
+       is distinct from (old.principal, old.direction, old.mode, old.space_id) then
+      raise exception using errcode = 'DK422', message = 'debt_immutable';
+    end if;
+    if new.contact_id = old.contact_id then
+      return new;
+    end if;
+  end if;
   select c.archived_at into v_archived from app.contacts c
    where c.id = new.contact_id and c.space_id = new.space_id for share;
   if not found then
@@ -99,8 +116,8 @@ begin
   end if;
   return new;
 end $$;
-create trigger debt_contact before insert or update of contact_id on app.debts
-  for each row execute function private.tg_debt_contact();
+create trigger debt_guard before insert or update on app.debts
+  for each row execute function private.tg_debt_guard();
 
 -- ===== Entri utang =====
 alter table app.entries add column debt_id uuid;
@@ -111,6 +128,9 @@ alter table app.entries add constraint entries_debt_check
 alter table app.entries add constraint entries_debt_personal_check
   check (kind not in ('debt_principal', 'debt_payment') or space_kind = 'personal');
 create index on app.entries (space_id, debt_id);
+-- Satu pokok hidup per utang (pokok batal tetap ada sampai dipurge; restore_debt menghidupkannya lagi).
+create unique index entries_debt_principal_live on app.entries (debt_id)
+  where kind = 'debt_principal' and voided_at is null;
 
 -- Matriks bentuk lines per kind (0101 + cabang utang 0130).
 create or replace function private.assert_entry_shape(p_entry_id uuid) returns void
@@ -238,6 +258,7 @@ language sql stable security definer set search_path = '' as $$
       from app.entry_lines l where l.entry_id = e.id
     ) s on true
     left join app.debts d on d.id = e.debt_id
+    left join app.accounts ma on ma.id = s.m_acc
     where e.voided_at is null
       and not coalesce(
         s.n_main = 1
@@ -253,11 +274,13 @@ language sql stable security definer set search_path = '' as $$
                and case e.direction when 'out' then s.m_amt < 0
                                     else s.m_amt > 0 and s.n_fee = 0 end
           when e.kind = 'adjustment' then s.n_counter = 0 and s.n_fee = 0
+          -- Paritas dengan assert_entry_shape 0130 (entri hidup saja, jadi utang harus hidup).
           when e.kind = 'debt_principal' then
-               s.n_counter = 0 and s.n_fee = 0
+               s.n_counter = 0 and s.n_fee = 0 and d.voided_at is null and ma.pocket <> 'kantor'
+               and d.mode = 'baru' and abs(s.m_amt) = d.principal
                and case d.direction when 'borrowed' then s.m_amt > 0 when 'lent' then s.m_amt < 0 end
           when e.kind = 'debt_payment' then
-               s.n_counter = 0 and s.n_fee = 0
+               s.n_counter = 0 and s.n_fee = 0 and d.voided_at is null and ma.pocket <> 'kantor'
                and case d.direction when 'borrowed' then s.m_amt < 0 when 'lent' then s.m_amt > 0 end
           else false
         end, false)
@@ -398,8 +421,8 @@ alter table app.entries drop constraint entries_debt_personal_check;
 alter table app.entries drop constraint entries_debt_check;
 alter table app.entries drop constraint entries_debt_fk;
 alter table app.entries drop column debt_id;
-drop trigger debt_contact on app.debts;
-drop function private.tg_debt_contact();
+drop trigger debt_guard on app.debts;
+drop function private.tg_debt_guard();
 drop table app.debts;
 drop table app.contacts;
 

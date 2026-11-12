@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(44);
+select plan(45);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -93,8 +93,8 @@ select set_eq($$
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
-        'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_debt_contact'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + kontak utang S11');
+        'private.tg_budget_tree', 'private.tg_budget_cascade'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -452,7 +452,15 @@ select set_eq($$
         'budgets.budgets_obligation_xor.private.tg_obligation_xor'],
   'trigger satu kewajiban di bills dan budgets');
 select has_trigger('app', 'space_members', 'seed_categories', 'kategori awal saat anggota masuk ruang');
-select has_trigger('app', 'debts', 'debt_contact', 'utang hanya untuk kontak aktif ruang yang sama (S11)');
+-- S11 (0130): penjaga utang INVOKER (kontak aktif ruang yang sama tanpa oracle, kolom tetap).
+select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
+           from pg_trigger g join pg_proc p on p.oid = g.tgfoid
+           join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname = 'debts' and g.tgname = 'debt_guard'),
+          'trigger debt_guard di app.debts memakai private.tg_debt_guard INVOKER milik owner');
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_debt_principal_live'),
+  'CREATE UNIQUE INDEX entries_debt_principal_live ON app.entries USING btree (debt_id) WHERE ((kind = ''debt_principal''::app.entry_kind) AND (voided_at IS NULL))',
+  'satu pokok hidup per utang');
 
 -- S11 (0129): urutan label entry_kind; nilai baru ditambah di akhir (ALTER TYPE ADD VALUE).
 select enum_has_labels('app', 'entry_kind',
