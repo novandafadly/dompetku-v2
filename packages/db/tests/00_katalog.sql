@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(41);
+select plan(42);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -435,13 +435,22 @@ select set_eq($$
   'trigger satu kewajiban di bills dan budgets');
 select has_trigger('app', 'space_members', 'seed_categories', 'kategori awal saat anggota masuk ruang');
 
+-- S11 (0129): urutan label entry_kind; nilai baru ditambah di akhir (ALTER TYPE ADD VALUE).
+select enum_has_labels('app', 'entry_kind',
+  array['income', 'expense', 'transfer', 'space_transfer', 'opening_balance', 'adjustment',
+        'reimbursement', 'debt_principal', 'debt_payment'],
+  'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment)');
+
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
+-- Sementara (S11 Task 2): kind utang dikecualikan sampai 0130 menambah kelasnya; Task 3 menghapus
+-- saringan ini dan menaikkan angka ke 0/972 (9 x 3 x 3 x 2 x 3 x 2).
 select is(tests.owner_val(null, $$
   select count(*) filter (where app.report_class(k, r, p, s, d, x) is null) || '/' || count(*)
   from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r,
        unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
        (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
-       unnest(array[true, false]) x $$),
+       unnest(array[true, false]) x
+  where k not in ('debt_principal', 'debt_payment') $$),
   '0/756', 'report_class tidak NULL untuk semua kombinasi (7 x 3 x 3 x 2 x 3 x 2)');
 
 -- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
