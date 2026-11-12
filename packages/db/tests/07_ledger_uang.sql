@@ -349,17 +349,17 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format($q$do $d$
 -- reimbursable hanya expense Pribadi, reimbursement hanya Pribadi), CHECK app.accounts (kantor hanya
 -- Pribadi), private.assert_entry_shape (counter hanya transfer; fee hanya transfer dan space_transfer
 -- keluar) dan pasangan space_transfer (tanpa Kas Kantor). Semua kombinasi enum (termasuk yang ditolak)
--- sudah dijaga 00_katalog (#9); di sini: tidak ada yang NULL dan tepat 12 kelas berbeda di S9 (BSD §8.1).
--- Tiga kelas sisa spec §9.1 (x_pokok_utang, x_pelunasan_utang, x_valuasi) milik M3/M4.
--- Sementara (S11 Task 2): kind utang dikecualikan; Task 3 (0130) menambah bentuk + kelasnya di sini.
-\set valid_combo 'select app.report_class(k, r, p, s, d, x) as c from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r, unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s, (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d), unnest(array[true, false]) x where k not in (''debt_principal'', ''debt_payment'') and (k = ''space_transfer'') = (d is not null) and (not x or (k = ''expense'' and s = ''personal'')) and (k <> ''reimbursement'' or s = ''personal'') and (p <> ''kantor'' or s = ''personal'') and (r <> ''counter'' or k = ''transfer'') and (r <> ''fee'' or k = ''transfer'' or (k = ''space_transfer'' and d = ''out'')) and (k <> ''space_transfer'' or p <> ''kantor'')'
+-- sudah dijaga 00_katalog (#9); di sini: tidak ada yang NULL dan tepat 14 kelas berbeda (BSD §8.1 + S11).
+-- S11 (0130): kind utang hanya line main, Pribadi, bukan Kantor, tanpa direction/reimbursable.
+-- Kelas sisa spec §9.1 (x_valuasi) milik M4.
+\set valid_combo 'select app.report_class(k, r, p, s, d, x) as c from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r, unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s, (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d), unnest(array[true, false]) x where (k not in (''debt_principal'', ''debt_payment'') or (r = ''main'' and s = ''personal'' and p <> ''kantor'')) and (k = ''space_transfer'') = (d is not null) and (not x or (k = ''expense'' and s = ''personal'')) and (k <> ''reimbursement'' or s = ''personal'') and (p <> ''kantor'' or s = ''personal'') and (r <> ''counter'' or k = ''transfer'') and (r <> ''fee'' or k = ''transfer'' or (k = ''space_transfer'' and d = ''out'')) and (k <> ''space_transfer'' or p <> ''kantor'')'
 select is(tests.owner_val(null, format($$select count(*) filter (where c is null) || '/' || count(*) || ' '
     || count(distinct c) from (%s) t$$, :'valid_combo')),
-  '0/53 12', 'report_class tidak NULL untuk 53 kombinasi yang lolos cek bentuk; tepat 12 kelas [BSD §13 #9]');
+  '0/57 14', 'report_class tidak NULL untuk 57 kombinasi yang lolos cek bentuk; tepat 14 kelas [BSD §13 #9]');
 select is(tests.owner_val(null, format($$select string_agg(distinct c collate "C", ',' order by c collate "C") from (%s) t$$, :'valid_combo')),
-  'expense,expense_fee,income,x_ambil_bersama,x_diambil_anggota,x_kantor,x_koreksi,x_reimburse,'
-  || 'x_setor_bersama,x_setoran_anggota,x_talangan,x_transfer',
-  '12 kelas BSD §8.1 tercapai dari kombinasi yang sah (tidak ada kelas mati, tidak ada kelas baru)');
+  'expense,expense_fee,income,x_ambil_bersama,x_diambil_anggota,x_kantor,x_koreksi,x_pelunasan_utang,'
+  || 'x_pokok_utang,x_reimburse,x_setor_bersama,x_setoran_anggota,x_talangan,x_transfer',
+  '14 kelas BSD §8.1 + S11 tercapai dari kombinasi yang sah (tidak ada kelas mati, tidak ada kelas baru)');
 
 select * from finish();
 rollback;

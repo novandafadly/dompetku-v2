@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(42);
+select plan(44);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -93,8 +93,8 @@ select set_eq($$
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
-        'private.tg_budget_tree', 'private.tg_budget_cascade'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10');
+        'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_debt_contact'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + kontak utang S11');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -262,6 +262,20 @@ select set_eq($$
     ('dompetku_api', 'app.wa_link_codes', 'INSERT'),
     ('dompetku_api', 'app.wa_link_codes', 'UPDATE'),
     ('dompetku_api', 'app.wa_link_codes', 'DELETE'),
+    -- S11 (0130): kontak dan utang (pola ruang; api tulis tanpa DELETE), view sisa (security_invoker).
+    ('dompetku_web', 'app.contacts', 'SELECT'),
+    ('dompetku_web', 'app.debts', 'SELECT'),
+    ('dompetku_web', 'app.debt_balances', 'SELECT'),
+    ('dompetku_api', 'app.contacts', 'SELECT'),
+    ('dompetku_api', 'app.contacts', 'INSERT'),
+    ('dompetku_api', 'app.contacts', 'UPDATE'),
+    ('dompetku_api', 'app.debts', 'SELECT'),
+    ('dompetku_api', 'app.debts', 'INSERT'),
+    ('dompetku_api', 'app.debts', 'UPDATE'),
+    ('dompetku_api', 'app.debt_balances', 'SELECT'),
+    ('dompetku_auditor', 'app.contacts', 'SELECT'),
+    ('dompetku_auditor', 'app.debts', 'SELECT'),
+    ('dompetku_auditor', 'app.debt_balances', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -400,6 +414,10 @@ select set_eq($$
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_name_unique'),
   'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
   'indeks unik nama dompet aktif per ruang');
+-- S11 (0130): nama kontak aktif unik per ruang (kontrak name_taken yang sama).
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'contacts_name_unique'),
+  'CREATE UNIQUE INDEX contacts_name_unique ON app.contacts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
+  'indeks unik nama kontak aktif per ruang');
 
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');
@@ -434,6 +452,7 @@ select set_eq($$
         'budgets.budgets_obligation_xor.private.tg_obligation_xor'],
   'trigger satu kewajiban di bills dan budgets');
 select has_trigger('app', 'space_members', 'seed_categories', 'kategori awal saat anggota masuk ruang');
+select has_trigger('app', 'debts', 'debt_contact', 'utang hanya untuk kontak aktif ruang yang sama (S11)');
 
 -- S11 (0129): urutan label entry_kind; nilai baru ditambah di akhir (ALTER TYPE ADD VALUE).
 select enum_has_labels('app', 'entry_kind',
@@ -442,16 +461,13 @@ select enum_has_labels('app', 'entry_kind',
   'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment)');
 
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
--- Sementara (S11 Task 2): kind utang dikecualikan sampai 0130 menambah kelasnya; Task 3 menghapus
--- saringan ini dan menaikkan angka ke 0/972 (9 x 3 x 3 x 2 x 3 x 2).
 select is(tests.owner_val(null, $$
   select count(*) filter (where app.report_class(k, r, p, s, d, x) is null) || '/' || count(*)
   from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r,
        unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
        (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
-       unnest(array[true, false]) x
-  where k not in ('debt_principal', 'debt_payment') $$),
-  '0/756', 'report_class tidak NULL untuk semua kombinasi (7 x 3 x 3 x 2 x 3 x 2)');
+       unnest(array[true, false]) x $$),
+  '0/972', 'report_class tidak NULL untuk semua kombinasi (9 x 3 x 3 x 2 x 3 x 2)');
 
 -- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
 -- DEFINER/owner (atau lewat private.purge_entries), ditambah deploy dan db_manual_access dari skrip
