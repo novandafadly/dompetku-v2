@@ -22,6 +22,7 @@ describe('JOBS', () => {
       ['purge_audit', '30 1 * * *', 'Asia/Jakarta', 'jobs'],
       ['purge_voided', '15 1 * * 1', 'Asia/Jakarta', 'jobs'],
       ['materialize_bills', '5 0 * * *', 'Asia/Jakarta', 'jobs'],
+      ['purge_wa_messages', '27 1 * * *', 'Asia/Jakarta', 'jobs'],
     ]);
   });
 
@@ -38,6 +39,15 @@ describe('JOBS', () => {
     expect(next('15 1 * * 1', '2026-11-03T17:59:00Z', 2)).toEqual([
       '2026-11-08T18:15:00.000Z',
       '2026-11-15T18:15:00.000Z',
+    ]);
+  });
+
+  it('purge_wa_messages harian 01:27 WIB (K7 S10), jam di dalam jendela 01:00–01:30, sebelum backup 02:00', () => {
+    const j = JOBS.find((x) => x.name === 'purge_wa_messages');
+    expect(j).toMatchObject({ kind: 'count', sql: 'select jobs.purge_wa_messages() as n' });
+    expect(next('27 1 * * *', '2026-11-04T17:00:00Z', 2)).toEqual([
+      '2026-11-04T18:27:00.000Z',
+      '2026-11-05T18:27:00.000Z',
     ]);
   });
 

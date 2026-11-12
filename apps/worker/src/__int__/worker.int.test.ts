@@ -101,7 +101,7 @@ describe('runJob terhadap Postgres', () => {
 
   it('purge job memakai EXECUTE jobs.* → job_runs ok dengan rows', async () => {
     const before = await lastRunId();
-    for (const name of ['purge_idempotency', 'purge_audit'] as const) {
+    for (const name of ['purge_idempotency', 'purge_audit', 'purge_wa_messages'] as const) {
       const res = await runJob(pool, jobDef(name), healthchecks(`${hcBase}/jobs`, { log: quiet }), {
         log: quiet,
       });
@@ -113,6 +113,8 @@ describe('runJob terhadap Postgres', () => {
       '/jobs job=purge_idempotency',
       '/jobs/start ',
       '/jobs job=purge_audit',
+      '/jobs/start ',
+      '/jobs job=purge_wa_messages',
     ]);
   });
 

@@ -27,7 +27,7 @@
 | K4 | "Penyesuaian" salin anggaran | Persen bilangan bulat −90..+100 untuk semua baris, dibulatkan ke Rp1.000: anggaran induk ke atas, rincian ke bawah (minimal Rp1.000), supaya `Σ rincian ≤ induk` terjaga setelah pembulatan (hasil review Task 2); induk ditulis lebih dulu; sesudah salin, tiap baris diubah lewat editor yang ada. Sub disalin sesudah induknya dan ikut persen yang sama (jadi `Σ sub ≤ induk` tetap). | Sederhana, uang dihitung di SQL. |
 | K5 | Isi CSV | Satu baris per entri hidup pada periode Laporan (basis gajian/kalender), kolom: tanggal, jenis, kelas laporan, dompet, kategori induk, subkategori, nominal bertanda (integer rupiah), catatan, pencatat (nama tampil). Ruang Bersama tidak pernah memuat entri Pribadi (B13). Batas 50.000 baris (`DK422 export_too_large`). Pencatatan audit `export` (meta jumlah baris + rentang, tanpa isi). | Cocok dengan Laporan secara terbukti (Σ per kelas = angka Laporan). |
 | K6 | Tombol Ekspor | Di header Laporan (membawa periode + basis yang sedang dilihat); item "Export" di menu tetap "Segera". | Konteks periode terbawa. |
-| K7 | Retensi `wa_messages` | 14 hari (di bawah retensi idempotensi 30 hari; pesan lama yang diputar ulang tetap tertahan idempotensi ledger), job `purge_wa_messages` 01:35 WIB. Baris `pending` tidak dihapus. | Handoff wa.md "Data dan DB". |
+| K7 | Retensi `wa_messages` | 14 hari (di bawah retensi idempotensi 30 hari; pesan lama yang diputar ulang tetap tertahan idempotensi ledger), job `purge_wa_messages` 01:27 WIB. Baris `pending` tidak dihapus. | Handoff wa.md "Data dan DB". |
 
 ## Global Constraints
 
@@ -131,9 +131,11 @@
 
 ### Task 9: Worker lanjutan dan utang (migrasi `0128`) — model terkuat
 
+**Selesai 2026-11-12:** migrasi `0128` `jobs.purge_wa_messages()` (> 14 hari, **semua status** termasuk `pending` yang tak pernah selesai: kalau tidak ia jadi "catatan terakhir" abadi yang memblokir `batal`), job `purge_wa_messages` **01:27 WIB** (bukan 01:35: tes jendela 01:00–01:30 sebelum backup 02:00), semua titik daftar job (katalog, `jobs.ts`, tes, int, runbook, env example, README); worker keluar pada `unhandledRejection`. **Ditunda:** DQ07 tanpa alert (R20) dan T15 di registry (M5): butuh keputusan desain terpisah, tidak ada di jalur S10.
+
 **Files:** Create `0128_purge_wa_messages.sql`; modify `apps/worker/src/{jobs.ts,jobs.test.ts,index.ts,__int__/worker.int.test.ts}`, `00_katalog.sql`, `infra/db-vm/deploy/worker.env.example`, `docs/ops/runbook-s7-worker.md`, `packages/db/README.md`.
 
-- [ ] `jobs.purge_wa_messages()` (DEFINER owner, EXECUTE hanya `dompetku_worker`): hapus baris `status <> 'pending'` dengan `created_at < app.now() - interval '14 days'` (K7); idempoten; tidak menyentuh `recorded` dalam jendela `batal` (10 menit) karena 14 hari ≫ 10 menit. Job `purge_wa_messages` 01:35 WIB, check `jobs`; semua titik daftar job (lihat peta di tes katalog: DEFINER owner, matriks EXECUTE, `jobs.test.ts`, int test, runbook, `worker.env.example`).
+- [ ] `jobs.purge_wa_messages()` (DEFINER owner, EXECUTE hanya `dompetku_worker`): hapus baris `status <> 'pending'` dengan `created_at < app.now() - interval '14 days'` (K7); idempoten; tidak menyentuh `recorded` dalam jendela `batal` (10 menit) karena 14 hari ≫ 10 menit. Job `purge_wa_messages` 01:27 WIB, check `jobs`; semua titik daftar job (lihat peta di tes katalog: DEFINER owner, matriks EXECUTE, `jobs.test.ts`, int test, runbook, `worker.env.example`).
 - [ ] pgTAP + int: pesan > 14 hari terhapus, baru dan `pending` tetap; jalan 2× = 0 baris kedua; revoke execute → `failed` (pola int test `materialize_bills`).
 - [ ] Worker: `unhandledRejection` memicu alert + keluar bersih (bukan hanya log); DQ07 dipantau lewat ringkasan alert (butir R20 handoff S7, bila rancangannya sederhana; selain itu catat dan tunda).
 - [ ] Tutup T15 di `REGISTRY.md` bila ada: `materialize_bills` dijalankan 2× = tidak ada kemunculan ganda (tes ada di `22_tagihan.sql`/int; petakan, jangan duplikasi).

@@ -88,7 +88,7 @@ select set_eq($$
     and n.nspname in ('app', 'api', 'private', 'jobs', 'audit', 'auth') $$,
   array['app.my_space_ids', 'app.space_roster', 'audit.log',
         'jobs.purge_audit', 'jobs.purge_unfinished_users', 'jobs.purge_voided',
-        'jobs.purge_idempotency',
+        'jobs.purge_idempotency', 'jobs.purge_wa_messages',
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
@@ -340,7 +340,7 @@ select set_eq($$
      union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
-                      'materialize_bills']) f
+                      'materialize_bills', 'purge_wa_messages']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');

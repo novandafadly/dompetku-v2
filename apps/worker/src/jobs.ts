@@ -11,7 +11,8 @@ export type JobName =
   | 'purge_unfinished_users'
   | 'purge_audit'
   | 'purge_voided'
-  | 'materialize_bills';
+  | 'materialize_bills'
+  | 'purge_wa_messages';
 
 export interface JobDef {
   name: JobName;
@@ -76,6 +77,15 @@ export const JOBS: readonly JobDef[] = [
     check: 'jobs',
     kind: 'count',
     sql: 'select jobs.materialize_bills() as n',
+  },
+  {
+    // S10 (K7): retensi pesan WhatsApp 14 hari (di dalam retensi idempotensi 30 hari).
+    name: 'purge_wa_messages',
+    cron: '27 1 * * *',
+    tz: TZ,
+    check: 'jobs',
+    kind: 'count',
+    sql: 'select jobs.purge_wa_messages() as n',
   },
 ];
 
