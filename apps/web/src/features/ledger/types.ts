@@ -191,6 +191,12 @@ export type LedgerErrorCode =
   | 'obligation_double'
   | 'category_in_obligation'
   | 'category_not_root'
+  // S10: anggaran rincian (bingkai S10 "Salinan galat S10").
+  | 'parent_budget_required'
+  | 'sub_exceeds_parent'
+  | 'sub_not_wajib'
+  // S10: ekspor (0127).
+  | 'export_too_large'
   | 'already_posted'
   | 'bill_archived'
   | 'bill_account_kantor'

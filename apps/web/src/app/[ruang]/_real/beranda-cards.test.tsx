@@ -34,6 +34,9 @@ const budget = (over: Partial<BudgetOverviewVM>): BudgetOverviewVM => ({
   pct: 85,
   remaining: 150_000,
   archived: false,
+  parentId: null,
+  subAllocated: null,
+  maxAmount: null,
   ...over,
 });
 

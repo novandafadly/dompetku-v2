@@ -9,7 +9,7 @@
 -- bersama). Persona N, F, Luar (tests.x(), tanpa ruang); kanari KANARI-N-TAGIHAN, KANARI-N-KATEGORI.
 -- ID: B1, B2, B13, T13, T17
 begin;
-select plan(73);
+select plan(71);
 select tests.fixture();
 select tests.clock_at('2026-11-26 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -81,7 +81,7 @@ language sql as $$
       || o.wajib || ':' || o.spent || ':' || coalesce(o.pct::text, '-') || ':' || coalesce(o.remaining::text, '-')
       || ':' || o.archived, ',' order by o.n)
     from api.budget_overview(%L, %L::date) with ordinality
-      as o (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, n)$q$, p_space, p_month))
+      as o (category_id, name, icon, budget, wajib, spent, pct, remaining, archived, parent_id, sub_allocated, max_amount, n)$q$, p_space, p_month))
 $$;
 -- Anggaran tersimpan: nama:amount:wajib, urut nama (dibaca owner).
 create function pg_temp.rows(p_space uuid, p_month text) returns text
@@ -156,10 +156,7 @@ select is(pg_temp.set(tests.n(), :'sh', :'ntrans', '2026-11-01', 1000), 'DK404:c
   'kategori ruang lain (Pribadi N di Bersama) = DK404 category_not_found');
 select is(pg_temp.set(tests.n(), :'sh', gen_random_uuid(), '2026-11-01', 1000), 'DK404:category_not_found:category_id',
   'kategori tidak ada = DK404');
-select is(pg_temp.set(tests.n(), :'sh', :'sayur', '2026-11-01', 1000), 'DK422:category_not_root:',
-  'subkategori = DK422 category_not_root (K5)');
-select is(pg_temp.set(tests.n(), :'sh', :'hobi', '2026-11-01', 1000), 'DK422:category_not_root:',
-  'induk yang sudah dipindah jadi anak = category_not_root, bukan 23503');
+-- Subkategori dan 'induk yang dipindah jadi anak' sah sejak S10 (0125): lihat 27_anggaran_sub.sql.
 select is(pg_temp.set(tests.n(), :'sh', :'arsipkosong', '2026-11-01', 1000), 'DK422:category_archived:',
   'kategori terarsip = DK422 category_archived');
 select is(pg_temp.rows(:'sh', '2026-11-01'), 'Belanja Dapur:1000000:false', 'penolakan tanpa efek');
@@ -255,9 +252,10 @@ select is(pg_temp.prog(tests.n(), :'np', '2026-11-01'),
 select is(pg_temp.over(tests.n(), :'sh', '2026-11-01'),
   'Sewa Rumah:-:false:0:-:-:false,Listrik & Air:-:false:0:-:-:false,Internet:150000:true:0:0:150000:false,'
   || 'Iuran Lingkungan:-:false:0:-:-:false,Belanja Dapur:1000000:false:185000:18:815000:false,'
+  || 'Hobi Rumah:-:false:0:-:-:false,Sayur & Buah:-:false:25000:-:-:false,'
   || 'Makan di Luar:300000:true:310000:103:-10000:false,Bensin & Parkir:200000:false:0:0:200000:false,'
   || 'Arsip Anggaran:10000:false:0:0:10000:true',
-  'overview Nov: induk pengeluaran aktif (tanpa anggaran = NULL), terarsip hanya bila beranggaran; tanpa sub, pemasukan, Hobi Rumah');
+  'overview Nov: induk pengeluaran aktif (tanpa anggaran = NULL), terarsip hanya bila beranggaran; rincian aktif dari induk beranggaran ikut (kandidat Tambah rincian, S10), tanpa pemasukan');
 select is(pg_temp.over(tests.f(), :'sh', '2026-12-01'),
   'Sewa Rumah:-:false:0:-:-:false,Listrik & Air:-:false:0:-:-:false,Internet:-:false:0:-:-:false,'
   || 'Iuran Lingkungan:-:false:0:-:-:false,Belanja Dapur:-:false:0:-:-:false,'

@@ -117,4 +117,14 @@ describe('createLinkLimiter', () => {
       expect(l.allow(`+62822000000${String(i).padStart(2, '0')}`)).toBe(true);
     expect(l.allow('+6283333333333')).toBe(false);
   });
+
+  it('percobaan yang ditolak karena global penuh tidak memakan jatah nomor', () => {
+    const c = clock();
+    const l = createLinkLimiter(c.now);
+    for (let i = 0; i < 30; i++) l.allow(`+62811000000${String(i).padStart(2, '0')}`);
+    for (let i = 0; i < 20; i++) expect(l.allow('+6289999999999')).toBe(false);
+    c.advance(HOUR);
+    for (let i = 0; i < 5; i++) expect(l.allow('+6289999999999')).toBe(true);
+    expect(l.allow('+6289999999999')).toBe(false);
+  });
 });

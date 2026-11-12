@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { normalizeBotNumber } from '@/features/wa/bot-number';
 import { withUser, type Pools } from '../db';
 import { readWaEnv } from './config';
+import { createRateLimiter } from './ratelimit';
 
 /**
  * Tautan nomor WhatsApp milik user yang masuk (spec 4.3, 5.6). Semua kueri lewat `withUser`
@@ -82,9 +83,21 @@ export class WaDisabledError extends Error {
   }
 }
 
+export class WaRateLimitedError extends Error {
+  constructor() {
+    super('wa_rate_limited');
+    this.name = 'WaRateLimitedError';
+  }
+}
+
+/** Kode baru menimpa kode lama: 10 per jam per user (satu proses web, hilang saat restart). */
+export const LINK_CODE_PER_USER_PER_HOUR = 10;
+const codeLimiter = createRateLimiter(LINK_CODE_PER_USER_PER_HOUR, 3_600_000);
+
 export async function createWaLinkCode(ctx: WaCtx): Promise<WaLinkCode> {
   // Tanpa nomor bot kode tidak bisa dipakai: sama dengan mati.
   if (waEnabled()?.botNumber == null) throw new WaDisabledError();
+  if (!codeLimiter.allow(ctx.userId)) throw new WaRateLimitedError();
   const raw = await withUser(ctx.pools.app, ctx.userId, async (client) => {
     const r = await client.query<{ r: unknown }>('select api.wa_create_link_code() as r');
     return r.rows[0]?.r;

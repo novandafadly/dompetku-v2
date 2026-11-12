@@ -74,6 +74,26 @@ export const RENCANA_COPY = {
     'Belum tersalin. Koneksi terputus saat mengirim. Coba lagi tidak akan menyalin dua kali.',
   errCopyServer: 'Belum tersalin. Ada kendala di server. Coba lagi tidak akan menyalin dua kali.',
   errCopyNothing: 'Tidak ada anggaran periode lalu yang bisa disalin.',
+  /** S10: anggaran rincian (bingkai `docs/design/s10-bingkai.md`, "Salinan final S10"). */
+  addSub: 'Tambah rincian',
+  addSubFor: (induk: string) => `Tambah rincian untuk ${induk}`,
+  subListLabel: (induk: string) => `Rincian ${induk}`,
+  subSummary: (n: number) => `Dibagi ke ${String(n)} rincian`,
+  subSheetTitle: (ruang: Ruang) => `Anggaran rincian · ${RUANG_NAME[ruang]}`,
+  subTitle: 'Anggaran rincian',
+  parent: 'Induk',
+  maxHint: 'Maksimal',
+  parentBudget: 'Anggaran',
+  parentFull: 'Anggaran induk sudah habis dibagi ke rincian lain.',
+  subAllocatedHint: (amountText: string) =>
+    `Dibagi ke rincian ${amountText}; anggaran induk tidak bisa lebih kecil dari itu.`,
+  removeBodySub: (n: number) =>
+    `Anggaran ${String(n)} rinciannya ikut dihapus. Pengeluaran tetap tercatat.`,
+  errSubExceeds:
+    'Rincian melebihi anggaran induk. Kecilkan nominal atau naikkan anggaran induk lebih dulu.',
+  errParentLower: 'Anggaran induk tidak boleh lebih kecil dari jumlah anggaran rinciannya.',
+  errParentRequired: (induk: string) => `Atur anggaran ${induk} dulu, baru rinciannya.`,
+  errSubNotWajib: 'Anggaran rincian tidak bisa diwajibkan. Wajib hanya untuk anggaran induk.',
 } as const;
 
 /** Anggaran bentrok dengan tagihan aktif di kategori yang sama (arah: sakelar Wajib). */
@@ -123,6 +143,22 @@ export function budgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewV
 /** Kategori induk aktif tanpa anggaran (urutan SQL). */
 export function unbudgetedRows(rows: readonly BudgetOverviewVM[]): BudgetOverviewVM[] {
   return rows.filter((r) => r.budget === null && !r.archived);
+}
+
+/** Rincian beranggaran milik satu induk (urutan SQL). */
+export function budgetedSubs(
+  subs: readonly BudgetOverviewVM[],
+  parentId: string,
+): BudgetOverviewVM[] {
+  return subs.filter((r) => r.parentId === parentId && r.budget !== null);
+}
+
+/** Rincian aktif tanpa anggaran milik satu induk: kandidat `Tambah rincian`. */
+export function candidateSubs(
+  subs: readonly BudgetOverviewVM[],
+  parentId: string,
+): BudgetOverviewVM[] {
+  return subs.filter((r) => r.parentId === parentId && r.budget === null && !r.archived);
 }
 
 /**

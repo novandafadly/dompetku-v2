@@ -59,3 +59,21 @@ Daftar lengkap keputusan yang diambil atas nama pemilik saat eksekusi plan M0a (
 - one fix wave covers findings 1,2,4,5,6,7,8 + ADR 0003 rewrite to Shareable Link option (owner confirms plan) — cheap, all in-scope — none
 - Owner 2026-10-31: keep violet Bersama on dark + uppercase "RUANG PRIBADI"/SpaceTag; keep handoff copy; drop M2 150 kB target (stay 162 kB); visual direction approved
 - A4 has no account form, so account creation moves to new `/buat-akun` (Terima undangan → Buat akun → Amankan): email comes from the invite token (read-only, not shown as a value in the prototype to avoid inventing an address), new password min 12 chars, then passkey + TOTP + recovery codes — matches spec §auth (email+password account, strong factor, recovery codes) and keeps A4 a pure decision screen — 12 may change when Better Auth policy is set in BSD/M0b
+
+## Keputusan agen atas nama pemilik selama S10 (2026-11-11 s.d. 2026-11-12)
+
+Pemilik menjawab "gas" pada plan S10 dan bingkai; default K1–K7 dipakai. Format: keputusan — alasan — risiko bila salah.
+
+- **K1** rincian di dalam anggaran induk (`Σ rincian ≤ induk`; hanya induk dihitung di aman dipakai dan Laporan) — BSD §15.1, tidak dobel — pemilik ingin rincian berdiri sendiri (ubah trigger dan `budget_progress`).
+- **K2** hapus anggaran induk menghapus rinciannya (konfirmasi menyebut jumlah) — alternatif menolak memaksa hapus satu-satu — hilang rincian tak sengaja (dialog fokus awal Kembali).
+- **K3** rincian tidak wajib — XOR dengan tagihan dinilai di induk — rincian wajib tidak tersedia.
+- **K4** penyesuaian salin = persen bulat −90..100, dibulatkan ke Rp1.000 (induk ke atas, rincian ke bawah) — menjaga `Σ rincian ≤ induk` — induk kecil bisa naik (Rp500 −10% → Rp1.000).
+- **K5** ekspor = satu baris per KAKI entri (bukan per entri) — transfer berbiaya berkelas ganda tidak bisa dicocokkan bila digabung — baris lebih banyak dari jumlah transaksi.
+- **K6** tombol Ekspor di Laporan (periode dan dasar terbawa); Menu → Export tetap "Segera" — tidak ada rute Pengaturan — pemilik mencari di Menu.
+- **K7** retensi `wa_messages` 14 hari, SEMUA status (juga `pending`); job 01:27 WIB (di jendela 01:00–01:30) — di bawah idempotensi 30 hari; ditambah batas umur pesan 7 hari di webhook — tanpa batas umur, kirim ulang sesudah hari ke-30 tercatat ganda — bila `data.timestamp` tak ada di payload OpenWA, batas itu mati (fail-open, log `no_timestamp`).
+- **Pemisah CSV koma** — standar, Sheets — Excel id-ID membuka satu kolom (ganti `;` bila diminta).
+- **Batas laju ekspor 10/jam/user di memori** — satu VM web — reset saat restart.
+- **`export_max_rows` di `app.settings`** (bukan konstanta) — tes tidak perlu menyisipkan 50.000 baris (3,5 menit) — admin bisa menaikkan batas.
+- **Audit `export` meta `{count, via}`** — kunci meta audit tertutup (0006) — rentang tidak tercatat.
+- **Review bulanan hanya dasar gajian; rincian selalu terbuka; ringkasan memakai kartu Laporan** — anggaran berlabel periode gajian; angka sama dengan Laporan — pemilik ingin kartu khusus.
+- **Worker `process.exit(1)` pada `unhandledRejection`** — gagal keras, container restart — loop restart bila rejection deterministik (runbook).

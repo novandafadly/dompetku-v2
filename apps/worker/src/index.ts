@@ -42,8 +42,11 @@ async function main(argv: readonly string[]): Promise<number> {
   return -1;
 }
 
+// Gagal keras: pekerjaan yang janjinya ditolak diam-diam bisa meninggalkan job_runs 'running' dan
+// pesan tak terkirim. Keluar membuat container restart dan check Healthchecks melewatkan ping.
 process.on('unhandledRejection', (err) => {
   log('unhandled_rejection', { code: errorCode(err) });
+  process.exit(1);
 });
 
 main(process.argv.slice(2)).then(

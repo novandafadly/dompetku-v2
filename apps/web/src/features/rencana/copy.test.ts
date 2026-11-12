@@ -20,6 +20,9 @@ const row = (over: Partial<BudgetOverviewVM> & Pick<BudgetOverviewVM, 'categoryI
     pct: null,
     remaining: null,
     archived: false,
+    parentId: null,
+    subAllocated: null,
+    maxAmount: null,
     ...over,
   }) satisfies BudgetOverviewVM;
 

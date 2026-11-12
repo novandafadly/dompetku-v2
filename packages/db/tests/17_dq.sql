@@ -8,7 +8,7 @@
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
 -- ID: S7, T18
 begin;
-select plan(50);
+select plan(54);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -26,7 +26,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12', 'DQ13']) c
+                    'DQ12', 'DQ13', 'DQ14']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -61,8 +61,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error',
-  'tepat 11 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error',
+  'tepat 12 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -238,6 +238,22 @@ select tests.raw_exec(format($$update app.bills set created_at = '2026-02-01 10:
 select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
   values (%L, %L, '2026-02-01', 1, true, %L)$$, :'sh', :'k_listrik', tests.n()));
 select is(pg_temp.dq(), pg_temp.expect(), 'DQ13: bentrok di label lampau tidak dihitung (hanya label berjalan ke depan)');
+rollback to savepoint s;
+
+-- ===== DQ14: pohon anggaran (S10, 0126): rincian tanpa induk, atau Σ rincian > induk =====
+select tests.owner_val(null, format($q$select id from app.categories where space_id = %L and name = 'Belanja Dapur'$q$, :'sh')) as k_dapur,
+       tests.owner_val(null, format($q$select id from app.categories where space_id = %L and name = 'Sayur & Buah'$q$, :'sh')) as k_sayur \gset
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, updated_by)
+  values (%L, %L, '2026-03-01', 1000, %L)$$, :'sh', :'k_sayur', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect('DQ14=1'), 'DQ14: rincian tanpa anggaran induk di label itu');
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, updated_by)
+  values (%L, %L, '2026-03-01', 1000, %L)$$, :'sh', :'k_dapur', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ14: Σ rincian = induk = nol temuan');
+select tests.raw_exec(format($$update app.budgets set amount = 999 where category_id = %L$$, :'k_dapur'));
+select is(pg_temp.dq(), pg_temp.expect('DQ14=1'), 'DQ14: induk diturunkan di bawah Σ rincian (trigger dilewati)');
+select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, updated_by)
+  values (%L, %L, '2026-04-01', 1000, %L)$$, :'sh', :'k_sayur', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect('DQ14=2'), 'DQ14: dihitung per (induk, label)');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

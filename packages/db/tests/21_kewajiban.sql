@@ -121,7 +121,7 @@ select is(tests.owner_val(null, $$select string_agg(i.indexrelid::regclass::text
   'app.bill_occurrences_bill_id_due_on_key,app.bill_occurrences_pkey,app.bill_occurrences_space_id_bill_id_idx,'
   'app.bill_occurrences_space_id_due_on_idx,app.bill_occurrences_space_id_entry_id_idx,app.bills_created_by_idx,'
   'app.bills_pkey,app.bills_space_id_account_id_idx,app.bills_space_id_category_id_category_type_idx,'
-  'app.bills_space_id_id_key,app.budgets_pkey,app.budgets_space_id_category_id_category_type_category_is_root_idx,'
+  'app.bills_space_id_id_key,app.budgets_pkey,app.budgets_space_id_category_id_category_type_idx,'
   'app.budgets_space_id_month_idx,app.budgets_updated_by_idx',
   'indeks BSD §6 (setiap FK berindeks; tes katalog #7 menjaga kelengkapan)');
 
@@ -161,7 +161,7 @@ from (values
   ('berakhir sebelum mulai', pg_temp.bill_sql(:'sh', :'internet', '2026-11-01', '2026-10-31'))
 ) v (t, q);
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'sayur', '2026-11-01', false)),
-  '23503', null, 'anggaran pada subkategori ditolak FK is_root (BSD §13 #27)');
+  'DK422', 'parent_budget_required', 'anggaran pada subkategori tanpa anggaran induk ditolak (S10, menggantikan FK is_root BSD §13 #27)');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'kontrib', '2026-11-01', false)),
   '23503', null, 'anggaran pada kategori pemasukan ditolak FK');
 select throws_ok(format($$select tests.api_exec(%L, %L)$$, tests.n(), pg_temp.budget_sql(:'sh', :'nlangganan', '2026-11-01', false)),

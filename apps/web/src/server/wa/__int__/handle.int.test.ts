@@ -106,6 +106,7 @@ function msg(text: string | null, over: Partial<InboundMessage> = {}): InboundMe
     messageId: `true_${N_FROM}_${randomUUID()}`,
     from: N_FROM,
     senderPhone: null,
+    sentAt: null,
     chatType: 'private',
     fromMe: false,
     text,
@@ -355,6 +356,37 @@ describe('handleInbound (Postgres sungguhan)', () => {
     expect(await entries()).toHaveLength(1);
     expect(r.sent).toHaveLength(1);
     expect(r.log).toHaveBeenCalledWith('duplicate');
+  });
+
+  it('pesan lebih tua dari 7 hari (data.timestamp) diabaikan: tanpa entri, tanpa balasan, tanpa baris dedupe', async () => {
+    const r = rig();
+    const now = 1_700_000_000; // jam rig (detik)
+    await handleInbound(r.deps, msg('25rb makan siang', { sentAt: now - 8 * 86_400 }));
+    expect(await entries()).toHaveLength(0);
+    expect(r.sent).toEqual([]);
+    expect(r.log).toHaveBeenCalledWith('stale');
+    const { rows } = await h.admin.query<{ n: number }>(
+      'select count(*)::int as n from app.wa_messages',
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it('pesan 6 hari atau tanpa timestamp tetap diproses', async () => {
+    const r = rig();
+    await handleInbound(r.deps, msg('25rb makan siang', { sentAt: 1_700_000_000 - 6 * 86_400 }));
+    await handleInbound(r.deps, msg('30rb makan siang', { sentAt: null }));
+    expect(await entries()).toHaveLength(2);
+  });
+
+  it('kirim ulang sesudah baris dedupe dipurge (hari 15) → idempotensi ledger: tetap satu entri [retensi WA]', async () => {
+    const r = rig();
+    const m = msg('25rb makan siang', { sentAt: 1_700_000_000 });
+    await handleInbound(r.deps, m);
+    await h.admin.query("update app.wa_messages set created_at = now() - interval '15 days'");
+    const purged = await h.admin.query<{ n: number }>('select jobs.purge_wa_messages() as n');
+    expect(purged.rows[0]?.n).toBe(1);
+    await handleInbound(r.deps, m);
+    expect(await entries()).toHaveLength(1);
   });
 
   it('pesan identik dua kali bersamaan (Promise.all) → tepat satu entri dan satu balasan', async () => {

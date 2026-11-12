@@ -6,6 +6,7 @@ import { createContext, lazy, Suspense, useContext, useState, type ReactNode } f
 import { Button } from '@/components/ui/button';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { PlusIcon } from '@/components/ui/icons/plus';
+import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { newClientId } from '@/features/ledger/client-id';
@@ -60,6 +61,8 @@ interface HostApi {
   ruang: Ruang;
   month: string;
   openBudget: (categoryId: string | null) => void;
+  /** Sheet rincian baru untuk satu induk (S10). */
+  openSub: (parentId: string) => void;
   openBill: (billId: string | null, occurrenceId?: string) => void;
   openPay: (occurrenceId: string) => void;
   unskip: (occurrenceId: string, name: string) => void;
@@ -169,6 +172,8 @@ export interface RencanaHostProps {
   /** `23 Okt – 24 Nov`. */
   range: string;
   rows: BudgetOverviewVM[];
+  /** Rincian (S10): beranggaran, atau aktif dari induk beranggaran. */
+  subRows?: BudgetOverviewVM[] | undefined;
   previous: Record<string, Rupiah>;
   billNameByRoot: Record<string, string>;
   /** Data Tagihan; tanpa ini pemicu Tagihan tidak berbuat apa-apa. */
@@ -181,6 +186,7 @@ export function RencanaHost({
   month,
   range,
   rows,
+  subRows = [],
   previous,
   billNameByRoot,
   bill,
@@ -198,6 +204,7 @@ export function RencanaHost({
   const payMounted = useOpenedOnce(payOpen);
   // Kategori sheet bertahan sesudah ditutup (animasi tutup memakai isi yang sama).
   const [target, setTarget] = useState<string | null>(null);
+  const [subParent, setSubParent] = useState<string | null>(null);
   const [conflict, setConflict] = useState(0);
   const mounted = useOpenedOnce(open);
   const api: HostApi = {
@@ -205,6 +212,12 @@ export function RencanaHost({
     month,
     openBudget: (categoryId) => {
       setTarget(categoryId);
+      setSubParent(null);
+      setOpen(true);
+    },
+    openSub: (parentId) => {
+      setTarget(null);
+      setSubParent(parentId);
       setOpen(true);
     },
     openBill: (billId, occurrenceId) => {
@@ -244,6 +257,8 @@ export function RencanaHost({
             onOpenChange={setOpen}
             ruang={ruang}
             rows={rows}
+            subRows={subRows}
+            parentId={subParent}
             categoryId={target}
             range={range}
             previous={previous}
@@ -362,6 +377,34 @@ export function BudgetRowTrigger({
   );
 }
 
+/** `Tambah rincian` di bawah daftar rincian satu induk: sheet rincian baru, induk terkunci. */
+export function AddSubButton({
+  parentId,
+  parentName,
+  className,
+}: {
+  parentId: string;
+  parentName: string;
+  className: string;
+}) {
+  const { openSub } = useHost();
+  return (
+    <button
+      type="button"
+      className={`${className} ${focusRing}`}
+      aria-label={RENCANA_COPY.addSubFor(parentName)}
+      onPointerEnter={preloadSheet}
+      onFocus={preloadSheet}
+      onClick={() => {
+        openSub(parentId);
+      }}
+    >
+      <PlusIcon size={16} weight="bold" />
+      {RENCANA_COPY.addSub}
+    </button>
+  );
+}
+
 /** `Atur anggaran` / `Atur anggaran pertama`: sheet kosong. */
 export function SetBudgetButton({
   label,
@@ -407,6 +450,7 @@ export function CopyBudgetsButton() {
         skippedExisting: number;
         skippedConflict: number;
         skippedArchived: number;
+        skippedParent: number;
       }>;
       try {
         res = await copyBudgetsAction(ruang, { toMonth: month });
@@ -421,7 +465,7 @@ export function CopyBudgetsButton() {
         return;
       }
       const v = res.value;
-      const skipped = v.skippedExisting + v.skippedConflict + v.skippedArchived;
+      const skipped = v.skippedExisting + v.skippedConflict + v.skippedArchived + v.skippedParent;
       setConflict(v.skippedConflict);
       restoreFocus(null);
       toast({

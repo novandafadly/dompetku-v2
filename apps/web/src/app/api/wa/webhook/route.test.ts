@@ -208,6 +208,7 @@ describe('POST /api/wa/webhook', () => {
       fromMe: false,
       text: 'makan siang 25rb',
       senderPhone: null,
+      sentAt: 1762682400,
     });
     expect((deps as { env: WaEnv }).env).toBe(env);
   });

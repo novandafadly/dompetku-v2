@@ -86,6 +86,17 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
   });
 
   it.each([
+    ['parent_budget_required'],
+    ['sub_exceeds_parent'],
+    ['sub_not_wajib'],
+    ['export_too_large'],
+  ] as const)('DK422 S10 %s = kode sama, tanpa log', (rule) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK422', rule, 'Rp 485.000 rahasia'))).toEqual({ code: rule });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ['obligation_double'],
     ['category_in_obligation'],
     ['category_not_root'],

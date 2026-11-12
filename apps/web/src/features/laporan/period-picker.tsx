@@ -1,3 +1,4 @@
+import type { Route } from 'next';
 import Link from 'next/link';
 import { CaretLeftIcon } from '@/components/ui/icons/caret-left';
 import { CaretRightIcon } from '@/components/ui/icons/caret-right';
@@ -7,7 +8,7 @@ import { focusRing } from '@/components/ui/styles';
 import type { Ruang } from '@/features/ledger/types';
 import { laporanHref } from './href';
 import { bulanTahunLabel } from './present';
-import type { LaporanPeriodVM } from './types';
+import type { LaporanBasis, LaporanPeriodVM } from './types';
 
 const step = `inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-text hover-pointer:bg-hover active:bg-surface-2 ${focusRing}`;
 const stepOff =
@@ -40,11 +41,20 @@ export function PeriodPicker({
   ruang,
   period,
   query,
+  hrefFor,
+  showBasis = true,
 }: {
   ruang: Ruang;
   period: LaporanPeriodVM;
   query: string;
+  /** Alamat halaman lain (Review S10) untuk periode/dasar; bawaan = Laporan. */
+  hrefFor?: ((opts: { periode: string | null; basis: LaporanBasis }) => Route) | undefined;
+  /** Review hanya dasar gajian: pilihan dasar disembunyikan. */
+  showBasis?: boolean;
 }) {
+  const href =
+    hrefFor ??
+    ((o: { periode: string | null; basis: LaporanBasis }) => laporanHref(ruang, query, o));
   const { title, range } = splitLabel(period.label);
   const { basis } = period;
   const viewed = period.labelMonth.slice(0, 7);
@@ -60,7 +70,7 @@ export function PeriodPicker({
           </span>
         ) : (
           <Link
-            href={laporanHref(ruang, query, { periode: period.prev, basis })}
+            href={href({ periode: period.prev, basis })}
             aria-label={`Periode sebelumnya: ${bulanTahunLabel(period.prev)}`}
             className={step}
           >
@@ -77,7 +87,7 @@ export function PeriodPicker({
           </span>
         ) : (
           <Link
-            href={laporanHref(ruang, query, { periode: period.next, basis })}
+            href={href({ periode: period.next, basis })}
             aria-label={`Periode berikutnya: ${bulanTahunLabel(period.next)}`}
             className={step}
           >
@@ -85,23 +95,25 @@ export function PeriodPicker({
           </Link>
         )}
       </nav>
-      <nav aria-label="Dasar periode" className={`${segmentTrack} w-full`}>
-        {(
-          [
-            ['gajian', 'Periode gajian'],
-            ['kalender', 'Bulan kalender'],
-          ] as const
-        ).map(([b, label]) => (
-          <Link
-            key={b}
-            href={laporanHref(ruang, query, { periode: keep, basis: b })}
-            aria-current={b === basis ? 'page' : undefined}
-            className={segmentItem(b === basis)}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      {showBasis ? (
+        <nav aria-label="Dasar periode" className={`${segmentTrack} w-full`}>
+          {(
+            [
+              ['gajian', 'Periode gajian'],
+              ['kalender', 'Bulan kalender'],
+            ] as const
+          ).map(([b, label]) => (
+            <Link
+              key={b}
+              href={href({ periode: keep, basis: b })}
+              aria-current={b === basis ? 'page' : undefined}
+              className={segmentItem(b === basis)}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       {holiday ? (
         <p className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-meta font-medium text-text-soft">
           <InfoIcon size={18} className="mt-px shrink-0" />

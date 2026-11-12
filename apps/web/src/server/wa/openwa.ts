@@ -49,6 +49,11 @@ export function createOpenWaTransport(env: WaEnv, fetchImpl: typeof fetch = fetc
         text: d.type === 'text' && typeof d.body === 'string' ? d.body : null,
         // Opt-in (RESOLVE_LID_TO_PHONE=true): digit MSISDN apa adanya; normalisasi E.164 di Task 4.
         senderPhone: typeof d.senderPhone === 'string' && d.senderPhone ? d.senderPhone : null,
+        // UNVERIFIED pada sesi hidup: dokumen dan fixture memuat data.timestamp (detik epoch).
+        sentAt:
+          typeof d.timestamp === 'number' && Number.isFinite(d.timestamp) && d.timestamp > 0
+            ? d.timestamp
+            : null,
       };
     },
 

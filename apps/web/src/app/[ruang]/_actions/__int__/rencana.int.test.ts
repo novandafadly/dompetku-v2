@@ -173,14 +173,26 @@ describe('action Rencana terhadap DB', () => {
     expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12' })).toEqual(nf);
   });
 
-  it('copyBudgetsAction (K13): salin lalu idempoten; subkategori = category_not_root', async () => {
+  it('copyBudgetsAction (K13): salin lalu idempoten; rincian tanpa anggaran induk = parent_budget_required', async () => {
     expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12' })).toEqual({
       ok: true,
-      value: { copied: 3, skippedExisting: 0, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 3,
+        skippedExisting: 0,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12' })).toEqual({
       ok: true,
-      value: { copied: 0, skippedExisting: 3, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 0,
+        skippedExisting: 3,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     const bersama = (await ctxAt(clock.at(TODAY), fx.n, 'bersama')).spaceId;
     expect(
@@ -190,10 +202,58 @@ describe('action Rencana terhadap DB', () => {
         amount: 100_000,
         wajib: false,
       }),
-    ).toEqual({ ok: false, error: { code: 'category_not_root' } });
+    ).toEqual({ ok: false, error: { code: 'parent_budget_required' } });
     expect(
       await a.deleteBudgetAction('pribadi', { categoryId: fx.ids.makan, month: '2026-12' }),
     ).toEqual({ ok: true, value: undefined });
+  });
+
+  it('anggaran rincian (S10): aturan induk, Σ rincian, dan salin dengan penyesuaian persen', async () => {
+    const mk = async (name: string) =>
+      (
+        await h.admin.query<{ id: string }>(
+          `insert into app.categories (space_id, parent_id, type, name, icon)
+           select space_id, id, 'expense', $2, 'Receipt' from app.categories where id = $1
+           returning id`,
+          [fx.ids.kesehatan, name],
+        )
+      ).rows[0]?.id ?? '';
+    const a1 = await mk('Rincian A');
+    const a2 = await mk('Rincian B');
+    const set = (categoryId: string, amount: number) =>
+      a.setBudgetAction('pribadi', { categoryId, month: '2026-11', amount, wajib: false });
+    expect(await set(a1, 400_000)).toEqual({ ok: true, value: undefined });
+    const over = await set(a2, 100_001);
+    expect(over).toEqual({ ok: false, error: { code: 'sub_exceeds_parent' } });
+    expect(memuatNominal(over, 100_001)).toBe(false);
+    expect(
+      await a.setBudgetAction('pribadi', {
+        categoryId: a1,
+        month: '2026-11',
+        amount: 1_000,
+        wajib: true,
+      }),
+    ).toEqual({ ok: false, error: { code: 'sub_not_wajib' } });
+    expect(await a.copyBudgetsAction('pribadi', { toMonth: '2026-12', adjustPct: 10 })).toEqual({
+      ok: true,
+      value: {
+        copied: 4,
+        skippedExisting: 0,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
+    });
+    const { rows } = await h.admin.query<{ category_id: string; amount: string }>(
+      `select category_id, amount::text from app.budgets
+        where month = '2026-12-01' and category_id = any($1::uuid[])`,
+      [[fx.ids.kesehatan, a1]],
+    );
+    const amt = Object.fromEntries(rows.map((r) => [r.category_id, r.amount]));
+    expect(amt).toEqual({ [fx.ids.kesehatan]: '550000', [a1]: '440000' });
+    expect(
+      await a.copyBudgetsAction('pribadi', { toMonth: '2026-12', adjustPct: 101 }),
+    ).toMatchObject({ ok: false });
   });
 
   it('ubah dan arsip tagihan; tagihan terarsip = bill_archived; dompet Kantor = bill_account_kantor', async () => {

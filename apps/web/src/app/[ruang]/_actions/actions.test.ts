@@ -357,6 +357,7 @@ beforeEach(() => {
     skippedExisting: 0,
     skippedConflict: 1,
     skippedArchived: 0,
+    skippedParent: 0,
   });
   m.createBill.mockResolvedValue({ billId: A });
   m.updateBill.mockResolvedValue({ billId: A });
@@ -682,11 +683,17 @@ describe('Rencana (S9)', () => {
   it('sukses: hasil wrapper diteruskan, refresh sekali', async () => {
     await expect(call('copyBudgetsAction')).resolves.toEqual({
       ok: true,
-      value: { copied: 2, skippedExisting: 0, skippedConflict: 1, skippedArchived: 0 },
+      value: {
+        copied: 2,
+        skippedExisting: 0,
+        skippedConflict: 1,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     expect(m.copyBudgets).toHaveBeenCalledWith(
       { pools: POOLS, userId: USER_ID, spaceId: SPACE_ID },
-      { toMonth: '2026-11' },
+      { toMonth: '2026-11', adjustPct: 0 },
     );
     expect(m.refresh).toHaveBeenCalledTimes(1);
     await call('unskipBillAction');

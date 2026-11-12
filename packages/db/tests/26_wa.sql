@@ -3,7 +3,7 @@
 -- user (DEFINER sempit, EXECUTE hanya web), dedupe pesan, batal dalam 10 menit, dompet bawaan,
 -- RLS antar user, event audit sistem wa_linked/wa_unlinked. Jam dipatok 2026-03-20 10:00 WIB.
 begin;
-select plan(131);
+select plan(141);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -385,6 +385,53 @@ select tests.owner_exec(null, $$update app.wa_messages set created_at = app.now(
 select is(tests.web_val(tests.n(), format($$select api.wa_claim_message('done-' || %L)::text$$, st)), 'false',
   'pesan selesai (' || st || ') yang lama -> false')
 from unnest(array['recorded', 'rejected', 'cancelled', 'ignored']) st;
+
+-- ===== 0124: entri harus milik pemanggil; created_at tidak bisa dimajukan web =====
+select tests.account(tests.n(), :'sh', 'BCA bersama', 'operasional', 100000) as bsh \gset
+select tests.web_val(tests.n(), format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 15000) ->> 'entry_id'$$,
+  :'sh', :'bsh')) as esh \gset
+select tests.web_exec(tests.f(), $$select api.wa_claim_message('fx1')$$);
+select throws_ok(format($$select tests.web_exec(%L, %L)$$, tests.f(), format(
+    $q$select api.wa_finish_message('fx1', 'recorded', %L)$q$, :'esh')),
+  'DK404', 'entry_not_found', 'F tidak bisa menempelkan entri N (terlihat di Bersama) ke pesannya');
+select tests.web_exec(tests.n(), $$select api.wa_claim_message('fx2')$$);
+select tests.web_exec(tests.n(), format($$select api.wa_finish_message('fx2', 'recorded', %L)$$, :'esh'));
+select is(tests.owner_val(null, $$select status from app.wa_messages where message_id = 'fx2'$$), 'recorded',
+  'N tetap bisa menyelesaikan pesan dengan entri buatannya sendiri di Bersama');
+select tests.web_exec(tests.n(), format(
+  $q$insert into app.wa_messages (message_id, user_id, status, created_at)
+     values ('fx3', %L, 'pending', app.now() + interval '1 year')$q$, tests.n()));
+select is(tests.owner_val(null, $$select (created_at = app.now())::text from app.wa_messages where message_id = 'fx3'$$),
+  'true', 'web tidak bisa mengisi created_at di masa depan saat INSERT');
+select tests.web_exec(tests.n(), $$update app.wa_messages set created_at = app.now() + interval '1 year'
+  where message_id = 'fx3'$$);
+select is(tests.owner_val(null, $$select (created_at = app.now())::text from app.wa_messages where message_id = 'fx3'$$),
+  'true', 'web tidak bisa memajukan created_at saat UPDATE');
+select tests.owner_exec(null, $$update app.wa_messages set created_at = app.now() - interval '2 days'
+  where message_id = 'fx3'$$);
+select tests.web_exec(tests.n(), $$update app.wa_messages set status = 'ignored' where message_id = 'fx3'$$);
+select is(tests.owner_val(null, $$select (created_at = app.now() - interval '2 days')::text from app.wa_messages
+  where message_id = 'fx3'$$), 'true', 'UPDATE status tidak mengubah created_at');
+
+-- ===== 0128: retensi pesan (jobs.purge_wa_messages, 14 hari) =====
+select is((select p.prosecdef || ' ' || p.proowner::regrole || ' ' || array_to_string(p.proconfig, ',')
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'jobs' and p.proname = 'purge_wa_messages'),
+  'true dompetku_owner search_path=""', 'purge_wa_messages DEFINER milik owner, search_path kosong');
+select throws_ok($$select tests.web_val(tests.n(), 'select jobs.purge_wa_messages()')$$, '42501', null,
+  'web tidak bisa menjalankan purge_wa_messages (hanya worker)');
+select tests.owner_exec(null, format($$insert into app.wa_messages (message_id, user_id, status, created_at) values
+  ('ret-13d', %1$L, 'rejected', app.now() - interval '13 days'),
+  ('ret-14d', %1$L, 'rejected', app.now() - interval '14 days'),
+  ('ret-15d', %1$L, 'rejected', app.now() - interval '15 days'),
+  ('ret-15d-pending', %1$L, 'pending', app.now() - interval '15 days'),
+  ('ret-400d', %2$L, 'ignored', app.now() - interval '400 days'),
+  ('ret-baru', %2$L, 'cancelled', app.now())$$, tests.n(), tests.f()));
+select is(tests.worker_val(null, 'select jobs.purge_wa_messages()'), '3',
+  'menghapus > 14 hari apa pun statusnya (15 hari, 15 hari pending, 400 hari) dan mengembalikan jumlahnya');
+select is(tests.owner_val(null, $$select string_agg(message_id, ',' order by message_id) from app.wa_messages where message_id like 'ret-%'$$),
+  'ret-13d,ret-14d,ret-baru', 'tepat 14 hari dan yang lebih baru tetap (batas eksklusif)');
+select is(tests.worker_val(null, 'select jobs.purge_wa_messages()'), '0', 'dijalankan ulang = 0 (idempoten)');
 
 -- ===== Audit: event sistem tidak bisa dipalsukan; tanpa nomor di payload =====
 select throws_ok(format($$select tests.%s_exec(%L, %L)$$, r, tests.n(), format('select audit.log(%L)', e)),

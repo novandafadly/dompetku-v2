@@ -80,20 +80,21 @@ select is_empty($$
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
-  array['wa_claim_message', 'wa_finish_message'],
-  'fungsi api INVOKER hanya baca (STABLE), kecuali tulis pesan WA');
+  array['wa_claim_message', 'wa_finish_message', 'export_entries'],
+  'fungsi api INVOKER hanya baca (STABLE), kecuali tulis pesan WA dan ekspor (audit event export)');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where p.prosecdef and p.proowner = 'dompetku_owner'::regrole
     and n.nspname in ('app', 'api', 'private', 'jobs', 'audit', 'auth') $$,
   array['app.my_space_ids', 'app.space_roster', 'audit.log',
         'jobs.purge_audit', 'jobs.purge_unfinished_users', 'jobs.purge_voided',
-        'jobs.purge_idempotency',
+        'jobs.purge_idempotency', 'jobs.purge_wa_messages',
         'private.provision_user', 'private.tg_space_member_guard', 'private.tg_user_admission',
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
-        'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA');
+        'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
+        'private.tg_budget_tree', 'private.tg_budget_cascade'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -320,7 +321,8 @@ select set_eq($$
                       'member_contributions', 'pay_period', 'bill_list', 'bills_due',
                       'budget_progress', 'budget_overview', 'spend_pace', 'category_summary',
                       'period_trend', 'excluded_summary', 'wa_default_account',
-                      'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message']) f
+                      'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
+                      'export_entries']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -338,7 +340,7 @@ select set_eq($$
      union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
-                      'materialize_bills']) f
+                      'materialize_bills', 'purge_wa_messages']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');

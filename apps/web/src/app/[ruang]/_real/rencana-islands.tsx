@@ -12,6 +12,7 @@ const load = () => import('./rencana-client');
 const HostLazy = lazy(() => load().then((m) => ({ default: m.RencanaHost })));
 const RowLazy = lazy(() => load().then((m) => ({ default: m.BudgetRowTrigger })));
 const SetLazy = lazy(() => load().then((m) => ({ default: m.SetBudgetButton })));
+const AddSubLazy = lazy(() => load().then((m) => ({ default: m.AddSubButton })));
 const CopyLazy = lazy(() => load().then((m) => ({ default: m.CopyBudgetsButton })));
 const NoteLazy = lazy(() => load().then((m) => ({ default: m.CopyConflictNote })));
 const BillBodyLazy = lazy(() => load().then((m) => ({ default: m.BillBodyTrigger })));
@@ -39,6 +40,14 @@ export function SetBudgetIsland(props: ComponentProps<typeof SetLazy>) {
   return (
     <Suspense fallback={null}>
       <SetLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function AddSubIsland(props: ComponentProps<typeof AddSubLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <AddSubLazy {...props} />
     </Suspense>
   );
 }

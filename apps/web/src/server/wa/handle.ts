@@ -99,6 +99,8 @@ export const REPLY = {
 
 export type WaLogEvent =
   | 'ignored'
+  | 'stale'
+  | 'no_timestamp'
   | 'no_phone'
   | 'rate_limited'
   | 'unlinked'
@@ -132,7 +134,16 @@ export interface WaDeps {
   hintLimiter: RateLimiter;
   /** Bawaan: `console.warn('[wa] …')`. */
   log?: WaLog;
+  /** Jam (ms) untuk batas umur pesan; bawaan `Date.now`. */
+  now?: () => number;
 }
+
+/**
+ * Pesan WhatsApp lebih tua dari ini (menurut data.timestamp yang ikut ditandatangani) diabaikan.
+ * Harus di bawah retensi `wa_messages` (14 hari, `jobs.purge_wa_messages`) dan idempotensi ledger
+ * (30 hari): dedupe pesan yang sudah dihapus hanya aman bila pesan setua itu tidak lagi diproses.
+ */
+export const MAX_MESSAGE_AGE_SECONDS = 7 * 24 * 3600;
 
 /** Deps untuk satu proses web (batas laju dalam memori). `now` hanya untuk tes. */
 export function createWaDeps(
@@ -148,6 +159,7 @@ export function createWaDeps(
     limiter: createRateLimiter(env.ratePerMin, MINUTE, now),
     linkLimiter: createLinkLimiter(now),
     hintLimiter: createRateLimiter(1, HOUR, now),
+    now,
   };
 }
 
@@ -596,6 +608,13 @@ async function dispatch(r: Run, userId: string, parsed: ParseResult): Promise<vo
 async function run(deps: WaDeps, log: WaLog, msg: InboundMessage): Promise<void> {
   if (msg.chatType !== 'private' || msg.fromMe || msg.text === null) {
     log('ignored');
+    return;
+  }
+  // shortcut: tanpa data.timestamp (belum terbukti ada pada sesi hidup) pesan tetap diproses; verifikasi
+  // saat pairing (runbook-wa). Dengan timestamp, pesan lama (kirim ulang/sinkron riwayat) tidak diproses.
+  if (msg.sentAt === null) log('no_timestamp');
+  else if ((deps.now ?? Date.now)() / 1000 - msg.sentAt > MAX_MESSAGE_AGE_SECONDS) {
+    log('stale');
     return;
   }
   const phone = toE164(msg.senderPhone ?? msg.from);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BudgetOverviewVM } from '@/features/rencana/types';
 import {
+  AddSubButton,
   BudgetRowTrigger,
   CopyBudgetsButton,
   CopyConflictNote,
@@ -51,6 +52,9 @@ const row = (over: Partial<BudgetOverviewVM> & Pick<BudgetOverviewVM, 'categoryI
     pct: null,
     remaining: null,
     archived: false,
+    parentId: null,
+    subAllocated: null,
+    maxAmount: null,
     ...over,
   }) satisfies BudgetOverviewVM;
 
@@ -214,7 +218,13 @@ describe('catatan bentrok (M7)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 1, skippedExisting: 0, skippedConflict: 2, skippedArchived: 0 },
+      value: {
+        copied: 1,
+        skippedExisting: 0,
+        skippedConflict: 2,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     setup();
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -233,7 +243,13 @@ describe('CopyBudgetsButton (K13)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 3, skippedExisting: 0, skippedConflict: 1, skippedArchived: 1 },
+      value: {
+        copied: 3,
+        skippedExisting: 0,
+        skippedConflict: 1,
+        skippedArchived: 1,
+        skippedParent: 0,
+      },
     });
     setup();
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -254,7 +270,13 @@ describe('CopyBudgetsButton (K13)', () => {
     const user = userEvent.setup();
     actions.copyBudgetsAction.mockResolvedValueOnce({
       ok: true,
-      value: { copied: 0, skippedExisting: 2, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 0,
+        skippedExisting: 2,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     setup('bersama');
     await user.click(screen.getByRole('button', { name: 'Salin anggaran periode lalu' }));
@@ -299,7 +321,13 @@ describe('CopyBudgetsButton (K13)', () => {
     expect(actions.copyBudgetsAction).toHaveBeenCalledTimes(1);
     resolve({
       ok: true,
-      value: { copied: 1, skippedExisting: 0, skippedConflict: 0, skippedArchived: 0 },
+      value: {
+        copied: 1,
+        skippedExisting: 0,
+        skippedConflict: 0,
+        skippedArchived: 0,
+        skippedParent: 0,
+      },
     });
     await waitFor(() => {
       expect(toastSpy).toHaveBeenCalled();
@@ -805,6 +833,54 @@ describe('RencanaHost: Tagihan', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Arsipkan tagihan' }));
     await waitFor(() => {
       expect(actions.archiveBillAction).toHaveBeenCalledWith('pribadi', 'b1');
+    });
+  });
+});
+
+describe('AddSubButton (S10-SB1): Tambah rincian membuka sheet rincian dengan induk terkunci', () => {
+  it('simpan rincian baru: setBudgetAction membawa kategori rincian, wajib false, bulan label', async () => {
+    const user = userEvent.setup();
+    const induk = row({
+      categoryId: 'k-sewa',
+      name: 'Sewa Rumah',
+      budget: 2_500_000,
+      pct: 0,
+      remaining: 2_500_000,
+      subAllocated: 0,
+    });
+    const kopi = row({
+      categoryId: 'k-kopi',
+      name: 'Kopi',
+      parentId: 'k-sewa',
+      maxAmount: 2_500_000,
+    });
+    render(
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={[induk]}
+        subRows={[kopi]}
+        previous={{}}
+        billNameByRoot={{}}
+      >
+        <AddSubButton parentId="k-sewa" parentName="Sewa Rumah" className="flex" />
+      </RencanaHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Tambah rincian untuk Sewa Rumah' }));
+    expect(
+      await screen.findByRole('dialog', { name: /^Anggaran rincian\s*Pribadi$/ }),
+    ).toBeTruthy();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-kopi');
+    await user.type(screen.getByRole('textbox', { name: 'Anggaran periode ini' }), '100000');
+    await user.click(screen.getByRole('button', { name: 'Simpan anggaran' }));
+    await waitFor(() => {
+      expect(actions.setBudgetAction).toHaveBeenCalledWith('pribadi', {
+        categoryId: 'k-kopi',
+        amount: 100_000,
+        wajib: false,
+        month: '2026-11',
+      });
     });
   });
 });
