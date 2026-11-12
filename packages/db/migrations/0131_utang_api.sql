@@ -3,7 +3,7 @@
 -- piutang dan kontak, penutupan jalur generik untuk entri utang, DQ05, "aman dipakai" tanpa pinjaman.
 -- Expand-only: satu kolom baru (default false) + CHECK di app.entries, fungsi baru, enam fungsi diganti
 -- utuh (create or replace, tanda tangan dan kolom hasil sama): private.set_void_state, api.purge_entry,
--- api.trash_list, jobs.purge_voided, api.safe_to_spend, private.dq_run.
+-- api.trash_list, jobs.purge_voided, private.dq_run.
 --
 -- - app.entries.voided_with_debt: true hanya pada entri yang dibatalkan api.void_debt (CHECK: batal dan
 --   kind utang). restore_debt memulihkan tepat entri ini (cicilan yang dibatalkan sendiri sebelumnya
@@ -28,7 +28,8 @@
 -- - api.pay_debt (T7, K7): payment_exceeds (DK422, nol efek; termasuk utang lunas), payment_before_opened,
 --   debt_deleted, debt_account_kantor, saldo_negatif, idempoten client_id. Hasil memuat angka dari SQL
 --   (private.debt_numbers): principal, paid, remaining, paid_pct (persen terbayar dibulatkan ke bawah),
---   settled, quick {p25, p50, full} (25%/50% dari SISA, dibulatkan ke bawah ke rupiah penuh).
+--   settled, quick {p25, p50, full} (25%/50% dari SISA, dibulatkan ke bawah ke rupiah penuh; p25/p50
+--   null bila 0).
 -- - api.update_debt_info (K4, T6): kontak, judul, catatan (ganti penuh); tanpa efek ledger.
 -- - api.void_debt / api.restore_debt (K5, T9): void atomik pokok + semua cicilan hidup dan utang;
 --   restore memulihkan entri voided_with_debt, jendela 90 hari (restore_window_closed), saldo_negatif
@@ -36,20 +37,23 @@
 -- - Jalur generik (temuan review S2): private.set_void_state menolak pokok (debt_principal_locked: hanya
 --   lewat Hapus utang), cicilan mengunci utang dulu, debt_deleted bila utang terhapus, pulihkan cicilan
 --   yang membuat Σ melebihi pokok = payment_exceeds. api.purge_entry menolak entri voided_with_debt
---   (debt_deleted). api.trash_list tidak memuat entri voided_with_debt (pemulihan dari segmen Utang;
+--   (debt_deleted). api.trash_list tidak memuat entri utang yang terhapus (pemulihan dari segmen Utang;
 --   UI menautkan cicilan batal lewat app.entries.debt_id, signature trash_list tetap). update_entry dan
 --   move_entry_to_space sudah menolak kind utang (kind_not_editable, kind_not_movable; diuji).
 -- - jobs.purge_voided: entri voided_with_debt tidak dipurge selama utangnya terhapus <= 90 hari (sama
 --   dengan jendela restore_debt); sesudah lintasan entri, utang terhapus > 90 hari tanpa entri tersisa
---   ikut dihapus (catatan/judul tidak tinggal selamanya). Kontak tidak pernah dihapus.
+--   ikut dihapus (catatan/judul tidak tinggal selamanya). Kontak tidak pernah dihapus. Keterbatasan
+--   (dicatat di BSD nanti): hapus baris utang ini tanpa event audit sendiri (event purge_voided hanya
+--   menghitung entri); utang berjalan tanpa cicilan yang terhapus tidak meninggalkan tombstone.
 -- - Baca (INVOKER milik owner, assert_member di awal): api.list_contacts (kontak aktif + Σ sisa dan
 --   jumlah utang aktif per arah), api.list_debts (utang hidup + terhapus <= 90 hari, angka per utang,
 --   total sisa dan jumlah kontak per arah untuk utang hidup bersisa), api.debt_detail (jsonb: rincian,
 --   quick, riwayat pembayaran termasuk yang dibatalkan, void_effects = efek bila dihapus sekarang).
--- - api.safe_to_spend (temuan T1 review independen): saldo operasional dikurangi Σ remaining utang
---   borrowed, mode baru, tidak terhapus, yang pokok hidupnya di dompet operasional. Pinjam tidak
---   menaikkan angka, bayar cicilan tidak menurunkannya, belanja uang pinjaman menurunkannya. lent dan
---   mode berjalan tidak diubah. Kolom hasil sama (kontrak web).
+-- - api.safe_to_spend TIDAK diubah (tetap 0120, kas murni): pinjaman yang masuk ke dompet operasional
+--   menaikkan operasional/total/per_day sebesar kas nyata. Keterbatasan terbuka, keputusan pemilik (lihat
+--   handoff s11); rumus potong-sisa-utang ditolak karena bergantung pada dompet pokok (uang pinjaman yang
+--   dipindah ke Tabungan membuat operasional negatif palsu). Yang dijamin (I6): pokok/cicilan tidak
+--   mengubah Σ pemasukan/pengeluaran, anggaran (budget_wajib_remaining), spend_pace, dan Laporan.
 -- - private.dq_run: + DQ05 (error): utang dengan Σ |main| cicilan hidup > principal (sisa negatif).
 -- - Kode galat baru: DK422 debt_personal_only, contact_name_taken, contact_archived (0130), debt_deleted,
 --   payment_exceeds, payment_before_opened, debt_account_kantor, debt_principal_locked; DK404
@@ -117,13 +121,15 @@ exception when unique_violation then
 end $$;
 
 -- Angka utang untuk UI (BSD §1.1: uang dihitung di SQL). paid_pct dibulatkan ke bawah (tidak pernah
--- 100 sebelum lunas); quick = 25%/50% dari sisa, dibulatkan ke bawah ke rupiah penuh.
+-- 100 sebelum lunas); quick = 25%/50% dari sisa, dibulatkan ke bawah ke rupiah penuh, null bila hasilnya 0
+-- (UI menyembunyikan chip); full = sisa.
 create function private.debt_numbers(p_principal bigint, p_paid bigint) returns jsonb
 language sql immutable set search_path = '' as $$
   select jsonb_build_object(
     'principal', p_principal, 'paid', p_paid, 'remaining', p_principal - p_paid,
     'paid_pct', (p_paid * 100 / p_principal)::int, 'settled', p_paid >= p_principal,
-    'quick', jsonb_build_object('p25', (p_principal - p_paid) / 4, 'p50', (p_principal - p_paid) / 2,
+    'quick', jsonb_build_object('p25', nullif((p_principal - p_paid) / 4, 0),
+                                'p50', nullif((p_principal - p_paid) / 2, 0),
                                 'full', p_principal - p_paid))
 $$;
 
@@ -573,13 +579,13 @@ begin
     from x where x.voided_at is null and x.remaining > 0 group by x.direction
   )
   select x.id, x.contact_id, x.name, x.direction, x.mode, x.title, x.principal, x.paid, x.remaining,
-         (x.paid * 100 / x.principal)::int, x.remaining / 4, x.remaining / 2, x.opened_on, x.account_id,
+         (x.paid * 100 / x.principal)::int, nullif(x.remaining / 4, 0), nullif(x.remaining / 2, 0), x.opened_on, x.account_id,
          x.voided_at, coalesce(t.total, 0)::bigint, coalesce(t.n, 0)
   from x left join t on t.direction = x.direction
   order by x.voided_at is not null, x.remaining = 0, x.direction, x.remaining desc, lower(x.name), x.id;
 end $$;
 
--- Satu utang (termasuk yang terhapus; UI memutuskan 404). payments = semua cicilan, terbaru dulu,
+-- Satu utang (termasuk yang terhapus; UI memutuskan 404; angka utang terhapus = sesudah dipulihkan). payments = semua cicilan, terbaru dulu,
 -- amount positif, voided/voided_with_debt sebagai penanda. void_effects = efek per dompet bila utang
 -- dihapus sekarang (entri hidup), tanpa nol.
 create function api.debt_detail(p_debt_id uuid) returns jsonb
@@ -599,9 +605,11 @@ begin
     'contact_archived', c.archived_at is not null, 'direction', v_d.direction, 'mode', v_d.mode,
     'title', v_d.title, 'note', v_d.note, 'opened_on', v_d.opened_on, 'created_at', v_d.created_at,
     'voided_at', v_d.voided_at,
-    'principal', v_d.principal, 'paid', b.paid, 'remaining', b.remaining,
-    'paid_pct', (b.paid * 100 / v_d.principal)::int, 'settled', b.remaining <= 0,
-    'quick', jsonb_build_object('p25', b.remaining / 4, 'p50', b.remaining / 2, 'full', b.remaining),
+    'principal', v_d.principal, 'paid', n.paid, 'remaining', v_d.principal - n.paid,
+    'paid_pct', (n.paid * 100 / v_d.principal)::int, 'settled', n.paid >= v_d.principal,
+    'quick', jsonb_build_object('p25', nullif((v_d.principal - n.paid) / 4, 0),
+                                'p50', nullif((v_d.principal - n.paid) / 2, 0),
+                                'full', v_d.principal - n.paid),
     'principal_entry_id', pe.id, 'account_id', pe.account_id, 'account_name', pe.account_name,
     'payments', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -627,6 +635,14 @@ begin
   into v
   from app.contacts c
   join app.debt_balances b on b.space_id = v_d.space_id and b.debt_id = v_d.id
+  -- Utang terhapus: angka sesudah dipulihkan (cicilan yang ikut terhapus), sama dengan api.list_debts.
+  cross join lateral (
+    select case when v_d.voided_at is null then b.paid else (
+             select coalesce(sum(abs(l.amount)), 0)::bigint from app.entries e
+             join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
+             where e.space_id = v_d.space_id and e.debt_id = v_d.id and e.kind = 'debt_payment'
+               and e.voided_with_debt) end as paid
+  ) n
   left join lateral (
     select e.id, l.account_id, a.name as account_name from app.entries e
     join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
@@ -805,7 +821,8 @@ end $$;
 -- ===== Sampah (0111 + tanpa entri yang ikut Hapus utang) =====
 -- Sampah (keputusan pemilik #10): entri batal yang masih bisa dipulihkan (<= 90 hari).
 -- Pulihkan = api.restore_entry; hapus permanen = api.purge_entry. Entri yang ikut Hapus utang
--- dipulihkan dari segmen Utang (api.restore_debt), jadi tidak tampil di sini.
+-- dipulihkan dari segmen Utang (api.restore_debt), jadi tidak tampil di sini; begitu pula cicilan yang
+-- dibatalkan sendiri selama utangnya terhapus.
 create or replace function api.trash_list(p_space_id uuid, p_limit int default 50)
 returns table (entry_id uuid, version int, kind app.entry_kind, direction app.entry_direction,
                occurred_on date, description text, amount bigint, voided_at timestamptz,
@@ -824,7 +841,10 @@ begin
   where e.space_id = p_space_id and e.voided_at is not null
     and e.voided_at >= app.now() - interval '90 days'
     and e.moved_at is null
-    and not e.voided_with_debt
+    -- 0131: entri utang yang terhapus (ikut Hapus utang ATAU dibatalkan sendiri sebelumnya) tidak tampil:
+    -- pulihkannya pasti debt_deleted. Muncul lagi sesudah restore_debt (cicilan batal sendiri).
+    and not exists (select 1 from app.debts d
+                    where d.space_id = e.space_id and d.id = e.debt_id and d.voided_at is not null)
   order by e.voided_at desc, e.id desc
   limit p_limit;
 end $$;
@@ -866,54 +886,6 @@ begin
    where d.voided_at < app.now() - interval '90 days'
      and not exists (select 1 from app.entries e where e.space_id = d.space_id and e.debt_id = d.id);
   return v_n;
-end $$;
-
--- ===== Aman dipakai (0120 + pinjaman tidak menaikkan angka) =====
--- Saldo operasional dikurangi Σ sisa utang borrowed mode baru hidup yang pokok hidupnya di dompet
--- operasional (dompet terarsip ikut: uangnya sudah pindah ke dompet lain, utangnya tetap). lent dan
--- mode berjalan tidak diubah.
-create or replace function api.safe_to_spend(p_space_id uuid, p_today date default null)
-returns table (operasional bigint, bills_until_eom bigint, budget_wajib_remaining bigint,
-               total bigint, per_day bigint, days_left int, until date)
-language plpgsql stable set search_path = '' as $$
-declare
-  v_today date := coalesce(p_today, app.today());
-  v_label date;
-  v_until date;
-  v_ops   bigint;
-  v_debt  bigint;
-  v_bills bigint;
-  v_wajib bigint;
-  v_days  int;
-begin
-  perform app.assert_member(p_space_id);
-  select p.ends_on, p.label_month into v_until, v_label from app.pay_period(p_space_id, v_today) p;
-  select coalesce(sum(ab.balance), 0)::bigint into v_ops
-    from app.account_balances ab
-    join app.accounts a on a.id = ab.account_id
-   where ab.space_id = p_space_id and ab.pocket = 'operasional' and a.archived_at is null;
-  select coalesce(sum(b.remaining), 0)::bigint into v_debt
-    from app.debts d
-    join app.debt_balances b on b.space_id = d.space_id and b.debt_id = d.id
-   where d.space_id = p_space_id and d.direction = 'borrowed' and d.mode = 'baru' and d.voided_at is null
-     and exists (select 1 from app.entries e
-                 join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
-                 join app.accounts a on a.space_id = l.space_id and a.id = l.account_id
-                 where e.space_id = d.space_id and e.debt_id = d.id and e.kind = 'debt_principal'
-                   and e.voided_at is null and a.pocket = 'operasional');
-  v_ops := v_ops - greatest(0, v_debt);
-  select coalesce(sum(bs.amount), 0)::bigint into v_bills
-    from app.bill_schedule bs
-   where bs.space_id = p_space_id and not bs.posted and bs.skipped_at is null
-     and not bs.bill_archived and bs.due_on <= v_until;
-  select coalesce(sum(greatest(0, bp.remaining)), 0)::bigint into v_wajib
-    from api.budget_progress(p_space_id, v_label) bp
-   where bp.wajib;
-  v_days := v_until - v_today + 1;
-  return query select v_ops, v_bills, v_wajib, v_ops - v_bills - v_wajib,
-    case when v_days > 0 then floor((v_ops - v_bills - v_wajib)::numeric / v_days)::bigint
-         else v_ops - v_bills - v_wajib end,
-    v_days, v_until;
 end $$;
 
 -- ===== Cek kualitas data (0130 + DQ05) =====
@@ -1102,7 +1074,7 @@ drop function private.lock_contact(uuid);
 drop function private.lock_debt(uuid);
 drop function private.assert_debt_space(uuid);
 
--- Fungsi yang diganti kembali ke badan sebelumnya (0111, 0103, 0113, 0120, 0130).
+-- Fungsi yang diganti kembali ke badan sebelumnya (0111, 0103, 0113, 0130).
 create or replace function private.set_void_state(
   p_client_id uuid, p_entry_id uuid, p_expected_version int, p_void boolean, p_allow_negative boolean
 ) returns jsonb
@@ -1291,39 +1263,6 @@ begin
     v_n := v_n + private.purge_entries(v_ids, 'purge_voided');
   end loop;
   return v_n;
-end $$;
-
-create or replace function api.safe_to_spend(p_space_id uuid, p_today date default null)
-returns table (operasional bigint, bills_until_eom bigint, budget_wajib_remaining bigint,
-               total bigint, per_day bigint, days_left int, until date)
-language plpgsql stable set search_path = '' as $$
-declare
-  v_today date := coalesce(p_today, app.today());
-  v_label date;
-  v_until date;
-  v_ops   bigint;
-  v_bills bigint;
-  v_wajib bigint;
-  v_days  int;
-begin
-  perform app.assert_member(p_space_id);
-  select p.ends_on, p.label_month into v_until, v_label from app.pay_period(p_space_id, v_today) p;
-  select coalesce(sum(ab.balance), 0)::bigint into v_ops
-    from app.account_balances ab
-    join app.accounts a on a.id = ab.account_id
-   where ab.space_id = p_space_id and ab.pocket = 'operasional' and a.archived_at is null;
-  select coalesce(sum(bs.amount), 0)::bigint into v_bills
-    from app.bill_schedule bs
-   where bs.space_id = p_space_id and not bs.posted and bs.skipped_at is null
-     and not bs.bill_archived and bs.due_on <= v_until;
-  select coalesce(sum(greatest(0, bp.remaining)), 0)::bigint into v_wajib
-    from api.budget_progress(p_space_id, v_label) bp
-   where bp.wajib;
-  v_days := v_until - v_today + 1;
-  return query select v_ops, v_bills, v_wajib, v_ops - v_bills - v_wajib,
-    case when v_days > 0 then floor((v_ops - v_bills - v_wajib)::numeric / v_days)::bigint
-         else v_ops - v_bills - v_wajib end,
-    v_days, v_until;
 end $$;
 
 create or replace function private.dq_run()

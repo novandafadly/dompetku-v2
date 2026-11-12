@@ -7,7 +7,7 @@
 -- Semua panggilan lewat role web (api.* DEFINER/INVOKER). Jam dipatok 2026-03-20 WIB.
 -- ID: T6, T7, T8, T9, B10
 begin;
-select plan(120);
+select plan(122);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -287,8 +287,10 @@ select throws_ok(format($$select pg_temp.void(%L, true)$$, :'p2'), 'DK422', 'sal
 
 -- ===== Lunas, pulihkan melebihi, jalur generik =====
 select pg_temp.pay(:'d1', :'bca', 3750000, '2026-03-12') as r_p5 \gset
-select is((select concat_ws(' ', r ->> 'remaining', r ->> 'paid_pct', r ->> 'settled') from (select :'r_p5'::jsonb r) x),
-  '0 100 true', 'bayar sisa = lunas');
+select is((select concat_ws(' ', r ->> 'remaining', r ->> 'paid_pct', r ->> 'settled',
+    coalesce(r -> 'quick' ->> 'p25', 'null'), coalesce(r -> 'quick' ->> 'p50', 'null'), r -> 'quick' ->> 'full')
+    from (select :'r_p5'::jsonb r) x),
+  '0 100 true null null 0', 'bayar sisa = lunas; pintasan 25/50 null bila 0');
 select throws_ok(format($$select pg_temp.pay(%L, %L, 1)$$, :'d1', :'bca'), 'DK422', 'payment_exceeds',
   'bayar utang lunas ditolak');
 select throws_ok(format($$select pg_temp.void(%L, true, true)$$, :'p2'), 'DK422', 'payment_exceeds',
@@ -345,9 +347,12 @@ select throws_ok(format($$select pg_temp.void(%L, true)$$, :'p3'), 'DK422', 'deb
   'pulihkan cicilan yang ikut terhapus lewat Sampah ditolak');
 select throws_ok(format($$select pg_temp.call(tests.n(), 'select api.update_debt_info(%s, %s, null, null)')$$,
   pg_temp.ql(:'d2'), pg_temp.ql(:'sari')), 'DK422', 'debt_deleted', 'ubah utang terhapus ditolak');
-select is(tests.web_val(tests.n(), format($$select string_agg(t.entry_id::text, ',') from api.trash_list(%L) t
-  join app.entries e on e.id = t.entry_id where e.debt_id = %L$$, :'np', :'d2')), :'p6',
-  'Sampah: hanya cicilan yang dibatalkan sendiri, bukan entri yang ikut Hapus utang');
+select is(tests.web_val(tests.n(), format($$select count(*) from api.trash_list(%L) t
+  join app.entries e on e.id = t.entry_id where e.debt_id = %L$$, :'np', :'d2')), '0',
+  'Sampah tanpa entri utang terhapus (yang ikut Hapus utang maupun cicilan yang dibatalkan sendiri)');
+select is(pg_temp.call(tests.n(), format('select api.debt_detail(%L)', :'d2')) ->> 'remaining'
+    || ' ' || tests.web_val(tests.n(), format('select remaining from api.list_debts(%L) where debt_id = %L', :'np', :'d2')),
+  '200000 200000', 'debt_detail dan list_debts utang terhapus: angka sesudah dipulihkan, sama');
 select is(tests.web_val(tests.n(), format($$select count(*) from api.trash_list(%L) t where t.entry_id = %L$$, :'np', :'p2')),
   '1', 'Sampah memuat cicilan batal utang hidup');
 select throws_ok(format($$select pg_temp.call(tests.n(), 'select api.purge_entry(%s, %s)')$$, pg_temp.ql(:'p3'),
@@ -367,6 +372,8 @@ select is(concat_ws(' ', tests.balance(:'tab'), tests.balance(:'bca'), pg_temp.b
     tests.web_val(tests.n(), format('select voided_at is null from app.debts where id = %L', :'d2')),
     tests.owner_val(null, format('select voided_at is not null from app.entries where id = %L', :'p6'))),
   '200000 2050000 100000/200000 true true', 'restore_debt memulihkan semua efek, cicilan yang dibatalkan sendiri tetap batal [T9]');
+select is(tests.web_val(tests.n(), format($$select count(*) from api.trash_list(%L) t where t.entry_id = %L$$, :'np', :'p6')),
+  '1', 'sesudah restore_debt cicilan yang dibatalkan sendiri muncul lagi di Sampah');
 select throws_ok(format($$select pg_temp.void_debt(%L, true)$$, :'d2'), 'DK422', 'not_voided', 'pulihkan utang hidup ditolak');
 select throws_ok(format($$select pg_temp.call(tests.f(), 'select api.void_debt(gen_random_uuid(), %s)')$$,
   pg_temp.ql(:'d2')), 'DK404', 'debt_not_found', 'hapus utang orang lain = DK404');

@@ -6,7 +6,7 @@
 -- Jam dipatok 2026-03-20 WIB.
 -- ID: B10, I6
 begin;
-select plan(89);
+select plan(88);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -320,11 +320,11 @@ select is(pg_temp.angka(), :'hidup',
   'Σ pemasukan/pengeluaran, kategori, tren, aman dipakai (anggaran wajib), laju belanja sama dengan atau tanpa entri utang [I6]');
 select isnt(:'hidup'::text, null::text, 'pembanding I6 terisi');
 
--- ===== I6 aman dipakai (0131, temuan T1 review independen) =====
--- Operasional dikurangi sisa utang borrowed mode baru yang pokoknya di dompet operasional: pinjam tidak
--- menaikkan operasional/total/per_day, bayar cicilan dari operasional tidak menurunkannya, uang pinjaman
--- yang dibelanjakan menurunkannya. Bayar dari Tabungan menaikkan (sisa turun, kas operasional tetap).
--- Hapus utang mengembalikan cicilan ke dompet asalnya. lent dan mode berjalan tidak diubah.
+-- ===== I6 lewat API (0131) =====
+-- Dijamin: pokok dan cicilan tidak mengubah Σ pemasukan/pengeluaran, kategori, tren, anggaran wajib, laju
+-- belanja, dan Laporan (pg_temp.angka). "Aman dipakai" (operasional/total/per_day) mengikuti saldo kas:
+-- pinjaman yang masuk ke dompet operasional MENAIKKAN angka sebesar kas nyata. Keterbatasan terbuka,
+-- keputusan pemilik; lihat handoff s11.
 create function pg_temp.aman() returns text
 language sql as $$
   select tests.web_val(tests.n(), format($q$select operasional || '/' || total || '/' || per_day || '/' || days_left
@@ -338,29 +338,34 @@ language sql as $$
 $$;
 create function pg_temp.api(p_sql text) returns jsonb
 language sql as $$ select tests.web_val(tests.n(), p_sql)::jsonb $$;
-select pg_temp.aman() as aman0 \gset
+select pg_temp.angka() as angka0, pg_temp.aman() as aman0 \gset
 select pg_temp.api(format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 5000000, 'baru', %L, null, %L)$$,
   :'np', :'tono', :'bca')) ->> 'debt_id' as i6 \gset
-select is(pg_temp.aman(), :'aman0', 'pinjam 5 jt ke dompet operasional: operasional, total, per_day tetap [I6]');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 5000000),
+  'pinjam 5 jt ke operasional: angka Laporan/anggaran tetap [I6]; aman dipakai naik sebesar kas (keterbatasan terbuka)');
 select pg_temp.api(format($$select api.pay_debt(gen_random_uuid(), %L, %L, 1000000)$$, :'i6', :'bca'));
-select is(pg_temp.aman(), :'aman0', 'bayar cicilan dari operasional: angka tetap');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 4000000),
+  'bayar cicilan dari operasional: Laporan tetap, aman dipakai turun sebesar kas');
 select pg_temp.api(format($$select api.pay_debt(gen_random_uuid(), %L, %L, 500000)$$, :'i6', :'tab'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', 500000), 'bayar cicilan dari Tabungan: sisa turun, kas operasional tetap');
-select pg_temp.api(format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 2000000)$$, :'np', :'bca'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -1500000), 'uang pinjaman dibelanjakan: angka turun');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 4000000),
+  'bayar cicilan dari Tabungan: Laporan dan aman dipakai tetap');
 select pg_temp.api(format($$select api.pay_debt(gen_random_uuid(), %L, %L, 3500000)$$, :'i6', :'bca'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -1500000), 'bayar lunas dari operasional: angka tetap');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 500000),
+  'bayar lunas: Laporan tetap, aman dipakai mengikuti kas');
 select pg_temp.api(format($$select api.void_debt(gen_random_uuid(), %L)$$, :'i6'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -2000000),
-  'hapus utang: semua efek utang dibalik, tersisa belanja (cicilan Tabungan kembali ke Tabungan)');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || :'aman0',
+  'hapus utang: semua efek kas dibalik, Laporan tetap');
 select pg_temp.api(format($$select api.restore_debt(gen_random_uuid(), %L)$$, :'i6'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -1500000), 'pulihkan utang: angka kembali');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 500000),
+  'pulihkan utang: efek kas kembali, Laporan tetap');
 select pg_temp.api(format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 1000000, 'berjalan', %L)$$,
   :'np', :'tono'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -1500000), 'utang berjalan tidak mengubah angka');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 500000),
+  'utang berjalan: nol efek kas dan Laporan (K2)');
 select pg_temp.api(format($$select api.create_debt(gen_random_uuid(), %L, 'lent', 300000, 'baru', %L, null, %L)$$,
   :'np', :'tono', :'bca'));
-select is(pg_temp.aman(), pg_temp.geser(:'aman0', -1800000), 'piutang dari operasional mengurangi angka seperti kas keluar');
+select is(pg_temp.angka() || ' # ' || pg_temp.aman(), :'angka0' || ' # ' || pg_temp.geser(:'aman0', 200000),
+  'piutang dari operasional: Laporan tetap, kas keluar');
 
 select * from finish();
 rollback;

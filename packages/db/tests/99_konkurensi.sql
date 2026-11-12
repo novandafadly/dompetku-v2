@@ -540,18 +540,20 @@ language sql as $$
   select tests.owner_val(null, format($q$select paid || '/' || remaining from app.debt_balances where debt_id = %L$q$, p_debt))
 $$;
 select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'U', 'operasional', 0)$$, :'np')) as acc_u \gset
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'V', 'operasional', 100)$$, :'np')) as acc_v \gset
 select pg_temp.adm_api(format($$select api.create_contact(gen_random_uuid(), %L, 'Konkuren')$$, :'np')) ->> 'contact_id' as kk \gset
 select pg_temp.utang(:'kk', 100, :'acc_u') as kd \gset
--- C3: dua pembayaran 60 paralel pada sisa 100.
+-- C3: dua pembayaran 60 paralel pada sisa 100 dari dua dompet berbeda (kunci dompet tidak menyerialkan;
+-- hanya kunci utang yang membuat yang kedua membaca Σ sesudah yang pertama commit).
 select tests.peer_exec('a', 'begin');
 select tests.peer_val('a', pg_temp.bayar_sql(:'kd', :'acc_u', 60) || $$ ->> 'entry_id'$$) as kp60 \gset
 select tests.peer_exec('b', 'begin');
-select tests.peer_send('b', pg_temp.bayar_sql(:'kd', :'acc_u', 60) || $$ ->> 'remaining'$$);
-select ok(tests.peer_blocked('b'), 'bayar kedua menunggu kunci utang [C3]');
+select tests.peer_send('b', pg_temp.bayar_sql(:'kd', :'acc_v', 60) || $$ ->> 'remaining'$$);
+select ok(tests.peer_blocked('b'), 'bayar kedua (dompet lain) menunggu kunci utang [C3]');
 select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '^ERROR: .*payment_exceeds', 'bayar paralel melebihi sisa: yang kedua payment_exceeds [C3]');
 select tests.peer_exec('b', 'rollback');
-select is(pg_temp.sisa(:'kd'), '60/40', 'sisa 40, tidak pernah negatif [C3]');
+select is(pg_temp.sisa(:'kd') || ' ' || tests.balance(:'acc_v'), '60/40 100', 'sisa 40, tidak pernah negatif; dompet kedua utuh [C3]');
 -- C6: klik ganda Bayar (client_id sama) paralel = satu cicilan.
 select tests.peer_exec('a', 'begin');
 select tests.peer_val('a', pg_temp.bayar_sql(:'kd', :'acc_u', 10, 'cccccccc-0000-0000-0000-000000000031') || $$ ->> 'remaining'$$);
