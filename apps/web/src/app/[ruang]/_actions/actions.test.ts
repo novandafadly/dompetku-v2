@@ -59,6 +59,14 @@ const m = vi.hoisted(() => ({
   archiveBill: vi.fn(),
   payBill: vi.fn(),
   setOccurrenceSkipped: vi.fn(),
+  createContact: vi.fn(),
+  renameContact: vi.fn(),
+  archiveContact: vi.fn(),
+  createDebt: vi.fn(),
+  updateDebtInfo: vi.fn(),
+  payDebt: vi.fn(),
+  voidDebt: vi.fn(),
+  restoreDebt: vi.fn(),
 }));
 
 vi.mock('@/server/auth/next', () => ({
@@ -103,6 +111,17 @@ vi.mock('@/server/ledger/rencana', async (orig) => ({
   payBill: m.payBill,
   setOccurrenceSkipped: m.setOccurrenceSkipped,
 }));
+vi.mock('@/server/ledger/utang', async (orig) => ({
+  ...(await orig<typeof import('@/server/ledger/utang')>()),
+  createContact: m.createContact,
+  renameContact: m.renameContact,
+  archiveContact: m.archiveContact,
+  createDebt: m.createDebt,
+  updateDebtInfo: m.updateDebtInfo,
+  payDebt: m.payDebt,
+  voidDebt: m.voidDebt,
+  restoreDebt: m.restoreDebt,
+}));
 vi.mock('@/server/ledger/read', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/read')>()),
   listAccounts: m.listAccounts,
@@ -123,6 +142,7 @@ const dompet = await import('./dompet');
 const beranda = await import('./beranda');
 const reimburse = await import('./reimburse');
 const rencana = await import('./rencana');
+const utang = await import('./utang');
 
 type AnyAction = (ruang: unknown, input?: unknown) => Promise<unknown>;
 
@@ -134,6 +154,7 @@ const ACTIONS: Record<string, AnyAction> = {
   ...(beranda as unknown as Record<string, AnyAction>),
   ...(reimburse as unknown as Record<string, AnyAction>),
   ...(rencana as unknown as Record<string, AnyAction>),
+  ...(utang as unknown as Record<string, AnyAction>),
 };
 
 /** Input sah per action dan wrapper DB pertama yang dipanggilnya. */
@@ -272,6 +293,41 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
   },
   skipBillAction: { input: B, wrapper: 'setOccurrenceSkipped', mutation: true },
   unskipBillAction: { input: B, wrapper: 'setOccurrenceSkipped', mutation: true },
+  createContactAction: {
+    input: { clientId: A, name: 'Budi' },
+    wrapper: 'createContact',
+    mutation: true,
+  },
+  renameContactAction: {
+    input: { contactId: A, name: 'Budi S' },
+    wrapper: 'renameContact',
+    mutation: true,
+  },
+  archiveContactAction: { input: { contactId: A }, wrapper: 'archiveContact', mutation: true },
+  createDebtAction: {
+    input: {
+      clientId: A,
+      direction: 'borrowed',
+      principal: 2_000_000,
+      mode: 'baru',
+      contactName: 'Budi',
+      accountId: B,
+    },
+    wrapper: 'createDebt',
+    mutation: true,
+  },
+  updateDebtInfoAction: {
+    input: { debtId: A, contactId: B, title: null, note: null },
+    wrapper: 'updateDebtInfo',
+    mutation: true,
+  },
+  payDebtAction: {
+    input: { clientId: A, debtId: B, accountId: C, amount: 500_000 },
+    wrapper: 'payDebt',
+    mutation: true,
+  },
+  voidDebtAction: { input: { clientId: A, debtId: B }, wrapper: 'voidDebt', mutation: true },
+  restoreDebtAction: { input: { clientId: A, debtId: B }, wrapper: 'restoreDebt', mutation: true },
 };
 
 const NAMES = Object.keys(CASES);
@@ -306,6 +362,14 @@ const WRAPPERS = [
   'archiveBill',
   'payBill',
   'setOccurrenceSkipped',
+  'createContact',
+  'renameContact',
+  'archiveContact',
+  'createDebt',
+  'updateDebtInfo',
+  'payDebt',
+  'voidDebt',
+  'restoreDebt',
 ] as const;
 
 function call(name: string, ruang: unknown = 'pribadi', input?: unknown): Promise<unknown> {
@@ -370,6 +434,14 @@ beforeEach(() => {
     warnings: [],
   });
   m.setOccurrenceSkipped.mockResolvedValue({ skipped: true });
+  m.createContact.mockResolvedValue({ contactId: A, name: 'Budi', replayed: false });
+  m.renameContact.mockResolvedValue({ contactId: A, name: 'Budi S' });
+  m.archiveContact.mockResolvedValue({ contactId: A });
+  m.createDebt.mockResolvedValue({ debtId: A, contactId: B, entryId: D, version: 1 });
+  m.updateDebtInfo.mockResolvedValue({ debtId: A });
+  m.payDebt.mockResolvedValue({ entryId: D, debtId: B, version: 1 });
+  m.voidDebt.mockResolvedValue({ debtId: B, affected: [D], effects: [], replayed: false });
+  m.restoreDebt.mockResolvedValue({ debtId: B, affected: [D], effects: [], replayed: false });
 });
 
 afterEach(() => {
@@ -562,6 +634,38 @@ function exportedAsyncFunctions(src: string): { name: string; firstLine: string 
   }
   return out;
 }
+
+describe('utang hanya Pribadi (B10)', () => {
+  const UTANG = Object.keys(utang).filter((n) => n in CASES);
+
+  it.each(UTANG)('Bersama = debt_personal_only tanpa menyentuh wrapper: %s', async (name) => {
+    m.resolveSpace.mockResolvedValue({ spaceId: OTHER_SPACE, kind: 'shared' });
+    await expect(call(name, 'bersama')).resolves.toEqual({
+      ok: false,
+      error: { code: 'debt_personal_only' },
+    });
+    for (const w of WRAPPERS) expect(m[w]).not.toHaveBeenCalled();
+    expect(m.refresh).not.toHaveBeenCalled();
+  });
+
+  it('kontak ganda atau sekaligus kosong = invalid contactId; mode baru tanpa dompet = invalid accountId', async () => {
+    const base = { clientId: A, direction: 'lent', principal: 1_000, mode: 'berjalan' };
+    await expect(call('createDebtAction', 'pribadi', base)).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalid', field: 'contactId' },
+    });
+    await expect(
+      call('createDebtAction', 'pribadi', { ...base, contactId: B, contactName: 'Budi' }),
+    ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'contactId' } });
+    await expect(
+      call('createDebtAction', 'pribadi', { ...base, contactId: B, mode: 'baru' }),
+    ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'accountId' } });
+    await expect(
+      call('createDebtAction', 'pribadi', { ...base, contactId: B, accountId: C }),
+    ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'accountId' } });
+    expect(m.createDebt).not.toHaveBeenCalled();
+  });
+});
 
 describe('ruang', () => {
   it.each(NAMES.filter((n) => n !== 'logCatatEvent'))(

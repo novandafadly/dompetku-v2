@@ -61,6 +61,8 @@ export function signedAmountVM(e: EntryVM): {
     case 'expense':
       return { value: -e.amount, kind: 'expense' };
     case 'space_transfer':
+    case 'debt_principal':
+    case 'debt_payment':
       return { value: e.direction === 'in' ? e.amount : -e.amount, kind: 'neutral' };
     default:
       return { value: e.amount, kind: 'neutral' };

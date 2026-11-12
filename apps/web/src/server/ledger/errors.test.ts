@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isSpaceNotFoundError, toLedgerError } from './errors';
 import { SpaceNotFoundError } from './space';
+import { DebtPersonalOnlyError } from './utang';
 
 /** Bentuk galat `pg` (DatabaseError): code = SQLSTATE, message, detail opsional. */
 function pgError(code: string, message: string, detail?: string): Error {
@@ -108,6 +109,40 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(toLedgerError(pgError('DK422', rule, 'Rp 485.000 rahasia'))).toEqual({ code: rule });
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['debt_personal_only'],
+    ['contact_name_taken'],
+    ['contact_archived'],
+    ['debt_deleted'],
+    ['payment_exceeds'],
+    ['payment_before_opened'],
+    ['debt_account_kantor'],
+    ['debt_principal_locked'],
+  ] as const)('DK422 S11 %s = kode sama, tanpa log, tanpa nominal', (rule) => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = toLedgerError(pgError('DK422', rule, 'Rp 1.500.000 Budi rahasia'));
+    expect(r).toEqual({ code: rule });
+    expect(JSON.stringify(r)).not.toMatch(/\d|Budi|Rp/);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('S11: debt_not_found/contact_not_found = not_found; already_voided/not_voided = conflict', () => {
+    expect(toLedgerError(pgError('DK404', 'debt_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK404', 'contact_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK422', 'already_voided'))).toEqual({ code: 'conflict' });
+    expect(toLedgerError(pgError('DK422', 'not_voided'))).toEqual({ code: 'conflict' });
+    for (const field of ['direction', 'mode', 'contact', 'title', 'name', 'principal']) {
+      expect(toLedgerError(pgError('DK400', 'invalid_argument', field))).toEqual({
+        code: 'invalid',
+        field,
+      });
+    }
+  });
+
+  it('S11: DebtPersonalOnlyError (action, sebelum DB) = debt_personal_only', () => {
+    expect(toLedgerError(new DebtPersonalOnlyError())).toEqual({ code: 'debt_personal_only' });
   });
 
   it('S9: bill_not_found = not_found; copy_budgets DK400 membawa from_month/to_month', () => {

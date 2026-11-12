@@ -151,6 +151,9 @@ const activityRow = z.strictObject({
     'space_transfer',
     'adjustment',
     'reimbursement',
+    // S11: utang hanya Pribadi, tidak pernah ada di feed Bersama; dikenal agar tidak dibuang diam-diam.
+    'debt_principal',
+    'debt_payment',
   ]),
   direction: z.enum(['in', 'out']).nullable(),
   actor_id: z.guid(),

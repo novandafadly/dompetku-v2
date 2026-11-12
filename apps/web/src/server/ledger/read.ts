@@ -86,6 +86,9 @@ const ENTRY_KINDS = new Set<EntryVM['kind']>([
   'adjustment',
   // S7: reimburse talangan (satu baris utama +nominal, seperti pemasukan).
   'reimbursement',
+  // S11: pokok utang dan cicilan (satu baris utama; arah dari tandanya).
+  'debt_principal',
+  'debt_payment',
 ]);
 
 function entryKind(kind: string): EntryVM['kind'] {
@@ -182,7 +185,10 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.voided_at !== null) vm.voidedAt = row.voided_at;
   if (kind === 'space_transfer' && row.direction !== null) vm.direction = row.direction;
   // Cocokkan saldo: nominal tetap absolut, arah dari tanda baris utama (naik = in, turun = out).
-  if (kind === 'adjustment') vm.direction = row.main_in ? 'in' : 'out';
+  // Utang (S11): sama, uang masuk/keluar dompet dari tanda baris utama.
+  if (kind === 'adjustment' || kind === 'debt_principal' || kind === 'debt_payment') {
+    vm.direction = row.main_in ? 'in' : 'out';
+  }
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
   // Ubah = ganti-penuh: nilai talangan sekarang harus ikut terkirim apa adanya.
   if (row.reimbursable) vm.reimbursable = true;

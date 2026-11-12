@@ -44,6 +44,15 @@ const RULES = new Set<LedgerErrorCode>([
   'already_posted',
   'bill_archived',
   'bill_account_kantor',
+  // S11: utang/piutang dan kontak (0130–0131); DK404 debt_not_found/contact_not_found = not_found.
+  'debt_personal_only',
+  'contact_name_taken',
+  'contact_archived',
+  'debt_deleted',
+  'payment_exceeds',
+  'payment_before_opened',
+  'debt_account_kantor',
+  'debt_principal_locked',
 ]);
 
 /**
@@ -124,6 +133,10 @@ export function toLedgerError(e: unknown): LedgerError | null {
           return { code: 'invalid', field: 'reimbursable' };
         }
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
+        // Hapus/pulihkan utang tanpa versi (S11): keadaan sudah berubah di tab lain = muat ulang.
+        if (d.message === 'already_voided' || d.message === 'not_voided') {
+          return { code: 'conflict' };
+        }
         break;
     }
     // DK500, DK422 lain, 23505, DKnnn baru: bug atau invarian, bukan keadaan UI.

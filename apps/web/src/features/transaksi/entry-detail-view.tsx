@@ -16,6 +16,9 @@ const KIND_NAME: Record<EntryVM['kind'], string> = {
   space_transfer: 'Antar ruang',
   adjustment: 'Cocokkan saldo',
   reimbursement: 'Reimburse',
+  // S11: label sementara; tampilan penuh di Task 7.
+  debt_principal: 'Utang',
+  debt_payment: 'Cicilan utang',
 };
 
 /** Dompet entri: transfer satu ruang = "BCA → Tunai". */
