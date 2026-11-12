@@ -137,3 +137,19 @@ test('S10-SB2 sheet rincian (baru, ubah) dan sheet induk dengan rincian', async 
     await openUntil(() => row(p, 'Kesehatan').first(), sheet, amountOf(sheet));
   });
 });
+
+test('S10-RV1 Review bulanan (periode berjalan: Rencana vs kenyataan, kartu Siapkan)', async ({
+  browser,
+  ownerState,
+}) => {
+  await shoot(browser, ownerState, 'rv1-review', '/pribadi/rencana/review', async (p) => {
+    await expect(main(p).getByRole('region', { name: 'Rencana vs kenyataan' })).toBeVisible();
+    await expect(main(p).getByRole('region', { name: /^Siapkan / })).toBeVisible();
+  });
+});
+
+test('S10-EX1 Laporan dengan tombol Ekspor CSV', async ({ browser, ownerState }) => {
+  await shoot(browser, ownerState, 'ex1-laporan-ekspor', '/pribadi/laporan', async (p) => {
+    await expect(main(p).getByRole('link', { name: 'Ekspor CSV' })).toBeVisible();
+  });
+});

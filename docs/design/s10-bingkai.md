@@ -133,28 +133,26 @@ Tiap task UI (5, 6, 8) menugaskan satu reviewer terpisah memeriksa: tangga statu
 
 ## Design critique dan Delivery Gate
 
-Diisi di Task 10 sesudah UI selesai (daftar periksa antislop dijalankan manual bila skill tidak tersedia, seperti S7 sampai S9).
+Antislop mode DURING; Delivery Gate dijalankan sebagai daftar periksa manual (skill tidak tersedia, seperti S7 sampai S9). Screenshot: `docs/design/s10/` (320/390/1280, terang dan gelap, `SCREENS=1`): `sb1-daftar-rincian`, `sb2-sheet-rincian-{baru,ubah}`, `sb2-sheet-induk`, `rv1-review`, `ex1-laporan-ekspor`. Design review terpisah (subagent) untuk Task 5; Task 6 dan 8 dikritik penulis dari screenshot.
 
-## Penyimpangan Task 5 dari bingkai (diputuskan agen, 2026-11-11; hasil design review terpisah)
+### Daftar periksa
 
-1. **Kotak Induk** menampilkan `Anggaran Rp …` (bukan nominal saja) dan label `Induk` terhubung ke kotaknya (`aria-labelledby`).
-2. **`Maksimal Rp …` baris sendiri** di bawah hint periode (bukan di ujung hint yang sama), supaya aturan paling menentukan tidak terpencil di 320 px; bila `maxAmount = 0` teksnya `Anggaran induk sudah habis dibagi ke rincian lain.` (kasus tepi yang tidak dibahas bingkai; `Tambah rincian` tetap tampil selama ada kandidat).
-3. **`Tambah rincian`** mendapat `hover-pointer:bg-hover` (sama dengan baris di atasnya). Jarak ≥ 8 antar baris induk, rincian, dan `Tambah rincian` memakai pengecualian yang sama dengan S9 (pemisah = padding baris, target ≥ 44: rincian 64, tombol 44).
-4. **Nama rincian sangat panjang**: caret ke tepi kanan saat status turun ke baris kedua (kosmetik, tidak ada yang terpotong).
-5. Belum dipotret: tangga `near/full/over` pada rincian dan `Rp 12.345.678.900` di baris rincian (komponen `Status` dan `Bar` dipakai bersama induk). Tercatat sebagai utang kecil untuk critique Task 10.
+| Butir                                                                                      | Hasil                                                           |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Token dan komponen Panel Malam dipakai ulang (tanpa warna/ikon baru, tanpa bayangan kartu) | lulus                                                           |
+| Status = ikon + teks, tangga sama untuk induk dan rincian                                  | lulus (rincian `near/full/over` belum dipotret)                 |
+| Target sentuh ≥ 44, jarak ≥ 8                                                              | lulus; pengecualian S9 untuk baris yang menempel (target 64/44) |
+| 320 px tanpa gulir horizontal                                                              | lulus (e2e `noHorizontalScroll` di Rencana, Review, Laporan)    |
+| axe tanpa pelanggaran serius, terang dan gelap                                             | lulus (`s9.spec` Review 320/1280, Rencana, Laporan)             |
+| Label in Name, ul berlabel, urutan fokus = urutan DOM                                      | lulus                                                           |
+| Salinan tanpa "rumah tangga", tanpa tanda seru, galat tanpa nominal                        | lulus (galat S10 dites tanpa digit)                             |
+| Budget JS ≤ 162 kB, pulau malas                                                            | lulus (e2e budget Rencana, Review, Laporan)                     |
 
-## Penyimpangan Task 6 dari bingkai (diputuskan agen, 2026-11-12)
+### Temuan
 
-1. **Rincian di "Rencana vs kenyataan" selalu terbuka** (daftar bersarang berlabel, seperti Rencana), bukan `details/summary`: layar baca-saja, tanpa ketukan ekstra.
-2. **Ringkasan = `SummaryCardView` Laporan** (judul `Pengeluaran {Bulan}`, buku besar Pemasukan/Pengeluaran/Selisih, pembanding periode lalu) ditambah `BudgetTotalCard` bila ada anggaran, bukan kartu baru: angkanya komponen yang sama dengan Laporan. Lencana `Sementara` digantikan catatan `Periode belum selesai; angka masih bisa bertambah.` bawaan kartu itu.
-3. **Tautan `Review bulanan`** ada di Rencana > Anggaran (di atas daftar, tampil bila ada anggaran atau periode baru); keadaan kosong Rencana tidak menampilkannya.
-4. **Kolom `Penyesuaian (%)` = `<input inputMode=numeric>` biasa** (persen, bukan uang); galat tanpa nominal.
-5. **Aksi `Salin`** hanya muncul untuk periode yang baru selesai atau berjalan dan punya anggaran (aturan di `loadReview`, bukan UI).
-
-## Penyimpangan Task 8 dari bingkai (diputuskan agen, 2026-11-12)
-
-1. **`Ekspor CSV` = `<a href download>` bergaya tombol sekunder** (bukan `<button>`): unduhan jalan tanpa JS dan sebelum hidrasi; dengan JS klik dicegat untuk keadaan `Menyiapkan…` dan toast galat.
-2. **Periode kosong:** CSV hanya berisi judul kolom; toast sukses yang sama (`Ekspor … selesai`), tanpa toast khusus "belum punya transaksi".
-3. **Batas laju 10 ekspor per jam per user** (di memori satu proses; toast `Terlalu sering mengunduh. Coba lagi nanti.`).
-4. **Pemisah koma**; Excel locale Indonesia membuka CSV koma sebagai satu kolom (Sheets dan Excel "Dari teks/CSV" normal). Utang kecil bila pemilik memakai Excel id-ID.
-5. Belum dipotret untuk design review (tombol + hint di header Laporan, 320/390 terang/gelap): masuk critique Task 10.
+1. **S10-C1 (diperbaiki)** Review di HP tidak punya judul terlihat (`h1` sr-only, pemilih periode hanya menyebut bulan): ditambah judul dekoratif `Review bulanan` seperti Laporan.
+2. **S10-C2 (diperbaiki)** Kotak Induk di sheet rincian hanya nominal tanpa kata `Anggaran`; `Maksimal` terpencil di akhir hint; kasus induk habis dibagi (Task 5 review).
+3. **S10-C3 (diperbaiki)** Ekspor saat sesi habis mengunduh halaman masuk sebagai `.csv`: kini ditolak dengan toast `Sesi berakhir…` (review akhir).
+4. **S10-C4 (catatan)** Nama rincian sangat panjang: caret ke tepi kanan saat status turun ke baris kedua (kosmetik).
+5. **S10-C5 (catatan)** Tangga `near/full/over` pada rincian, `Rp 12.345.678.900` di baris rincian, Review dengan banyak induk, dan keadaan `Menyiapkan…` Ekspor belum dipotret.
+6. **S10-C6 (catatan)** Review memakai dua kartu angka besar berurutan di HP (Ringkasan Laporan lalu Terpakai): padat; layak ditinjau bila pemilik merasa sesak.

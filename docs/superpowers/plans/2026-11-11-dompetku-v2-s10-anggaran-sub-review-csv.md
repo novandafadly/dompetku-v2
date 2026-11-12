@@ -25,9 +25,9 @@
 | K2 | Menghapus anggaran induk yang punya sub | Ikut menghapus anggaran sub label itu (UI memberi teks konfirmasi). | Alternatif (tolak) memaksa hapus satu-satu. |
 | K3 | `wajib` pada sub | Ditolak (`DK422 sub_not_wajib`); wajib hanya induk (XOR dengan tagihan tetap di induk). | XOR sudah dinilai di induk; sub wajib membuka celah dobel. |
 | K4 | "Penyesuaian" salin anggaran | Persen bilangan bulat −90..+100 untuk semua baris, dibulatkan ke Rp1.000: anggaran induk ke atas, rincian ke bawah (minimal Rp1.000), supaya `Σ rincian ≤ induk` terjaga setelah pembulatan (hasil review Task 2); induk ditulis lebih dulu; sesudah salin, tiap baris diubah lewat editor yang ada. Sub disalin sesudah induknya dan ikut persen yang sama (jadi `Σ sub ≤ induk` tetap). | Sederhana, uang dihitung di SQL. |
-| K5 | Isi CSV | Satu baris per entri hidup pada periode Laporan (basis gajian/kalender), kolom: tanggal, jenis, kelas laporan, dompet, kategori induk, subkategori, nominal bertanda (integer rupiah), catatan, pencatat (nama tampil). Ruang Bersama tidak pernah memuat entri Pribadi (B13). Batas 50.000 baris (`DK422 export_too_large`). Pencatatan audit `export` (meta jumlah baris + rentang, tanpa isi). | Cocok dengan Laporan secara terbukti (Σ per kelas = angka Laporan). |
+| K5 | Isi CSV | Satu baris per KAKI entri hidup (bukan per entri; lihat Task 7) pada periode Laporan (basis gajian/kalender), kolom: tanggal, jenis, kelas laporan, dompet, kategori induk, subkategori, nominal bertanda (integer rupiah), catatan, pencatat (nama tampil). Ruang Bersama tidak pernah memuat entri Pribadi (B13). Batas 50.000 baris (`DK422 export_too_large`). Pencatatan audit `export` (meta `{count, via}`: kunci meta audit tertutup, tanpa rentang, tanpa isi). | Cocok dengan Laporan secara terbukti (Σ per kelas = angka Laporan). |
 | K6 | Tombol Ekspor | Di header Laporan (membawa periode + basis yang sedang dilihat); item "Export" di menu tetap "Segera". | Konteks periode terbawa. |
-| K7 | Retensi `wa_messages` | 14 hari (di bawah retensi idempotensi 30 hari; pesan lama yang diputar ulang tetap tertahan idempotensi ledger), job `purge_wa_messages` 01:27 WIB. Baris `pending` tidak dihapus. | Handoff wa.md "Data dan DB". |
+| K7 | Retensi `wa_messages` | 14 hari (di bawah retensi idempotensi 30 hari; pesan lama yang diputar ulang tetap tertahan idempotensi ledger), job `purge_wa_messages` 01:27 WIB. SEMUA status dihapus (juga `pending`; lihat Task 9), ditambah batas umur pesan 7 hari di webhook. | Handoff wa.md "Data dan DB". |
 
 ## Global Constraints
 
@@ -141,6 +141,8 @@
 - [ ] Tutup T15 di `REGISTRY.md` bila ada: `materialize_bills` dijalankan 2× = tidak ada kemunculan ganda (tes ada di `22_tagihan.sql`/int; petakan, jangan duplikasi).
 
 ### Task 10: Dokumen, review, penutup
+
+**Selesai 2026-11-12:** BSD §16 "Catatan S10", IPD S10, `docs/m0a-keputusan.md`, `handoff/s10.md`, critique + Delivery Gate di bingkai, review akhir Opus (tanpa BLOCKER/TINGGI; temuan sesi ini: ekspor saat sesi habis diperbaiki, judul Review di HP ditambah).
 
 - [ ] BSD §16 "Catatan S10" (migrasi 0125–0128, aturan sub K1–K3, `copy_budgets` baru, ekspor K5, retensi K7), BSD §13 butir 27 diganti aturan sub, `IPD.md` S10 (status, bukti kriteria keluar, `recurring_materialize` = `materialize_bills`), `docs/m0a-keputusan.md` (K1–K7), `CLAUDE.md` status, `docs/superpowers/handoff/s10.md` (langkah pemilik: masa pakai 7 hari kedua akun, runbook worker memasang job baru).
 - [ ] Review akhir: task review per task, review keamanan (uang/RLS/DB, ekspor CSV, injeksi formula, kebocoran lintas ruang), gerbang penuh (lihat Global Constraints), `deploy-test.sh`.

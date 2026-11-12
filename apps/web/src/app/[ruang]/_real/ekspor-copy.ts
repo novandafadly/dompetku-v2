@@ -10,5 +10,6 @@ export const EKSPOR_COPY = {
   done: (title: string, ruang: Ruang) => `Ekspor ${title} · ${RUANG_NAME[ruang]} selesai`,
   errTooLarge: 'Terlalu banyak transaksi untuk satu ekspor. Pilih periode yang lebih pendek.',
   errRate: 'Terlalu sering mengunduh. Coba lagi nanti.',
+  errSession: 'Sesi berakhir. Masuk lagi, lalu coba ekspor sekali lagi.',
   errGeneric: 'Belum berhasil. Sambungan ke server terputus. Coba lagi.',
 } as const;

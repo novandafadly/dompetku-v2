@@ -43,7 +43,9 @@ function setup() {
 
 describe('ExportButton (S10-EX1)', () => {
   it('berhasil: fetch, unduh dengan nama berkas, toast tanpa nominal', async () => {
-    fetchMock.mockResolvedValue(new Response('﻿x', { status: 200 }));
+    fetchMock.mockResolvedValue(
+      new Response('x', { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8' } }),
+    );
     const user = userEvent.setup();
     const btn = setup();
     expect(btn).toHaveAccessibleDescription('Semua transaksi');
@@ -68,6 +70,24 @@ describe('ExportButton (S10-EX1)', () => {
     await user.click(setup());
     await waitFor(() => {
       expect(toastSpy).toHaveBeenCalledWith({ message, tone: 'info' });
+    });
+    expect(clicked).toHaveLength(0);
+  });
+
+  it('sesi habis (redirect ke halaman masuk, HTML): tidak diunduh, toast sesi berakhir', async () => {
+    const html = new Response('<html></html>', {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    });
+    Object.defineProperty(html, 'redirected', { value: true });
+    fetchMock.mockResolvedValue(html);
+    const user = userEvent.setup();
+    await user.click(setup());
+    await waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith({
+        message: 'Sesi berakhir. Masuk lagi, lalu coba ekspor sekali lagi.',
+        tone: 'info',
+      });
     });
     expect(clicked).toHaveLength(0);
   });

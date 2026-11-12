@@ -57,6 +57,10 @@ export function ReviewReal({
     <>
       <PageHeader title={REVIEW_COPY.title(title)} />
       <div className={WRAP}>
+        {/* HP/tablet: judul terlihat (pola Laporan); `h1` aslinya sr-only dari PageHeader, jadi ini dekoratif. */}
+        <p aria-hidden="true" className="text-title font-extrabold text-text laptop:hidden">
+          {REVIEW_COPY.link}
+        </p>
         <PeriodPicker
           ruang={ruang}
           period={period}

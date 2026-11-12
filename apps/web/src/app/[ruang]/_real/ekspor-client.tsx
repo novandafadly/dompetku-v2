@@ -46,6 +46,11 @@ export function ExportButton({
         });
         return;
       }
+      // Sesi habis: fetch mengikuti redirect ke halaman masuk (200 HTML); jangan diunduh sebagai .csv.
+      if (res.redirected || !(res.headers.get('content-type') ?? '').startsWith('text/csv')) {
+        toast({ message: EKSPOR_COPY.errSession, tone: 'info' });
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
