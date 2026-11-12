@@ -207,7 +207,7 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format('delete fr
 -- DQ07 (warn) = 1: dompet "X" sengaja dibuat negatif dengan p_allow_negative di atas dan masih
 -- negatif lebih dari 3 hari WIB. Cek error tetap nol.
 select is(tests.worker_val(null, $$select string_agg(check_id || '=' || violations, ',' order by check_id) from jobs.dq_reconcile()$$),
-  'DQ01=0,DQ03=0,DQ04=0,DQ04b=0,DQ06=0,DQ07=1,DQ09=0,DQ10=0,DQ11=0,DQ12=0,DQ13=0,DQ14=0', 'dq_reconcile: nol temuan error, DQ07 warn untuk dompet negatif');
+  'DQ01=0,DQ03=0,DQ04=0,DQ04b=0,DQ05=0,DQ06=0,DQ07=1,DQ09=0,DQ10=0,DQ11=0,DQ12=0,DQ13=0,DQ14=0', 'dq_reconcile: nol temuan error, DQ07 warn untuk dompet negatif');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
 select throws_ok($$select tests.worker_val(null, 'select count(*) from private.dq_run()')$$, '42501', null,
