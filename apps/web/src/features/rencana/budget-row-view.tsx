@@ -121,7 +121,14 @@ export function BudgetItemView({
  * Isi satu baris anggaran rincian (S10-SB1): nama, status (tangga yang sama dengan induk), bilah
  * 4 px, `Rp … dari Rp …`. Tanpa `Wajib` (rincian tidak pernah wajib).
  */
-export function BudgetSubItemView({ row }: { row: BudgetOverviewVM }) {
+export function BudgetSubItemView({
+  row,
+  caret = true,
+}: {
+  row: BudgetOverviewVM;
+  /** Review (baca saja) mematikan caret. */
+  caret?: boolean;
+}) {
   const level = budgetLevel(row);
   return (
     <span className="flex w-full flex-col gap-1.5 text-left">
@@ -130,7 +137,7 @@ export function BudgetSubItemView({ row }: { row: BudgetOverviewVM }) {
           <span data-budget-name className="line-clamp-2 break-words leading-snug">
             {row.name}
           </span>
-          <CaretRightIcon size={16} className="shrink-0 text-text-muted" />
+          {caret ? <CaretRightIcon size={16} className="shrink-0 text-text-muted" /> : null}
         </span>
         <Status level={level} pct={row.pct ?? 0} over={-(row.remaining ?? 0)} />
       </span>

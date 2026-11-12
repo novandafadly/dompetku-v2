@@ -101,7 +101,7 @@ function toTrend(r: TrendRow): TrendRowVM {
   };
 }
 
-async function trendTx(
+export async function trendTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
   labelMonth: IsoDate,
@@ -136,7 +136,7 @@ const categoryRow = z.object({
   archived: z.boolean().nullable(),
 });
 
-async function categoriesTx(
+export async function categoriesTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
   from: IsoDate,
@@ -239,20 +239,65 @@ function trimLeadingEmpty(rows: TrendRowVM[]): TrendRowVM[] {
   return i === -1 ? rows.slice(-1) : rows.slice(i);
 }
 
+/** Periode berjalan (`current`) dan yang dilihat (`viewed`, ≤ current) `YYYY-MM` untuk `basis`. */
+export async function resolveViewed(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  label: string | undefined,
+  basis: LaporanBasis,
+): Promise<{ current: string; viewed: string }> {
+  const { rows } = await c.query<{ label_month: string; today: string }>(
+    `select p.label_month, app.today() as today from api.pay_period(p_space_id => $1) p`,
+    [ctx.spaceId],
+  );
+  const now = rows[0];
+  if (!now) throw new Error('pay_period kosong');
+  const current = basis === 'gajian' ? now.label_month.slice(0, 7) : now.today.slice(0, 7);
+  return { current, viewed: label !== undefined && label <= current ? label : current };
+}
+
+/** `LaporanPeriodVM` dari baris tren periode yang dilihat. */
+export function periodOf(
+  row: TrendRowVM,
+  viewed: string,
+  current: string,
+  basis: LaporanBasis,
+): LaporanPeriodVM {
+  const viewedMonth: IsoDate = `${viewed}-01`;
+  const prev = addMonths(viewed, -1);
+  return {
+    label: periodLabel(viewedMonth, row.from, row.to),
+    from: row.from,
+    to: row.to,
+    labelMonth: viewedMonth,
+    holidaysKnown: row.holidaysKnown,
+    basis,
+    isCurrent: row.isCurrent,
+    complete: row.complete,
+    daysLeft: row.daysLeft,
+    prev: prev >= LAPORAN_EARLIEST ? prev : null,
+    next: viewed < current ? addMonths(viewed, 1) : null,
+  };
+}
+
+/** `LaporanSummaryVM` dari baris periode yang dilihat dan pembandingnya. */
+export function summaryOf(row: TrendRowVM, prevRow: TrendRowVM): LaporanSummaryVM {
+  return {
+    pemasukan: row.pemasukan,
+    pengeluaran: row.pengeluaran,
+    selisih: row.selisih,
+    deltaPengeluaran: row.deltaPengeluaran,
+    previous: { labelMonth: prevRow.labelMonth, pengeluaran: prevRow.pengeluaran },
+  };
+}
+
 export async function loadLaporan(
   ctx: LedgerCtx & { kind: 'personal' | 'shared' },
   params: LaporanParams = {},
 ): Promise<LaporanData> {
   const { label, basis } = parseLaporanParams(params);
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
-    const { rows } = await c.query<{ label_month: string; today: string }>(
-      `select p.label_month, app.today() as today from api.pay_period(p_space_id => $1) p`,
-      [ctx.spaceId],
-    );
-    const now = rows[0];
-    if (!now) throw new Error('pay_period kosong');
-    const current = basis === 'gajian' ? now.label_month.slice(0, 7) : now.today.slice(0, 7);
-    const viewed = label !== undefined && label <= current ? label : current;
+    const { current, viewed } = await resolveViewed(c, ctx, label, basis);
     const viewedMonth: IsoDate = `${viewed}-01`;
 
     // Dua baris berakhir di periode yang dilihat: [sebelumnya, dilihat] (urut lama ke baru).
@@ -277,28 +322,9 @@ export async function loadLaporan(
       }
     }
 
-    const prev = addMonths(viewed, -1);
     return {
-      period: {
-        label: periodLabel(viewedMonth, row.from, row.to),
-        from: row.from,
-        to: row.to,
-        labelMonth: viewedMonth,
-        holidaysKnown: row.holidaysKnown,
-        basis,
-        isCurrent: row.isCurrent,
-        complete: row.complete,
-        daysLeft: row.daysLeft,
-        prev: prev >= LAPORAN_EARLIEST ? prev : null,
-        next: viewed < current ? addMonths(viewed, 1) : null,
-      },
-      summary: {
-        pemasukan: row.pemasukan,
-        pengeluaran: row.pengeluaran,
-        selisih: row.selisih,
-        deltaPengeluaran: row.deltaPengeluaran,
-        previous: { labelMonth: prevRow.labelMonth, pengeluaran: prevRow.pengeluaran },
-      },
+      period: periodOf(row, viewed, current, basis),
+      summary: summaryOf(row, prevRow),
       classes,
       categories,
       budgets,

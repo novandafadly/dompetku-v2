@@ -142,3 +142,11 @@ Diisi di Task 10 sesudah UI selesai (daftar periksa antislop dijalankan manual b
 3. **`Tambah rincian`** mendapat `hover-pointer:bg-hover` (sama dengan baris di atasnya). Jarak ≥ 8 antar baris induk, rincian, dan `Tambah rincian` memakai pengecualian yang sama dengan S9 (pemisah = padding baris, target ≥ 44: rincian 64, tombol 44).
 4. **Nama rincian sangat panjang**: caret ke tepi kanan saat status turun ke baris kedua (kosmetik, tidak ada yang terpotong).
 5. Belum dipotret: tangga `near/full/over` pada rincian dan `Rp 12.345.678.900` di baris rincian (komponen `Status` dan `Bar` dipakai bersama induk). Tercatat sebagai utang kecil untuk critique Task 10.
+
+## Penyimpangan Task 6 dari bingkai (diputuskan agen, 2026-11-12)
+
+1. **Rincian di "Rencana vs kenyataan" selalu terbuka** (daftar bersarang berlabel, seperti Rencana), bukan `details/summary`: layar baca-saja, tanpa ketukan ekstra.
+2. **Ringkasan = `SummaryCardView` Laporan** (judul `Pengeluaran {Bulan}`, buku besar Pemasukan/Pengeluaran/Selisih, pembanding periode lalu) ditambah `BudgetTotalCard` bila ada anggaran, bukan kartu baru: angkanya komponen yang sama dengan Laporan. Lencana `Sementara` digantikan catatan `Periode belum selesai; angka masih bisa bertambah.` bawaan kartu itu.
+3. **Tautan `Review bulanan`** ada di Rencana > Anggaran (di atas daftar, tampil bila ada anggaran atau periode baru); keadaan kosong Rencana tidak menampilkannya.
+4. **Kolom `Penyesuaian (%)` = `<input inputMode=numeric>` biasa** (persen, bukan uang); galat tanpa nominal.
+5. **Aksi `Salin`** hanya muncul untuk periode yang baru selesai atau berjalan dan punya anggaran (aturan di `loadReview`, bukan UI).

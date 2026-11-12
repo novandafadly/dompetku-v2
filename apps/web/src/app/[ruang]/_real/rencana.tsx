@@ -2,6 +2,7 @@ import { formatRupiah } from '@dompetku/domain';
 import type { Route } from 'next';
 import Link from 'next/link';
 import { CalendarCheckIcon } from '@/components/ui/icons/calendar-check';
+import { ChartBarIcon } from '@/components/ui/icons/chart-bar';
 import { CalendarDotsIcon } from '@/components/ui/icons/calendar-dots';
 import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { InfoIcon } from '@/components/ui/icons/info';
@@ -31,6 +32,7 @@ import {
   unbudgetedRows,
 } from '@/features/rencana/copy';
 import type { RencanaData } from '@/features/rencana/types';
+import { REVIEW_COPY } from './review-copy';
 import {
   AddBillIsland,
   AddSubIsland,
@@ -77,6 +79,13 @@ function bagianHref(ruang: Ruang, bagian: Bagian, query: string): Route {
   return `/${ruang}/rencana${q === '' ? '' : `?${q}`}` as Route;
 }
 
+function reviewLink(ruang: Ruang, query: string): Route {
+  const params = new URLSearchParams(query);
+  params.delete('bagian');
+  const q = params.toString();
+  return `/${ruang}/rencana/review${q === '' ? '' : `?${q}`}` as Route;
+}
+
 function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Bagian; query: string }) {
   const items: { b: Bagian; label: string }[] = [
     { b: 'anggaran', label: 'Anggaran' },
@@ -99,7 +108,7 @@ function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Bagian; query:
   );
 }
 
-function Anggaran({ data }: { data: RencanaData }) {
+function Anggaran({ data, ruang, query }: { data: RencanaData; ruang: Ruang; query: string }) {
   const budgeted = budgetedRows(data.budgets);
   const unbudgeted = unbudgetedRows(data.budgets);
   const { title } = splitPeriodLabel(data.period.label);
@@ -131,6 +140,15 @@ function Anggaran({ data }: { data: RencanaData }) {
         </section>
       ) : null}
       <CopyConflictIsland />
+      {budgeted.length > 0 || newPeriod ? (
+        <Link
+          href={reviewLink(ruang, query)}
+          className={`flex min-h-11 items-center gap-2 self-start text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+        >
+          <ChartBarIcon size={18} />
+          {REVIEW_COPY.link}
+        </Link>
+      ) : null}
       {budgeted.length === 0 && !newPeriod ? (
         <EmptyState
           tone="accent"
@@ -383,7 +401,7 @@ export function RencanaReal({
             }
           />
         ) : bagian === 'anggaran' ? (
-          <Anggaran data={data} />
+          <Anggaran data={data} ruang={ruang} query={query} />
         ) : (
           <Tagihan data={data} />
         )}

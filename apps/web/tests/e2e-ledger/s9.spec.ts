@@ -353,6 +353,67 @@ test('realisasi nyata: 85% terpakai dengan ikon, lalu Lewat Rp … di baris dan 
   await expect(toasts(page).getByText(`Anggaran ${kategori} dihapus · Pribadi`)).toBeVisible();
 });
 
+test('Review bulanan (S10): angka, kartu Siapkan dengan +10%, axe dan 320 px', async ({ page }) => {
+  const sid = await spaceId('personal');
+  const label = `(select label_month from app.pay_period($1, app.today()))`;
+  // Anggaran bernominal ganjil di periode berjalan (test sebelumnya memulihkan keadaan kosong).
+  await adminQuery(
+    `insert into app.budgets (space_id, category_id, month, amount, wajib, updated_by)
+     select $1, c.id, ${label}, 1234567, false, u.id
+       from app.categories c, auth."user" u where c.space_id = $1 and c.name = $2 limit 1`,
+    [sid, MAKAN],
+  );
+  await page.goto('/pribadi/rencana');
+  const link = main(page).getByRole('link', { name: 'Review bulanan' });
+  await expect(link).toBeVisible();
+  await link.click();
+  await expect(page).toHaveURL(/\/pribadi\/rencana\/review$/);
+  await expect(page.getByRole('heading', { level: 1, name: /^Review / })).toBeVisible();
+  await expect(main(page).getByRole('navigation', { name: 'Dasar periode' })).toHaveCount(0);
+  const versus = main(page).getByRole('region', { name: 'Rencana vs kenyataan' });
+  await expect(versus).toBeVisible();
+  await expect(versus.getByRole('button')).toHaveCount(0);
+  await expect(main(page).getByRole('region', { name: /^Pengeluaran / })).toBeVisible();
+  // Kartu Siapkan: pilih +10%, salin ke periode berikutnya; nominal dihitung SQL (induk ke atas).
+  const before = await adminQuery<{ amount: string }>(
+    `select amount::text from app.budgets b join app.categories c on c.id = b.category_id
+      where b.space_id = $1 and c.parent_id is null and b.month = ${label} order by b.category_id`,
+    [sid],
+  );
+  expect(before.length).toBeGreaterThan(0);
+  const card = main(page).getByRole('region', { name: /^Siapkan / });
+  await card.getByRole('radio', { name: '+10%' }).click();
+  await card.getByRole('button', { name: `Salin ${String(before.length)} anggaran` }).click();
+  await expect(
+    toasts(page).getByText(/anggaran disalin ke .* · Pribadi · disesuaikan \+10%/),
+  ).toBeVisible();
+  const after = await adminQuery<{ amount: string }>(
+    `select amount::text from app.budgets b join app.categories c on c.id = b.category_id
+      where b.space_id = $1 and c.parent_id is null and b.month = (${label} + interval '1 month')::date
+      order by b.category_id`,
+    [sid],
+  );
+  expect(after.map((r) => Number(r.amount))).toEqual(
+    before.map((r) => Math.ceil((Number(r.amount) * 110) / 100_000) * 1000),
+  );
+  await adminQuery(
+    `delete from app.budgets where space_id = $1 and month = (${label} + interval '1 month')::date`,
+    [sid],
+  );
+  expect(after.map((r) => Number(r.amount))).toEqual([1_359_000]);
+  for (const theme of ['dark', 'light']) {
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/pribadi/rencana/review?theme=${theme}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await expect(versus).toBeVisible();
+      await expectNoSeriousViolations(page, { tags: WCAG_TAGS });
+      if (width === 320) await noHorizontalScroll(page);
+    }
+  }
+  await adminQuery('delete from app.budgets where space_id = $1', [sid]);
+});
+
 test('Bersama: obligation_double dengan nama tagihan, jalan keluar tidak wajib; tanpa data Pribadi', async ({
   page,
 }) => {
@@ -488,6 +549,7 @@ for (const url of [
   '/pribadi/beranda',
   '/pribadi/transaksi',
   '/pribadi/rencana',
+  '/pribadi/rencana/review',
   '/bersama/rencana',
 ]) {
   test(`JS muat dingin ${url} mode nyata ≤ 162 kB`, async ({ browser, ownerState }) => {

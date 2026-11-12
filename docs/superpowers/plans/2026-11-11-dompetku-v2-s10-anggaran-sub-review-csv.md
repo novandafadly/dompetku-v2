@@ -101,6 +101,8 @@
 
 ### Task 6: Review bulanan (loader + halaman + salin dengan penyesuaian) — loader model terkuat, UI sonnet
 
+**Selesai 2026-11-12:** `loadReview` (`server/ledger/review.ts`, menyusun `trendTx`/`categoriesTx`/`budgetOverviewTx`/`budgetTotalsTx`; helper `resolveViewed`/`periodOf`/`summaryOf` dipakai bersama `loadLaporan`), rute `/[ruang]/rencana/review` (nyata saja, prototipe 404), `ReviewReal` (Ringkasan = `SummaryCardView` Laporan, total kartu, Rencana vs kenyataan baca-saja, Tanpa anggaran, kartu `Siapkan` dengan `SegmentedControl` persen + `Lain…`), tautan `Review bulanan` di Rencana, `PeriodPicker` menerima `hrefFor`/`showBasis`. Tes: `test:int` (angka = Laporan/Rencana, B13, aturan salin), unit 28, e2e (`s9.spec`: +10% atas Rp1.234.567 → 1.359.000 dari SQL, axe, 320 px, budget JS).
+
 **Files:** Create `server/ledger/review.ts`, `app/[ruang]/rencana/review/page.tsx`, `_real/review.tsx`, `features/review/*`; Modify `_real/rencana.tsx` (tautan), `features/laporan/href.ts` bila perlu.
 
 - [ ] `loadReview(ctx,{label})`: satu `withLedger` memanggil `api.pay_period`, `api.period_trend` (periode ini + sebelumnya), `api.category_summary`, `api.budget_overview` dan `api.budget_progress` untuk label itu; **tidak** menghitung uang di JS. Tes `__int__`: setiap angka = keluaran fungsi Laporan yang sama (golden T17), Bersama tanpa data Pribadi (B13).
