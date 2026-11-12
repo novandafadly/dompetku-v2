@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { loadBeranda } from '../beranda';
 import { toLedgerError } from '../errors';
 import { loadLaporan } from '../laporan';
+import { exportLaporanCsv } from '../ekspor';
 import { loadReview } from '../review';
 import { spendPaceTx } from '../read';
 import { payBill, loadRencana, setBudget, setOccurrenceSkipped } from '../rencana';
@@ -453,6 +454,75 @@ describe('Review bulanan (S10 Task 6): angka sama dengan Laporan dan Rencana [T1
     }
     const nP = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
     const err = await failure(loadReview({ ...nP, userId: fx.f.id }, {}));
+    expect(toLedgerError(err)).toEqual({ code: 'not_found' });
+  });
+});
+
+describe('Ekspor CSV (S10 Task 7): angka sama dengan Laporan [T17], tanpa data Pribadi di Bersama [B13]', () => {
+  const sums = (rows: { reportClass: string; amount: number }[]) => ({
+    pemasukan: rows.filter((r) => r.reportClass === 'income').reduce((a, r) => a + r.amount, 0),
+    pengeluaran: -rows
+      .filter((r) => r.reportClass === 'expense' || r.reportClass === 'expense_fee')
+      .reduce((a, r) => a + r.amount, 0),
+  });
+
+  it('Pribadi N, dua dasar periode: Σ per kelas = ringkasan Laporan; nama berkas; BOM', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    for (const basis of ['gajian', 'kalender'] as const) {
+      const ex = await exportLaporanCsv(ctx, { basis });
+      const lp = await loadLaporan(ctx, { basis });
+      expect(sums(ex.rows)).toEqual({
+        pemasukan: lp.summary.pemasukan,
+        pengeluaran: lp.summary.pengeluaran,
+      });
+      expect(ex.rows.length).toBeGreaterThan(0);
+      expect(ex.csv.charCodeAt(0)).toBe(0xfeff);
+      expect(ex.csv.split('\r\n')).toHaveLength(ex.rows.length + 2);
+    }
+    expect((await exportLaporanCsv(ctx, {})).filename).toBe('dompetku-pribadi-2026-11.csv');
+    expect((await exportLaporanCsv(ctx, { basis: 'kalender' })).filename).toBe(
+      'dompetku-pribadi-2026-11-kalender.csv',
+    );
+    // Periode lampau yang sah dan parameter rusak = periode berjalan.
+    expect((await exportLaporanCsv(ctx, { label: '2026-10' })).filename).toBe(
+      'dompetku-pribadi-2026-10.csv',
+    );
+    expect((await exportLaporanCsv(ctx, { label: 'x' })).filename).toBe(
+      'dompetku-pribadi-2026-11.csv',
+    );
+  });
+
+  it('Bersama N dan F: tanpa kanari Pribadi; Σ = Laporan Bersama; satu event audit tanpa isi per ekspor', async () => {
+    for (const p of [fx.n, fx.f]) {
+      const ctx = await ctxAt(clock.at(TODAY), p, 'bersama');
+      const before = await h.admin.query<{ n: number }>(
+        "select count(*)::int as n from audit.events where event = 'export' and user_id = $1",
+        [p.id],
+      );
+      const ex = await exportLaporanCsv(ctx, {});
+      const lp = await loadLaporan(ctx, {});
+      expect(sums(ex.rows).pengeluaran).toBe(lp.summary.pengeluaran);
+      expect(sums(ex.rows).pengeluaran).toBe(GOLDEN.bersamaBelanja);
+      for (const k of [KANARI.nTagihan, KANARI.nKategori, KANARI.nDompet, KANARI.fDompet]) {
+        expect(ex.csv).not.toContain(k);
+      }
+      expect(ex.csv).not.toContain(String(KANARI.nRp));
+      const after = await h.admin.query<{ n: number; meta: string }>(
+        `select count(*)::int as n, max(meta::text) as meta from audit.events
+          where event = 'export' and user_id = $1`,
+        [p.id],
+      );
+      expect((after.rows[0]?.n ?? 0) - (before.rows[0]?.n ?? 0)).toBe(1);
+      expect(JSON.parse(after.rows[0]?.meta ?? '{}')).toEqual({
+        count: ex.rows.length,
+        via: 'csv',
+      });
+    }
+  });
+
+  it('Luar dan Pribadi pasangan: not_found, tanpa event', async () => {
+    const nP = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const err = await failure(exportLaporanCsv({ ...nP, userId: fx.f.id }, {}));
     expect(toLedgerError(err)).toEqual({ code: 'not_found' });
   });
 });

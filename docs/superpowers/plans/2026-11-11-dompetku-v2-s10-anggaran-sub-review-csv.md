@@ -111,6 +111,8 @@
 
 ### Task 7: Ekspor CSV: DB dan util (migrasi `0127`) — model terkuat
 
+**Selesai 2026-11-12:** migrasi `0127` (`api.export_entries`: satu baris per KAKI entri dari `report_lines`, bukan per entri, supaya transfer berbiaya cocok dengan Laporan; batas baris di `app.settings export_max_rows` = 50.000 agar tes tidak menyisipkan 50.000 baris; audit `export` meta `{count, via}` karena kunci meta `audit.events` tertutup, tanpa rentang), `csv.ts` (BOM, CRLF, RFC 4180, escape rumus; nominal integer polos tak di-escape), `ekspor.ts` (`exportLaporanCsv`, rentang = periode Laporan, `statement_timeout` 30 s lokal transaksi). pgTAP `28_ekspor` (30), unit `csv.test` (23), int (3). Route handler dan tombol: Task 8.
+
 **Files:** Create `0127_ekspor.sql`, `tests/28_ekspor.sql`, `server/ledger/csv.ts`, `server/ledger/ekspor.ts`; tes unit.
 
 - [ ] Test-first pgTAP: `api.export_entries(p_space_id, p_from, p_to)` (INVOKER, STABLE, `assert_member` lebih dulu; baca `app.report_lines`/`report_class`, entri batal/dipindah/dipurge tidak ikut): Σ nominal per kelas = angka `period_trend`/`category_summary` periode itu (golden T17); Bersama tidak memuat entri Pribadi (kanari B13, dua anggota); Pribadi pasangan = `DK404`; > 50.000 baris = `DK422 export_too_large`; rentang tidak sah = `DK400`; `statement_timeout` dinaikkan lokal transaksi ≤ 30 s hanya di fungsi ini (daftar terdaftar di `00_katalog.sql`); pencatatan audit `export` lewat `audit.log` (non-reserved) dengan meta `{rows, from, to}` tanpa isi (tes katalog audit).

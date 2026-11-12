@@ -80,8 +80,8 @@ select is_empty($$
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.provolatile <> 's' $$,
-  array['wa_claim_message', 'wa_finish_message'],
-  'fungsi api INVOKER hanya baca (STABLE), kecuali tulis pesan WA');
+  array['wa_claim_message', 'wa_finish_message', 'export_entries'],
+  'fungsi api INVOKER hanya baca (STABLE), kecuali tulis pesan WA dan ekspor (audit event export)');
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where p.prosecdef and p.proowner = 'dompetku_owner'::regrole
@@ -321,7 +321,8 @@ select set_eq($$
                       'member_contributions', 'pay_period', 'bill_list', 'bills_due',
                       'budget_progress', 'budget_overview', 'spend_pace', 'category_summary',
                       'period_trend', 'excluded_summary', 'wa_default_account',
-                      'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message']) f
+                      'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
+                      'export_entries']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
