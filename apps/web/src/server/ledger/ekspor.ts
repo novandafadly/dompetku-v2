@@ -1,5 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
+import { eksporFilename } from '@/features/laporan/href';
+import { createRateLimiter } from '@/server/wa/ratelimit';
 import { toCsv, type ExportRow } from './csv';
 import { type LaporanParams, parseLaporanParams, resolveViewed, trendTx } from './laporan';
 import { withLedger } from './retry';
@@ -13,6 +15,10 @@ import type { LedgerCtx } from './write';
  * sampai 30 s lokal transaksi sebelum membaca (BSD §15 butir 7); hanya fungsi ini yang menaikkannya.
  * Hanya ruang ini (`assert_member`, B13); event audit `export` ditulis fungsi SQL (tanpa isi).
  */
+
+/** Batas laju: 10 ekspor per jam per user (satu ekspor = satu event audit + kueri sampai 30 s); di memori satu proses. */
+export const EXPORT_PER_USER_PER_HOUR = 10;
+export const exportLimiter = createRateLimiter(EXPORT_PER_USER_PER_HOUR, 3_600_000);
 
 export interface LaporanExport {
   csv: string;
@@ -64,11 +70,9 @@ export async function exportLaporanCsv(
         recordedBy: v.recorded_by,
       };
     });
-    const ruang = ctx.kind === 'shared' ? 'bersama' : 'pribadi';
     return {
       csv: toCsv(rows),
-      // Tanpa nama orang; ruang dan periode saja.
-      filename: `dompetku-${ruang}-${viewed}${basis === 'kalender' ? '-kalender' : ''}.csv`,
+      filename: eksporFilename(ctx.kind === 'shared' ? 'bersama' : 'pribadi', viewed, basis),
       rows,
     };
   });

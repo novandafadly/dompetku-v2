@@ -19,3 +19,14 @@ export function laporanHref(
   const q = params.toString();
   return `/${ruang}/laporan${q === '' ? '' : `?${q}`}` as Route;
 }
+
+/** Alamat unduhan CSV periode yang sedang dilihat (`/{ruang}/laporan/ekspor`, S10-EX1). */
+export function eksporHref(ruang: Ruang, opts: { periode: string; basis: LaporanBasis }): Route {
+  const params = new URLSearchParams({ periode: opts.periode, basis: opts.basis });
+  return `/${ruang}/laporan/ekspor?${params.toString()}` as Route;
+}
+
+/** Nama berkas ekspor: ruang dan periode saja (tanpa nama orang). */
+export function eksporFilename(ruang: Ruang, periode: string, basis: LaporanBasis): string {
+  return `dompetku-${ruang}-${periode}${basis === 'kalender' ? '-kalender' : ''}.csv`;
+}

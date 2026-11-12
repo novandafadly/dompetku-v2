@@ -434,6 +434,52 @@ test('Kontribusi dua anggota di Laporan Bersama = SQL member_contributions perio
   }
 });
 
+test('Ekspor CSV Bersama: N dan F mengunduh baris yang sama, tanpa dompet/kanari Pribadi, Σ = SQL (B13)', async ({
+  page,
+  partnerPage,
+}) => {
+  const sh = await spaceOf(OWNER, 'shared');
+  const p = await period(sh.uid, sh.sid);
+  const trend = await asUser<{ pengeluaran: string }>(
+    sh.uid,
+    `select pengeluaran::text from api.period_trend($1, $2::date, 1, 'gajian')`,
+    [sh.sid, p.l],
+  );
+  const pengeluaran = trend[0]?.pengeluaran ?? '0';
+  const results: { raw: string; rows: string[][]; name: string }[] = [];
+  for (const pg of [page, partnerPage]) {
+    await pg.goto('/bersama/laporan');
+    const [dl] = await Promise.all([
+      pg.waitForEvent('download'),
+      pg.getByRole('link', { name: 'Ekspor CSV' }).click(),
+    ]);
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(await dl.path(), 'utf8');
+    const lines = raw
+      .replace(/^\uFEFF/, '')
+      .split('\r\n')
+      .filter((l) => l !== '');
+    results.push({
+      raw,
+      rows: lines.slice(1).map((l) => l.split(',')),
+      name: dl.suggestedFilename(),
+    });
+  }
+  expect(results[0]?.name).toMatch(/^dompetku-bersama-/);
+  expect(results[0]?.rows.length).toBe(results[1]?.rows.length);
+  expect(results[0]?.rows.length).toBeGreaterThan(0);
+  for (const r of results) {
+    for (const w of [K9.n.wallet, K9.f.wallet]) expect(r.raw.includes(w)).toBe(false);
+    const spent = -r.rows
+      .filter((c) => c[3] === 'expense' || c[3] === 'expense_fee')
+      .reduce((a, c) => a + Number(c[7]), 0);
+    expect(spent).toBe(Number(pengeluaran));
+  }
+  // Kedua nama pencatat ada di ekspor Bersama (nama dari space_roster).
+  const names = new Set(results[0]?.rows.map((c) => c[9]));
+  expect(names.has('Novanda')).toBe(true);
+});
+
 test('axe Laporan dan Rencana Bersama dua anggota (F) terang/gelap 320/390/768/1280', async ({
   partnerPage,
 }) => {

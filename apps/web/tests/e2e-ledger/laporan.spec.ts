@@ -236,6 +236,64 @@ test('Laporan Pribadi: Ringkasan = SQL, Tidak termasuk, kategori terurut, tren',
   expect(await txt(now)).toContain(digits(t.pengeluaran));
 });
 
+/** Klik `Ekspor CSV`, tunggu unduhan, kembalikan nama berkas dan baris data (kolom dipisah koma; data tes tanpa koma). */
+async function downloadCsv(page: Page) {
+  const [dl] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('link', { name: 'Ekspor CSV' }).click(),
+  ]);
+  const { readFile } = await import('node:fs/promises');
+  const raw = await readFile(await dl.path(), 'utf8');
+  const lines = raw.replace(/^\uFEFF/, '').split('\r\n');
+  expect(lines.pop()).toBe('');
+  const header = lines.shift()?.split(',') ?? [];
+  const rows = lines.map((l) =>
+    Object.fromEntries(l.split(',').map((v, i) => [header[i] ?? '', v])),
+  );
+  return { name: dl.suggestedFilename(), raw, header, rows };
+}
+
+const sumClass = (rows: Record<string, string>[], classes: string[]) =>
+  rows
+    .filter((r) => classes.includes(r['Kelas laporan'] ?? ''))
+    .reduce((a, r) => a + Number(r.Nominal ?? 0), 0);
+
+test('Ekspor CSV Pribadi: unduhan = angka Laporan di layar (T17), nama berkas tanpa nama orang', async ({
+  page,
+}) => {
+  const t = await truth('personal', 'gajian');
+  await page.goto('/pribadi/laporan');
+  await expect(page.getByTestId('laporan-ringkasan')).toContainText(rp(t.pengeluaran));
+  await expect(
+    main(page).getByText(/^Semua transaksi .* · Pribadi\. Dibuka di Excel atau Sheets\.$/),
+  ).toBeVisible();
+  const csv = await downloadCsv(page);
+  expect(csv.name).toMatch(/^dompetku-pribadi-\d{4}-\d{2}\.csv$/);
+  expect(csv.header).toEqual([
+    'Tanggal',
+    'Jenis',
+    'Peran',
+    'Kelas laporan',
+    'Dompet',
+    'Kategori',
+    'Subkategori',
+    'Nominal',
+    'Catatan',
+    'Pencatat',
+  ]);
+  expect(sumClass(csv.rows, ['income'])).toBe(t.pemasukan);
+  expect(-sumClass(csv.rows, ['expense', 'expense_fee'])).toBe(t.pengeluaran);
+  expect(csv.rows.length).toBeGreaterThan(0);
+  expect(csv.name.toLowerCase()).not.toContain('novanda');
+  await expect(toasts(page).getByText(/^Ekspor .* · Pribadi selesai$/)).toBeVisible();
+  // Basis kalender: nama berkas membawa basis; angka = Laporan kalender.
+  const tk = await truth('personal', 'kalender');
+  await page.goto('/pribadi/laporan?basis=kalender');
+  const csvK = await downloadCsv(page);
+  expect(csvK.name).toMatch(/-kalender\.csv$/);
+  expect(-sumClass(csvK.rows, ['expense', 'expense_fee'])).toBe(tk.pengeluaran);
+});
+
 test('periode lalu (lengkap): pembanding dari SQL dan ringkasan = SQL periode itu', async ({
   page,
 }) => {
@@ -408,6 +466,13 @@ test('Bersama: Laporan tanpa data Pribadi (B13) dan tanpa "rumah tangga"', async
   const t = await truth('shared', 'gajian');
   expect(await txt(page.getByTestId('laporan-ringkasan'))).toContain(rp(t.pengeluaran));
   await expect(page.getByTestId('laporan-kategori').filter({ hasText: KAT_DAPUR })).toBeVisible();
+  // Ekspor Bersama: Σ = Laporan Bersama; tanpa dompet/kategori Pribadi (B13).
+  const csv = await downloadCsv(page);
+  expect(csv.name).toMatch(/^dompetku-bersama-/);
+  expect(-sumClass(csv.rows, ['expense', 'expense_fee'])).toBe(t.pengeluaran);
+  for (const secret of [W_A, W_B, 'Dompet Laporan Lama', KANARI_KAT]) {
+    expect(csv.raw).not.toContain(secret);
+  }
 });
 
 test('axe, 320 tanpa gulir samping, dua tema (Pribadi, kalender, Bersama, kosong)', async ({

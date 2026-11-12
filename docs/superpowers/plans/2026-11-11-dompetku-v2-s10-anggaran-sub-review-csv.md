@@ -121,6 +121,8 @@
 
 ### Task 8: Route ekspor + tombol (sonnet + lensa desain untuk tombol, server model terkuat)
 
+**Selesai 2026-11-12:** route `GET /[ruang]/laporan/ekspor` (`ruangContext`, 429 batas laju 10/jam/user di memori, 422 `export_too_large`, 500 teks polos tanpa isi, `no-store`/`nosniff`, prototipe 404), tautan `Ekspor CSV` bergaya tombol di Laporan (unduh biasa tanpa JS; dengan JS fetch→blob + toast galat), e2e (Laporan Pribadi/kalender/Bersama dan `e2e:bersama` N dan F: Σ = SQL, tanpa data Pribadi), unit route (6) dan klien (6). **Pemisah CSV = koma** (standar, Google Sheets); Excel locale Indonesia membuka satu kolom: catat di handoff, ganti `;` bila pemilik meminta.
+
 **Files:** Create `app/[ruang]/laporan/ekspor/route.ts` (+ tes), modify `_real/laporan.tsx`, `features/laporan/*`.
 
 - [ ] Route GET (mode nyata saja; prototipe 404): gerbang `requireDataUser` + `resolveSpace` (bukan helper halaman), parameter `periode`/`basis` divalidasi seperti `parseLaporanParams`, header `text/csv; charset=utf-8`, `Content-Disposition: attachment`, `Cache-Control: no-store`; tanpa nominal/isi di log. Batas laju per user (mis. 10/jam, di memori) dan `export_too_large` → 422 dengan pesan awam.

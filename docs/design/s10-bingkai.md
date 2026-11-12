@@ -150,3 +150,11 @@ Diisi di Task 10 sesudah UI selesai (daftar periksa antislop dijalankan manual b
 3. **Tautan `Review bulanan`** ada di Rencana > Anggaran (di atas daftar, tampil bila ada anggaran atau periode baru); keadaan kosong Rencana tidak menampilkannya.
 4. **Kolom `Penyesuaian (%)` = `<input inputMode=numeric>` biasa** (persen, bukan uang); galat tanpa nominal.
 5. **Aksi `Salin`** hanya muncul untuk periode yang baru selesai atau berjalan dan punya anggaran (aturan di `loadReview`, bukan UI).
+
+## Penyimpangan Task 8 dari bingkai (diputuskan agen, 2026-11-12)
+
+1. **`Ekspor CSV` = `<a href download>` bergaya tombol sekunder** (bukan `<button>`): unduhan jalan tanpa JS dan sebelum hidrasi; dengan JS klik dicegat untuk keadaan `Menyiapkan…` dan toast galat.
+2. **Periode kosong:** CSV hanya berisi judul kolom; toast sukses yang sama (`Ekspor … selesai`), tanpa toast khusus "belum punya transaksi".
+3. **Batas laju 10 ekspor per jam per user** (di memori satu proses; toast `Terlalu sering mengunduh. Coba lagi nanti.`).
+4. **Pemisah koma**; Excel locale Indonesia membuka CSV koma sebagai satu kolom (Sheets dan Excel "Dari teks/CSV" normal). Utang kecil bila pemilik memakai Excel id-ID.
+5. Belum dipotret untuk design review (tombol + hint di header Laporan, 320/390 terang/gelap): masuk critique Task 10.

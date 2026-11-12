@@ -4,7 +4,7 @@ import { buttonClass } from '@/components/ui/button';
 import { CategoryChartView } from '@/features/laporan/category-chart-view';
 import { ClassBreakdownView } from '@/features/laporan/class-breakdown-view';
 import { ContributionReportView } from '@/features/laporan/contribution-report-view';
-import { laporanHref } from '@/features/laporan/href';
+import { eksporFilename, eksporHref, laporanHref } from '@/features/laporan/href';
 import {
   LaporanEmptyCard,
   LaporanFailedCard,
@@ -17,6 +17,8 @@ import { TrendChartView } from '@/features/laporan/trend-chart-view';
 import type { Ruang } from '@/features/ledger/types';
 import { PageHeader } from '@/features/shell/page-header';
 import type { LaporanData } from '@/server/ledger/laporan';
+import { EKSPOR_COPY } from './ekspor-copy';
+import { ExportIsland } from './ekspor-islands';
 import { CatatEmptyIsland } from './transaksi-islands';
 
 /**
@@ -61,6 +63,18 @@ export function LaporanReal({
           Laporan
         </p>
         <PeriodPicker ruang={ruang} period={period} query={query} />
+        <div className="flex flex-col gap-1.5">
+          <ExportIsland
+            ruang={ruang}
+            href={eksporHref(ruang, { periode: viewed, basis: period.basis })}
+            filename={eksporFilename(ruang, viewed, period.basis)}
+            periodTitle={title}
+            describedBy="lp-ekspor-hint"
+          />
+          <p id="lp-ekspor-hint" className="text-caption font-medium text-text-muted">
+            {EKSPOR_COPY.hint(title, ruang)}
+          </p>
+        </div>
         {empty ? (
           <LaporanEmptyCard
             action={

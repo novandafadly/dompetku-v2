@@ -195,6 +195,8 @@ export type LedgerErrorCode =
   | 'parent_budget_required'
   | 'sub_exceeds_parent'
   | 'sub_not_wajib'
+  // S10: ekspor (0127).
+  | 'export_too_large'
   | 'already_posted'
   | 'bill_archived'
   | 'bill_account_kantor'
