@@ -3,13 +3,16 @@
 -- satu fungsi job baru.
 --
 -- jobs.purge_wa_messages(): hapus baris pesan WhatsApp yang lebih tua dari 14 hari, apa pun statusnya.
--- 14 hari sengaja di dalam retensi idempotensi ledger (30 hari, jobs.purge_idempotency): pesan lama yang
--- diputar ulang sesudah baris dihapus diklaim baru, tetapi createEntry memakai client_id turunan id
--- pesan, jadi kunci idempotensi yang masih ada mengembalikan entri yang sama (tidak ada catatan ganda).
--- Jendela `batal` (10 menit) jauh di dalam 14 hari. Baris `pending` yang tak pernah selesai ikut
--- dihapus (kalau tidak ia menjadi "catatan terakhir" abadi yang memblokir `batal`, wa_last_cancellable).
--- DEFINER milik dompetku_owner (BYPASSRLS; wa_messages ber-RLS FORCE tanpa policy owner), EXECUTE hanya
--- dompetku_worker; mengembalikan jumlah baris terhapus (job_runs.rows). Idempoten.
+-- Dedupe pesan (wa_claim_message) hanya berlaku selama baris ada, jadi jaminan "tidak ada catatan ganda"
+-- bertumpu pada DUA lapis di luar tabel ini: (1) web mengabaikan pesan yang data.timestamp-nya lebih
+-- tua dari 7 hari (handle.ts MAX_MESSAGE_AGE_SECONDS, di bawah 14 hari); (2) untuk pesan 7-14 hari yang
+-- baris dedupe-nya sudah tiada, createEntry memakai client_id turunan id pesan dan kunci idempotensi
+-- ledger (30 hari, jobs.purge_idempotency) mengembalikan entri yang sama. Tanpa lapis (1) pesan yang
+-- dikirim ulang sesudah hari ke-30 akan tercatat ganda. Jendela `batal` (10 menit) jauh di dalam 14
+-- hari. Baris `pending` yang tak pernah selesai ikut dihapus (tak ada gunanya disimpan; entri, bila
+-- sempat dibuat, tetap ditemukan lewat idempotensi). DEFINER milik dompetku_owner (BYPASSRLS;
+-- wa_messages ber-RLS FORCE tanpa policy owner), EXECUTE hanya dompetku_worker; mengembalikan jumlah
+-- baris terhapus (job_runs.rows). Idempoten.
 create function jobs.purge_wa_messages() returns int
 language plpgsql security definer set search_path = '' as $$
 declare

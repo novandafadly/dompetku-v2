@@ -96,8 +96,8 @@ Setiap butir dari ledger SDD Task 1 sampai 7 dan catatan laporan task. Nomor bar
 
 ### Data dan DB
 
-- [ ] **Retensi `wa_messages` belum ada** (tumbuh terus, kecil): job purge worker > N hari, tidak boleh menghapus baris `recorded` yang masih dalam jendela `batal`.
-- [ ] Retensi `wa_messages`: jendela purge harus berada di dalam retensi idempotensi `client_id` ledger, kalau tidak pesan bertanda tangan lama yang diputar ulang bisa tercatat lagi.
+- [x] Retensi `wa_messages`: `jobs.purge_wa_messages` (migrasi 0128, S10): > 14 hari apa pun statusnya, job 01:27 WIB; jendela `batal` (10 menit) tak tersentuh.
+- [x] Replay sesudah purge: webhook menolak pesan yang `data.timestamp`-nya lebih tua dari 7 hari (`MAX_MESSAGE_AGE_SECONDS`, log `stale`); 7-14 hari ditahan idempotensi ledger (30 hari). **Verifikasi di sesi hidup (runbook-wa):** log `[wa] no_timestamp` berarti `data.timestamp` tidak ada di payload OpenWA, dan perlindungan ini tidak berlaku sampai ada penggantinya (fail-open). Metrik spec §... "80% dalam 14 hari" dari `wa_messages` harus diambil sebelum data berumur 14 hari terhapus.
 - [ ] Down migrasi gagal bila `audit.events` sudah memuat `wa_linked`/`wa_unlinked` (`0123_wa_catat.sql:380-382`): hapus baris itu dulu atau catat.
 - [ ] `wa_default_account` memindai `entries` tanpa indeks `(space_id, created_by, created_at)` (`0123_wa_catat.sql:251-267`); ukur sebelum menambah indeks.
 - [ ] Nomor SIM yang didaur ulang: nomor milik A memblokir B sampai A memutuskan (ruling Task 2).

@@ -401,6 +401,8 @@ sudo systemctl start dompetku-deploy.timer
 
    Tidak ada balasan dan tidak ada log `[wa]` sama sekali = bentuk payload OpenWA tidak cocok dengan yang dibaca web (`kind`/`isGroup` di fixture **UNVERIFIED**), atau webhook tidak sampai (cek log openwa). Log `[wa] ignored <alasan>` menunjukkan pesan dikenali tapi diabaikan: `not_message` (event bukan pesan, atau JSON tidak terbaca), `not_private` (grup, broadcast, atau pengirim bukan `@c.us`/`@lid`), `from_me` (pesan bot sendiri), `not_text` (media/stiker tanpa teks). Pesan pribadi berteks dari HP pemilik yang tetap menghasilkan `not_private` atau `not_message` = bentuk payload versi OpenWA ini berbeda; laporkan sebagai bug adaptor (`apps/web/src/server/wa/openwa.ts`).
 
+   **Batas umur pesan (S10):** pesan yang `data.timestamp`-nya lebih tua dari 7 hari diabaikan (log `[wa] stale`), supaya baris dedupe yang sudah dipurge (14 hari) tidak membuka catatan ganda. Pastikan log TIDAK memuat `[wa] no_timestamp` sesudah langkah 3: bila ada, OpenWA tidak mengirim `data.timestamp` di payload dan perlindungan itu mati (fail-open); laporkan ke sesi pengembang sebelum membiarkan bot hidup berhari-hari.
+
 5. Nomor yang tidak terhubung (mis. HP lain) mengirim pesan: balasan petunjuk "belum terhubung" paling banyak sekali per jam, tanpa entri.
 
 ## Operasi

@@ -47,7 +47,20 @@ describe('toInbound', () => {
       fromMe: false,
       text: 'makan siang 25rb',
       senderPhone: null,
+      sentAt: 1762682400,
     });
+  });
+  it('sentAt: data.timestamp berupa angka positif; selain itu null', () => {
+    const base = JSON.parse(fx('message-private')) as {
+      data: Record<string, unknown>;
+    };
+    const withTs = (ts: unknown) =>
+      t.toInbound(JSON.stringify({ ...base, data: { ...base.data, timestamp: ts } }))?.sentAt;
+    expect(withTs(1762682400)).toBe(1762682400);
+    for (const bad of ['1762682400', 0, -5, null, Number.NaN]) expect(withTs(bad)).toBeNull();
+    const noTs = { ...base.data };
+    delete noTs.timestamp;
+    expect(t.toInbound(JSON.stringify({ ...base, data: noTs }))?.sentAt).toBeNull();
   });
   it('grup', () => {
     expect(t.toInbound(fx('message-group'))).toMatchObject({ chatType: 'group', fromMe: false });

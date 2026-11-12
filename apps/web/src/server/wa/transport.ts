@@ -8,6 +8,8 @@ export interface InboundMessage {
   text: string | null;
   /** data.senderPhone OpenWA (opt-in RESOLVE_LID_TO_PHONE=true), digit apa adanya; null bila tidak ada. */
   senderPhone: string | null;
+  /** data.timestamp OpenWA (detik epoch waktu pesan); null bila tidak ada atau tidak sah. */
+  sentAt: number | null;
 }
 
 export interface WaTransport {
