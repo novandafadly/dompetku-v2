@@ -111,3 +111,16 @@ export interface DebtDetailVM extends DebtNumbersVM {
   /** Efek bersih per dompet bila utang dihapus sekarang (dialog AK2). */
   voidEffects: DebtEffectVM[];
 }
+
+/** Bagian utang yang dipakai sheet Bayar: daftar dan detail sama-sama memenuhinya. */
+export interface PayTarget {
+  debtId: string;
+  contactName: string;
+  direction: DebtDirection;
+  principal: Rupiah;
+  remaining: Rupiah;
+  quick: DebtQuickVM;
+  openedOn: IsoDate;
+  /** Dompet entri pokok (mode baru): bawaan dompet bayar bila masih aktif. */
+  accountId: string | null;
+}

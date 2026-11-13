@@ -30,6 +30,7 @@ import type {
   UtangData,
 } from '@/features/utang/types';
 import { Segmen } from './rencana';
+import { UTANG_TITLE_ID } from './utang-ids';
 import { RetryIsland } from './transaksi-islands';
 
 /**
@@ -38,9 +39,6 @@ import { RetryIsland } from './transaksi-islands';
  * (dimuat malas di chunk `utang-client`, terpisah dari `rencana-client`). Hanya Pribadi, hanya
  * mode nyata. Tanpa merah/hijau untuk angka utang; `Lunas` = ikon + teks, tidak pernah `Rp 0`.
  */
-
-/** Id judul detail: sasaran fokus sesudah aksi yang memuat ulang halaman (pola `focus-title`). */
-export const UTANG_TITLE_ID = 'utang-title';
 
 const ROW_BODY = `flex min-h-18 min-w-0 flex-1 items-start py-3 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 const HISTORY_BODY = `flex min-h-16 min-w-0 flex-[1_1_12rem] flex-col justify-center gap-0.5 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
@@ -190,9 +188,9 @@ export function UtangList({
         <Details summary={UTANG_COPY.deletedGroup(g.deleted.length)}>
           {g.deleted.map((d) => (
             <li key={d.debtId} className={rowDivider}>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2">
                 <DeletedBodyView debt={d} />
-                <span className="shrink-0">{slots.restore(d)}</span>
+                {slots.restore(d)}
               </div>
             </li>
           ))}
