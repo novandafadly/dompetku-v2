@@ -437,7 +437,7 @@ test(
   async ({ page }) => {
     const before = await walletBalance(page, 'pribadi', WALLET);
     const d0 = await debtOf(BUDI);
-    // Budi punya pokok, dua cicilan hidup, dan satu cicilan batal: tiga entri + satu batal.
+    // Budi punya pokok, dua cicilan hidup, dan satu cicilan batal: empat entri (tiga hidup, satu batal).
     expect(d0.entries).toBe(4);
     await openDetail(page, BUDI, new RegExp(`^Utang ke ${BUDI}$`));
     await expect(sisaBox(page)).toContainText(rpRe(250_000));
