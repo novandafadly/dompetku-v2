@@ -9,6 +9,7 @@ import {
   buildAccountHref,
   buildEntryHref,
   buildHref,
+  buildKontakHref,
   buildSectionHref,
   isRuang,
   KEPT_PARAMS,
@@ -37,6 +38,8 @@ export interface NavValue {
   monthHref: (ruang: Ruang, month: string) => Route;
   sampahHref: (ruang: Ruang) => Route;
   kategoriHref: (ruang: Ruang) => Route;
+  /** Menu → Kontak (S11): hanya Pribadi mode nyata. */
+  kontakHref: (ruang: Ruang) => Route;
   /** Hanya DemoProvider yang perlu: membuang satu parameter dari query tersimpan (mis. `state`). */
   dropParam: (key: string) => void;
 }
@@ -95,6 +98,7 @@ function NavProviderInner({
     monthHref: (r, m) => buildHref(r, 'transaksi', query, { value: m, today }),
     sampahHref: (r) => buildSectionHref(r, 'sampah', query),
     kategoriHref: (r) => buildSectionHref(r, 'kategori', query),
+    kontakHref: (r) => buildKontakHref(r, query),
     dropParam: (key) => {
       setQuery((q) => withoutParam(q, key));
     },
