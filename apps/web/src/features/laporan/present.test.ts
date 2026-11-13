@@ -143,3 +143,27 @@ describe('excludedLines', () => {
     expect(lines[0]?.note).toBe('Pindah antar dompet Bersama.');
   });
 });
+
+describe('excludedLines utang (S11)', () => {
+  it('pokok dan pelunasan: nama per arah uang, tanpa Lainnya, tanpa "Hutang"', () => {
+    const lines = excludedLines(
+      [
+        { reportClass: 'x_pelunasan_utang', direction: 'in', amount: 300_000, entryCount: 1 },
+        { reportClass: 'x_pelunasan_utang', direction: 'out', amount: 200_000, entryCount: 2 },
+        { reportClass: 'x_pokok_utang', direction: 'in', amount: 1_000_000, entryCount: 1 },
+        { reportClass: 'x_pokok_utang', direction: 'out', amount: 500_000, entryCount: 1 },
+      ],
+      'pribadi',
+    );
+    expect(lines.map((l) => [l.key, l.name, l.amount])).toEqual([
+      ['x_pelunasan_utang:in', 'Penerimaan piutang', 300_000],
+      ['x_pelunasan_utang:out', 'Pelunasan utang', 200_000],
+      ['x_pokok_utang:in', 'Pinjaman diterima', 1_000_000],
+      ['x_pokok_utang:out', 'Pinjaman diberikan', 500_000],
+    ]);
+    for (const l of lines) {
+      expect(l.name).not.toBe('Lainnya');
+      expect(`${l.name} ${l.note}`).not.toMatch(/hutang/i);
+    }
+  });
+});
