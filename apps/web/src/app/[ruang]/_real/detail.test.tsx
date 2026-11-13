@@ -712,7 +712,13 @@ describe('Detail pokok dan cicilan utang (S11)', () => {
   it('ikut batal karena utang dihapus: tanpa Pulihkan, arahkan ke Utang', () => {
     const e = debtEntry({
       voidedAt: '2026-11-02T09:00:00+07:00',
-      debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi', deleted: true },
+      debt: {
+        id: 'u-1',
+        direction: 'borrowed',
+        contactName: 'Budi',
+        deleted: true,
+        voidedWithDebt: true,
+      },
     });
     render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
     expect(screen.queryByRole('button', { name: 'Pulihkan' })).toBeNull();
@@ -721,5 +727,21 @@ describe('Detail pokok dan cicilan utang (S11)', () => {
       '/pribadi/rencana?bagian=utang',
     );
     expect(screen.queryByRole('link', { name: 'Lihat utang' })).toBeNull();
+  });
+
+  it('dibatalkan sendiri sebelum utang dihapus: tidak menjanjikan pulih bersama utang', () => {
+    const e = debtEntry({
+      voidedAt: '2026-11-02T09:00:00+07:00',
+      debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi', deleted: true },
+    });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.queryByRole('button', { name: 'Pulihkan' })).toBeNull();
+    expect(screen.queryByText('Utang ke Budi dihapus. Pulihkan dari Utang.')).toBeNull();
+    expect(
+      screen.getByText(
+        'Utang ke Budi dihapus. Pulihkan utangnya dulu; transaksi ini dipulihkan sendiri sesudahnya.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buka Utang' })).toBeTruthy();
   });
 });

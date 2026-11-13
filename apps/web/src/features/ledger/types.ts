@@ -68,7 +68,8 @@ export interface EntryVM {
   reimbursesEntryId?: string;
   /**
    * Pokok/cicilan utang (S11): utang yang ditunjuk. `deleted` = utangnya sudah dihapus (entri ikut
-   * batal; pulihnya dari Utang, bukan dari entri).
+   * batal; pulihnya dari Utang, bukan dari entri). `voidedWithDebt` = entri ini dibatalkan oleh Hapus
+   * utang (ikut pulih bersama utangnya); tanpa penanda berarti dibatalkan sendiri lebih dulu.
    */
   debt?: {
     id: string;
@@ -76,6 +77,7 @@ export interface EntryVM {
     contactName: string;
     title?: string;
     deleted?: true;
+    voidedWithDebt?: true;
   };
 }
 

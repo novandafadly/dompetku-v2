@@ -214,9 +214,13 @@ export function DetailReal({
         </p>
       ) : debt?.deleted === true ? (
         // Ikut batal karena Hapus utang: pulihnya satu paket dari Utang (restore_entry = debt_deleted).
+        // Dibatalkan sendiri sebelum utang dihapus: tidak ikut kembali; pulihkan utangnya dulu, lalu
+        // entri ini dari sini (restore_debt hanya memulihkan entri `voidedWithDebt`).
         <>
           <p className="min-w-0 basis-full text-meta font-medium text-text-muted">
-            {`${debtHeading(debt.direction, debt.contactName)} dihapus. Pulihkan dari Utang.`}
+            {debt.voidedWithDebt === true
+              ? `${debtHeading(debt.direction, debt.contactName)} dihapus. Pulihkan dari Utang.`
+              : `${debtHeading(debt.direction, debt.contactName)} dihapus. Pulihkan utangnya dulu; transaksi ini dipulihkan sendiri sesudahnya.`}
           </p>
           <Link
             href={buildDebtListHref(ruang, '')}

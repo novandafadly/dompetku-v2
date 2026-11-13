@@ -129,6 +129,7 @@ interface EntryRow {
   debt_title: string | null;
   debt_contact_name: string | null;
   debt_deleted: boolean | null;
+  voided_with_debt: boolean;
 }
 
 /**
@@ -152,7 +153,8 @@ const ENTRY_COLUMNS = `
     (select abs(sum(fl.amount))::bigint from app.entry_lines fl
       where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id,
   e.debt_id, dbt.direction as debt_direction, dbt.title as debt_title,
-  dct.name as debt_contact_name, dbt.voided_at is not null as debt_deleted`;
+  dct.name as debt_contact_name, dbt.voided_at is not null as debt_deleted,
+  e.voided_with_debt`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -213,6 +215,7 @@ function toEntryVM(row: EntryRow): EntryVM {
       contactName: row.debt_contact_name,
       ...(row.debt_title === null ? {} : { title: row.debt_title }),
       ...(row.debt_deleted === true ? { deleted: true as const } : {}),
+      ...(row.voided_with_debt ? { voidedWithDebt: true as const } : {}),
     };
   }
   return vm;

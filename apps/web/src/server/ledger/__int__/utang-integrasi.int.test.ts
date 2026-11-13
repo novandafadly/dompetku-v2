@@ -301,7 +301,11 @@ describe('S11 Task 7: Transaksi, Laporan, Ekspor, Sampah untuk pokok dan cicilan
     expect(s.items).toEqual([]);
     const dp = await loadDetail(pribadi, utang.entryId ?? '');
     expect(dp?.entry.voidedAt).toBeDefined();
-    expect(dp?.entry.debt).toMatchObject({ contactName: 'Budi', deleted: true });
+    expect(dp?.entry.debt).toMatchObject({
+      contactName: 'Budi',
+      deleted: true,
+      voidedWithDebt: true,
+    });
     const t = await loadTransaksi(pribadi, month);
     expect(t.entries.some((e) => e.debt?.contactName === 'Budi')).toBe(false);
     // Σ Laporan tetap; kelas pinjaman Budi hilang dari "Tidak termasuk".
