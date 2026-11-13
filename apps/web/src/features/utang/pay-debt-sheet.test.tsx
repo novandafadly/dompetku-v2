@@ -128,6 +128,38 @@ describe('PayDebtSheet (S11-BY1)', () => {
     expect(screen.getByText(/Saldo BCA berkurang Rp\s375\.000/)).toBeTruthy();
   });
 
+  it('pelunasan: sisa sesudahnya tampil Lunas (ikon + teks), tidak pernah Rp 0', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(
+      within(screen.getByRole('radiogroup', { name: 'Pintasan jumlah' })).getByRole('radio', {
+        name: /^Lunas/,
+      }),
+    );
+    const table = screen.getByRole('table', { name: 'Setelah ini' });
+    expect(table).toHaveTextContent(/Sisa sesudahnyaLunas/);
+    expect(table.textContent).not.toMatch(/Rp\s0\b/);
+  });
+
+  it('peringatan saldo kurang tepat di bawah kolom Jumlah (sebelum Dompet), bukan di dasar sheet', async () => {
+    const user = userEvent.setup();
+    setup({
+      target: {
+        ...TARGET,
+        remaining: 5_000_000,
+        principal: 5_000_000,
+        quick: { p25: 1_250_000, p50: 2_500_000, full: 5_000_000 },
+      },
+    });
+    await user.type(amountBox(), '3000000');
+    const warning = screen.getByText(/Kalau dibayar, saldonya jadi/).closest('[role="status"]');
+    const account = screen.getByRole('combobox', { name: 'Dibayar dari' });
+    expect(warning).not.toBeNull();
+    expect(
+      (warning as Node).compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('bayar lebih: galat kolom, Bayar sisa mengisi kolom (tidak menyimpan), tidak mengirim', async () => {
     const user = userEvent.setup();
     const { onPay } = setup();

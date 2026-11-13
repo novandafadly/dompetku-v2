@@ -153,7 +153,7 @@ export const UTANG_COPY = {
     arah === 'lent'
       ? 'Jumlah ini lebih besar dari sisa. Kurangi jumlahnya atau terima sisanya.'
       : 'Jumlah ini lebih besar dari sisa. Kurangi jumlahnya atau bayar sisanya.',
-  errAmountMax: 'Jumlah terlalu besar. Maksimal Rp 10.000.000.000.000.',
+  errAmountMax: 'Jumlah terlalu besar. Periksa lagi angkanya.',
   errDateFuture: 'Tanggal tidak boleh sesudah hari ini.',
   errIdem:
     'Isian ini sudah pernah terkirim dengan isi berbeda. Periksa daftar Utang sebelum menyimpan lagi.',

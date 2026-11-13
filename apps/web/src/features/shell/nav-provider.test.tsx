@@ -95,7 +95,6 @@ describe('NavProvider, alamat', () => {
     expect(nav.accountHref('bersama', 'x1')).toBe('/bersama/dompet/x1');
     expect(nav.sampahHref('bersama')).toBe('/bersama/sampah');
     expect(nav.kategoriHref('pribadi')).toBe('/pribadi/kategori');
-    expect(nav.kontakHref('pribadi')).toBe('/pribadi/kontak');
   });
 
   it('bulan terbawa hanya di dalam Transaksi', () => {

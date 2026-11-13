@@ -54,9 +54,10 @@ export function paidCaptionDetail(
   principal: Rupiah,
   settled: boolean,
 ): string {
-  return settled
-    ? `${formatRupiah(principal)} terbayar penuh`
-    : `${String(paidPct)}% terbayar · ${formatRupiah(paid)} dari ${formatRupiah(principal)}`;
+  if (settled) return `${formatRupiah(principal)} terbayar penuh`;
+  // Belum ada cicilan: tidak ada "Rp 0" (bingkai aturan 3).
+  if (paid === 0) return `Belum ada pembayaran · dari ${formatRupiah(principal)}`;
+  return `${String(paidPct)}% terbayar · ${formatRupiah(paid)} dari ${formatRupiah(principal)}`;
 }
 
 export interface QuickOption {

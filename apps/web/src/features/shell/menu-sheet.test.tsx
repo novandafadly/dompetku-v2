@@ -9,7 +9,6 @@ vi.mock('./nav-provider', () => ({
     query: '',
     sampahHref: (r: string) => `/${r}/sampah`,
     kategoriHref: (r: string) => `/${r}/kategori`,
-    kontakHref: (r: string) => `/${r}/kontak`,
   }),
 }));
 

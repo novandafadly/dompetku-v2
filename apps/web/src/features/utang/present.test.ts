@@ -72,6 +72,9 @@ describe('caption', () => {
     expect(paidCaptionDetail(25, 500_000, 2_000_000, false)).toBe(
       '25% terbayar · Rp 500.000 dari Rp 2.000.000',
     );
+    expect(paidCaptionDetail(0, 0, 2_000_000, false)).toBe(
+      'Belum ada pembayaran · dari Rp\u00a02.000.000',
+    );
     expect(paidCaptionDetail(100, 2_000_000, 2_000_000, true)).toBe('Rp 2.000.000 terbayar penuh');
   });
 });

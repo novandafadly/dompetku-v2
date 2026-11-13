@@ -246,17 +246,26 @@ describe('AddDebtSheet (S11-AD1)', () => {
 
   it('tanpa dompet di mode Baru: NoAccount; Sudah berjalan tetap bisa', async () => {
     const user = userEvent.setup();
-    setup({ accounts: [] });
+    const { onCreate } = setup({ accounts: [] });
     expect(
       screen.getByText(
         'Belum ada dompet di Pribadi. Tambah dompet dulu, atau pilih Sudah berjalan.',
       ),
     ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Simpan utang' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Simpan utang' }));
+    expect(onCreate).not.toHaveBeenCalled();
     await user.click(
       within(screen.getByRole('radiogroup', { name: 'Cara mencatat' })).getByRole('radio', {
         name: 'Sudah berjalan',
       }),
     );
     expect(screen.queryByText(/Belum ada dompet/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Simpan utang' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
   });
 });

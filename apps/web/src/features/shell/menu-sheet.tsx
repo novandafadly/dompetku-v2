@@ -21,6 +21,7 @@ import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import { signOutAction } from '@/server/auth/actions';
 import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
+import { buildKontakHref } from './utang-hrefs';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
 const MENU_ITEMS: { name: string; Icon: Icon }[] = [
@@ -82,7 +83,7 @@ export function MenuSheet({
 }) {
   const [theme, setTheme] = useState<ThemeChoice>(currentTheme);
   const themeLabel = useId();
-  const { ruang, query, sampahHref, kategoriHref, kontakHref } = useNav();
+  const { ruang, query, sampahHref, kategoriHref } = useNav();
   // Kontak hanya ada di Pribadi mode nyata (S11-MN1): di Bersama butirnya tidak dirender (bukan
   // nonaktif, ui-ux:20).
   const items = MENU_ITEMS.filter(
@@ -111,7 +112,7 @@ export function MenuSheet({
               />
             ) : real && name === 'Kontak' ? (
               <MenuLink
-                href={kontakHref(ruang)}
+                href={buildKontakHref(ruang, query)}
                 name={name}
                 Icon={Icon}
                 onOpenChange={onOpenChange}

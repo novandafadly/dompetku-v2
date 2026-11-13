@@ -1,4 +1,5 @@
 import { formatRupiah, type Rupiah } from '@dompetku/domain';
+import { CheckCircleIcon } from '@/components/ui/icons/check-circle';
 
 /**
  * Kolom buku kas (ui-ux R4; S11): tabel dua kolom, angka rata kanan tabular, baris pengurang
@@ -12,6 +13,29 @@ export interface KolomKasRow {
   value: Rupiah;
   /** `true`: tampil bertanda (`+Rp …` / `−Rp …`); selain itu angka polos. */
   signed?: boolean;
+  /** Sisa utang: bernilai 0 tampil `Lunas` (ikon + teks), tidak pernah `Rp 0` (bingkai aturan 3). */
+  lunas?: boolean;
+}
+
+/** Nilai satu sel: `Lunas` untuk sisa utang 0, selain itu rupiah. */
+function Amount({
+  value,
+  signed,
+  lunas,
+}: {
+  value: Rupiah;
+  signed?: boolean | undefined;
+  lunas?: boolean | undefined;
+}) {
+  if (lunas === true && value === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 font-bold text-accent-text">
+        <CheckCircleIcon size={16} weight="fill" className="shrink-0" />
+        Lunas
+      </span>
+    );
+  }
+  return <>{formatRupiah(value, signed === true ? { sign: 'always' } : {})}</>;
 }
 
 const CELL = 'py-1.5 text-label align-top';
@@ -27,7 +51,7 @@ export function KolomKas({
   caption: string;
   rows: readonly KolomKasRow[];
   /** Baris hasil di bawah garis ganda; tanpa ini tabel hanya daftar dua kolom. */
-  result?: { label: string; value: Rupiah };
+  result?: { label: string; value: Rupiah; lunas?: boolean };
   /** Judul terlihat 13/700 di atas tabel (dialog dengan dua kolom). */
   title?: string;
   className?: string;
@@ -48,7 +72,7 @@ export function KolomKas({
                 {r.label}
               </th>
               <td className={`${CELL} num text-right font-medium whitespace-nowrap text-text`}>
-                {formatRupiah(r.value, r.signed === true ? { sign: 'always' } : {})}
+                <Amount value={r.value} signed={r.signed} lunas={r.lunas} />
               </td>
             </tr>
           ))}
@@ -60,7 +84,7 @@ export function KolomKas({
                 {result.label}
               </th>
               <td className={`${CELL} num text-right font-extrabold whitespace-nowrap text-text`}>
-                {formatRupiah(result.value)}
+                <Amount value={result.value} lunas={result.lunas} />
               </td>
             </tr>
           </tfoot>

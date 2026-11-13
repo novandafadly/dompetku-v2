@@ -141,6 +141,9 @@ export function UtangHost({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
   const [dialogFailure, setDialogFailure] = useState<LedgerErrorCode | null>(null);
+  // Hapus utang: sekali server menolak `saldo_negatif`, pengguna yang mengonfirmasi `Tetap hapus` tetap
+  // dianggap sudah mengonfirmasi walau percobaan berikutnya gagal karena hal lain (jaringan).
+  const [forceDelete, setForceDelete] = useState(false);
   const dialogClientId = useRef('');
   const running = useRef(false);
   const addMounted = useOpenedOnce(addOpen);
@@ -171,6 +174,7 @@ export function UtangHost({
     openDelete: () => {
       dialogClientId.current = newClientId();
       setDialogFailure(null);
+      setForceDelete(false);
       setDeleteOpen(true);
     },
   };
@@ -308,7 +312,7 @@ export function UtangHost({
     if (running.current || detail === undefined) return;
     running.current = true;
     setDialogBusy(true);
-    const force = dialogFailure === 'saldo_negatif';
+    const force = forceDelete;
     setDialogFailure(null);
     const clientId = dialogClientId.current;
     const res = await call(() =>
@@ -317,6 +321,7 @@ export function UtangHost({
     running.current = false;
     setDialogBusy(false);
     if (!res.ok) {
+      if (res.error.code === 'saldo_negatif') setForceDelete(true);
       setDialogFailure(res.error.code);
       return;
     }
@@ -423,6 +428,7 @@ export function UtangHost({
             detail={detail}
             busy={dialogBusy}
             failure={dialogFailure}
+            force={forceDelete}
             onConfirm={() => {
               void confirmDelete();
             }}

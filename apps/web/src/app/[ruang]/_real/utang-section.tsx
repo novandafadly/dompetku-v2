@@ -1,6 +1,6 @@
 import { todayWIB } from '@dompetku/domain';
 import type { AccountVM, Ruang } from '@/features/ledger/types';
-import { buildDebtListHref } from '@/features/shell/hrefs';
+import { buildDebtListHref } from '@/features/shell/utang-hrefs';
 import type { ContactVM, DebtDetailVM, DebtListItemVM, PayTarget } from '@/features/utang/types';
 import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { errorTag } from '@/server/ledger/transaksi';

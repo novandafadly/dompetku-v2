@@ -75,6 +75,25 @@ describe('CancelPaymentDialog (S11-AK1)', () => {
     );
   });
 
+  it('sisa utang sekarang 0 (lunas) tampil Lunas, bukan Rp 0', async () => {
+    render(
+      <CancelPaymentDialog
+        open
+        onOpenChange={vi.fn()}
+        payment={PAYMENT}
+        detail={{ direction: 'borrowed', remaining: 0 }}
+        account={ACCOUNT}
+        busy={false}
+        failure={null}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const debt = await screen.findByRole('table', { name: 'Sisa utang' });
+    expect(debt).toHaveTextContent(/SekarangLunas/);
+    expect(debt.textContent).not.toMatch(/Rp\s0\b/);
+    expect(debt).toHaveTextContent(/SesudahnyaRp\s375\.000/);
+  });
+
   it('Batalkan pembayaran memanggil onConfirm; galat tampil sebagai alert tanpa nominal', async () => {
     const user = userEvent.setup();
     const { onConfirm } = setup('borrowed', 'debt_deleted');
@@ -106,6 +125,7 @@ describe('DeleteDebtDialog (S11-AK2)', () => {
         detail={base}
         busy={false}
         failure={null}
+        force={false}
         onConfirm={vi.fn()}
       />,
     );
@@ -126,6 +146,7 @@ describe('DeleteDebtDialog (S11-AK2)', () => {
         detail={{ ...base, mode: 'berjalan', payments: [], voidEffects: [] }}
         busy={false}
         failure={null}
+        force={false}
         onConfirm={vi.fn()}
       />,
     );
@@ -142,6 +163,7 @@ describe('DeleteDebtDialog (S11-AK2)', () => {
         detail={base}
         busy={false}
         failure="saldo_negatif"
+        force
         onConfirm={vi.fn()}
       />,
     );
@@ -157,6 +179,7 @@ describe('DeleteDebtDialog (S11-AK2)', () => {
         detail={{ ...base, direction: 'lent' }}
         busy={false}
         failure={null}
+        force={false}
         onConfirm={vi.fn()}
       />,
     );

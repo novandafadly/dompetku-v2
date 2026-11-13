@@ -159,7 +159,7 @@ function AddSession({
   }
 
   async function save() {
-    if (busy.current) return;
+    if (busy.current || noAccount) return;
     const next: Errors = {};
     const name = contact.name.trim();
     if (direction === null) next.direction = C.errDirection;
@@ -311,7 +311,9 @@ function AddSession({
       }
       tint="pribadi"
       initialFocus={firstFocus}
-      footer={<SaveButton formId={FORM_ID} saving={saving} label={saveLabel} />}
+      footer={
+        <SaveButton formId={FORM_ID} saving={saving} disabled={noAccount} label={saveLabel} />
+      }
     >
       <form
         id={FORM_ID}
@@ -412,6 +414,15 @@ function AddSession({
             </div>
           )}
         </div>
+        {negative && account !== undefined ? (
+          <WarningBox>
+            {saldoWarning(account.name, account.balance, preview.walletAfter, 'disimpan')}
+          </WarningBox>
+        ) : forced && direction !== null ? (
+          <WarningBox>
+            Saldo dompet ini tidak cukup. Kalau disimpan, saldonya jadi negatif.
+          </WarningBox>
+        ) : null}
         {baru ? (
           noAccount ? (
             <NoAccountBlock text={C.noAccountAdd} />
@@ -449,11 +460,6 @@ function AddSession({
                   result={{ label: 'Saldo sesudahnya', value: preview.walletAfter }}
                 />
               ) : null}
-              {negative && account !== undefined ? (
-                <WarningBox>
-                  {saldoWarning(account.name, account.balance, preview.walletAfter, 'disimpan')}
-                </WarningBox>
-              ) : null}
             </>
           )
         ) : null}
@@ -479,11 +485,6 @@ function AddSession({
           autoComplete="off"
         />
       </form>
-      {forced && !negative && account !== undefined && direction !== null ? (
-        <WarningBox>
-          Saldo dompet ini tidak cukup. Kalau disimpan, saldonya jadi negatif.
-        </WarningBox>
-      ) : null}
       {galat === null ? null : (
         <Alert
           action={

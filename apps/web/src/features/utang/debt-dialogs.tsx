@@ -88,7 +88,7 @@ export function CancelPaymentDialog({
             title={C.debtBalanceTitle}
             caption={C.debtBalanceTitle}
             rows={[
-              { label: C.now, value: detail.remaining },
+              { label: C.now, value: detail.remaining, lunas: true },
               { label: 'Perubahan', value: payment.amount, signed: true },
             ]}
             result={{ label: C.afterwards, value: preview.remainingAfter }}
@@ -111,6 +111,7 @@ export function DeleteDebtDialog({
   detail,
   busy,
   failure,
+  force,
   onConfirm,
 }: {
   open: boolean;
@@ -121,6 +122,8 @@ export function DeleteDebtDialog({
   > | null;
   busy: boolean;
   failure: LedgerErrorCode | null;
+  /** Server sudah menolak `saldo_negatif` sekali: tombol `Tetap hapus` bertahan (kirim allowNegative). */
+  force: boolean;
   onConfirm: () => void;
 }) {
   if (detail === null) return null;
@@ -151,7 +154,7 @@ export function DeleteDebtDialog({
           <p>{lent ? C.deleteGoneLent(detail.contactName) : C.deleteGone(detail.contactName)}</p>
         </div>
       }
-      confirmLabel={failure === 'saldo_negatif' ? 'Tetap hapus' : C.deleteDebt}
+      confirmLabel={force ? 'Tetap hapus' : C.deleteDebt}
       cancelLabel={C.back}
       onConfirm={onConfirm}
       holdOpen

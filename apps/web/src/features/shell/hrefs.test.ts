@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildAddWalletHref,
-  buildDebtHref,
-  buildDebtListHref,
-  buildKontakHref,
-  sectionFromPathname,
-  tabFromPathname,
-} from './hrefs';
+import { buildAddWalletHref, sectionFromPathname, tabFromPathname } from './hrefs';
 
 describe('layar di luar tab (Sampah, Kategori)', () => {
   it('sectionFromPathname mengenali /{ruang}/sampah dan /kategori', () => {
@@ -44,22 +37,5 @@ describe('buildAddWalletHref (S6-C6: Tambah dompet dari Catat dan Beranda)', () 
     expect(buildAddWalletHref('bersama', '?theme=light')).toBe(
       '/bersama/dompet?theme=light&tambah=1',
     );
-  });
-});
-
-describe('Utang dan Kontak (S11)', () => {
-  it('alamat daftar, detail, dan Kontak; query yang dibawa tetap ada', () => {
-    expect(buildDebtListHref('pribadi', '')).toBe('/pribadi/rencana?bagian=utang');
-    expect(buildDebtListHref('pribadi', '?theme=light')).toBe(
-      '/pribadi/rencana?theme=light&bagian=utang',
-    );
-    expect(buildDebtHref('pribadi', 'abc', '?theme=dark')).toBe(
-      '/pribadi/rencana/utang/abc?theme=dark',
-    );
-    expect(buildKontakHref('pribadi', '')).toBe('/pribadi/kontak');
-  });
-  it('Kontak di luar tab: tanpa tab aktif; detail utang tetap tab Rencana', () => {
-    expect(tabFromPathname('/pribadi/kontak')).toBeNull();
-    expect(tabFromPathname('/pribadi/rencana/utang/abc')).toBe('rencana');
   });
 });

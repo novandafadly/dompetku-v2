@@ -88,23 +88,6 @@ export function buildSectionHref(ruang: Ruang, section: Section, query: string):
   return `/${ruang}/${section}${query}` as Route;
 }
 
-/** Segmen Utang di Rencana (S11): `?bagian=utang`, query yang dibawa tetap ada. */
-export function buildDebtListHref(ruang: Ruang, query: string): Route {
-  const params = new URLSearchParams(query);
-  params.set('bagian', 'utang');
-  return `/${ruang}/rencana?${params.toString()}` as Route;
-}
-
-/** Detail utang (S11): `/{ruang}/rencana/utang/{id}`. */
-export function buildDebtHref(ruang: Ruang, id: string, query: string): Route {
-  return `/${ruang}/rencana/utang/${encodeURIComponent(id)}${query}` as Route;
-}
-
-/** Halaman Kontak (S11): hanya Pribadi; di Bersama rutenya 404. */
-export function buildKontakHref(ruang: Ruang, query: string): Route {
-  return `/${ruang}/kontak${query}` as Route;
-}
-
 /** Halaman Aktivitas Bersama (S8, K5): hanya ruang Bersama, di luar tab. */
 export function buildAktivitasHref(query: string): Route {
   return `/bersama/aktivitas${query}` as Route;
@@ -134,7 +117,7 @@ export function sectionFromPathname(pathname: string): Section | null {
 export function tabFromPathname(pathname: string): Tab | null {
   const seg = pathname.split('/')[2];
   // Laporan dibuka dari Menu/sidebar/Ringkasan Transaksi: tidak ada tab yang tampak aktif (K8).
-  if (seg === 'laporan' || seg === 'whatsapp' || seg === 'kontak') return null;
+  if (seg === 'laporan' || seg === 'whatsapp') return null;
   if (seg === 'sampah' || seg === 'kategori') return 'transaksi';
   return TABS.find((t) => t === seg) ?? 'beranda';
 }

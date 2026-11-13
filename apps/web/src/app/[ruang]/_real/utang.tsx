@@ -10,7 +10,8 @@ import { MoneyText } from '@/components/ui/money-text';
 import { EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui/state';
 import { card, focusRing, heroCard, rowDivider } from '@/components/ui/styles';
 import type { Ruang } from '@/features/ledger/types';
-import { buildDebtHref, buildDebtListHref, buildEntryHref } from '@/features/shell/hrefs';
+import { buildEntryHref } from '@/features/shell/hrefs';
+import { buildDebtHref, buildDebtListHref } from '@/features/shell/utang-hrefs';
 import { PageHeader } from '@/features/shell/page-header';
 import { dateWithYear, debtHeading, directionName, UTANG_COPY } from '@/features/utang/copy';
 import {

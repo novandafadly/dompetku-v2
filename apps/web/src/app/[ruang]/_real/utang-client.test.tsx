@@ -287,6 +287,33 @@ describe('UtangHost: dialog akibat', () => {
     expect(clientIdOf(m.void.mock.calls[0])).toBe(clientIdOf(m.void.mock.calls[1]));
   });
 
+  it('Tetap hapus bertahan walau percobaan berikutnya gagal jaringan (allowNegative tetap true, clientId sama)', async () => {
+    const user = userEvent.setup();
+    m.void
+      .mockResolvedValueOnce({ ok: false, error: { code: 'saldo_negatif' } })
+      .mockResolvedValueOnce({ ok: false, error: { code: 'network' } })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { debtId: 'd1', affected: [], effects: [], replayed: false },
+      });
+    host(<DeleteDebtButton />, DETAIL);
+    await user.click(screen.getByRole('button', { name: 'Hapus utang' }));
+    await user.click(last(await screen.findAllByRole('button', { name: 'Hapus utang' })));
+    await user.click(await screen.findByRole('button', { name: 'Tetap hapus' }));
+    await waitFor(() => {
+      expect(m.void).toHaveBeenCalledTimes(2);
+    });
+    // Galat jaringan menimpa pesan, tetapi konfirmasi pengguna tidak hilang.
+    const again = await screen.findByRole('button', { name: 'Tetap hapus' });
+    await user.click(again);
+    await waitFor(() => {
+      expect(m.void).toHaveBeenCalledTimes(3);
+    });
+    expect(m.void.mock.calls[1]?.[1]).toMatchObject({ allowNegative: true });
+    expect(m.void.mock.calls[2]?.[1]).toMatchObject({ allowNegative: true });
+    expect(clientIdOf(m.void.mock.calls[0])).toBe(clientIdOf(m.void.mock.calls[2]));
+  });
+
   it('Batalkan pembayaran: dialog memuat dua kolom; konfirmasi memakai versi entri, Urungkan = restore entri', async () => {
     const user = userEvent.setup();
     m.voidEntry.mockResolvedValue({ ok: true, value: { version: 4 } });

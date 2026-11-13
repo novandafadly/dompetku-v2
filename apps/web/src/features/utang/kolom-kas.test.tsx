@@ -5,6 +5,23 @@ import { KolomKas } from './kolom-kas';
 afterEach(cleanup);
 
 describe('KolomKas', () => {
+  it('lunas: nilai 0 tampil Lunas (ikon + teks) di baris hasil dan baris, nilai lain tetap rupiah', () => {
+    render(
+      <KolomKas
+        caption="Setelah ini"
+        rows={[
+          { label: 'Sisa sekarang', value: 0, lunas: true },
+          { label: 'Saldo', value: 0 },
+        ]}
+        result={{ label: 'Sisa sesudahnya', value: 0, lunas: true }}
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Setelah ini' });
+    expect(within(table).getAllByText('Lunas')).toHaveLength(2);
+    // Saldo 0 tanpa flag tetap angka.
+    expect(table).toHaveTextContent(/SaldoRp\s0/);
+  });
+
   it('tabel berjudul, baris bertanda, hasil di tfoot', () => {
     render(
       <KolomKas

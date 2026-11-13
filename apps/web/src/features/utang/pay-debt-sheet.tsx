@@ -349,6 +349,15 @@ function PaySession({
                 ))}
               </ChipGroup>
             ) : null}
+            {(negative || forced) && account !== undefined ? (
+              <WarningBox>
+                {forced && !negative
+                  ? 'Saldo dompet ini tidak cukup. Kalau dibayar, saldonya jadi negatif.'
+                  : preview === null
+                    ? ''
+                    : saldoWarning(account.name, account.balance, preview.walletAfter, 'dibayar')}
+              </WarningBox>
+            ) : null}
             <div className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2">
               <SelectField
                 label={lent ? C.receivedIn : C.paidFrom}
@@ -400,21 +409,12 @@ function PaySession({
                     signed: true,
                   },
                 ]}
-                result={{ label: C.remainingAfter, value: preview.remainingAfter }}
+                result={{ label: C.remainingAfter, value: preview.remainingAfter, lunas: true }}
               />
               <FieldHint id={`${errorId}-w`}>
                 {walletChangeNote(account.name, preview.walletDelta)}
               </FieldHint>
             </div>
-          ) : null}
-          {(negative || forced) && account !== undefined ? (
-            <WarningBox>
-              {forced && !negative
-                ? 'Saldo dompet ini tidak cukup. Kalau dibayar, saldonya jadi negatif.'
-                : preview === null
-                  ? ''
-                  : saldoWarning(account.name, account.balance, preview.walletAfter, 'dibayar')}
-            </WarningBox>
           ) : null}
           {galat === null ? null : (
             <Alert
