@@ -35,7 +35,7 @@ import {
   updateDebtInfoAction,
   voidDebtAction,
 } from '../_actions/utang';
-import { focusHeadingAt, focusTitle, restoreFocus } from './focus-title';
+import { focusHeadingAt, restoreFocus } from './focus-title';
 import { UTANG_TITLE_ID } from './utang-ids';
 
 /**
@@ -300,7 +300,8 @@ export function UtangHost({
         },
       },
     });
-    focusTitle(UTANG_TITLE_ID);
+    // Tombol Batalkan baris itu diganti `Dibatalkan` (fokus jatuh ke body): kembali ke judul.
+    restoreFocus(null, `#${UTANG_TITLE_ID}`);
   }
 
   async function confirmDelete() {
@@ -388,7 +389,8 @@ export function UtangHost({
             onSaved={(name) => {
               setEditOpen(false);
               toast({ message: savedInfoToast(name, detail.direction) });
-              focusTitle(UTANG_TITLE_ID);
+              // Tombol Batalkan baris itu diganti `Dibatalkan` (fokus jatuh ke body): kembali ke judul.
+              restoreFocus(null, `#${UTANG_TITLE_ID}`);
             }}
           />
         </Suspense>
