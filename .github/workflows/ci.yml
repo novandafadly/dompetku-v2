@@ -136,9 +136,11 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        # Image dasar yang sama dengan image VM (infra/db-vm/postgres/Dockerfile); digest = indeks
-        # multi-arch, jadi runner amd64 memakai varian amd64 dari rilis 17.11 yang sama.
-        image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+        # Digest = indeks multi-arch, jadi runner amd64 memakai varian amd64 dari rilis yang sama.
+        # 17.12 (bukan 17.11 seperti image VM): sejak 2026-11-12 paket pgdg postgresql-17-pgtap
+        # menarik pustaka postgresql-17 17.12, yang tidak cocok dengan server 17.11 di image
+        # (plpgsql.so: undefined symbol heap_datum_update_type) dan menggagalkan migrasi 0001.
+        image: postgres:17.12-bookworm@sha256:40865bc877a289da75963d97d72b59633f639fc5af7a4e856bfa3714cae5b536
         env:
           # Tanpa password: cluster CI sekali pakai, tidak dipublikasikan ke host.
           POSTGRES_HOST_AUTH_METHOD: trust
