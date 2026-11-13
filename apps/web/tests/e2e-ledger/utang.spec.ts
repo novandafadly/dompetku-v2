@@ -75,6 +75,8 @@ interface DebtRow {
   entries: number;
   paymentsLive: number;
   principalLive: number;
+  /** Tiap entri utang: id, versi, tanggal, jumlah baris utama, status batal (urut id). */
+  sig: string;
 }
 
 /** Baris utang kontak `name` + hitungan entrinya (superuser, hanya untuk asersi). */
@@ -85,7 +87,12 @@ async function debtOf(name: string): Promise<DebtRow> {
             (select count(*)::int from app.entries e where e.debt_id = d.id
                and e.kind = 'debt_payment' and e.voided_at is null) as "paymentsLive",
             (select count(*)::int from app.entries e where e.debt_id = d.id
-               and e.kind = 'debt_principal' and e.voided_at is null) as "principalLive"
+               and e.kind = 'debt_principal' and e.voided_at is null) as "principalLive",
+            coalesce((select string_agg(e.id || ':' || e.version || ':' || e.occurred_on || ':'
+                        || l.amount || ':' || (e.voided_at is not null), ',' order by e.id)
+                        from app.entries e
+                        join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
+                       where e.debt_id = d.id), '') as sig
        from app.debts d join app.contacts c on c.id = d.contact_id
       where c.name = $1`,
     [name],
@@ -176,14 +183,26 @@ async function openPay(page: Page, button: Locator) {
   return sheet;
 }
 
+/** Kotak `Sisa` kartu utama detail (label + nominal), bukan riwayat pembayaran. */
+const sisaBox = (page: Page) => main(page).getByText('Sisa', { exact: true }).locator('xpath=..');
+
 const detailPay = (page: Page) =>
   main(page).getByRole('button', { name: /^(Bayar utang|Terima pembayaran)$/ });
 
-async function payQuick(page: Page, quick: RegExp, footer: RegExp, toast: string | RegExp) {
+async function payQuick(
+  page: Page,
+  quick: RegExp,
+  footer: RegExp,
+  toast: string | RegExp,
+  { double = false }: { double?: boolean } = {},
+) {
   const sheet = await openPay(page, detailPay(page));
   await sheet.getByRole('radio', { name: quick }).click();
-  await sheet.getByRole('button', { name: footer }).click();
-  await expect(toasts(page).getByText(toast)).toBeVisible();
+  const save = sheet.getByRole('button', { name: footer });
+  if (double) await save.dblclick();
+  else await save.click();
+  // Klik ganda: tepat satu toast (satu cicilan), bukan dua.
+  await expect(toasts(page).getByText(toast)).toHaveCount(1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
@@ -252,8 +271,7 @@ test('cicilan 25% → 50% → Lunas lewat sheet Bayar: sisa, bilah, Lunas', asyn
     `Dibayar ke ${BUDI} · ${rp(250_000)} dari ${WALLET} · sisa ${rp(750_000)}`,
   );
   await expect(main(page)).toContainText('25% terbayar · Rp 250.000 dari Rp 1.000.000');
-  await expect(main(page).getByText('Sisa', { exact: true })).toBeVisible();
-  await expect(main(page)).toContainText(rpRe(750_000));
+  await expect(sisaBox(page)).toContainText(rpRe(750_000));
   expect(await walletBalance(page, 'pribadi', WALLET)).toBe(state.wallet0 + 750_000);
 
   // 50% dari sisa baru (Rp 750.000).
@@ -265,7 +283,7 @@ test('cicilan 25% → 50% → Lunas lewat sheet Bayar: sisa, bilah, Lunas', asyn
     `Dibayar ke ${BUDI} · ${rp(375_000)} dari ${WALLET} · sisa ${rp(375_000)}`,
   );
   await expect(main(page)).toContainText('62% terbayar · Rp 625.000 dari Rp 1.000.000');
-  await expect(main(page)).toContainText(rpRe(375_000));
+  await expect(sisaBox(page)).toContainText(rpRe(375_000));
   expect(await walletBalance(page, 'pribadi', WALLET)).toBe(state.wallet0 + 375_000);
 
   // Lunas: pintasan sama dengan sisa, tombol menjadi `Lunasi`.
@@ -315,8 +333,7 @@ test(
     await expect(dlg).toHaveCount(0);
 
     // Sisa bertambah Rp 250.000, bukan Lunas lagi; saldo dompet kembali Rp 250.000.
-    await expect(main(page).getByText('Sisa', { exact: true })).toBeVisible();
-    await expect(main(page)).toContainText(rpRe(250_000));
+    await expect(sisaBox(page)).toContainText(rpRe(250_000));
     await expect(main(page)).toContainText('75% terbayar');
     await expect(main(page).getByText('Rp 1.000.000 terbayar penuh')).toHaveCount(0);
     const cancelled = main(page)
@@ -413,30 +430,43 @@ test(
 );
 
 test(
-  'Ubah utang: judul dan catatan tanpa efek ke saldo, pembayaran, atau sisa',
+  'Ubah utang: judul dan catatan tanpa efek ke saldo, cicilan, atau sisa (utang yang sudah dicicil)',
   {
     tag: ['@T6', '@S4'],
   },
   async ({ page }) => {
     const before = await walletBalance(page, 'pribadi', WALLET);
-    const d0 = await debtOf(SARI);
-    await openDetail(page, SARI, new RegExp(`^Utang ke ${SARI}$`));
+    const d0 = await debtOf(BUDI);
+    // Budi punya pokok, dua cicilan hidup, dan satu cicilan batal: tiga entri + satu batal.
+    expect(d0.entries).toBe(4);
+    await openDetail(page, BUDI, new RegExp(`^Utang ke ${BUDI}$`));
+    await expect(sisaBox(page)).toContainText(rpRe(250_000));
     const sheet = editSheet(page);
     await openUntil(
       () => main(page).getByRole('button', { name: 'Ubah', exact: true }),
       sheet,
       sheet.getByRole('textbox', { name: /^Untuk apa/ }),
     );
-    await sheet.getByRole('textbox', { name: /^Untuk apa/ }).fill('Renovasi dapur');
+    await sheet.getByRole('textbox', { name: /^Untuk apa/ }).fill(`${BUDI_TITLE} warung`);
     await sheet.getByRole('textbox', { name: /^Catatan/ }).fill('dari tabungan arisan');
     await sheet.getByRole('button', { name: 'Simpan perubahan' }).click();
-    await expect(toasts(page).getByText(`Utang ke ${SARI} disimpan · Pribadi`)).toBeVisible();
+    await expect(toasts(page).getByText(`Utang ke ${BUDI} disimpan · Pribadi`)).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(main(page)).toContainText('Renovasi dapur');
+    await expect(main(page)).toContainText(`${BUDI_TITLE} warung`);
     await expect(main(page)).toContainText('dari tabungan arisan');
-    await expect(main(page)).toContainText(rpRe(2_000_000));
-    const d1 = await debtOf(SARI);
+    // Sisa, bilah, dan riwayat tidak berubah.
+    await expect(sisaBox(page)).toContainText(rpRe(250_000));
+    await expect(main(page)).toContainText('75% terbayar');
+    // Tiap entri: id, versi, tanggal, jumlah, status batal sama persis; judul tersimpan di utang.
+    const d1 = await debtOf(BUDI);
+    expect(d1.sig).toBe(d0.sig);
     expect({ ...d1 }).toEqual({ ...d0 });
+    const [t] = await adminQuery<{ title: string; note: string }>(
+      `select d.title, d.note from app.debts d join app.contacts c on c.id = d.contact_id
+        where c.name = $1`,
+      [BUDI],
+    );
+    expect(t).toEqual({ title: `${BUDI_TITLE} warung`, note: 'dari tabungan arisan' });
     expect(await walletBalance(page, 'pribadi', WALLET)).toBe(before);
   },
 );
@@ -444,9 +474,10 @@ test(
 test(
   'Hapus utang membalik semua efek; Pulihkan dari Utang dihapus mengembalikannya',
   {
-    tag: ['@T9'],
+    tag: ['@T9', '@C6'],
   },
   async ({ page }) => {
+    const before = await walletBalance(page, 'pribadi', WALLET);
     await addDebt(
       page,
       { direction: 'borrowed', contact: EKO, amount: 400_000 },
@@ -459,8 +490,14 @@ test(
       /^25% dari sisa, Rp 100\.000$/,
       /^Bayar Rp\s100\.000$/,
       `Dibayar ke ${EKO} · ${rp(100_000)} dari ${WALLET} · sisa ${rp(300_000)}`,
+      { double: true },
     );
+    // Klik ganda Bayar = satu cicilan (pokok + satu cicilan = 2 entri), saldo turun sekali.
+    const paid = await debtOf(EKO);
+    expect(paid.paymentsLive).toBe(1);
+    expect(paid.entries).toBe(2);
     const mid = await walletBalance(page, 'pribadi', WALLET);
+    expect(mid).toBe(before + 400_000 - 100_000);
 
     await page.goto(paths.eko);
     await main(page).getByRole('button', { name: 'Hapus utang' }).click();
