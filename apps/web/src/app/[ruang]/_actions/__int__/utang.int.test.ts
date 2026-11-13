@@ -9,7 +9,9 @@ import {
   seedPersonas,
   type Persona,
 } from '@/server/ledger/__int__/harness';
-import { listEntries, monthSummary } from '@/server/ledger/read';
+import { effectOnAccountVM } from '@/features/ledger/present';
+import { loadDompetRiwayat } from '@/server/ledger/dompet';
+import { listAccounts, listEntries, monthSummary } from '@/server/ledger/read';
 import { loadSampah } from '@/server/ledger/sampah';
 import { resolveSpace } from '@/server/ledger/space';
 import { createDebt, loadDebtDetail, loadKontak, loadUtang, payDebt } from '@/server/ledger/utang';
@@ -470,6 +472,31 @@ describe('action Utang S11 terhadap DB', () => {
     const pinjamBaru = await pinjam({ contactName: 'Citra' });
     ok(await bayar(pinjamBaru.debtId, 100_000));
     expect(await monthSummary(pribadi, month)).toEqual(sebelum);
+  });
+
+  it('riwayat dompet: efek pokok dan cicilan utang/piutang = saldo (empat arah)', async () => {
+    const u = await pinjam();
+    ok(await bayar(u.debtId, 300_000));
+    const p = ok(
+      await a.createDebtAction('pribadi', {
+        clientId: randomUUID(),
+        direction: 'lent',
+        principal: 800_000,
+        mode: 'baru',
+        contactName: 'Andi',
+        accountId: bca,
+      }),
+    );
+    ok(await bayar(p.debtId, 200_000));
+    const saldo = 1_000_000 + PINJAM - 300_000 - 800_000 + 200_000;
+    expect(await balance(bca)).toBe(saldo);
+
+    const r = await loadDompetRiwayat(pribadi, bca, 50, await listAccounts(pribadi));
+    const opening = (r?.opening ?? []).reduce((s, e) => s + e.amount, 0);
+    const rows = (r?.entries ?? []).map((e) => effectOnAccountVM(e, bca).value);
+    expect([...rows].sort((x, y) => x - y)).toEqual([-800_000, -300_000, 200_000, PINJAM]);
+    expect(opening + rows.reduce((s, v) => s + v, 0)).toBe(saldo);
+    expect(r?.account.balance).toBe(saldo);
   });
 
   it('T7: pintasan 25%/50% null bila hasilnya 0 (tanpa "Rp 0"), full = sisa', async () => {

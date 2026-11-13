@@ -114,6 +114,20 @@ describe('effectOnAccountVM: efek entri pada satu dompet (riwayat dompet)', () =
       25_000,
     );
   });
+
+  // S11: arah dari tanda baris utama (read.ts `main_in`), sama untuk utang dan piutang.
+  it.each([
+    ['utang: pokok masuk', 'debt_principal', 'in', 25_000],
+    ['utang: cicilan keluar', 'debt_payment', 'out', -25_000],
+    ['piutang: pokok keluar', 'debt_principal', 'out', -25_000],
+    ['piutang: cicilan diterima masuk', 'debt_payment', 'in', 25_000],
+  ] as const)('%s', (_name, kind, direction, value) => {
+    expect(effectOnAccountVM({ ...base, kind, direction }, 'a1')).toEqual({
+      value,
+      kind: 'neutral',
+    });
+    expect(accountFeeNoteVM({ ...base, kind, direction }, 'a1')).toBeUndefined();
+  });
 });
 
 describe('judul kaki antar ruang (S7-D1)', () => {

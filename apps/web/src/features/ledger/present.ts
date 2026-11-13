@@ -73,7 +73,8 @@ export function signedAmountVM(e: EntryVM): {
  * Efek entri pada satu dompet (riwayat dompet): pengeluaran mengurangi, pemasukan menambah;
  * transfer mengurangi dompet sumber sebesar nominal + biaya dan menambah dompet lawan sebesar
  * nominal; antar ruang keluar mengurangi sebesar nominal + biaya; cocokkan saldo mengikuti
- * `direction`. Entri pembuka (Saldo awal) ditampilkan terpisah.
+ * `direction`, begitu juga pokok dan cicilan utang/piutang. Entri pembuka (Saldo awal) ditampilkan
+ * terpisah.
  */
 export function effectOnAccountVM(
   e: EntryVM,
@@ -95,7 +96,10 @@ export function effectOnAccountVM(
         value: e.direction === 'out' ? -(e.amount + fee) : e.amount,
         kind: 'neutral',
       };
+    // S11: pokok/cicilan utang dan piutang seperti cocokkan saldo, arah dari tanda baris utama.
     case 'adjustment':
+    case 'debt_principal':
+    case 'debt_payment':
       return { value: e.direction === 'out' ? -e.amount : e.amount, kind: 'neutral' };
     default:
       return { value: e.amount, kind: 'neutral' };
