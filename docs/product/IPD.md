@@ -199,6 +199,22 @@ Rincian dan tes (T6 sampai T15) ada di `docs/team/round1/qa.md`. Sprint M3 sampa
 | S19    | Arsip ekspor v1, screenshot otomatis 390/1280 terang/gelap dari data demo, matikan v1, pembongkaran pratinjau Vercel (ADR 0003)                                                           | M6                        | Pemilik menyetujui (gerbang M7; daftar periksa PRD §6.1)                      | v1 dimatikan sebelum arsip aman: arsip diverifikasi dulu; v1 tetap read-only sampai itu                                   |
 | M8     | Kosong. Otomatisasi catat (email bank, WhatsApp Cloud API, Telegram) ditunda ke backlog                                                                                                   | -                         | -                                                                             | -                                                                                                                         |
 
+### S11: status (utang/piutang, cicilan, utang berjalan)
+
+- **Status (2026-11-13).** Selesai di branch `ccr-f260701e-61yx7j` (belum merge). **Merge = deploy + migrasi `0129`–`0131` di produksi**, tanpa langkah VM baru. Task 1 sampai 8 lulus review independen; review akhir (task + keamanan) dan gerbang penuh dijalankan pengendali sebelum PR. Catatan teknis: BSD §16 "Catatan S11"; desain, critique, dan Delivery Gate: `docs/design/s11-bingkai.md`; serah-terima: `docs/superpowers/handoff/s11.md`; keputusan agen: `docs/m0a-keputusan.md`.
+- **Bukti kriteria keluar (T6 sampai T9, S4, INT-12, C3, C6, B10, I6; lokasi lengkap di `packages/db/tests/REGISTRY.md`):**
+  - T6 dan S4 (ubah judul/catatan/kontak tanpa efek ke saldo, cicilan, sisa): pgTAP `30_utang_api`, `utang.int` (`[S4] [T6]`), e2e `utang.spec` (Ubah utang pada utang yang dicicil).
+  - T7 (bayar melebihi sisa ditolak, nol efek): `30_utang_api` (`payment_exceeds`), `utang.int`, e2e `utang.spec` (galat kolom + `Bayar sisa`).
+  - T8 (batal cicilan membalik saldo dan sisa, riwayat menandai batal): `30_utang_api`, `utang.int`, e2e `utang.spec`.
+  - T9 (Hapus utang membalik semua efek, Pulihkan mengembalikan): `30_utang_api`, `utang.int`, e2e `utang.spec`.
+  - INT-12 (`pay_debt` gagal di tengah = rollback utuh, termasuk kunci idempotensi): `99_konkurensi` (`tests.fail_after`), `utang.int`.
+  - C3 (dua bayar paralel melebihi sisa: yang kedua `payment_exceeds`, sisa tidak negatif): `99_konkurensi`, `utang.int`.
+  - C6 (klik ganda Simpan utang dan Bayar cicilan = satu efek): e2e `utang.spec`, `99_konkurensi` (bayar kembar), `utang.int`.
+  - B10 (utang dan kontak tidak ada di Bersama): `29_utang` (CHECK), `30_utang_api`, `utang.int`, e2e `utang.spec` (rute dan payload Bersama tanpa kanari).
+  - I6 (pokok dan cicilan tidak mengubah Σ pemasukan/pengeluaran, Laporan, anggaran): `29_utang`, `utang-integrasi.int`, e2e `utang.spec` (Laporan).
+  - Angka: pgTAP 2221, unit web 3049, `test:int` 294, e2e prototipe 308, `e2e:ledger` 119 (+30 dilewati), `e2e:bersama` 34, `e2e:auth` 22; budget JS nyata Rencana 150,5, utang 150,5, detail utang 150,6, Kontak 148,5 kB (batas 162).
+- **T10 tidak termasuk S11:** tetap `belum` di registry; dikerjakan bersama S12 (gerbang M3). "Aman dipakai" tetap kas murni, jadi meminjam menaikkan angka itu; kartu "Utang yang harus dibayar" menunggu keputusan pemilik (S12).
+
 ## 7. Risiko lintas milestone
 
 | Risiko                                     | Mitigasi                                                                       |
