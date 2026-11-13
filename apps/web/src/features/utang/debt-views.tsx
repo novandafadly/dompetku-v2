@@ -57,9 +57,11 @@ export function SettledMark({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   );
 }
 
-/** Nominal besar kartu `Sisa`: skala turun untuk nominal sangat panjang di HP (320 px). */
-function BigMoney({ value }: { value: Rupiah }) {
-  const long = formatRupiah(value).length > 13;
+/**
+ * Nominal besar kartu `Sisa`. `long` (salah satu nominal kartu > 13 karakter) menurunkan skala
+ * KEDUA baris di 320 px, supaya dua nominal tidak berbeda ukuran.
+ */
+function BigMoney({ value, long }: { value: Rupiah; long: boolean }) {
   return (
     <MoneyText
       value={value}
@@ -69,11 +71,11 @@ function BigMoney({ value }: { value: Rupiah }) {
   );
 }
 
-function SisaRow({ label, total }: { label: string; total: DebtTotalVM }) {
+function SisaRow({ label, total, long }: { label: string; total: DebtTotalVM; long: boolean }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-meta font-semibold text-text-soft">{label}</span>
-      <BigMoney value={total.remaining} />
+      <BigMoney value={total.remaining} long={long} />
       <span className="text-caption font-medium text-text-muted">
         {UTANG_COPY.contactsCount(total.contacts)}
       </span>
@@ -89,10 +91,15 @@ export function SisaCard({ totals }: { totals: Record<DebtDirection, DebtTotalVM
   const borrowed = totals.borrowed.remaining > 0;
   const lent = totals.lent.remaining > 0;
   if (!borrowed && !lent) return null;
+  const long =
+    (borrowed && formatRupiah(totals.borrowed.remaining).length > 13) ||
+    (lent && formatRupiah(totals.lent.remaining).length > 13);
   return (
     <section aria-label={UTANG_COPY.remaining} className={`${card} flex flex-col gap-3 p-4`}>
-      {borrowed ? <SisaRow label={UTANG_COPY.borrowed} total={totals.borrowed} /> : null}
-      {lent ? <SisaRow label={UTANG_COPY.lent} total={totals.lent} /> : null}
+      {borrowed ? (
+        <SisaRow label={UTANG_COPY.borrowed} total={totals.borrowed} long={long} />
+      ) : null}
+      {lent ? <SisaRow label={UTANG_COPY.lent} total={totals.lent} long={long} /> : null}
     </section>
   );
 }

@@ -10,7 +10,8 @@ import { Sheet } from '@/components/ui/sheet';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { newClientId } from '@/features/ledger/client-id';
 import type { AccountVM, LedgerErrorCode } from '@/features/ledger/types';
-import { Alert, payableAccounts, SelectField } from '@/features/rencana/form-parts';
+import { Alert, SelectField } from '@/components/ui/form-parts';
+import { payableAccounts } from '@/features/ledger/accounts';
 import { UTANG_COPY as C, paySheetTitle, saldoWarning } from './copy';
 import { utangFailedText } from './galat';
 import { NoAccountBlock, SaveButton, WarningBox } from './fields';
@@ -390,6 +391,7 @@ function PaySession({
             <div className="flex flex-col gap-1">
               <KolomKas
                 caption={C.after}
+                title={C.after}
                 rows={[
                   { label: C.remainingNow, value: target.remaining },
                   {

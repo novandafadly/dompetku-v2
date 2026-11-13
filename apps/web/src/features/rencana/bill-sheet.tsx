@@ -21,7 +21,8 @@ import {
   obligationDoubleBillText,
   TAGIHAN_COPY as C,
 } from './copy';
-import { Alert, payableAccounts, SelectField } from './form-parts';
+import { Alert, SelectField } from '@/components/ui/form-parts';
+import { payableAccounts } from '@/features/ledger/accounts';
 import type { BillListVM } from './types';
 
 export { Alert, payableAccounts, SelectField };

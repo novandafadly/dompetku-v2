@@ -13,7 +13,7 @@ import { WalletIcon } from '@/components/ui/icons/wallet';
 import { WarningIcon } from '@/components/ui/icons/warning';
 import { TextField } from '@/components/ui/text-field';
 import { focusRing } from '@/components/ui/styles';
-import { SelectField } from '@/features/rencana/form-parts';
+import { SelectField } from '@/components/ui/form-parts';
 import { UTANG_COPY } from './copy';
 import type { ContactVM } from './types';
 

@@ -11,7 +11,8 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { TextField } from '@/components/ui/text-field';
 import { newClientId } from '@/features/ledger/client-id';
 import type { AccountVM, LedgerErrorCode } from '@/features/ledger/types';
-import { Alert, payableAccounts, SelectField } from '@/features/rencana/form-parts';
+import { Alert, SelectField } from '@/components/ui/form-parts';
+import { payableAccounts } from '@/features/ledger/accounts';
 import { UTANG_COPY as C, saldoWarning, sheetTitle } from './copy';
 import {
   ContactControl,

@@ -5,10 +5,9 @@ import { FieldLabel } from '@/components/ui/field';
 import { FieldError, FieldHint } from '@/components/ui/field-messages';
 import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
-import type { AccountVM } from '@/features/ledger/types';
 
 /**
- * Bagian formulir bersama sheet Rencana dan Utang (galat kotak atas, `<select>` berlabel, dompet
+ * Bagian formulir bersama sheet (Rencana, Utang) (galat kotak atas, `<select>` berlabel, dompet
  * yang boleh dipakai). Dipisah dari `bill-sheet.tsx` supaya sheet Utang tidak membawa seluruh
  * sheet Tagihan ke chunknya (budget JS).
  */
@@ -90,9 +89,4 @@ export function SelectField({
       {hint === undefined ? null : <FieldHint id={hintId}>{hint}</FieldHint>}
     </div>
   );
-}
-
-/** Dompet yang boleh membayar tagihan: ruang ini, aktif, bukan Kas Kantor. */
-export function payableAccounts(accounts: readonly AccountVM[]): AccountVM[] {
-  return accounts.filter((a) => !a.archived && a.pocket !== 'kantor');
 }
