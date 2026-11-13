@@ -90,6 +90,7 @@
 
 1. **Sisa selalu benar** di bawah konkurensi dan urutan operasi (bayar/batal/void/restore/hapus utang), dan tidak pernah negatif.
 2. **Bukan pemasukan/pengeluaran**: Σ income/expense, Beranda "aman dipakai", Laporan, Ekspor, anggaran tidak berubah oleh pokok/cicilan; saldo dompet berubah tepat sekali.
+   - **Catatan (review akhir M1):** "aman dipakai" tetap kas murni atas keputusan agen (handoff s11 keputusan 2; keputusan pemilik masih terbuka, kartu "Utang yang harus dibayar" di S12), jadi meminjam menaikkannya sebesar kas yang masuk. Bagian "aman dipakai" di butir ini tidak berlaku; plan dan kode kini sepakat.
 3. **Utang berjalan**: saldo dan Laporan nol efek sampai ada pembayaran.
 4. **Kind baru di semua tempat** yang mengenal `entry_kind` (tidak ada kasus yang jatuh ke `else`/NULL).
 5. **Hanya Pribadi** (B10), tanpa kebocoran ke Bersama; nama kontak/catatan tidak bocor lewat galat/log; ganti nama dan arsip kontak tidak mengubah angka utang.

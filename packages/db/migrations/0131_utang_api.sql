@@ -1,7 +1,7 @@
 -- migrate:up
 -- S11 (IPD §6, plan S11 Task 4, K1 sampai K7, K10; bingkai docs/design/s11-bingkai.md): API utang/
 -- piutang dan kontak, penutupan jalur generik untuk entri utang, DQ05, "aman dipakai" tanpa pinjaman.
--- Expand-only: satu kolom baru (default false) + CHECK di app.entries, fungsi baru, enam fungsi diganti
+-- Expand-only: satu kolom baru (default false) + CHECK di app.entries, fungsi baru, lima fungsi diganti
 -- utuh (create or replace, tanda tangan dan kolom hasil sama): private.set_void_state, api.purge_entry,
 -- api.trash_list, jobs.purge_voided, private.dq_run.
 --
