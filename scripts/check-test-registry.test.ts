@@ -16,7 +16,7 @@ const REGISTRY = `# Registry
 | --- | --- | --- | --- | --- |
 | B2 | isolasi | M1 | aktif | a.sql |
 | B20 | feed | M1 | aktif | b.test.ts |
-| B21 | contoh M3 | M3 | aktif | - |
+| B21 | contoh M4 | M4 | aktif | - |
 | B16 | net worth | M1 | belum | - |
 `;
 
@@ -41,7 +41,7 @@ after(() => {
 });
 
 describe('check-test-registry', () => {
-  it('lengkap: semua ID aktif M<=2 bertag, keluar 0', () => {
+  it('lengkap: semua ID aktif M<=3 bertag, keluar 0', () => {
     const root = sample({
       'packages/db/tests/01.sql': '-- ID: B2\nselect 1;\n',
       'apps/web/src/x.test.ts': "it('feed [B20]', () => {});\n",
@@ -50,7 +50,7 @@ describe('check-test-registry', () => {
     assert.equal(code, 0, out);
   });
 
-  it('ID aktif M<=2 tanpa tag: keluar 1 dan menyebut ID', () => {
+  it('ID aktif M<=3 tanpa tag: keluar 1 dan menyebut ID', () => {
     const root = sample({ 'packages/db/tests/01.sql': '-- ID: B2\n' });
     const { code, out } = run(root);
     assert.equal(code, 1);

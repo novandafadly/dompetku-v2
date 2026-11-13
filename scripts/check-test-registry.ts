@@ -1,5 +1,5 @@
 // Pemeriksa registry ID tes (qa.md R1). Jalankan: node scripts/check-test-registry.ts [akar-repo]
-// Galat (keluar 1) bila: (a) ID berstatus `aktif` dengan milestone <= M2 tanpa tag di tes mana pun,
+// Galat (keluar 1) bila: (a) ID berstatus `aktif` dengan milestone <= M3 tanpa tag di tes mana pun,
 // atau (b) ada tag yang tidak terdaftar di packages/db/tests/REGISTRY.md.
 // Format tag (hanya ini yang dikenali):
 //   pgTAP       baris `-- ID: B3, B6` (juga `[B4]` di deskripsi asersi)
@@ -10,7 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const MAX_MILESTONE = 2;
+const MAX_MILESTONE = 3;
 const ID = String.raw`(?:BR|[ITSBCZK])\d+`;
 const SKIP_DIRS = new Set([
   'node_modules',

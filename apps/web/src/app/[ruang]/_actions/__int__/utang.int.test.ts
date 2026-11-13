@@ -210,7 +210,7 @@ describe('action Utang S11 terhadap DB', () => {
     expect(det?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+07:00$/);
   });
 
-  it('S4/T6: ubah judul, catatan, kontak, dan nama kontak tanpa efek ke saldo, cicilan, sisa, pokok', async () => {
+  it('[S4] [T6] ubah judul, catatan, kontak, dan nama kontak tanpa efek ke saldo, cicilan, sisa, pokok', async () => {
     const d = await pinjam();
     ok(await bayar(d.debtId, 500_000));
     const before = {
@@ -262,7 +262,7 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await loadDebtDetail(pribadi, d.debtId)).toMatchObject({ title: null, note: null });
   });
 
-  it('T7: bayar > sisa = payment_exceeds tanpa efek dan tanpa nominal; sisa untuk "Bayar sisa" dari data', async () => {
+  it('[T7] bayar > sisa = payment_exceeds tanpa efek dan tanpa nominal; sisa untuk "Bayar sisa" dari data', async () => {
     const d = await pinjam();
     ok(await bayar(d.debtId, 500_000));
     const saldo = await balance(bca);
@@ -287,7 +287,7 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await bayar(d.debtId, 1)).toEqual({ ok: false, error: { code: 'payment_exceeds' } });
   });
 
-  it('T8: batal cicilan membalik saldo dan sisa, riwayat menandai batal; pulihkan mengembalikan', async () => {
+  it('[T8] batal cicilan membalik saldo dan sisa, riwayat menandai batal; pulihkan mengembalikan', async () => {
     const d = await pinjam();
     const p = ok(await bayar(d.debtId, 400_000));
     expect(await balance(bca)).toBe(2_600_000);
@@ -366,7 +366,7 @@ describe('action Utang S11 terhadap DB', () => {
     });
   });
 
-  it('T9: hapus utang = void atomik semua efek; pulihkan memulihkan (round-trip)', async () => {
+  it('[T9] hapus utang = void atomik semua efek; pulihkan memulihkan (round-trip)', async () => {
     const d = await pinjam();
     const p1 = ok(await bayar(d.debtId, 300_000));
     const p2 = ok(await bayar(d.debtId, 200_000));
@@ -499,7 +499,7 @@ describe('action Utang S11 terhadap DB', () => {
     expect(r?.account.balance).toBe(saldo);
   });
 
-  it('T7: pintasan 25%/50% null bila hasilnya 0 (tanpa "Rp 0"), full = sisa', async () => {
+  it('[T7] pintasan 25%/50% null bila hasilnya 0 (tanpa "Rp 0"), full = sisa', async () => {
     const d = ok(
       await a.createDebtAction('pribadi', {
         clientId: randomUUID(),
@@ -520,7 +520,7 @@ describe('action Utang S11 terhadap DB', () => {
     });
   });
 
-  it('C6: Tambah utang ganda (clientId sama) = satu utang, satu kontak, satu entri pokok', async () => {
+  it('[C6] Tambah utang ganda (clientId sama) = satu utang, satu kontak, satu entri pokok', async () => {
     const input = {
       clientId: randomUUID(),
       direction: 'borrowed' as const,
@@ -547,7 +547,7 @@ describe('action Utang S11 terhadap DB', () => {
     });
   });
 
-  it('C3: dua pembayaran paralel melebihi sisa = satu ditolak; C6: klik ganda = satu entri', async () => {
+  it('[C3] dua pembayaran paralel melebihi sisa = satu ditolak; [C6] klik ganda = satu entri', async () => {
     const d = await pinjam();
     const rs = await Promise.allSettled([
       payDebt(pribadi, {
@@ -616,7 +616,7 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await count(`app.entries where kind = 'debt_payment'`)).toBe(1);
   });
 
-  it('B10: Bersama ditolak di action (tanpa DB) dan di DB (wrapper langsung); tidak ada baris', async () => {
+  it('[B10] Bersama ditolak di action (tanpa DB) dan di DB (wrapper langsung); tidak ada baris', async () => {
     const r = await a.createDebtAction('bersama', {
       clientId: randomUUID(),
       direction: 'borrowed',
