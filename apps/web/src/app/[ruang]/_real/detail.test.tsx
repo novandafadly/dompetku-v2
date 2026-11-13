@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { Route } from 'next';
 import { describe, expect, it, vi } from 'vitest';
 import type { AccountVM, EntryVM, TalanganVM } from '@/features/ledger/types';
-import { entryTitleVM } from '@/features/ledger/present';
+import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
 import { DetailFailed, DetailReal, detailAbilities } from './detail';
 
 vi.mock('./detail-islands', () => ({
@@ -627,5 +627,121 @@ describe('Detail saldo awal (S7-W2)', () => {
       />,
     );
     expect(screen.queryByText(/terkunci sejak/)).toBeNull();
+  });
+});
+
+describe('Detail pokok dan cicilan utang (S11)', () => {
+  const NONE = { editable: false, voidable: false, movable: false, reimbursable: null };
+  const debtEntry = (over: Partial<EntryVM> = {}): EntryVM => ({
+    id: 'e-utang',
+    version: 2,
+    kind: 'debt_payment',
+    occurredOn: TODAY,
+    createdAt: '2026-11-02T08:00:00+07:00',
+    createdBy: { id: 'u-n', name: 'Novanda', initial: 'N' },
+    accountId: 'acc-1',
+    accountName: 'BCA',
+    amount: 300_000,
+    direction: 'out',
+    debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi', title: 'Cicilan motor' },
+    ...over,
+  });
+  const debtLabels = (e: EntryVM) => ({
+    title: entryTitleVM(e),
+    category: entryKindLabelVM(e),
+    amount: signedAmountVM(e),
+  });
+  const ab = (e: EntryVM) =>
+    detailAbilities(e, { accounts: [ACCOUNT], spaceCount: 2, talangan: null }, TODAY, 'u-n');
+
+  it('abilities: cicilan hanya Batalkan; pokok tanpa aksi apa pun (tanpa Ubah, Pindah, Batalkan)', () => {
+    expect(ab(debtEntry())).toEqual({ ...NONE, voidable: true });
+    expect(ab(debtEntry({ kind: 'debt_principal', direction: 'in' }))).toEqual(NONE);
+    expect(ab(debtEntry({ voidedAt: '2026-11-02T09:00:00+07:00' }))).toEqual(NONE);
+  });
+
+  it('cicilan: judul kontak + judul utang, jenis searah, Lihat utang, Kontak/Untuk apa, Batalkan saja', () => {
+    const e = debtEntry();
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Budi · Cicilan motor' })).toBeTruthy();
+    expect(screen.getAllByText('Pembayaran utang').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Tanpa kategori')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Lihat utang' }).getAttribute('href')).toBe(
+      '/pribadi/rencana/utang/u-1',
+    );
+    expect(screen.getByText('Kontak').nextElementSibling?.textContent).toBe('Budi');
+    expect(screen.getByText('Untuk apa').nextElementSibling?.textContent).toBe('Cicilan motor');
+    expect(screen.getByRole('button', { name: 'Batalkan transaksi' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ubah' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Pindahkan/ })).toBeNull();
+  });
+
+  it('pokok: tanpa Batalkan/Ubah/Pindah, ada penjelasan dan tautan ke utang', () => {
+    const e = debtEntry({
+      kind: 'debt_principal',
+      direction: 'in',
+      debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi' },
+    });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.getAllByText('Pinjaman diterima').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('Untuk apa')).toBeNull();
+    expect(
+      screen.getByText('Pokok utang tidak dibatalkan sendiri. Hapus utangnya dari halaman utang.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Lihat utang' })).toBeTruthy();
+  });
+
+  it('piutang diterima: judul dan jenis Penerimaan piutang', () => {
+    const e = debtEntry({
+      direction: 'in',
+      debt: { id: 'u-2', direction: 'lent', contactName: 'Sari' },
+    });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Sari' })).toBeTruthy();
+    expect(screen.getAllByText('Penerimaan piutang').length).toBeGreaterThan(0);
+  });
+
+  it('cicilan batal, utang masih ada: Pulihkan (restore_entry biasa)', () => {
+    const e = debtEntry({ voidedAt: '2026-11-02T09:00:00+07:00' });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.getByRole('button', { name: 'Pulihkan' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Lihat utang' })).toBeTruthy();
+  });
+
+  it('ikut batal karena utang dihapus: tanpa Pulihkan, arahkan ke Utang', () => {
+    const e = debtEntry({
+      voidedAt: '2026-11-02T09:00:00+07:00',
+      debt: {
+        id: 'u-1',
+        direction: 'borrowed',
+        contactName: 'Budi',
+        deleted: true,
+        voidedWithDebt: true,
+      },
+    });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.queryByRole('button', { name: 'Pulihkan' })).toBeNull();
+    expect(screen.getByText('Utang ke Budi dihapus. Pulihkan dari Utang.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buka Utang' }).getAttribute('href')).toBe(
+      '/pribadi/rencana?bagian=utang',
+    );
+    expect(screen.queryByRole('link', { name: 'Lihat utang' })).toBeNull();
+  });
+
+  it('dibatalkan sendiri sebelum utang dihapus: tidak menjanjikan pulih bersama utang', () => {
+    const e = debtEntry({
+      voidedAt: '2026-11-02T09:00:00+07:00',
+      debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi', deleted: true },
+    });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={debtLabels(e)} />);
+    expect(screen.queryByRole('button', { name: 'Pulihkan' })).toBeNull();
+    expect(screen.queryByText('Utang ke Budi dihapus. Pulihkan dari Utang.')).toBeNull();
+    expect(
+      screen.getByText(
+        'Utang ke Budi dihapus. Pulihkan utangnya dulu; transaksi ini dipulihkan sendiri sesudahnya.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buka Utang' })).toBeTruthy();
   });
 });

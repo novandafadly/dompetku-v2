@@ -75,6 +75,11 @@ const NETWORK: Failure = { ok: false, error: { code: 'network' } };
 function voidFailedText(code: LedgerErrorCode): string {
   if (code === 'conflict') return 'Transaksi ini baru saja diubah. Periksa lalu batalkan lagi.';
   if (code === 'network') return 'Belum bisa dibatalkan. Periksa koneksi lalu coba lagi.';
+  // S11: pokok hanya lewat Hapus utang (tombolnya tidak ditawarkan; ini jaring bila ditolak server).
+  if (code === 'debt_principal_locked') {
+    return 'Pinjaman awal hanya bisa dibatalkan lewat Hapus utang.';
+  }
+  if (code === 'debt_deleted') return 'Utang ini sudah dihapus. Pulihkan utangnya dulu.';
   return 'Belum bisa dibatalkan. Ada kendala di server.';
 }
 
@@ -328,9 +333,7 @@ const VoidDialogDescribed = lazy(() =>
           onOpenChange={props.onOpenChange}
           onConfirm={props.onConfirm}
           description={m.voidSentenceVM(props.entry)}
-          {...(props.entry.kind === 'space_transfer'
-            ? { title: 'Batalkan transfer antar ruang?', confirmLabel: 'Batalkan transfer' }
-            : {})}
+          {...m.voidDialogCopyVM(props.entry)}
         />
       );
     },

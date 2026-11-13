@@ -34,7 +34,10 @@ export interface EntryVM {
     | 'opening_balance'
     | 'space_transfer'
     | 'adjustment'
-    | 'reimbursement';
+    | 'reimbursement'
+    // S11: pokok utang dan cicilan (hanya Pribadi; arah uang di `direction`).
+    | 'debt_principal'
+    | 'debt_payment';
   occurredOn: IsoDate;
   createdAt: string;
   createdBy: { id: string; name: string; initial: string };
@@ -63,6 +66,19 @@ export interface EntryVM {
   movedAt?: string;
   /** Reimburse: id talangan yang diganti (ruang yang sama). */
   reimbursesEntryId?: string;
+  /**
+   * Pokok/cicilan utang (S11): utang yang ditunjuk. `deleted` = utangnya sudah dihapus (entri ikut
+   * batal; pulihnya dari Utang, bukan dari entri). `voidedWithDebt` = entri ini dibatalkan oleh Hapus
+   * utang (ikut pulih bersama utangnya); tanpa penanda berarti dibatalkan sendiri lebih dulu.
+   */
+  debt?: {
+    id: string;
+    direction: 'borrowed' | 'lent';
+    contactName: string;
+    title?: string;
+    deleted?: true;
+    voidedWithDebt?: true;
+  };
 }
 
 /** Satu reimburse hidup pada sebuah talangan (daftar di Detail talangan, S7-D3). */
@@ -200,6 +216,15 @@ export type LedgerErrorCode =
   | 'already_posted'
   | 'bill_archived'
   | 'bill_account_kantor'
+  // S11: utang/piutang dan kontak (0130–0131; bingkai S11 "Salinan galat S11").
+  | 'debt_personal_only'
+  | 'contact_name_taken'
+  | 'contact_archived'
+  | 'debt_deleted'
+  | 'payment_exceeds'
+  | 'payment_before_opened'
+  | 'debt_account_kantor'
+  | 'debt_principal_locked'
   | 'not_found'
   | 'invalid'
   | 'network'

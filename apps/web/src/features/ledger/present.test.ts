@@ -114,6 +114,20 @@ describe('effectOnAccountVM: efek entri pada satu dompet (riwayat dompet)', () =
       25_000,
     );
   });
+
+  // S11: arah dari tanda baris utama (read.ts `main_in`), sama untuk utang dan piutang.
+  it.each([
+    ['utang: pokok masuk', 'debt_principal', 'in', 25_000],
+    ['utang: cicilan keluar', 'debt_payment', 'out', -25_000],
+    ['piutang: pokok keluar', 'debt_principal', 'out', -25_000],
+    ['piutang: cicilan diterima masuk', 'debt_payment', 'in', 25_000],
+  ] as const)('%s', (_name, kind, direction, value) => {
+    expect(effectOnAccountVM({ ...base, kind, direction }, 'a1')).toEqual({
+      value,
+      kind: 'neutral',
+    });
+    expect(accountFeeNoteVM({ ...base, kind, direction }, 'a1')).toBeUndefined();
+  });
 });
 
 describe('judul kaki antar ruang (S7-D1)', () => {
@@ -170,5 +184,83 @@ describe('feeNoteVM: keterangan biaya di daftar (S8-D1a)', () => {
     expect(feeNoteVM({ ...kaki, direction: 'in' })).toBeUndefined();
     expect(feeNoteVM({ ...kaki, spaceKind: 'personal' })).toBeUndefined();
     expect(feeNoteVM({ ...kaki, kind: 'expense' })).toBeUndefined();
+  });
+});
+
+describe('pokok dan cicilan utang (S11)', () => {
+  const debtEntry = (over: Partial<EntryVM>): EntryVM => ({
+    id: 'd-1',
+    version: 1,
+    kind: 'debt_payment',
+    occurredOn: '2026-11-10',
+    createdAt: '2026-11-10T10:00:00+07:00',
+    createdBy: { id: 'm1', name: 'Novanda', initial: 'N' },
+    accountId: 'a1',
+    accountName: 'BCA',
+    amount: 300_000,
+    direction: 'out',
+    ...over,
+  });
+  const budi: EntryVM['debt'] = { id: 'u-1', direction: 'borrowed', contactName: 'Budi' };
+
+  it('label jenis mengikuti arah utang, bukan Tanpa kategori', () => {
+    expect(
+      entryKindLabelVM(debtEntry({ kind: 'debt_principal', direction: 'in', debt: budi })),
+    ).toBe('Pinjaman diterima');
+    expect(
+      entryKindLabelVM(
+        debtEntry({
+          kind: 'debt_principal',
+          direction: 'out',
+          debt: { id: 'u-2', direction: 'lent', contactName: 'Sari' },
+        }),
+      ),
+    ).toBe('Pinjaman diberikan');
+    expect(entryKindLabelVM(debtEntry({ debt: budi }))).toBe('Pembayaran utang');
+    expect(
+      entryKindLabelVM(
+        debtEntry({ direction: 'in', debt: { id: 'u-2', direction: 'lent', contactName: 'Sari' } }),
+      ),
+    ).toBe('Penerimaan piutang');
+  });
+
+  it('arah dari baris utama bila utang tidak dimuat', () => {
+    expect(entryKindLabelVM(debtEntry({ kind: 'debt_principal', direction: 'in' }))).toBe(
+      'Pinjaman diterima',
+    );
+    const tanpa = debtEntry({ direction: 'in' });
+    expect(entryKindLabelVM(tanpa)).toBe('Penerimaan piutang');
+    expect(entryKindLabelVM({ ...tanpa, direction: 'out' })).toBe('Pembayaran utang');
+    expect(entryKindLabelVM({ ...tanpa, kind: 'debt_principal', direction: 'out' })).toBe(
+      'Pinjaman diberikan',
+    );
+  });
+
+  it('judul = nama kontak, ditambah judul utang bila ada; tanpa utang jatuh ke label jenis', () => {
+    expect(entryTitleVM(debtEntry({ debt: budi }))).toBe('Budi');
+    expect(
+      entryTitleVM(
+        debtEntry({
+          debt: { id: 'u-1', direction: 'borrowed', contactName: 'Budi', title: 'Cicilan motor' },
+        }),
+      ),
+    ).toBe('Budi · Cicilan motor');
+    const tanpa = debtEntry({});
+    expect(entryTitleVM(tanpa)).toBe('Pembayaran utang');
+    for (const k of ['debt_principal', 'debt_payment'] as const) {
+      expect(entryTitleVM(debtEntry({ kind: k, debt: budi }))).not.toBe('Tanpa kategori');
+    }
+  });
+
+  it('nominal bertanda dan efek dompet mengikuti arah uang, netral (bukan pemasukan/pengeluaran)', () => {
+    expect(signedAmountVM(debtEntry({ debt: budi }))).toEqual({ value: -300_000, kind: 'neutral' });
+    expect(signedAmountVM(debtEntry({ direction: 'in', debt: budi }))).toEqual({
+      value: 300_000,
+      kind: 'neutral',
+    });
+    expect(effectOnAccountVM(debtEntry({ debt: budi }), 'a1')).toEqual({
+      value: -300_000,
+      kind: 'neutral',
+    });
   });
 });

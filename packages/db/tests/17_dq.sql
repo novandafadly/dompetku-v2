@@ -6,9 +6,10 @@
 -- diuji positif: data dirusak lewat tests.raw_exec (superuser, session_replication_role = replica,
 -- di dalam savepoint yang di-rollback) atau lewat api.* bila keadaannya sah (DQ07, saldo negatif
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
+-- DQ05 (S11, 0131): Σ cicilan hidup per utang <= pokok.
 -- ID: S7, T18
 begin;
-select plan(54);
+select plan(57);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -25,7 +26,7 @@ create function pg_temp.expect(variadic p text[] default '{}') returns text
 language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
-  from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
+  from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
                     'DQ12', 'DQ13', 'DQ14']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
@@ -61,8 +62,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error',
-  'tepat 12 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error',
+  'tepat 13 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -254,6 +255,19 @@ select is(pg_temp.dq(), pg_temp.expect('DQ14=1'), 'DQ14: induk diturunkan di baw
 select tests.raw_exec(format($$insert into app.budgets (space_id, category_id, month, amount, updated_by)
   values (%L, %L, '2026-04-01', 1000, %L)$$, :'sh', :'k_sayur', tests.n()));
 select is(pg_temp.dq(), pg_temp.expect('DQ14=2'), 'DQ14: dihitung per (induk, label)');
+rollback to savepoint s;
+
+-- ===== DQ05: sisa utang tidak negatif (S11, 0131): Σ cicilan hidup per utang <= pokok =====
+select pg_temp.call(tests.n(), format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 100000, 'baru',
+  null, 'Budi', %L, '2026-03-02')$$, :'np', :'bca')) ->> 'debt_id' as dq_debt \gset
+select pg_temp.call(tests.n(), format($$select api.pay_debt(gen_random_uuid(), %L, %L, 40000, '2026-03-05')$$,
+  :'dq_debt', :'bca')) ->> 'entry_id' as dq_pay \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ05: utang + cicilan sah = nol temuan');
+savepoint s;
+select tests.raw_exec(format($$update app.entry_lines set amount = -150000 where entry_id = %L$$, :'dq_pay'));
+select is(pg_temp.dq(), pg_temp.expect('DQ05=1'), 'DQ05: Σ cicilan hidup melebihi pokok (sisa negatif)');
+select tests.raw_exec(format($$update app.entries set voided_at = now(), voided_by = created_by where id = %L$$, :'dq_pay'));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ05: cicilan batal tidak dihitung');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

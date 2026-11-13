@@ -2,9 +2,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MenuSheet } from './menu-sheet';
 
+let ruangNow = 'bersama';
 vi.mock('./nav-provider', () => ({
   useNav: () => ({
-    ruang: 'bersama',
+    ruang: ruangNow,
     query: '',
     sampahHref: (r: string) => `/${r}/sampah`,
     kategoriHref: (r: string) => `/${r}/kategori`,
@@ -13,7 +14,10 @@ vi.mock('./nav-provider', () => ({
 
 vi.mock('@/server/auth/actions', () => ({ signOutAction: vi.fn() }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  ruangNow = 'bersama';
+});
 
 describe('MenuSheet: Kategori', () => {
   it('mode nyata: Kategori adalah tautan ke /{ruang}/kategori, tanpa "Segera"', () => {
@@ -22,8 +26,9 @@ describe('MenuSheet: Kategori', () => {
       'href',
       '/bersama/kategori',
     );
-    // Butir lain yang belum ada tetap "Segera".
-    expect(screen.getAllByText('Segera')).toHaveLength(4);
+    // Butir lain yang belum ada tetap "Segera"; Kontak tidak dirender di Bersama (S11-MN1).
+    expect(screen.getAllByText('Segera')).toHaveLength(3);
+    expect(screen.queryByText('Kontak')).toBeNull();
     // Analisis diganti Laporan (S9 K8).
     expect(screen.getByRole('link', { name: 'Laporan' })).toHaveAttribute(
       'href',
@@ -43,6 +48,29 @@ describe('MenuSheet: Kategori', () => {
   it('Sampah aktif di kedua mode', () => {
     render(<MenuSheet open onOpenChange={vi.fn()} />);
     expect(screen.getByRole('link', { name: 'Sampah' })).toHaveAttribute('href', '/bersama/sampah');
+  });
+});
+
+describe('MenuSheet: Kontak (S11)', () => {
+  it('mode nyata Pribadi: tautan ke /pribadi/kontak, bukan "Segera"', () => {
+    ruangNow = 'pribadi';
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const link = screen.getByRole('link', { name: 'Kontak' });
+    expect(link).toHaveAttribute('href', '/pribadi/kontak');
+    expect(link).not.toHaveTextContent('Segera');
+    expect(screen.getAllByText('Segera')).toHaveLength(3);
+  });
+
+  it('mode nyata Bersama: butir Kontak tidak dirender sama sekali', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    expect(screen.queryByRole('link', { name: 'Kontak' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Kontak/ })).toBeNull();
+  });
+
+  it('prototipe: Kontak tetap "Segera" di kedua ruang', () => {
+    ruangNow = 'pribadi';
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /Kontak/ })).toHaveTextContent('Segera');
   });
 });
 

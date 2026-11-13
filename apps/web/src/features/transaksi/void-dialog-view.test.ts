@@ -1,7 +1,7 @@
 import { formatRupiah } from '@dompetku/domain';
 import { describe, expect, it } from 'vitest';
 import type { EntryVM } from '@/features/ledger/types';
-import { voidSentenceVM, voidedToastVM } from './void-dialog-view';
+import { voidDialogCopyVM, voidSentenceVM, voidedToastVM } from './void-dialog-view';
 
 const base: EntryVM = {
   id: 'e',
@@ -35,5 +35,68 @@ describe('Batalkan reimburse dan antar ruang (S7)', () => {
     expect(voidedToastVM('Bersama', st)).toBe(
       `Dibatalkan di Pribadi dan Bersama · ${formatRupiah(100_000)}`,
     );
+  });
+});
+
+describe('Batalkan cicilan utang (S11): kalimat searah dengan uangnya', () => {
+  const bayar: EntryVM = {
+    ...base,
+    kind: 'debt_payment',
+    direction: 'out',
+    occurredOn: '2026-10-14',
+    debt: { id: 'u', direction: 'borrowed', contactName: 'Budi' },
+  };
+  const terima: EntryVM = {
+    ...bayar,
+    direction: 'in',
+    debt: { id: 'u', direction: 'lent', contactName: 'Sari' },
+  };
+
+  it('pembayaran utang (uang keluar): saldo bertambah dan sisa utang bertambah lagi', () => {
+    expect(voidSentenceVM(bayar)).toBe(
+      `Pembayaran 14 Okt 2026 dibatalkan. Saldo BCA bertambah ${formatRupiah(100_000)} dan sisa utang bertambah lagi. Bisa dipulihkan 90 hari dari Sampah.`,
+    );
+  });
+
+  it('penerimaan piutang (uang masuk): saldo berkurang dan sisa piutang bertambah lagi', () => {
+    expect(voidSentenceVM(terima)).toBe(
+      `Penerimaan 14 Okt 2026 dibatalkan. Saldo BCA berkurang ${formatRupiah(100_000)} dan sisa piutang bertambah lagi. Bisa dipulihkan 90 hari dari Sampah.`,
+    );
+  });
+
+  it('pokok pinjaman: arah saldo ikut uangnya (masuk = berkurang, keluar = bertambah)', () => {
+    expect(voidSentenceVM({ ...bayar, kind: 'debt_principal', direction: 'in' })).toContain(
+      'Saldo BCA berkurang',
+    );
+    expect(voidSentenceVM({ ...bayar, kind: 'debt_principal', direction: 'out' })).toContain(
+      'Saldo BCA bertambah',
+    );
+  });
+
+  it('toast: uang keluar = dari dompet, uang masuk = ke dompet', () => {
+    expect(voidedToastVM('Pribadi', bayar)).toBe(
+      `Dibatalkan di Pribadi · ${formatRupiah(100_000)} dari BCA`,
+    );
+    expect(voidedToastVM('Pribadi', terima)).toBe(
+      `Dibatalkan di Pribadi · ${formatRupiah(100_000)} ke BCA`,
+    );
+  });
+});
+
+describe('judul dialog Batalkan per jenis', () => {
+  it('cicilan: pembayaran atau penerimaan; antar ruang: transfer; lainnya: salinan tetap', () => {
+    const e: EntryVM = { ...base, kind: 'debt_payment', direction: 'out' };
+    expect(voidDialogCopyVM(e)).toEqual({
+      title: 'Batalkan pembayaran ini?',
+      confirmLabel: 'Batalkan pembayaran',
+    });
+    expect(voidDialogCopyVM({ ...e, direction: 'in' })).toEqual({
+      title: 'Batalkan penerimaan ini?',
+      confirmLabel: 'Batalkan penerimaan',
+    });
+    expect(
+      voidDialogCopyVM({ ...base, kind: 'space_transfer', direction: 'out' })?.confirmLabel,
+    ).toBe('Batalkan transfer');
+    expect(voidDialogCopyVM({ ...base, kind: 'expense' })).toBeNull();
   });
 });

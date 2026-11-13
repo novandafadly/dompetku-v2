@@ -77,3 +77,35 @@ Pemilik menjawab "gas" pada plan S10 dan bingkai; default K1–K7 dipakai. Forma
 - **Audit `export` meta `{count, via}`** — kunci meta audit tertutup (0006) — rentang tidak tercatat.
 - **Review bulanan hanya dasar gajian; rincian selalu terbuka; ringkasan memakai kartu Laporan** — anggaran berlabel periode gajian; angka sama dengan Laporan — pemilik ingin kartu khusus.
 - **Worker `process.exit(1)` pada `unhandledRejection`** — gagal keras, container restart — loop restart bila rejection deterministik (runbook).
+
+## Keputusan agen atas nama pemilik selama S11 (2026-11-12 s.d. 2026-11-13)
+
+Pemilik menjawab K1 (tabel Kontak), K2, K3, K5 pada 2026-11-12 dan mengizinkan PR + merge otomatis dengan pemilihan model dinilai agen ("PR dan merge otomatis, pemilihan model dinilai lead sendiri"). Format: keputusan — alasan — risiko bila salah. Butir bertanda **[konfirmasi pemilik]** belum disetujui eksplisit.
+
+### Keputusan plan (default agen, di luar K1/K2/K3/K5)
+
+- **K4** pokok dan nominal cicilan tidak bisa diubah (batal lalu catat ulang); judul, catatan, kontak boleh tanpa efek ledger — tidak menulis ulang entri ledger — pemilik ingin koreksi nominal langsung (perlu jalur ubah yang membalik dan menulis ulang atomik).
+- **K6** dompet Pribadi aktif bukan Kantor; saldo negatif tanpa flag ditolak (`saldo_negatif`) — pola tagihan dan mutasi lain — pengguna yang meminjamkan dari dompet kurang saldo harus mengonfirmasi `Tetap simpan`.
+- **K7** bayar lebih ditolak atomik (`payment_exceeds`), UI menawarkan `Bayar sisa` yang hanya mengisi kolom — PRD:157 — satu ketukan tambahan bagi yang mau melunasi.
+- **K8** utang = segmen ketiga di Rencana (Pribadi saja), detail = halaman, istilah baku `Utang` — bingkai Task 1, ui-ux:20 — pemilik ingin Utang di tab sendiri.
+- **K9** tanpa wizard onboarding utang berjalan — tidak ada di AFD/PRD final — onboarding utang lama harus lewat sheet Tambah satu per satu.
+- **K10** definisi T6 sampai T9 diinferensi dari backlog PO (isi aslinya tidak ada di repo): T6 edit keterangan tanpa efek, T7 bayar > sisa ditolak, T8 batal cicilan membalik, T9 hapus utang atomik; T10 (modal trading) = S12 — **[konfirmasi pemilik]** — bila definisi asli berbeda, tes T6 sampai T9 perlu disesuaikan, kode tidak.
+
+### Keputusan agen selama implementasi (handoff s11 butir 1 sampai 6)
+
+1. **Judul dan catatan opsional, pintasan di SQL:** `title` dan `note` kosong atau spasi saja disimpan `null`; judul ≤ 80 dan catatan ≤ 200 sesudah trim. Pintasan 25%/50% dari SISA, rupiah penuh dibulatkan ke bawah, dihitung di SQL (null bila 0, UI menyembunyikan chip). Pratinjau `sisa − jumlah` di sheet dihitung di UI (preseden S6-C3/S9-TG3). Pemulihan utang dari grup `Utang dihapus` di segmen Utang, bukan Sampah. Kontak hanya bisa diarsipkan (tanpa hapus atau pulihkan). Server menolak bayar sebelum tanggal mulai (`payment_before_opened`). Tanpa jatuh tempo, tanpa bunga, tanpa kartu utang di Beranda — bingkai butir 1 sampai 8, tidak ada K untuk jatuh tempo — pemilik ingin jatuh tempo atau pengingat (kolom baru + job). **[konfirmasi pemilik]**
+2. **`safe_to_spend` = kas murni (0120), tidak diubah.** Sempat dibuat memotong sisa utang pinjaman, dibatalkan karena angka menjadi salah (−Rp3 juta) bila uang pinjaman dipindah ke Tabungan. Akibatnya meminjam menaikkan "aman dipakai" sebesar kas yang masuk — angka tetap benar sebagai kas, tetapi bisa terbaca "boleh belanja uang pinjaman" — bila menyesatkan, tambah kartu "Utang yang harus dibayar" terpisah (S12). **[konfirmasi pemilik]** (keputusan terbuka)
+3. **Penanda `voided_with_debt`:** `restore_debt` hanya memulihkan entri bertanda; `trash_list` menyembunyikan semua entri utang terhapus (signature tak berubah); Sampah tidak punya teks "Pulihkan dari Utang" seperti bingkai #3 (teks itu ada di detail transaksi dengan tautan `Buka Utang`) — penanda kolom, bukan kesamaan `voided_at` (jam tes dipatok, dua pembatalan jam sama tak terbedakan) — cicilan yang dibatalkan sendiri sebelum Hapus utang tetap batal sesudah Pulihkan; salinan detail untuk kasus itu menyesatkan (utang di handoff).
+4. **`create_debt` menerima `p_contact_id` atau `p_contact_name`:** kontak baru dibuat di transaksi yang sama dan ikut idempoten — satu ketukan Simpan tanpa kontak yatim bila gagal — signature lebih lebar, dua jalur input yang harus konsisten.
+5. **Purge:** entri `voided_with_debt` tidak dipurge selama utangnya terhapus ≤ 90 hari; sesudahnya `jobs.purge_voided` juga menghapus baris `app.debts` tanpa event audit (dicatat di BSD) — catatan/judul tidak tinggal selamanya — hilang jejak audit penghapusan utang; kontak tidak pernah dihapus.
+6. **Keterbatasan diterima (dokumentasi):** dompet yang dipakai utang lalu diarsipkan membuat `void_debt`/`restore_debt` ditolak `account_archived` (pola `void_entry`); `api.net_worth` hanya kas (piutang/utang masuk S12/S14); loader (`read.ts`) mengenal kind utang sejak Task 5 supaya Transaksi, riwayat dompet, dan Sampah tidak melempar — Hapus/Pulihkan utang pada dompet terarsip ditolak dengan galat (belum ada jalan keluar di UI).
+
+### Ruling pengendali (ledger SDD S11)
+
+- **Model:** Opus untuk review Task 5 dan review akhir, Opus untuk Task 5 (server uang), Sonnet implementer untuk UI Task 6 dan 7 dengan design reviewer terpisah — spec meminta model terkuat untuk uang/DB/server — pemakaian token lebih tinggi.
+- **`errors.ts` memetakan `already_voided`/`not_voided` ke `conflict` untuk semua jalur** (juga `void_entry`/`restore_entry`/`purge_entry` lama) — reviewer: tidak terjangkau dari UI lama karena versi dicek lebih dulu (DK409), dan UI memperlakukan `conflict` sebagai muat ulang — galat langka tampil sebagai "muat ulang" alih-alih `unknown` + log.
+- **e2e Menu → Kontak dipindah dari Task 6 ke Task 8** (`e2e:ledger`) — spec e2e milik Task 8, brief Task 6 melarang implementer menulisnya — bila Task 8 lupa, tautan Menu tak teruji di browser (Task 8 memuatnya, tes 11).
+- **CSV kategori/catatan kosong untuk pokok dan cicilan diterima:** `export_entries` tidak mengambil kontak/judul utang; Jenis dan Kelas laporan benar, nominal bertanda benar, Σ tidak tercemar; perbaikan butuh migrasi `0132` (S12: `coalesce(description, kontak · judul)`) — CSV kurang informatif, bukan salah — pemilik membuka ekspor di Excel dan bingung siapa lawan utangnya. **[konfirmasi pemilik]** (dicatat di handoff)
+- **Kolom Jenis di ekspor tetap kunci mesin** (`debt_principal`, `debt_payment`) seperti semua kind lain — memberi label hanya kind baru tidak konsisten dan mengubah kontrak CSV S10 — pemilik menginginkan label Indonesia untuk semua kind.
+- **Tab `Beranda` menyala di `/pribadi/kontak`** (Task 6 fix I1: `hrefs.ts`/`nav-provider.tsx` dikembalikan persis ke baseline agar Beranda prototipe +0 byte) — budget Beranda prototipe hanya 0,4 kB di bawah batas — pengguna melihat tab Beranda menyala di Kontak; pemindah ruang dari Kontak jatuh ke Beranda ruang lain.
+- **Dialog Batalkan cicilan memakai salinan Transaksi generik** (`Saldo {dompet} bertambah Rp …`), bukan kalimat AK1 persis — kalimat benar arah dan dipakai bersama dialog Batalkan lain (pola S6) — toast tak persis seperti bingkai.

@@ -48,11 +48,13 @@ const BY_NAME: Record<string, Icon> = {
   'Kontribusi Farida': HandCoinsIcon,
 };
 
-/** Ikon untuk entri tanpa kategori: saldo awal, transfer, antar ruang. */
+/** Ikon untuk entri tanpa kategori: saldo awal, transfer, antar ruang, pokok/cicilan utang. */
 const BY_KIND = {
   opening_balance: FlagIcon,
   transfer: ArrowsLeftRightIcon,
   space_transfer: ArrowsLeftRightIcon,
+  debt_principal: HandCoinsIcon,
+  debt_payment: HandCoinsIcon,
 } as const;
 
 export function categoryGlyph(name: string | undefined, kind: string | undefined): Icon {

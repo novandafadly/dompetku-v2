@@ -32,6 +32,7 @@ import {
   unbudgetedRows,
 } from '@/features/rencana/copy';
 import type { RencanaData } from '@/features/rencana/types';
+import { UTANG_COPY } from '@/features/utang/copy';
 import { REVIEW_COPY } from './review-copy';
 import {
   AddBillIsland,
@@ -55,6 +56,8 @@ import { RetryIsland } from './transaksi-islands';
  */
 
 export type Bagian = 'anggaran' | 'tagihan';
+/** Segmen Rencana (S11): Utang hanya di Pribadi, dirender halaman sendiri (`utang-section.tsx`). */
+export type Segment = Bagian | 'utang';
 
 // Lebar eksplisit: `w-full` + `-mx-4` hanya menggeser; baris harus melebar 2 × 16 px agar bilah dan
 // isinya selebar garis pemisah.
@@ -71,10 +74,10 @@ const ADD_SUB =
 // Badan baris tagihan: ubin + nama + sub; kolom kanan (nominal + Bayar) di luar tombol.
 const BILL_BODY = `flex min-h-18 min-w-0 flex-[1_1_15rem] items-center gap-3 py-2.5 pr-2 pl-4 text-left hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 
-function bagianHref(ruang: Ruang, bagian: Bagian, query: string): Route {
+function bagianHref(ruang: Ruang, bagian: Segment, query: string): Route {
   const params = new URLSearchParams(query);
-  if (bagian === 'tagihan') params.set('bagian', 'tagihan');
-  else params.delete('bagian');
+  if (bagian === 'anggaran') params.delete('bagian');
+  else params.set('bagian', bagian);
   const q = params.toString();
   return `/${ruang}/rencana${q === '' ? '' : `?${q}`}` as Route;
 }
@@ -86,10 +89,12 @@ function reviewLink(ruang: Ruang, query: string): Route {
   return `/${ruang}/rencana/review${q === '' ? '' : `?${q}`}` as Route;
 }
 
-function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Bagian; query: string }) {
-  const items: { b: Bagian; label: string }[] = [
+/** Segmen Anggaran | Tagihan, dan Utang di Pribadi saja (di Bersama tidak ada tautan mati, ui-ux:20). */
+export function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Segment; query: string }) {
+  const items: { b: Segment; label: string }[] = [
     { b: 'anggaran', label: 'Anggaran' },
     { b: 'tagihan', label: 'Tagihan' },
+    ...(ruang === 'pribadi' ? [{ b: 'utang' as const, label: UTANG_COPY.segment }] : []),
   ];
   return (
     <nav aria-label="Bagian Rencana" className={`${segmentTrack} w-full`}>

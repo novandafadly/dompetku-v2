@@ -212,6 +212,8 @@ begin
   delete from app.bills;
   delete from app.budgets;
   delete from app.entries;
+  delete from app.debts;
+  delete from app.contacts;
   delete from app.entry_tombstones;
   delete from app.accounts;
   delete from app.categories;

@@ -12,13 +12,18 @@
 -- conflict do nothing), ubah tagihan paralel bayar dan arsip paralel batalkan lewati = menunggu kunci
 -- tagihan, tanpa deadlock. Pohon anggaran (0125): dua rincian paralel melewati induk = tepat satu
 -- sub_exceeds_parent; hapus induk paralel rincian baru = parent_budget_required tanpa rincian yatim.
+-- Utang (0131): dua pembayaran paralel melebihi sisa = satu payment_exceeds (C3), klik ganda bayar =
+-- satu cicilan (C6), kegagalan di tengah pay_debt (trigger tests.fail_after sesudah line ditulis, hanya
+-- aktif bila GUC tests.fail_after diset di sesi itu) = rollback utuh termasuk kunci idempotensi
+-- (INT-12), arsip kontak paralel utang baru (kedua urutan), hapus utang paralel bayar (kedua urutan),
+-- batal cicilan paralel hapus utang tanpa deadlock (kunci utang -> entri -> akun).
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
--- ID: B8, C2, C4, C9, T15
+-- ID: B8, C2, C3, C4, C6, C9, T15
 begin;
-select plan(82);
+select plan(104);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -517,6 +522,131 @@ select is(tests.owner_val(null, $$select count(*) - count(distinct (bill_id, dat
   '0', 'satu kemunculan per tagihan per bulan sesudah materialisasi paralel');
 select tests.peer_close('w1');
 select tests.peer_close('w2');
+
+-- ===== Utang (0131) =====
+create function pg_temp.adm_api(p_sql text) returns jsonb
+language sql as $$ select tests.peer_val('adm', format('select tests.web_val(tests.n(), %L)', p_sql))::jsonb $$;
+create function pg_temp.utang(p_contact uuid, p_principal int, p_acc uuid) returns uuid
+language sql as $$
+  select (pg_temp.adm_api(format($q$select api.create_debt(gen_random_uuid(), %L, 'borrowed', %s, 'baru', %L,
+    null, %L)$q$, tests.space_id(tests.n(), 'personal'), p_principal, p_contact, p_acc)) ->> 'debt_id')::uuid
+$$;
+create function pg_temp.bayar_sql(p_debt uuid, p_acc uuid, p_amount int, p_client uuid default null) returns text
+language sql as $$
+  select format($q$select api.pay_debt(%L, %L, %L, %s)$q$, coalesce(p_client, gen_random_uuid()), p_debt, p_acc, p_amount)
+$$;
+create function pg_temp.sisa(p_debt uuid) returns text
+language sql as $$
+  select tests.owner_val(null, format($q$select paid || '/' || remaining from app.debt_balances where debt_id = %L$q$, p_debt))
+$$;
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'U', 'operasional', 0)$$, :'np')) as acc_u \gset
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'V', 'operasional', 100)$$, :'np')) as acc_v \gset
+select pg_temp.adm_api(format($$select api.create_contact(gen_random_uuid(), %L, 'Konkuren')$$, :'np')) ->> 'contact_id' as kk \gset
+select pg_temp.utang(:'kk', 100, :'acc_u') as kd \gset
+-- C3: dua pembayaran 60 paralel pada sisa 100 dari dua dompet berbeda (kunci dompet tidak menyerialkan;
+-- hanya kunci utang yang membuat yang kedua membaca Σ sesudah yang pertama commit).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.bayar_sql(:'kd', :'acc_u', 60) || $$ ->> 'entry_id'$$) as kp60 \gset
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.bayar_sql(:'kd', :'acc_v', 60) || $$ ->> 'remaining'$$);
+select ok(tests.peer_blocked('b'), 'bayar kedua (dompet lain) menunggu kunci utang [C3]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*payment_exceeds', 'bayar paralel melebihi sisa: yang kedua payment_exceeds [C3]');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.sisa(:'kd') || ' ' || tests.balance(:'acc_v'), '60/40 100', 'sisa 40, tidak pernah negatif; dompet kedua utuh [C3]');
+-- C6: klik ganda Bayar (client_id sama) paralel = satu cicilan.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.bayar_sql(:'kd', :'acc_u', 10, 'cccccccc-0000-0000-0000-000000000031') || $$ ->> 'remaining'$$);
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.bayar_sql(:'kd', :'acc_u', 10, 'cccccccc-0000-0000-0000-000000000031') || $$ ->> 'replayed'$$);
+select ok(tests.peer_blocked('b'), 'bayar kembar menunggu kunci idempotensi [C6]');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'true', 'bayar kembar = replay [C6]');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.sisa(:'kd') || ' ' || tests.balance(:'acc_u'), '70/30 30', 'klik ganda paralel = satu cicilan [C6]');
+-- INT-12: gagal sesudah entri dan line cicilan ditulis = rollback utuh. Trigger dibuat owner di dalam
+-- savepoint sesi ini (bukan lewat peer: DDL lintas sesi menunggu kunci tabel sesi tes) dan aktif hanya bila
+-- GUC tests.fail_after diset; rollback to savepoint membuang trigger beserta kuncinya.
+savepoint int12;
+select tests.owner_exec(null, $q$create function private.tes_fail_after() returns trigger
+  language plpgsql set search_path = '' as $f$
+  begin
+    if pg_catalog.current_setting('tests.fail_after', true) = 'debt_payment_line' then
+      raise exception using errcode = 'P0001', message = 'fail_after';
+    end if;
+    return null;
+  end $f$$q$);
+select tests.owner_exec(null, 'create trigger tes_fail_after after insert on app.entry_lines
+  for each row execute function private.tes_fail_after()');
+select set_config('tests.fail_after', 'debt_payment_line', true);
+select throws_ok(format('select tests.web_val(tests.n(), %L)',
+  pg_temp.bayar_sql(:'kd', :'acc_u', 5, 'cccccccc-0000-0000-0000-000000000032')), 'P0001', 'fail_after',
+  'kegagalan disuntik di tengah pay_debt (sesudah entri dan line ditulis)');
+select is(concat_ws(' ', pg_temp.sisa(:'kd'), tests.balance(:'acc_u'),
+    tests.owner_val(null, format($$select count(*) from app.entries where debt_id = %L$$, :'kd')),
+    tests.owner_val(null, $$select count(*) from app.idempotency_keys where client_id = 'cccccccc-0000-0000-0000-000000000032'$$)),
+  '70/30 30 3 0', 'rollback utuh: sisa, saldo, entri, kunci idempotensi tidak berubah [INT-12]');
+rollback to savepoint int12;
+select set_config('tests.fail_after', '', true);
+select is(tests.peer_val('a', pg_temp.bayar_sql(:'kd', :'acc_u', 5, 'cccccccc-0000-0000-0000-000000000032') || $$ ->> 'remaining'$$),
+  '25', 'client_id yang sama diulang sesudah gagal = cicilan baru');
+-- Batal cicilan paralel hapus utang: keduanya mengunci utang dulu, tanpa deadlock; cicilan yang batal
+-- lebih dulu tidak ikut ditandai Hapus utang.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.void_entry(gen_random_uuid(), %L, 1) ->> 'version'$$, :'kp60'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select jsonb_array_length(api.void_debt(gen_random_uuid(), %L) -> 'affected')$$, :'kd'));
+select ok(tests.peer_blocked('b'), 'hapus utang menunggu batal cicilan paralel (kunci utang)');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '3', 'hapus utang sesudah batal commit: pokok + dua cicilan hidup, tanpa deadlock');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select string_agg(voided_with_debt::text, ',' order by voided_with_debt)
+  from app.entries where debt_id = %L$$, :'kd')), 'false,true,true,true', 'cicilan yang batal lebih dulu tidak ditandai ikut terhapus');
+-- Arsip kontak lebih dulu, utang baru menunggu lalu contact_archived.
+select pg_temp.adm_api(format($$select api.create_contact(gen_random_uuid(), %L, 'Konkuren 2')$$, :'np')) ->> 'contact_id' as kk2 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_contact(%L) ->> 'archived'$$, :'kk2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 10, 'berjalan', %L) ->> 'debt_id'$$, :'np', :'kk2'));
+select ok(tests.peer_blocked('b'), 'utang baru menunggu arsip kontak paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*contact_archived', 'utang baru sesudah arsip commit = contact_archived');
+select tests.peer_exec('b', 'rollback');
+-- Utang baru lebih dulu, arsip menunggu lalu berhasil; utang tetap tercatat.
+select pg_temp.adm_api(format($$select api.create_contact(gen_random_uuid(), %L, 'Konkuren 3')$$, :'np')) ->> 'contact_id' as kk3 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 10, 'berjalan', %L) ->> 'debt_id'$$, :'np', :'kk3'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_contact(%L) ->> 'archived'$$, :'kk3'));
+select ok(tests.peer_blocked('b'), 'arsip kontak menunggu utang baru paralel');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'true', 'arsip berhasil sesudah utang baru commit');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select count(*) || ' ' || bool_and(c.archived_at is not null) from app.debts d
+  join app.contacts c on c.id = d.contact_id where d.contact_id = %L and d.voided_at is null$$, :'kk3')), '1 true',
+  'utang tetap tercatat pada kontak yang diarsipkan');
+-- Hapus utang lebih dulu, bayar menunggu lalu debt_deleted.
+select pg_temp.utang(:'kk', 50, :'acc_u') as kd2 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.void_debt(gen_random_uuid(), %L) ->> 'debt_id'$$, :'kd2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.bayar_sql(:'kd2', :'acc_u', 10) || $$ ->> 'remaining'$$);
+select ok(tests.peer_blocked('b'), 'bayar menunggu hapus utang paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*debt_deleted', 'bayar sesudah hapus commit = debt_deleted');
+select tests.peer_exec('b', 'rollback');
+-- Bayar lebih dulu, hapus menunggu lalu ikut membatalkan cicilan baru.
+select pg_temp.utang(:'kk', 50, :'acc_u') as kd3 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.bayar_sql(:'kd3', :'acc_u', 20) || $$ ->> 'remaining'$$);
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select jsonb_array_length(api.void_debt(gen_random_uuid(), %L) -> 'affected')$$, :'kd3'));
+select ok(tests.peer_blocked('b'), 'hapus utang menunggu bayar paralel');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '2', 'hapus sesudah bayar commit ikut membatalkan cicilan baru');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select count(*) from app.entries where debt_id = %L and voided_at is null$$, :'kd3'))
+  || ' ' || tests.balance(:'acc_u'), '0 0', 'tanpa entri hidup, saldo dompet kembali ke nol');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');

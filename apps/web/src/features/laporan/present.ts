@@ -144,6 +144,15 @@ function excludedName(
       return dir === 'out'
         ? { name: 'Diambil anggota', note: 'Pengambilan ke ruang Pribadi.' }
         : null;
+    // S11: pokok dan pelunasan utang/piutang; arah = arah uang di dompet (masuk/keluar).
+    case 'x_pokok_utang':
+      return dir === 'in'
+        ? { name: 'Pinjaman diterima', note: 'Uang pinjaman masuk; bukan pemasukan.' }
+        : { name: 'Pinjaman diberikan', note: 'Uang yang kamu pinjamkan; bukan pengeluaran.' };
+    case 'x_pelunasan_utang':
+      return dir === 'out'
+        ? { name: 'Pelunasan utang', note: 'Cicilan utang; bukan pengeluaran.' }
+        : { name: 'Penerimaan piutang', note: 'Cicilan piutang yang diterima; bukan pemasukan.' };
     case 'x_koreksi':
       return { name: `Saldo awal dan koreksi · ${dir === 'in' ? 'naik' : 'turun'}`, note: KOREKSI };
     default:

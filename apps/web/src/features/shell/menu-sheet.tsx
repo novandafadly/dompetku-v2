@@ -21,6 +21,7 @@ import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import { signOutAction } from '@/server/auth/actions';
 import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
+import { buildKontakHref } from './utang-hrefs';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
 const MENU_ITEMS: { name: string; Icon: Icon }[] = [
@@ -74,12 +75,20 @@ export function MenuSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Mode nyata: Kategori aktif (tautan ke /{ruang}/kategori). Prototipe: tetap "Segera". */
+  /**
+   * Mode nyata: Kategori aktif (tautan ke /{ruang}/kategori), Kontak hanya di Pribadi. Prototipe:
+   * tetap "Segera".
+   */
   real?: boolean;
 }) {
   const [theme, setTheme] = useState<ThemeChoice>(currentTheme);
   const themeLabel = useId();
   const { ruang, query, sampahHref, kategoriHref } = useNav();
+  // Kontak hanya ada di Pribadi mode nyata (S11-MN1): di Bersama butirnya tidak dirender (bukan
+  // nonaktif, ui-ux:20).
+  const items = MENU_ITEMS.filter(
+    ({ name }) => !(real && name === 'Kontak' && ruang !== 'pribadi'),
+  );
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Menu">
       <ul className="flex flex-col">
@@ -92,11 +101,18 @@ export function MenuSheet({
             onOpenChange={onOpenChange}
           />
         </li>
-        {MENU_ITEMS.map(({ name, Icon }) => (
+        {items.map(({ name, Icon }) => (
           <li key={name} className={rowDivider}>
             {real && name === 'Kategori' ? (
               <MenuLink
                 href={kategoriHref(ruang)}
+                name={name}
+                Icon={Icon}
+                onOpenChange={onOpenChange}
+              />
+            ) : real && name === 'Kontak' ? (
+              <MenuLink
+                href={buildKontakHref(ruang, query)}
                 name={name}
                 Icon={Icon}
                 onOpenChange={onOpenChange}

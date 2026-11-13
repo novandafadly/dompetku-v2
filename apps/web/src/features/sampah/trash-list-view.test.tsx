@@ -56,4 +56,31 @@ describe('TrashListView', () => {
     ).toBeTruthy();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
+
+  it('cicilan utang yang dibatalkan sendiri (S11): nama kontak dan jenis searah, bukan Tanpa kategori', () => {
+    render(
+      <TrashListView
+        today="2026-11-02"
+        items={[
+          item('c1', {
+            kind: 'debt_payment',
+            direction: 'out',
+            debt: { id: 'u1', direction: 'borrowed', contactName: 'Budi' },
+          }),
+          item('c2', {
+            kind: 'debt_payment',
+            direction: 'in',
+            debt: { id: 'u2', direction: 'lent', contactName: 'Sari' },
+          }),
+        ]}
+        restore={(_, slot) => <button type="button">{`Pulihkan ${slot.labelSuffix}`}</button>}
+      />,
+    );
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Budi');
+    expect(rows[0]).toHaveTextContent('Pembayaran utang · BCA');
+    expect(rows[1]).toHaveTextContent('Sari');
+    expect(rows[1]).toHaveTextContent('Penerimaan piutang · BCA');
+    expect(screen.queryByText(/Tanpa kategori/)).toBeNull();
+  });
 });
