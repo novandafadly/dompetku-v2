@@ -1,6 +1,25 @@
 import { formatRupiah, type Rupiah } from '@dompetku/domain';
 import type { EntryVM } from './types';
 
+/**
+ * Arah utang sebuah entri pokok/cicilan: dari utangnya bila dimuat, selain itu dari arah uang di
+ * dompet (pokok masuk = pinjam, pokok keluar = pinjamkan; cicilan keluar = bayar utang, cicilan
+ * masuk = terima piutang).
+ */
+function debtDirectionOf(e: EntryVM): 'borrowed' | 'lent' {
+  if (e.debt !== undefined) return e.debt.direction;
+  const moneyIn = e.direction === 'in';
+  if (e.kind === 'debt_principal') return moneyIn ? 'borrowed' : 'lent';
+  return moneyIn ? 'lent' : 'borrowed';
+}
+
+/** Label jenis pokok/cicilan utang menurut arah (S11). */
+function debtKindLabel(e: EntryVM): string {
+  const borrowed = debtDirectionOf(e) === 'borrowed';
+  if (e.kind === 'debt_principal') return borrowed ? 'Pinjaman diterima' : 'Pinjaman diberikan';
+  return borrowed ? 'Pembayaran utang' : 'Penerimaan piutang';
+}
+
 /** Judul entri di daftar: deskripsi, lalu catatan bersama, lalu nama kategori. */
 export function entryTitleVM(e: EntryVM): string {
   switch (e.kind) {
@@ -12,6 +31,14 @@ export function entryTitleVM(e: EntryVM): string {
       return e.description ?? 'Pindah dompet';
     case 'reimbursement':
       return e.description ?? 'Reimburse talangan';
+    case 'debt_principal':
+    case 'debt_payment':
+      // S11: nama kontak (+ judul utang bila ada); tanpa utang dimuat jatuh ke label jenis.
+      return e.debt === undefined
+        ? debtKindLabel(e)
+        : e.debt.title === undefined
+          ? e.debt.contactName
+          : `${e.debt.contactName} · ${e.debt.title}`;
     case 'space_transfer':
       // S7-D1: judul dari arah dan pencatat, bukan keterangan; kaki Bersama tidak menyebut Pribadi.
       if (e.spaceKind === 'shared') {
@@ -45,6 +72,9 @@ export function entryKindLabelVM(e: EntryVM): string {
       return 'Antar ruang';
     case 'reimbursement':
       return 'Reimburse';
+    case 'debt_principal':
+    case 'debt_payment':
+      return debtKindLabel(e);
     default:
       return e.categoryName ?? 'Tanpa kategori';
   }

@@ -328,9 +328,7 @@ const VoidDialogDescribed = lazy(() =>
           onOpenChange={props.onOpenChange}
           onConfirm={props.onConfirm}
           description={m.voidSentenceVM(props.entry)}
-          {...(props.entry.kind === 'space_transfer'
-            ? { title: 'Batalkan transfer antar ruang?', confirmLabel: 'Batalkan transfer' }
-            : {})}
+          {...m.voidDialogCopyVM(props.entry)}
         />
       );
     },

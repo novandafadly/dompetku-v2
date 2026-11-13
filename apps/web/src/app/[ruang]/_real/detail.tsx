@@ -15,6 +15,8 @@ import { card, focusRing, rowDivider } from '@/components/ui/styles';
 import { openingEditable, openingLockedOn } from '@/features/ledger/opening';
 import type { EntryVM, Ruang, TalanganVM } from '@/features/ledger/types';
 import { buildEntryHref, buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
+import { buildDebtHref, buildDebtListHref } from '@/features/shell/utang-hrefs';
+import { debtHeading } from '@/features/utang/copy';
 import { DetailRow, EntryDetailView } from '@/features/transaksi/entry-detail-view';
 import { MovedBanner, VOIDED_COPY, VoidedBanner } from '@/features/transaksi/voided-banner';
 import type { DetailData } from '@/server/ledger/detail';
@@ -41,6 +43,9 @@ export interface DetailAbilities {
  * - Pindahkan (S7-D2): pemasukan/pengeluaran hidup oleh pencatat (R10), bukan talangan, bukan
  *   dompet Kantor (R17), dan pengguna anggota ≥ 2 ruang.
  * - Catat reimburse / Tidak diganti (S7-D3): talangan hidup yang masih punya sisa.
+ * - Pokok/cicilan utang (S11): tanpa Ubah (`kind_not_editable`) dan tanpa Pindahkan
+ *   (`kind_not_movable`). Cicilan boleh Batalkan (jalur `void_entry` biasa); pokok tidak
+ *   (`debt_principal_locked`: hanya lewat Hapus utang di halaman utang).
  */
 export function detailAbilities(
   entry: EntryVM,
@@ -61,6 +66,8 @@ export function detailAbilities(
     return { ...none, editable };
   }
   if (entry.kind === 'space_transfer') return { ...none, voidable: entry.createdBy.id === me };
+  if (entry.kind === 'debt_principal') return none;
+  if (entry.kind === 'debt_payment') return { ...none, voidable: true };
   const talangan = data.talangan ?? null;
   const isIncomeOrExpense = entry.kind === 'income' || entry.kind === 'expense';
   const pocket = data.accounts.find((a) => a.id === entry.accountId)?.pocket;
@@ -177,6 +184,8 @@ export function DetailReal({
   const by = entry.createdBy.id === me ? 'Kamu' : entry.createdBy.name;
   const antarRuang = entry.kind === 'space_transfer';
   const creator = entry.createdBy.id === me;
+  const debt = entry.debt;
+  const isDebt = entry.kind === 'debt_principal' || entry.kind === 'debt_payment';
 
   // Entri Pribadi orang lain tidak bisa dibuka dari ruang tujuan (Pribadi mereka): tanpa tautan.
   const banner = moved ? (
@@ -203,6 +212,19 @@ export function DetailReal({
         <p className="text-meta font-medium text-text-muted">
           {`Hanya ${entry.createdBy.name} yang bisa memulihkan.`}
         </p>
+      ) : debt?.deleted === true ? (
+        // Ikut batal karena Hapus utang: pulihnya satu paket dari Utang (restore_entry = debt_deleted).
+        <>
+          <p className="min-w-0 basis-full text-meta font-medium text-text-muted">
+            {`${debtHeading(debt.direction, debt.contactName)} dihapus. Pulihkan dari Utang.`}
+          </p>
+          <Link
+            href={buildDebtListHref(ruang, '')}
+            className={buttonClass('secondary', 'sm', 'self-start')}
+          >
+            Buka Utang
+          </Link>
+        </>
       ) : (
         <RestoreIsland ruang={ruang} entry={entry} accounts={accounts} />
       )}
@@ -243,6 +265,11 @@ export function DetailReal({
       {antarRuang && !voidable ? (
         <ActionNote>{`Hanya ${entry.createdBy.name} yang bisa membatalkan transfer ini.`}</ActionNote>
       ) : null}
+      {entry.kind === 'debt_principal' ? (
+        <ActionNote>
+          Pokok utang tidak dibatalkan sendiri. Hapus utangnya dari halaman utang.
+        </ActionNote>
+      ) : null}
       {entry.kind === 'expense' && talangan !== null && talangan.items.length > 0 ? (
         <ActionNote>Batalkan reimburse di atas dulu untuk membatalkan talangan ini.</ActionNote>
       ) : null}
@@ -254,6 +281,7 @@ export function DetailReal({
       entry={entry}
       title={labels.title}
       category={labels.category}
+      {...(isDebt ? { kindName: labels.category } : {})}
       amount={labels.amount}
       ruang={ruang}
       by={by}
@@ -271,6 +299,8 @@ export function DetailReal({
       rows={
         <>
           {entry.reimbursable === true ? <DetailRow term="Talangan">Ya, kantor</DetailRow> : null}
+          {debt === undefined ? null : <DetailRow term="Kontak">{debt.contactName}</DetailRow>}
+          {debt?.title === undefined ? null : <DetailRow term="Untuk apa">{debt.title}</DetailRow>}
           {entry.fee === undefined ? null : (
             <DetailRow term="Biaya">{formatRupiah(entry.fee)}</DetailRow>
           )}
@@ -279,6 +309,14 @@ export function DetailReal({
       after={
         <>
           {talangan === null ? null : <ReimbursementList ruang={ruang} talangan={talangan} />}
+          {debt !== undefined && debt.deleted !== true ? (
+            <Link
+              href={buildDebtHref(ruang, debt.id, '')}
+              className={buttonClass('secondary', 'md', 'self-start')}
+            >
+              Lihat utang
+            </Link>
+          ) : null}
           {entry.kind === 'reimbursement' && entry.reimbursesEntryId !== undefined ? (
             <Link
               href={buildEntryHref(ruang, entry.reimbursesEntryId, '')}

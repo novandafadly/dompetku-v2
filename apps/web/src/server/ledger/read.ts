@@ -123,6 +123,12 @@ interface EntryRow {
   moved_at: string | null;
   fee: number | null;
   reimburses_entry_id: string | null;
+  // S11: utang yang ditunjuk pokok/cicilan (kosong untuk jenis lain).
+  debt_id: string | null;
+  debt_direction: 'borrowed' | 'lent' | null;
+  debt_title: string | null;
+  debt_contact_name: string | null;
+  debt_deleted: boolean | null;
 }
 
 /**
@@ -144,7 +150,9 @@ const ENTRY_COLUMNS = `
   e.shared_note, e.reimbursable, ${wib('e.moved_at')} as moved_at,
   case when e.kind = 'transfer' or (e.kind = 'space_transfer' and e.direction = 'out') then
     (select abs(sum(fl.amount))::bigint from app.entry_lines fl
-      where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id`;
+      where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id,
+  e.debt_id, dbt.direction as debt_direction, dbt.title as debt_title,
+  dct.name as debt_contact_name, dbt.voided_at is not null as debt_deleted`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -154,6 +162,8 @@ const ENTRY_JOINS = `
     on c.space_id = e.space_id and c.entry_id = e.id and c.role = 'counter'
   left join app.accounts ca on ca.space_id = e.space_id and ca.id = c.account_id
   left join app.categories cat on cat.space_id = e.space_id and cat.id = e.category_id
+  left join app.debts dbt on dbt.space_id = e.space_id and dbt.id = e.debt_id
+  left join app.contacts dct on dct.space_id = dbt.space_id and dct.id = dbt.contact_id
   left join app.space_roster($1) r on r.user_id = e.created_by`;
 
 const ENTRY_ORDER = 'order by e.occurred_on desc, e.created_at desc, e.id desc';
@@ -196,6 +206,15 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.fee !== null && row.fee > 0) vm.fee = row.fee;
   if (row.moved_at !== null) vm.movedAt = row.moved_at;
   if (row.reimburses_entry_id !== null) vm.reimbursesEntryId = row.reimburses_entry_id;
+  if (row.debt_id !== null && row.debt_direction !== null && row.debt_contact_name !== null) {
+    vm.debt = {
+      id: row.debt_id,
+      direction: row.debt_direction,
+      contactName: row.debt_contact_name,
+      ...(row.debt_title === null ? {} : { title: row.debt_title }),
+      ...(row.debt_deleted === true ? { deleted: true as const } : {}),
+    };
+  }
   return vm;
 }
 

@@ -16,9 +16,9 @@ const KIND_NAME: Record<EntryVM['kind'], string> = {
   space_transfer: 'Antar ruang',
   adjustment: 'Cocokkan saldo',
   reimbursement: 'Reimburse',
-  // S11: label sementara; tampilan penuh di Task 7.
-  debt_principal: 'Utang',
-  debt_payment: 'Cicilan utang',
+  // S11: arah (diterima/diberikan, utang/piutang) datang dari pemanggil lewat `kindName`.
+  debt_principal: 'Pinjaman',
+  debt_payment: 'Pembayaran utang',
 };
 
 /** Dompet entri: transfer satu ruang = "BCA → Tunai". */
@@ -87,6 +87,7 @@ export function EntryDetailView({
   entry,
   title,
   category,
+  kindName,
   amount,
   ruang,
   by,
@@ -106,6 +107,8 @@ export function EntryDetailView({
   title: string;
   /** Baris Kategori: nama kategori atau jenis (Saldo awal, Pindah dompet, …). */
   category: string;
+  /** Teks di bawah judul bila bukan nama jenis tetap (S11: `Pinjaman diterima`, `Penerimaan piutang`). */
+  kindName?: string;
   /** Nominal bertanda dari sudut pandang ruang entri. */
   amount: { value: Rupiah; kind: MoneyKind };
   ruang: Ruang;
@@ -150,7 +153,9 @@ export function EntryDetailView({
             >
               {title}
             </h1>
-            <p className="text-label font-medium text-text-muted">{KIND_NAME[entry.kind]}</p>
+            <p className="text-label font-medium text-text-muted">
+              {kindName ?? KIND_NAME[entry.kind]}
+            </p>
           </div>
         </div>
         <p>

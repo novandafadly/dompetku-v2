@@ -66,6 +66,17 @@ export interface EntryVM {
   movedAt?: string;
   /** Reimburse: id talangan yang diganti (ruang yang sama). */
   reimbursesEntryId?: string;
+  /**
+   * Pokok/cicilan utang (S11): utang yang ditunjuk. `deleted` = utangnya sudah dihapus (entri ikut
+   * batal; pulihnya dari Utang, bukan dari entri).
+   */
+  debt?: {
+    id: string;
+    direction: 'borrowed' | 'lent';
+    contactName: string;
+    title?: string;
+    deleted?: true;
+  };
 }
 
 /** Satu reimburse hidup pada sebuah talangan (daftar di Detail talangan, S7-D3). */

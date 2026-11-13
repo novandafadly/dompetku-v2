@@ -1,6 +1,6 @@
 'use client';
 
-import { formatRupiah } from '@dompetku/domain';
+import { formatRupiah, shortDateLabel } from '@dompetku/domain';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-clockwise';
 import type { EntryVM } from '@/features/ledger/types';
@@ -18,8 +18,22 @@ export function voidSentenceVM(e: EntryVM): string {
   if (e.kind === 'space_transfer') {
     return `Kedua sisinya dibatalkan bersamaan, di Pribadi dan Bersama. Saldo kedua dompet kembali. Bisa dipulihkan dari Sampah selama ${String(SAMPAH_HARI)} hari.`;
   }
+  // S11: arah saldo mengikuti uangnya (cicilan keluar = saldo kembali bertambah). Kalimat cicilan
+  // mengikuti bingkai AK1 (tanggal bayar, sisa utang/piutang bertambah lagi).
+  if (e.kind === 'debt_payment') {
+    const piutang = e.debt === undefined ? e.direction === 'in' : e.debt.direction === 'lent';
+    const verb = piutang ? 'Penerimaan' : 'Pembayaran';
+    const saldo = e.direction === 'in' ? 'berkurang' : 'bertambah';
+    const sisa = piutang ? 'piutang' : 'utang';
+    return `${verb} ${shortDateLabel(e.occurredOn)} ${e.occurredOn.slice(0, 4)} dibatalkan. Saldo ${own} ${saldo} ${amt} dan sisa ${sisa} bertambah lagi. Bisa dipulihkan ${String(SAMPAH_HARI)} hari dari Sampah.`;
+  }
   let effect: string;
   switch (e.kind) {
+    case 'debt_principal':
+      // Pokok hanya dibatalkan lewat Hapus utang; kalimat tetap benar bila suatu saat dipakai.
+      effect =
+        e.direction === 'in' ? `Saldo ${own} berkurang ${amt}.` : `Saldo ${own} bertambah ${amt}.`;
+      break;
     case 'expense':
       effect = `Saldo ${own} bertambah ${amt}.`;
       break;
@@ -41,6 +55,23 @@ export function voidSentenceVM(e: EntryVM): string {
 }
 
 /**
+ * Judul dan tombol dialog yang menyimpang dari salinan tetap: antar ruang (S7-D1) dan cicilan
+ * utang (S11-AK1, searah dengan uangnya). `null` = salinan tetap `Batalkan transaksi ini?`.
+ */
+export function voidDialogCopyVM(e: EntryVM): { title: string; confirmLabel: string } | null {
+  if (e.kind === 'space_transfer') {
+    return { title: 'Batalkan transfer antar ruang?', confirmLabel: 'Batalkan transfer' };
+  }
+  if (e.kind === 'debt_payment') {
+    const piutang = e.debt === undefined ? e.direction === 'in' : e.debt.direction === 'lent';
+    return piutang
+      ? { title: 'Batalkan penerimaan ini?', confirmLabel: 'Batalkan penerimaan' }
+      : { title: 'Batalkan pembayaran ini?', confirmLabel: 'Batalkan pembayaran' };
+  }
+  return null;
+}
+
+/**
  * Toast sesudah batal (pola toast Catat): "Dibatalkan di Pribadi · Rp 35.000 dari BCA".
  * Reimburse masuk ke dompet ("ke"), antar ruang menyebut kedua ruang tanpa dompet (S7-D1).
  */
@@ -55,6 +86,9 @@ export function voidedToastVM(ruang: string, e: EntryVM): string {
       return `${head} ke ${e.accountName}`;
     case 'transfer':
       return `${head} dari ${e.accountName} ke ${e.counterAccountName ?? ''}`;
+    case 'debt_principal':
+    case 'debt_payment':
+      return e.direction === 'in' ? `${head} ke ${e.accountName}` : `${head} dari ${e.accountName}`;
     default:
       return `${head} dari ${e.accountName}`;
   }

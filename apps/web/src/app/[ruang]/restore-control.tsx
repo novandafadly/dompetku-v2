@@ -39,11 +39,15 @@ export interface RestoreAccount {
 const NETWORK = { ok: false, error: { code: 'network' } } as const;
 
 /** Saldo dompet utama sesudah entri batal dipulihkan (baris utama dipasang lagi). */
-function restoredBalance(entry: EntryVM, account: RestoreAccount): number {
+export function restoredBalance(entry: EntryVM, account: RestoreAccount): number {
   const out =
     entry.kind === 'expense' ||
     entry.kind === 'transfer' ||
-    ((entry.kind === 'space_transfer' || entry.kind === 'adjustment') && entry.direction === 'out');
+    ((entry.kind === 'space_transfer' ||
+      entry.kind === 'adjustment' ||
+      entry.kind === 'debt_principal' ||
+      entry.kind === 'debt_payment') &&
+      entry.direction === 'out');
   return account.balance + (out ? -entry.amount : entry.amount);
 }
 
@@ -62,6 +66,13 @@ export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'):
   }
   if (code === 'reimbursement_exceeds') {
     return 'Belum bisa dipulihkan. Sisa talangannya tidak cukup untuk reimburse ini.';
+  }
+  // S11: cicilan yang dipulihkan harus tetap sah (Σ cicilan ≤ pokok) dan utangnya masih ada.
+  if (code === 'payment_exceeds') {
+    return 'Belum bisa dipulihkan. Pembayaran ini akan melebihi sisa utang.';
+  }
+  if (code === 'debt_deleted') {
+    return 'Belum bisa dipulihkan. Utangnya sudah dihapus. Pulihkan dari Utang.';
   }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }

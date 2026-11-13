@@ -179,3 +179,62 @@ describe('groupByDayVM oracle terhadap groupByDay', () => {
     expect(groups[0]?.entries.map((e) => e.id)).toEqual(['2', '1', '3']);
   });
 });
+
+describe('baris utang (S11)', () => {
+  const base = {
+    version: 1,
+    occurredOn: '2026-10-17',
+    createdBy: { id: 'u', name: 'N', initial: 'N' },
+    accountId: 'a',
+    accountName: 'BCA',
+  } as const;
+  const bayar = {
+    ...base,
+    id: 'p1',
+    kind: 'debt_payment',
+    amount: 300_000,
+    direction: 'out',
+    createdAt: '2026-10-17T08:00:00+07:00',
+    debt: { id: 'u1', direction: 'borrowed', contactName: 'Budi' },
+  } as const;
+
+  it('judul nama kontak, jenis searah, nominal bertanda netral; tanpa Tanpa kategori', () => {
+    const out = html(<EntryRowView entry={bayar} href={href('p1')} />);
+    expect(out).toContain('Budi');
+    expect(out).toContain('Pembayaran utang · BCA');
+    expect(out).not.toContain('Tanpa kategori');
+    expect(out).not.toContain('Menunggu reimburse');
+    const pokok = html(
+      <EntryRowView
+        entry={{ ...bayar, id: 'p2', kind: 'debt_principal', direction: 'in' }}
+        href={href('p2')}
+      />,
+    );
+    expect(pokok).toContain('Pinjaman diterima · BCA');
+  });
+
+  it('pokok dan cicilan tidak masuk total pemasukan/pengeluaran hari itu', () => {
+    const groups = groupByDayVM(
+      [
+        { ...bayar },
+        {
+          ...bayar,
+          id: 'p2',
+          kind: 'debt_principal',
+          direction: 'in',
+          amount: 1_000_000,
+          createdAt: '2026-10-17T09:00:00+07:00',
+        },
+        {
+          ...base,
+          id: 'x',
+          kind: 'expense',
+          amount: 10_000,
+          createdAt: '2026-10-17T07:00:00+07:00',
+        },
+      ],
+      '2026-10-17',
+    );
+    expect(groups[0]?.total).toBe(-10_000);
+  });
+});
