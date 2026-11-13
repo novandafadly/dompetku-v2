@@ -12,13 +12,7 @@ import {
 import { listEntries, monthSummary } from '@/server/ledger/read';
 import { loadSampah } from '@/server/ledger/sampah';
 import { resolveSpace } from '@/server/ledger/space';
-import {
-  createDebt,
-  loadDebtDetail,
-  loadKontak,
-  loadUtang,
-  payDebt,
-} from '@/server/ledger/utang';
+import { createDebt, loadDebtDetail, loadKontak, loadUtang, payDebt } from '@/server/ledger/utang';
 import type { LedgerCtx } from '@/server/ledger/write';
 
 /**
@@ -38,7 +32,6 @@ vi.mock('@/server/auth/next', () => ({
 
 const a = await import('../utang');
 const { createAccountAction } = await import('../dompet');
-const { saveCatat, catatOptions } = await import('../catat');
 const { voidEntryAction, restoreEntryAction } = await import('../entri');
 
 const h = createLedgerHarness();
@@ -81,7 +74,7 @@ async function wallet(
 
 async function balance(accountId: string): Promise<number> {
   const { rows } = await h.admin.query<{ b: number }>(
-    `select coalesce(sum(l.amount), 0)::bigint as b
+    `select coalesce(sum(l.amount), 0)::float8 as b
        from app.entry_lines l join app.entries e on e.id = l.entry_id
       where l.account_id = $1 and e.voided_at is null`,
     [accountId],
@@ -90,7 +83,10 @@ async function balance(accountId: string): Promise<number> {
 }
 
 async function count(sql: string, params: unknown[] = []): Promise<number> {
-  const { rows } = await h.admin.query<{ n: number }>(`select count(*)::int as n from ${sql}`, params);
+  const { rows } = await h.admin.query<{ n: number }>(
+    `select count(*)::int as n from ${sql}`,
+    params,
+  );
   return rows[0]?.n ?? NaN;
 }
 
@@ -221,7 +217,9 @@ describe('action Utang S11 terhadap DB', () => {
       cicilan: await count(`app.entries where kind = 'debt_payment'`),
       history: await count('app.entry_history'),
     };
-    const sari = ok(await a.createContactAction('pribadi', { clientId: randomUUID(), name: 'Sari' }));
+    const sari = ok(
+      await a.createContactAction('pribadi', { clientId: randomUUID(), name: 'Sari' }),
+    );
 
     expect(
       ok(
@@ -341,6 +339,29 @@ describe('action Utang S11 terhadap DB', () => {
         expectedVersion: 1,
       }),
     ).toEqual({ ok: false, error: { code: 'debt_principal_locked' } });
+
+    // Pulihkan cicilan yang membuat Σ cicilan melebihi pokok = payment_exceeds, nol efek.
+    ok(
+      await voidEntryAction('pribadi', {
+        clientId: randomUUID(),
+        entryId: p.entryId,
+        expectedVersion: 3,
+      }),
+    );
+    ok(await bayar(d.debtId, 1_700_000));
+    const saldo = await balance(bca);
+    const r = await restoreEntryAction('pribadi', {
+      clientId: randomUUID(),
+      entryId: p.entryId,
+      expectedVersion: 4,
+    });
+    expect(r).toEqual({ ok: false, error: { code: 'payment_exceeds' } });
+    expect(memuatNominal(r, 400_000)).toBe(false);
+    expect(await balance(bca)).toBe(saldo);
+    expect(await loadDebtDetail(pribadi, d.debtId)).toMatchObject({
+      paid: 1_700_000,
+      remaining: 300_000,
+    });
   });
 
   it('T9: hapus utang = void atomik semua efek; pulihkan memulihkan (round-trip)', async () => {
@@ -365,8 +386,9 @@ describe('action Utang S11 terhadap DB', () => {
     expect(u.debts[0]).toMatchObject({ debtId: d.debtId, remaining: 1_700_000 });
     expect(u.debts[0]?.voidedAt).toMatch(/\+07:00$/);
     expect(u.totals.borrowed).toEqual({ remaining: 0, contacts: 0 });
-    // Sampah tidak memuat entri yang ikut Hapus utang; cicilan yang dibatalkan sendiri tetap ada.
-    expect((await loadSampah(pribadi)).items.map((t) => t.entry.id)).toEqual([p2.entryId]);
+    // Sampah tidak memuat entri utang terhapus (ikut Hapus utang maupun cicilan yang dibatalkan
+    // sendiri sebelumnya): pemulihan lewat segmen Utang (0131 trash_list).
+    expect((await loadSampah(pribadi)).items).toEqual([]);
 
     // Cicilan utang terhapus tidak bisa dipulihkan sendiri, dan tidak bisa dibayar.
     expect(
@@ -377,18 +399,39 @@ describe('action Utang S11 terhadap DB', () => {
       }),
     ).toEqual({ ok: false, error: { code: 'debt_deleted' } });
     expect(await bayar(d.debtId, 1)).toEqual({ ok: false, error: { code: 'debt_deleted' } });
-    // Hapus dua kali (tab lain) = conflict.
+    // Batalkan cicilan utang terhapus lewat jalur generik (versi terbaru) = debt_deleted.
     expect(
-      await a.voidDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId }),
-    ).toEqual({ ok: false, error: { code: 'conflict' } });
+      await voidEntryAction('pribadi', {
+        clientId: randomUUID(),
+        entryId: p1.entryId,
+        expectedVersion: 2,
+      }),
+    ).toEqual({ ok: false, error: { code: 'debt_deleted' } });
+    // Ubah info utang terhapus = debt_deleted.
+    expect(
+      await a.updateDebtInfoAction('pribadi', {
+        debtId: d.debtId,
+        contactId: d.contactId,
+        title: 'X',
+        note: null,
+      }),
+    ).toEqual({ ok: false, error: { code: 'debt_deleted' } });
+    // Hapus dua kali (tab lain) = conflict.
+    expect(await a.voidDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId })).toEqual(
+      { ok: false, error: { code: 'conflict' } },
+    );
 
-    const r = ok(await a.restoreDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId }));
+    const r = ok(
+      await a.restoreDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId }),
+    );
     expect(r).toMatchObject({
       paid: 300_000,
       remaining: 1_700_000,
       effects: [{ accountId: bca, accountName: 'BCA', amount: 1_700_000 }],
     });
     expect(await balance(bca)).toBe(2_700_000);
+    // Cicilan yang dibatalkan sendiri tetap batal dan muncul lagi di Sampah.
+    expect((await loadSampah(pribadi)).items.map((t) => t.entry.id)).toEqual([p2.entryId]);
     const det = await loadDebtDetail(pribadi, d.debtId);
     expect(det?.payments.map((x) => [x.entryId, x.voided])).toEqual(
       expect.arrayContaining([
@@ -429,11 +472,69 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await monthSummary(pribadi, month)).toEqual(sebelum);
   });
 
+  it('T7: pintasan 25%/50% null bila hasilnya 0 (tanpa "Rp 0"), full = sisa', async () => {
+    const d = ok(
+      await a.createDebtAction('pribadi', {
+        clientId: randomUUID(),
+        direction: 'lent',
+        principal: 3,
+        mode: 'berjalan',
+        contactName: 'Kecil',
+      }),
+    );
+    expect(d.quick).toEqual({ p25: null, p50: 1, full: 3 });
+    const p = ok(await bayar(d.debtId, 2));
+    expect(p.quick).toEqual({ p25: null, p50: null, full: 1 });
+    expect((await loadUtang(pribadi)).debts[0]?.quick).toEqual({ p25: null, p50: null, full: 1 });
+    expect((await loadDebtDetail(pribadi, d.debtId))?.quick).toEqual({
+      p25: null,
+      p50: null,
+      full: 1,
+    });
+  });
+
+  it('C6: Tambah utang ganda (clientId sama) = satu utang, satu kontak, satu entri pokok', async () => {
+    const input = {
+      clientId: randomUUID(),
+      direction: 'borrowed' as const,
+      principal: PINJAM,
+      mode: 'baru' as const,
+      contactName: 'Budi',
+      accountId: bca,
+    };
+    const [x, y] = await Promise.all([
+      a.createDebtAction('pribadi', input),
+      a.createDebtAction('pribadi', input),
+    ]);
+    const both = [ok(x), ok(y)];
+    expect(both[0]?.debtId).toBe(both[1]?.debtId);
+    expect(both.map((b) => b.replayed).sort()).toEqual([false, true]);
+    expect(await count('app.debts')).toBe(1);
+    expect(await count('app.contacts')).toBe(1);
+    expect(await count(`app.entries where kind = 'debt_principal'`)).toBe(1);
+    expect(await balance(bca)).toBe(3_000_000);
+    // clientId sama, isi beda = idem_mismatch.
+    expect(await a.createDebtAction('pribadi', { ...input, principal: 1 })).toEqual({
+      ok: false,
+      error: { code: 'idem_mismatch' },
+    });
+  });
+
   it('C3: dua pembayaran paralel melebihi sisa = satu ditolak; C6: klik ganda = satu entri', async () => {
     const d = await pinjam();
     const rs = await Promise.allSettled([
-      payDebt(pribadi, { clientId: randomUUID(), debtId: d.debtId, accountId: bca, amount: 1_200_000 }),
-      payDebt(pribadi, { clientId: randomUUID(), debtId: d.debtId, accountId: bca, amount: 1_200_000 }),
+      payDebt(pribadi, {
+        clientId: randomUUID(),
+        debtId: d.debtId,
+        accountId: bca,
+        amount: 1_200_000,
+      }),
+      payDebt(pribadi, {
+        clientId: randomUUID(),
+        debtId: d.debtId,
+        accountId: bca,
+        amount: 1_200_000,
+      }),
     ]);
     expect(rs.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const rejected = rs.find((r) => r.status === 'rejected');
@@ -441,7 +542,10 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await count(`app.entries where kind = 'debt_payment'`)).toBe(1);
 
     const clientId = randomUUID();
-    const [x, y] = await Promise.all([bayar(d.debtId, 100_000, clientId), bayar(d.debtId, 100_000, clientId)]);
+    const [x, y] = await Promise.all([
+      bayar(d.debtId, 100_000, clientId),
+      bayar(d.debtId, 100_000, clientId),
+    ]);
     const both = [ok(x), ok(y)];
     expect(both[0]?.entryId).toBe(both[1]?.entryId);
     expect(both.map((b) => b.replayed).sort()).toEqual([false, true]);
@@ -452,7 +556,8 @@ describe('action Utang S11 terhadap DB', () => {
   it('INT-12: kegagalan di tengah pay_debt = rollback utuh; clientId sama lalu berhasil sekali', async () => {
     const d = await pinjam();
     const saldo = await balance(bca);
-    await h.admin.query(`create function public.tes_gagal_cicilan() returns trigger language plpgsql as $$
+    await h.admin
+      .query(`create function public.tes_gagal_cicilan() returns trigger language plpgsql as $$
       begin
         if exists (select 1 from app.entries e where e.id = new.entry_id and e.kind = 'debt_payment') then
           raise exception using errcode = 'P0001', message = 'fail_after';
@@ -474,7 +579,12 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await balance(bca)).toBe(saldo);
     expect((await loadDebtDetail(pribadi, d.debtId))?.remaining).toBe(PINJAM);
 
-    const r = await payDebt(pribadi, { clientId, debtId: d.debtId, accountId: bca, amount: 300_000 });
+    const r = await payDebt(pribadi, {
+      clientId,
+      debtId: d.debtId,
+      accountId: bca,
+      amount: 300_000,
+    });
     expect(r.replayed).toBe(false);
     expect(await count(`app.entries where kind = 'debt_payment'`)).toBe(1);
   });
@@ -524,9 +634,9 @@ describe('action Utang S11 terhadap DB', () => {
       amount: 1_000,
     });
     expect(r).toEqual({ ok: false, error: { code: 'not_found' } });
-    expect(
-      await a.voidDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId }),
-    ).toEqual({ ok: false, error: { code: 'not_found' } });
+    expect(await a.voidDebtAction('pribadi', { clientId: randomUUID(), debtId: d.debtId })).toEqual(
+      { ok: false, error: { code: 'not_found' } },
+    );
     expect(
       await a.renameContactAction('pribadi', { contactId: d.contactId, name: 'Diubah' }),
     ).toEqual({ ok: false, error: { code: 'not_found' } });
@@ -539,17 +649,21 @@ describe('action Utang S11 terhadap DB', () => {
 
   it('kontak: nama ganda tanpa beda huruf, arsip, kontak terarsip ditolak untuk utang baru; Kantor dan tanggal sebelum mulai ditolak', async () => {
     const k = ok(await a.createContactAction('pribadi', { clientId: randomUUID(), name: 'Budi' }));
-    expect(await a.createContactAction('pribadi', { clientId: randomUUID(), name: ' budi ' })).toEqual({
+    expect(
+      await a.createContactAction('pribadi', { clientId: randomUUID(), name: ' budi ' }),
+    ).toEqual({
       ok: false,
       error: { code: 'contact_name_taken' },
     });
-    expect(await a.createDebtAction('pribadi', {
-      clientId: randomUUID(),
-      direction: 'lent',
-      principal: 10_000,
-      mode: 'berjalan',
-      contactName: 'BUDI',
-    })).toEqual({ ok: false, error: { code: 'contact_name_taken' } });
+    expect(
+      await a.createDebtAction('pribadi', {
+        clientId: randomUUID(),
+        direction: 'lent',
+        principal: 10_000,
+        mode: 'berjalan',
+        contactName: 'BUDI',
+      }),
+    ).toEqual({ ok: false, error: { code: 'contact_name_taken' } });
     expect(await a.createContactAction('pribadi', { clientId: randomUUID(), name: '  ' })).toEqual({
       ok: false,
       error: { code: 'invalid', field: 'name' },
@@ -562,6 +676,15 @@ describe('action Utang S11 terhadap DB', () => {
     expect((await loadDebtDetail(pribadi, d.debtId))?.contactArchived).toBe(true);
     // Utang lama tetap bisa dibayar.
     ok(await bayar(d.debtId, 1_000));
+    // Utang lama pada kontak terarsip tetap bisa diubah judulnya (kontak sama ditulis ulang).
+    ok(
+      await a.updateDebtInfoAction('pribadi', {
+        debtId: d.debtId,
+        contactId: k.contactId,
+        title: 'Judul baru',
+        note: null,
+      }),
+    );
     expect(
       await a.createDebtAction('pribadi', {
         clientId: randomUUID(),
@@ -576,7 +699,6 @@ describe('action Utang S11 terhadap DB', () => {
     ).toEqual({ ok: false, error: { code: 'contact_archived' } });
 
     const kantor = await wallet('Kantor', 500_000, 'kantor');
-    expect(await pinjam({ accountId: kantor, contactName: 'Eko' })).toBeDefined;
     const kr = await a.createDebtAction('pribadi', {
       clientId: randomUUID(),
       direction: 'borrowed',
@@ -627,8 +749,3 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await balance(bca)).toBe(-500_000);
   });
 });
-
-// Dipakai agar `catatOptions`/`saveCatat` tetap diimpor bila kasus pengeluaran ditambah (I6 di atas
-// memakai monthSummary saja).
-void saveCatat;
-void catatOptions;
