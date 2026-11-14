@@ -138,9 +138,14 @@ export const reconcileBalanceSchema = z.object({
 
 export const archiveAccountSchema = z.object({ accountId: id });
 
-export const voidEntrySchema = z.object({ clientId: id, entryId: id, expectedVersion: version });
+export const voidEntrySchema = z.object({
+  clientId: id,
+  entryId: id,
+  expectedVersion: version,
+  allowNegative: z.boolean().optional(),
+});
 
-export const restoreEntrySchema = voidEntrySchema.extend({ allowNegative: z.boolean().optional() });
+export const restoreEntrySchema = voidEntrySchema;
 
 export const createAccountSchema = z.object({
   clientId: id,
@@ -435,6 +440,8 @@ export interface VoidEntryInput {
   clientId: string;
   entryId: string;
   expectedVersion: number;
+  /** Batal yang membuat saldo negatif (mis. cicilan piutang): hanya sesudah `saldo_negatif` dikonfirmasi. */
+  allowNegative?: boolean | undefined;
 }
 
 export async function voidEntry(ctx: LedgerCtx, i: VoidEntryInput): Promise<{ version: number }> {
@@ -443,16 +450,15 @@ export async function voidEntry(ctx: LedgerCtx, i: VoidEntryInput): Promise<{ ve
     ctx,
     (c) => assertInSpace(c, 'entries', [v.entryId], ctx.spaceId),
     `select api.void_entry(
-       p_client_id => $1, p_entry_id => $2, p_expected_version => $3::int) as r`,
-    [v.clientId, v.entryId, v.expectedVersion],
+       p_client_id => $1, p_entry_id => $2, p_expected_version => $3::int,
+       p_allow_negative => $4) as r`,
+    [v.clientId, v.entryId, v.expectedVersion, v.allowNegative ?? false],
     entryResult,
   );
   return { version: r.version };
 }
 
-export interface RestoreEntryInput extends VoidEntryInput {
-  allowNegative?: boolean | undefined;
-}
+export type RestoreEntryInput = VoidEntryInput;
 
 /** Pulihkan dari Sampah; lewat 90 hari sejak dibatalkan = DK422 `restore_window_closed`. */
 export async function restoreEntry(

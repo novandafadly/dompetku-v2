@@ -15,7 +15,7 @@ import { listAccounts, listEntries, monthSummary } from '@/server/ledger/read';
 import { loadSampah } from '@/server/ledger/sampah';
 import { resolveSpace } from '@/server/ledger/space';
 import { createDebt, loadDebtDetail, loadKontak, loadUtang, payDebt } from '@/server/ledger/utang';
-import type { LedgerCtx } from '@/server/ledger/write';
+import { createEntry, type LedgerCtx } from '@/server/ledger/write';
 
 /**
  * Utang/piutang S11 (plan Task 5, K10) terhadap Postgres nyata lewat jalur TS: action (sesi di-mock
@@ -774,5 +774,51 @@ describe('action Utang S11 terhadap DB', () => {
     expect(await count('app.contacts')).toBe(0);
     ok(await a.createDebtAction('pribadi', { ...input, allowNegative: true }));
     expect(await balance(bca)).toBe(-500_000);
+  });
+
+  it('[S12 K5] batal cicilan piutang yang membuat saldo negatif = saldo_negatif; allowNegative (clientId sama) membatalkan', async () => {
+    const piutang = ok(
+      await a.createDebtAction('pribadi', {
+        clientId: randomUUID(),
+        direction: 'lent',
+        principal: 600_000,
+        mode: 'baru',
+        contactName: 'Hadi',
+        accountId: bca,
+      }),
+    );
+    const terima = ok(await bayar(piutang.debtId, 600_000));
+    const { rows } = await h.admin.query<{ id: string }>(
+      `select id from app.categories
+        where space_id = $1 and type = 'expense' and parent_id is null order by sort_order limit 1`,
+      [pribadi.spaceId],
+    );
+    await createEntry(pribadi, {
+      clientId: randomUUID(),
+      accountId: bca,
+      kind: 'expense',
+      amount: 700_000,
+      categoryId: rows[0]?.id ?? '',
+    });
+    expect(await balance(bca)).toBe(300_000);
+
+    const input = {
+      clientId: randomUUID(),
+      entryId: terima.entryId,
+      expectedVersion: terima.version,
+    };
+    const ditolak = await voidEntryAction('pribadi', input);
+    expect(ditolak).toEqual({ ok: false, error: { code: 'saldo_negatif' } });
+    expect(memuatNominal(ditolak, 600_000)).toBe(false);
+    // Ditolak = tidak ada efek: saldo dan sisa tetap.
+    expect(await balance(bca)).toBe(300_000);
+    expect(await loadDebtDetail(pribadi, piutang.debtId)).toMatchObject({ remaining: 0 });
+
+    ok(await voidEntryAction('pribadi', { ...input, allowNegative: true }));
+    expect(await balance(bca)).toBe(-300_000);
+    expect(await loadDebtDetail(pribadi, piutang.debtId)).toMatchObject({
+      paid: 0,
+      remaining: 600_000,
+    });
   });
 });

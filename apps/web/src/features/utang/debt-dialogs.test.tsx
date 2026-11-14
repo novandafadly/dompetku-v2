@@ -30,7 +30,11 @@ const ACCOUNT: AccountVM = {
 };
 
 describe('CancelPaymentDialog (S11-AK1)', () => {
-  function setup(direction: 'borrowed' | 'lent', failure = null as null | 'debt_deleted') {
+  function setup(
+    direction: 'borrowed' | 'lent',
+    failure = null as null | 'debt_deleted' | 'saldo_negatif',
+    force = false,
+  ) {
     const onConfirm = vi.fn();
     render(
       <CancelPaymentDialog
@@ -41,6 +45,7 @@ describe('CancelPaymentDialog (S11-AK1)', () => {
         account={ACCOUNT}
         busy={false}
         failure={failure}
+        force={force}
         onConfirm={onConfirm}
       />,
     );
@@ -85,6 +90,7 @@ describe('CancelPaymentDialog (S11-AK1)', () => {
         account={ACCOUNT}
         busy={false}
         failure={null}
+        force={false}
         onConfirm={vi.fn()}
       />,
     );
@@ -101,6 +107,48 @@ describe('CancelPaymentDialog (S11-AK1)', () => {
       'Utang ini sudah dihapus. Pulihkan utangnya dulu.',
     );
     await user.click(screen.getByRole('button', { name: 'Batalkan pembayaran' }));
+    expect(onConfirm).toHaveBeenCalled();
+  });
+});
+
+describe('CancelPaymentDialog saldo_negatif (S12 K5)', () => {
+  it('tanpa force: tombol Batalkan pembayaran; sesudah saldo_negatif: alert + Tetap batalkan', async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <CancelPaymentDialog
+        open
+        onOpenChange={vi.fn()}
+        payment={PAYMENT}
+        detail={{ direction: 'lent', remaining: 100_000 }}
+        account={ACCOUNT}
+        busy={false}
+        failure={null}
+        force={false}
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(await screen.findByRole('button', { name: 'Batalkan pembayaran' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tetap batalkan' })).toBeNull();
+    first.unmount();
+    const onConfirm = vi.fn();
+    render(
+      <CancelPaymentDialog
+        open
+        onOpenChange={vi.fn()}
+        payment={PAYMENT}
+        detail={{ direction: 'lent', remaining: 100_000 }}
+        account={ACCOUNT}
+        busy={false}
+        failure="saldo_negatif"
+        force
+        onConfirm={onConfirm}
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Saldo dompet tidak cukup, jadi saldonya akan negatif. Ketuk Tetap batalkan untuk melanjutkan.',
+    );
+    expect(screen.getByRole('button', { name: 'Kembali' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Tetap batalkan' }));
     expect(onConfirm).toHaveBeenCalled();
   });
 });
