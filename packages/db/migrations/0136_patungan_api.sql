@@ -26,7 +26,9 @@
 -- - api.void_split / api.restore_split: hanya pembayar (selain itu split_not_found, pola §9.1);
 --   membatalkan/memulihkan ketiga entri dan baris tagihan sekaligus; pulihkan <= 90 hari
 --   (restore_window_closed), saldo_negatif dompet pembayar; dompet terarsip = account_archived. Saldo
---   patungan boleh berbalik arah (tidak ada logika pelunasan tersembunyi).
+--   patungan boleh berbalik arah (tidak ada logika pelunasan tersembunyi). Pemilik bagian yang sudah
+--   keluar dari ruang = split_member_left (saldonya tidak boleh berubah lagi: pelunasan mewajibkan
+--   penerima masih anggota, jadi saldo itu tidak akan bisa dilunasi).
 -- - api.settle_split: pelunas = pemanggil, penerima = anggota lain (p_to_user, bawaan satu-satunya
 --   anggota lain); nominal <= min(utang pemanggil, piutang penerima), lebih = payment_exceeds (nol efek).
 -- - api.receive_settlement (hanya penerima, ke dompet Pribadinya; settlement_received bila sudah,
@@ -45,8 +47,8 @@
 --   batal sama; per pelunasan kaki masuk (dan kaki terima bila ada) cocok; entri hidup di dompet sistem
 --   wajib dirujuk baris hidup; Σ saldo anggota per ruang = 0. DQ07 tidak membaca dompet sistem.
 -- Kode galat baru: DK422 split_shared_only, split_needs_partner, split_account_invalid,
--- settlement_received, settlement_voided, settlement_not_received; DK404 split_not_found,
--- settlement_not_found. Pesan/detail tanpa nominal dan nama.
+-- settlement_received, settlement_voided, settlement_not_received, split_member_left; DK404
+-- split_not_found, settlement_not_found. Pesan/detail tanpa nominal dan nama.
 
 -- ===== Helper (INVOKER milik owner, EXECUTE dompetku_api; berjalan di bawah RLS pemanggil) =====
 create function private.assert_split_space(p_space_id uuid) returns void
@@ -91,7 +93,9 @@ begin
   return v;
 end $$;
 
--- Tagihan milik pembayar = pemanggil, dikunci. Tidak terlihat atau bukan pembayar = DK404.
+-- Tagihan milik pembayar = pemanggil, dikunci. Tidak terlihat, bukan pembayar, atau hilang sebelum
+-- kunci didapat (purge paralel) = DK404. Pemilik bagian yang sudah keluar dari ruang = DK422
+-- split_member_left (pembayar = pemanggil, sudah lolos assert_member).
 create function private.lock_split(p_split_id uuid, p_uid uuid) returns app.splits
 language plpgsql set search_path = '' as $$
 declare v app.splits%rowtype;
@@ -102,10 +106,20 @@ begin
   end if;
   perform app.assert_member(v.space_id);
   select * into v from app.splits where id = p_split_id for no key update;
+  if not found then
+    raise exception using errcode = 'DK404', message = 'split_not_found';
+  end if;
+  if exists (select 1 from app.split_shares sh
+              where sh.space_id = v.space_id and sh.split_id = v.id
+                and not exists (select 1 from app.space_members m
+                                 where m.space_id = v.space_id and m.user_id = sh.user_id)) then
+    raise exception using errcode = 'DK422', message = 'split_member_left';
+  end if;
   return v;
 end $$;
 
--- Pelunasan dengan pemanggil sebagai pelunas (p_as_payer) atau penerima, dikunci. Selain itu DK404.
+-- Pelunasan dengan pemanggil sebagai pelunas (p_as_payer) atau penerima, dikunci. Selain itu, atau
+-- hilang sebelum kunci didapat (purge paralel), DK404.
 create function private.lock_settlement(p_settlement_id uuid, p_uid uuid, p_as_payer boolean)
 returns app.settlements
 language plpgsql set search_path = '' as $$
@@ -117,6 +131,9 @@ begin
   end if;
   perform app.assert_member(v.space_id);
   select * into v from app.settlements where id = p_settlement_id for no key update;
+  if not found then
+    raise exception using errcode = 'DK404', message = 'settlement_not_found';
+  end if;
   return v;
 end $$;
 

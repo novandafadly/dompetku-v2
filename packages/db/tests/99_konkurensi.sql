@@ -18,14 +18,15 @@
 -- (INT-12), arsip kontak paralel utang baru (kedua urutan), hapus utang paralel bayar (kedua urutan),
 -- batal cicilan paralel hapus utang tanpa deadlock (kunci utang -> entri -> akun). S12 (0132): purge
 -- menghapus utang di antara baca dan kunci = debt_not_found. Patungan (0136): dua pelunasan paralel melebihi
--- utang = satu payment_exceeds (kunci dompet sistem), hapus tagihan paralel pelunasan tanpa deadlock.
+-- utang = satu payment_exceeds (kunci dompet sistem), hapus tagihan paralel pelunasan tanpa deadlock,
+-- purge menghapus tagihan/pelunasan di antara baca dan kunci = split_not_found/settlement_not_found.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- ID: B8, C2, C3, C4, C6, C9, T15
 begin;
-select plan(113);
+select plan(118);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -706,6 +707,31 @@ select tests.peer_exec('a', 'commit');
 select is(tests.owner_val(null, format($$select string_agg(balance::text, ',' order by user_id) from app.member_balances
     where space_id = %L$$, :'sh')) || ' ' || tests.worker_val(null, $$select violations from jobs.dq_reconcile()
     where check_id = 'DQ16'$$), '-200,200 0', 'saldo berbalik nol-jumlah; DQ16 nol');
+-- R1 S12 (0136): purge menghapus tagihan/pelunasan batal di antara baca dan kunci private.lock_split /
+-- lock_settlement (pola K7): aksi menunggu kunci, lalu split_not_found / settlement_not_found (bukan
+-- sukses palsu yang ikut disimpan idempotensi).
+select tests.owner_val(null, format($$select id from app.splits where space_id = %L$$, :'sh')) as sp1,
+       tests.owner_val(null, format($$select id from app.settlements where space_id = %L and amount = 50$$, :'sh')) as t50 \gset
+select tests.peer_val('pa', format($$select api.void_settlement(gen_random_uuid(), %L) ->> 'settlement_id'$$, :'t50'));
+select tests.peer_val('adm', format($$with a as (update app.splits set voided_at = voided_at - interval '100 days'
+  where id = %L returning 1), b as (update app.settlements set voided_at = voided_at - interval '100 days'
+  where id = %L returning 1) select (select count(*) from a) + (select count(*) from b)$$, :'sp1', :'t50'));
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', 'select jobs.purge_voided()');
+select tests.peer_exec('a', 'begin');
+select tests.peer_send('a', format($$select api.restore_split(gen_random_uuid(), %L) ->> 'split_id'$$, :'sp1'));
+select tests.peer_exec('pa', 'begin');
+select tests.peer_send('pa', format($$select api.void_settlement(gen_random_uuid(), %L) ->> 'settlement_id'$$, :'t50'));
+select ok(tests.peer_blocked('a'), 'pulihkan tagihan menunggu purge yang menghapusnya [R1]');
+select ok(tests.peer_blocked('pa'), 'batal pelunasan menunggu purge yang menghapusnya [R1]');
+select tests.peer_exec('adm', 'commit');
+select matches(tests.peer_result('a'), '^ERROR: .*split_not_found', 'tagihan hilang sesudah kunci = split_not_found [R1]');
+select matches(tests.peer_result('pa'), '^ERROR: .*settlement_not_found',
+  'pelunasan hilang sesudah kunci = settlement_not_found [R1]');
+select tests.peer_exec('a', 'rollback');
+select tests.peer_exec('pa', 'rollback');
+select is(tests.owner_val(null, format($$select (select count(*) from app.splits where id = %L)
+    + (select count(*) from app.settlements where id = %L)$$, :'sp1', :'t50')), '0', 'keduanya terhapus purge [R1]');
 select tests.peer_close('pa');
 select tests.peer_close('pb');
 

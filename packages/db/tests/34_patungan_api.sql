@@ -1,15 +1,16 @@
 -- Patungan S12 sisi API (0136; plan S12 Task 6, K3, K4; bingkai S12-ADR1, PT1 sampai PT4, CT1, CT2,
 -- AK1, AK2): api.create_split (sama rata, sisa ganjil ke pembayar, bagian nominal, idempoten, batas
 -- dompet/ruang/bagian), api.void_split/restore_split (hanya pembayar, membalik tepat sekali, jendela 90
--- hari), api.settle_split (payment_exceeds, hanya dompet sendiri), api.receive_settlement/void_receipt
--- (hanya penerima, ke Pribadinya sendiri), api.void_settlement (hanya pelunas, settlement_received),
--- api.shared_balances, api.split_history. Setiap langkah: saldo antar-anggota nol-jumlah, dompet Bersama
--- tidak bergerak, dompet sistem = Σ pelunasan belum diterima, Laporan Bersama memuat tagihan tepat sekali,
--- Kontribusi S8 dan dq_reconcile tidak berubah, ruang Pribadi pasangan tidak terbaca atau tertulis, galat
--- tanpa nama/nominal. Kegagalan di tengah create_split = rollback utuh. Jam dipatok 2026-03-20 WIB.
+-- hari, split_member_left bila pemilik bagian sudah keluar), api.settle_split (payment_exceeds, hanya
+-- dompet sendiri), api.receive_settlement/void_receipt (hanya penerima, ke Pribadinya sendiri),
+-- api.void_settlement (hanya pelunas, settlement_received), api.shared_balances, api.split_history.
+-- Setiap langkah: saldo antar-anggota nol-jumlah, dompet Bersama tidak bergerak, dompet sistem = Σ
+-- pelunasan belum diterima, Laporan Bersama memuat tagihan tepat sekali, Kontribusi S8 dan
+-- dq_reconcile tidak berubah, ruang Pribadi pasangan tidak terbaca atau tertulis, galat tanpa
+-- nama/nominal. Kegagalan di tengah create_split = rollback utuh. Jam dipatok 2026-03-20 WIB.
 -- ID: B1, B2, B10, B21, T19
 begin;
-select plan(91);
+select plan(94);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -293,6 +294,24 @@ select is(pg_temp.settle(tests.n(), :'bca', 200000) ->> 'remaining', '0', 'Novan
 select is(pg_temp.st(), 'N=0,F=0|pat=450000|bca=9700000|mdr=649999|kas=500000',
   'impas; dua pelunasan menunggu diterima (dompet sistem = Σ belum diterima) [T19]');
 select is(pg_temp.dq(), 'bersih', 'dq_reconcile nol temuan');
+
+-- ===== Anggota keluar sesudah impas (S1): saldonya tidak boleh berubah lagi =====
+-- Farida menerima pelunasan untuknya lalu keluar (penjaga keluar lolos); hapus tagihan yang memuat
+-- bagian Farida atau pulihkan tagihan batal ditolak tanpa efek (saldo macet: pelunasan butuh anggota).
+savepoint keluar;
+select pg_temp.op(tests.f(), 'receive_settlement', tests.owner_val(null, format($q$select id from app.settlements
+  where space_id = %L and to_user = %L and voided_at is null and received_entry_id is null$q$, :'sh', tests.f()))::uuid,
+  format(', %L', :'mdr'));
+select tests.owner_exec(null, format($$delete from app.space_members where space_id = %L and user_id = %L$$, :'sh', tests.f()));
+select pg_temp.st() || ' ' || tests.owner_val(null, $$select count(*) filter (where voided_at is null) || '/' || count(*)
+  from app.entries$$) as before_left \gset
+select throws_ok(format($$select pg_temp.op(%L, 'void_split', %L)$$, tests.n(), :'s3_id'),
+  'DK422', 'split_member_left', 'hapus tagihan dengan bagian anggota yang sudah keluar ditolak [S1]');
+select throws_ok(format($$select pg_temp.op(%L, 'restore_split', %L)$$, tests.n(), :'s1_id'),
+  'DK422', 'split_member_left', 'pulihkan tagihan dengan bagian anggota yang sudah keluar ditolak [S1]');
+select is(pg_temp.st() || ' ' || tests.owner_val(null, $$select count(*) filter (where voided_at is null) || '/' || count(*)
+  from app.entries$$), :'before_left', 'penolakan tanpa efek: saldo dan entri tidak berubah [S1]');
+rollback to savepoint keluar;
 
 -- ===== Riwayat (PT2) =====
 -- Jam dipatok: created_at sama, jadi urutan dalam satu tanggal ditentukan id; bandingkan sebagai himpunan.
