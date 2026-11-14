@@ -6,6 +6,7 @@ import { useId, useState } from 'react';
 import type { Icon } from '@/components/ui/icon';
 import { AddressBookIcon } from '@/components/ui/icons/address-book';
 import { AirplaneTiltIcon } from '@/components/ui/icons/airplane-tilt';
+import { ReceiptIcon } from '@/components/ui/icons/receipt';
 import { SignOutIcon } from '@/components/ui/icons/sign-out';
 import { DeviceMobileIcon } from '@/components/ui/icons/device-mobile';
 import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
@@ -21,6 +22,7 @@ import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import { signOutAction } from '@/server/auth/actions';
 import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
+import { buildPatunganHref } from './patungan-hrefs';
 import { buildKontakHref } from './utang-hrefs';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
@@ -101,6 +103,17 @@ export function MenuSheet({
             onOpenChange={onOpenChange}
           />
         </li>
+        {real && ruang === 'bersama' ? (
+          <li className={rowDivider}>
+            {/* Bagi tagihan (S12-PT2): hanya mode nyata Bersama; Pribadi tidak punya halaman ini. */}
+            <MenuLink
+              href={buildPatunganHref(query)}
+              name="Patungan"
+              Icon={ReceiptIcon}
+              onOpenChange={onOpenChange}
+            />
+          </li>
+        ) : null}
         {items.map(({ name, Icon }) => (
           <li key={name} className={rowDivider}>
             {real && name === 'Kategori' ? (

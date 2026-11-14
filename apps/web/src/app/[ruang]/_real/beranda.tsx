@@ -41,6 +41,7 @@ import { markNoSpendDayAction } from '../_actions/beranda';
 import { BillsDueCard } from './bills-due-view';
 import { BudgetsNearCard } from './budgets-near-view';
 import { DebtsCard } from './debts-card-view';
+import { SplitCard, SplitCardError } from './split-card-view';
 import { berandaSteps, bersamaView, type BerandaStepState } from './beranda-steps';
 import { CatatStepIsland, NoSpendIsland } from './beranda-islands';
 
@@ -135,6 +136,10 @@ export function BerandaReal({
       />
     );
   }
+  // S12-PT1: Saldo patungan (Bersama dua anggota); kartu tidak dirender bila belum pernah ada patungan.
+  let patungan: ReactNode = null;
+  if (b?.split === 'error') patungan = <SplitCardError retryHref={retryHref} />;
+  else if (b?.split != null) patungan = <SplitCard vm={b.split} query={query} />;
   let kontribusi: ReactNode = null;
   if (b?.contributions === 'error') kontribusi = <ContributionCardError retryHref={retryHref} />;
   else if (b?.contributions != null) kontribusi = <ContributionCardView vm={b.contributions} />;
@@ -213,7 +218,7 @@ export function BerandaReal({
   // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop (S9-C10):
   // kolom kiri = Aman + S6-B1 + checklist + Kontribusi; kolom kanan = Tagihan 7 hari + Anggaran
   // hampir habis + Aktivitas + Terakhir (urutan DOM tetap, lewat penempatan kolom grid).
-  const leftBottom = checklist !== null || kontribusi !== null;
+  const leftBottom = checklist !== null || kontribusi !== null || patungan !== null;
   return (
     <>
       {header}
@@ -242,6 +247,7 @@ export function BerandaReal({
         {leftBottom ? (
           <div className="flex flex-col gap-3 tablet:gap-4 laptop:col-start-1 laptop:row-start-2">
             {checklist}
+            {patungan}
             {kontribusi}
           </div>
         ) : null}

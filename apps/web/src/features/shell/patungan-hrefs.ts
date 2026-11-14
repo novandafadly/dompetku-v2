@@ -5,8 +5,13 @@ import type { Route } from 'next';
  * nyata Bersama yang memakainya. Pribadi tidak punya halaman ini (404).
  */
 
-/** Halaman Patungan Bersama; `lunasi`/`terima` membuka sheetnya saat halaman termuat. */
-export function buildPatunganHref(query: string, open?: 'lunasi' | 'terima'): Route {
+/**
+ * Halaman Patungan Bersama. `open` membuka sheet saat halaman termuat: kartu Beranda memakai
+ * tautan (bukan pulau klien) supaya JS Beranda tidak bertambah; `?lunasi=1` = Lunasi,
+ * `?terima={id pelunasan}` = Terima pelunasan itu.
+ */
+export function buildPatunganHref(query: string, open?: 'lunasi' | { terima: string }): Route {
   if (open === undefined) return `/bersama/patungan${query}` as Route;
-  return `/bersama/patungan${query === '' ? '?' : `${query}&`}${open}=1` as Route;
+  const part = open === 'lunasi' ? 'lunasi=1' : `terima=${encodeURIComponent(open.terima)}`;
+  return `/bersama/patungan${query === '' ? '?' : `${query}&`}${part}` as Route;
 }

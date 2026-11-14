@@ -74,6 +74,26 @@ describe('MenuSheet: Kontak (S11)', () => {
   });
 });
 
+describe('MenuSheet: Patungan (S12)', () => {
+  it('mode nyata Bersama: tautan ke /bersama/patungan', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    expect(screen.getByRole('link', { name: 'Patungan' })).toHaveAttribute(
+      'href',
+      '/bersama/patungan',
+    );
+  });
+
+  it('Pribadi dan prototipe: butir Patungan tidak dirender', () => {
+    ruangNow = 'pribadi';
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    expect(screen.queryByText('Patungan')).toBeNull();
+    cleanup();
+    ruangNow = 'bersama';
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByText('Patungan')).toBeNull();
+  });
+});
+
 describe('MenuSheet: Keluar', () => {
   it('mode nyata: Keluar adalah tombol submit dalam form, baris terakhir daftar', () => {
     render(<MenuSheet open onOpenChange={vi.fn()} real />);

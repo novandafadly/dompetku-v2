@@ -144,3 +144,9 @@ export interface SplitEffectVM {
   accountName: string;
   amount: Rupiah;
 }
+
+/** Dompet Pribadi penonton yang dimuat malas (lihat `PatunganWalletsVM`). */
+export interface WalletsState {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  data: PatunganWalletsVM | null;
+}

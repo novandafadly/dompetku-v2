@@ -15,6 +15,8 @@ export interface KolomKasRow {
   signed?: boolean;
   /** Sisa utang: bernilai 0 tampil `Lunas` (ikon + teks), tidak pernah `Rp 0` (bingkai aturan 3). */
   lunas?: boolean;
+  /** Saldo patungan 0 tampil `Impas` (ikon + teks), tidak pernah `Rp 0` (S12). */
+  impas?: boolean;
 }
 
 /** Nilai satu sel: `Lunas` untuk sisa utang 0, selain itu rupiah. */
@@ -22,16 +24,18 @@ function Amount({
   value,
   signed,
   lunas,
+  impas,
 }: {
   value: Rupiah;
   signed?: boolean | undefined;
   lunas?: boolean | undefined;
+  impas?: boolean | undefined;
 }) {
-  if (lunas === true && value === 0) {
+  if ((lunas === true || impas === true) && value === 0) {
     return (
       <span className="inline-flex items-center gap-1 font-bold text-accent-text">
         <CheckCircleIcon size={16} weight="fill" className="shrink-0" />
-        Lunas
+        {impas === true ? 'Impas' : 'Lunas'}
       </span>
     );
   }
@@ -51,7 +55,7 @@ export function KolomKas({
   caption: string;
   rows: readonly KolomKasRow[];
   /** Baris hasil di bawah garis ganda; tanpa ini tabel hanya daftar dua kolom. */
-  result?: { label: string; value: Rupiah; lunas?: boolean };
+  result?: { label: string; value: Rupiah; lunas?: boolean; impas?: boolean };
   /** Judul terlihat 13/700 di atas tabel (dialog dengan dua kolom). */
   title?: string;
   className?: string;
@@ -72,7 +76,7 @@ export function KolomKas({
                 {r.label}
               </th>
               <td className={`${CELL} num text-right font-medium whitespace-nowrap text-text`}>
-                <Amount value={r.value} signed={r.signed} lunas={r.lunas} />
+                <Amount value={r.value} signed={r.signed} lunas={r.lunas} impas={r.impas} />
               </td>
             </tr>
           ))}
@@ -84,7 +88,7 @@ export function KolomKas({
                 {result.label}
               </th>
               <td className={`${CELL} num text-right font-extrabold whitespace-nowrap text-text`}>
-                <Amount value={result.value} lunas={result.lunas} />
+                <Amount value={result.value} lunas={result.lunas} impas={result.impas} />
               </td>
             </tr>
           </tfoot>
