@@ -40,6 +40,7 @@ import type { BerandaData } from '@/server/ledger/beranda';
 import { markNoSpendDayAction } from '../_actions/beranda';
 import { BillsDueCard } from './bills-due-view';
 import { BudgetsNearCard } from './budgets-near-view';
+import { DebtsCard } from './debts-card-view';
 import { berandaSteps, bersamaView, type BerandaStepState } from './beranda-steps';
 import { CatatStepIsland, NoSpendIsland } from './beranda-islands';
 
@@ -155,6 +156,9 @@ export function BerandaReal({
   });
   const recent = <RecentEntriesView rows={rows} listHref={buildHref(ruang, 'transaksi', query)} />;
 
+  // S12-UT1: hanya Pribadi dengan utang berjalan (loader: `null` selain itu).
+  const utang = data.debts ? <DebtsCard ruang={ruang} query={query} data={data.debts} /> : null;
+
   const header = (
     <PageHeader
       title="Beranda"
@@ -196,6 +200,7 @@ export function BerandaReal({
           />
           {invite}
           {checklist}
+          {utang}
           {recent}
           {aktivitas}
         </div>
@@ -203,7 +208,7 @@ export function BerandaReal({
     );
   }
 
-  // HP: Aman → S6-B1 → Tagihan 7 hari → Anggaran hampir habis → checklist → (Bersama) Kontribusi →
+  // HP: Aman → S6-B1 → Tagihan 7 hari → Anggaran hampir habis → (Pribadi) Utang → checklist → (Bersama) Kontribusi →
   // Aktivitas → Terakhir, satu kolom. Checklist sesudah dua kartu S9 (critique S9-C2): kartu yang
   // bisa ditindak tidak terdorong ke bawah oleh checklist yang hampir selesai. Laptop (S9-C10):
   // kolom kiri = Aman + S6-B1 + checklist + Kontribusi; kolom kanan = Tagihan 7 hari + Anggaran
@@ -232,6 +237,7 @@ export function BerandaReal({
         <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:items-start tablet:gap-4 laptop:col-start-2 laptop:row-start-1 laptop:grid-cols-1">
           <BillsDueCard ruang={ruang} query={query} data={data.billsDue} />
           <BudgetsNearCard ruang={ruang} query={query} data={data.budgetsNear} />
+          {utang}
         </div>
         {leftBottom ? (
           <div className="flex flex-col gap-3 tablet:gap-4 laptop:col-start-1 laptop:row-start-2">

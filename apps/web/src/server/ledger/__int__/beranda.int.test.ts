@@ -83,6 +83,7 @@ describe('loadBeranda (persona N)', () => {
         },
         billsDue: { items: [], hasBills: false },
         budgetsNear: { items: [], hasBudgets: false },
+        debts: null,
         today: { hasExpense: false, noSpendMarked: false },
         hasOperasional: false,
         hasExpense: false,

@@ -124,3 +124,13 @@ export interface PayTarget {
   /** Dompet entri pokok (mode baru): bawaan dompet bayar bila masih aktif. */
   accountId: string | null;
 }
+
+/** Kartu `Utang yang harus dibayar` di Beranda Pribadi (S12-UT1): angka dari `api.debt_totals`. */
+export interface DebtCardVM {
+  /** Σ sisa utang `borrowed` aktif. */
+  borrowed: Rupiah;
+  /** Σ sisa piutang `lent` aktif. */
+  lent: Rupiah;
+  /** Jumlah utang aktif (kedua arah; SQL tidak memisahkan per arah). */
+  activeCount: number;
+}

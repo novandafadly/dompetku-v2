@@ -237,6 +237,7 @@ describe('satu transaksi baca per page', () => {
         period: undefined,
         billsDue: undefined,
         budgetsNear: undefined,
+        debts: undefined,
       }).toEqual(await berandaLama(ctx));
     }
     const p = await loadBeranda(pribadi);
