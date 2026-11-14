@@ -1,6 +1,6 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
-import type { SplitContextVM } from '@/features/patungan/types';
+import type { SplitContextVM } from '@/features/ledger/patungan-types';
 
 /**
  * Sumber data sheet Catat. Prototipe memakai `demoCatatSource` (store demo, sinkron dibungkus

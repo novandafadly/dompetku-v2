@@ -13,7 +13,7 @@ import { ListCard } from '@/components/ui/list-card';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { EmptyState, ErrorState, LoadingRegion, Skeleton } from '@/components/ui/state';
 import { card, focusRing, heroCard, rowDivider, tile } from '@/components/ui/styles';
-import { dateLabel, debtSentence, PATUNGAN_COPY as C } from '@/features/patungan/copy';
+import { dateLabel, debtSentence, PATUNGAN_COPY as C } from '@/features/ledger/patungan-copy';
 import { partnerShareOf } from '@/features/patungan/present';
 import type {
   PatunganData,
@@ -21,7 +21,7 @@ import type {
   SplitBillVM,
   SplitHistoryItemVM,
   SplitSettlementVM,
-} from '@/features/patungan/types';
+} from '@/features/ledger/patungan-types';
 import { buildAuthHref, buildEntryHref } from '@/features/shell/hrefs';
 import { RetryIsland } from './transaksi-islands';
 import { PATUNGAN_TITLE_ID } from './patungan-ids';

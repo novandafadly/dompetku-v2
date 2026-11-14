@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { SplitBalanceVM } from '@/features/patungan/types';
+import type { SplitBalanceVM } from '@/features/ledger/patungan-types';
 import { SplitCard, SplitCardError } from './split-card-view';
 
 afterEach(cleanup);

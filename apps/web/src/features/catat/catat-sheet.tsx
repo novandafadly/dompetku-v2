@@ -30,7 +30,7 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import type { Ruang } from '@/features/ledger/types';
-import { PATUNGAN_COPY, shareNote } from '@/features/patungan/copy';
+import { PATUNGAN_COPY, shareNote } from '@/features/ledger/patungan-copy';
 import { AppKeypad } from './app-keypad';
 import {
   accountArchivedText,

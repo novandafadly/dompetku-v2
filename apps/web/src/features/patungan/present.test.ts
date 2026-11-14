@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { debtSentence, pendingLine, sharesRemark, savedToast, settledToast } from './copy';
+import {
+  debtSentence,
+  pendingLine,
+  sharesRemark,
+  savedToast,
+  settledToast,
+} from '@/features/ledger/patungan-copy';
 import { balanceRows, netOf, partnerShareOf } from './present';
-import type { SplitBillVM } from './types';
+import type { SplitBillVM } from '@/features/ledger/patungan-types';
 
 const ME = { id: 'n', name: 'Novanda', initial: 'N' };
 const BILL = {

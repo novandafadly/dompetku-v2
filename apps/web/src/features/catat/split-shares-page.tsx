@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/ui/field-messages';
 import { MoneyInput } from '@/components/ui/money-input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { PATUNGAN_COPY as C, sharesRemark } from '@/features/patungan/copy';
+import { PATUNGAN_COPY as C, sharesRemark } from '@/features/ledger/patungan-copy';
 
 /**
  * Isi halaman dalam sheet `Pembagian · Bersama` (S12-CT2). Dimuat malas, hanya saat `Ubah

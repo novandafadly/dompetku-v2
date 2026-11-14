@@ -6,7 +6,7 @@ import type {
   CreateSplitResultVM,
   PatunganWalletsVM,
   SettleResultVM,
-} from '@/features/patungan/types';
+} from '@/features/ledger/patungan-types';
 import {
   createSplit,
   createSplitSchema,

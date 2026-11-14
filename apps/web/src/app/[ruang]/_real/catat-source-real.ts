@@ -8,7 +8,7 @@ import type { SaveCatatInput } from '../_actions/inputs';
 import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
 import { moveTargetsAction, voidEntryAction } from '../_actions/entri';
 import { createSplitAction, voidSplitAction } from '../_actions/patungan';
-import { savedToast as splitSavedToast } from '@/features/patungan/copy';
+import { savedToast as splitSavedToast } from '@/features/ledger/patungan-copy';
 
 /**
  * Sumber Catat mode nyata (modul klien): hanya referensi Server Action dari `_actions/*`, tidak

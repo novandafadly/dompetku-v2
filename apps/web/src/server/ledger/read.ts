@@ -15,7 +15,7 @@ import type {
   TrashVM,
   WalletType,
 } from '@/features/ledger/types';
-import type { SplitContextVM } from '@/features/patungan/types';
+import type { SplitContextVM } from '@/features/ledger/patungan-types';
 import { splitContextTx } from './patungan';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';

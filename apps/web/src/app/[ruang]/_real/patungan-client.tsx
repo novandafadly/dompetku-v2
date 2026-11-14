@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { newClientId } from '@/features/ledger/client-id';
 import type { ActionResult, LedgerErrorCode } from '@/features/ledger/types';
-import { PATUNGAN_COPY as C, receivedToast, settledToast } from '@/features/patungan/copy';
+import { PATUNGAN_COPY as C, receivedToast, settledToast } from '@/features/ledger/patungan-copy';
 import { patunganRestoreFailedText } from '@/features/patungan/galat';
 import { useOpenCatat, usePreloadCatat } from '@/features/shell/catat';
 import type {
@@ -26,7 +26,7 @@ import type {
   SplitHistoryItemVM,
   SplitSettlementVM,
   WalletsState,
-} from '@/features/patungan/types';
+} from '@/features/ledger/patungan-types';
 import type { ReceiveResult, ReceiveSubmit, ReceivedInfo } from '@/features/patungan/receive-sheet';
 import type { SettleResult, SettleSubmit, SettledInfo } from '@/features/patungan/settle-sheet';
 import {

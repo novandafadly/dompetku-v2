@@ -12,8 +12,8 @@ import {
   PATUNGAN_COPY as C,
   pendingLine,
   settledCounts,
-} from '@/features/patungan/copy';
-import type { SplitBalanceVM } from '@/features/patungan/types';
+} from '@/features/ledger/patungan-copy';
+import type { SplitBalanceVM } from '@/features/ledger/patungan-types';
 import { buildPatunganHref } from '@/features/shell/patungan-hrefs';
 
 /**

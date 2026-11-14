@@ -8,10 +8,14 @@ import { Sheet } from '@/components/ui/sheet';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { newClientId } from '@/features/ledger/client-id';
 import type { LedgerErrorCode } from '@/features/ledger/types';
-import { NoAccountBlock, SaveButton } from '@/features/utang/fields';
-import { PATUNGAN_COPY as C } from './copy';
+import { NoAccountBlock, SaveButton } from './fields';
+import { PATUNGAN_COPY as C } from '@/features/ledger/patungan-copy';
 import { patunganFailedText } from './galat';
-import type { PendingSettlementVM, SplitBalanceVM, WalletsState } from './types';
+import type {
+  PendingSettlementVM,
+  SplitBalanceVM,
+  WalletsState,
+} from '@/features/ledger/patungan-types';
 
 const FORM_ID = 'terima-patungan';
 

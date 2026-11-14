@@ -1,7 +1,7 @@
 'use server';
 
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
-import type { SplitContextVM } from '@/features/patungan/types';
+import type { SplitContextVM } from '@/features/ledger/patungan-types';
 import { splitContextTx } from '@/server/ledger/patungan';
 import { withLedger } from '@/server/ledger/retry';
 import { recordProductEvent } from '@/server/ledger/events';

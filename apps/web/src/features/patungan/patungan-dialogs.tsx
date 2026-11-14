@@ -4,8 +4,8 @@ import { ArrowCounterClockwiseIcon } from '@/components/ui/icons/arrow-counter-c
 import { TrashIcon } from '@/components/ui/icons/trash';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { LedgerErrorCode } from '@/features/ledger/types';
-import { KolomKas } from '@/features/utang/kolom-kas';
-import { dateLabel, PATUNGAN_COPY as C } from './copy';
+import { KolomKas } from '@/components/ui/kolom-kas';
+import { dateLabel, PATUNGAN_COPY as C } from '@/features/ledger/patungan-copy';
 import { patunganFailedText } from './galat';
 import { balanceRows, netOf, partnerShareOf } from './present';
 import type {
@@ -14,7 +14,7 @@ import type {
   SplitSettlementVM,
   SplitWalletVM,
   WalletsState,
-} from './types';
+} from '@/features/ledger/patungan-types';
 
 /**
  * Dialog akibat (S12-AK1, AK2): hanya aksi yang MEMBALIK uang. Fokus awal `Kembali`; tombol bahaya

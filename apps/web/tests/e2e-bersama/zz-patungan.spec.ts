@@ -128,7 +128,10 @@ test('Beranda Bersama: kartu Saldo patungan dari dua sudut pandang; Pribadi tanp
   await page.goto('/bersama/transaksi');
   await expect(main(page)).toContainText(BILL);
   await expect(main(page)).toContainText('Dibayar dari dompet pribadi Novanda');
-  await expect(main(page)).not.toContainText('Setoran dari');
+  // Kaki dompet sistem tidak tampil sebagai setoran anggota (spec lain mengisi Setoran dari … lain).
+  await expect(
+    main(page).getByRole('link', { name: new RegExp(`Setoran dari.*${digits(AMOUNT)}`) }),
+  ).toHaveCount(0);
   await expect(main(page)).not.toContainText(N_WALLET);
   // Transaksi Pribadi N: kaki keluar berlabel, bukan pengeluaran pribadi.
   await page.goto('/pribadi/transaksi');

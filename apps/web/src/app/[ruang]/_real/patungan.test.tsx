@@ -2,7 +2,11 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import type { Route } from 'next';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PatunganData, SplitBalanceVM, SplitHistoryItemVM } from '@/features/patungan/types';
+import type {
+  PatunganData,
+  SplitBalanceVM,
+  SplitHistoryItemVM,
+} from '@/features/ledger/patungan-types';
 import { PatunganFailed, PatunganLoading, PatunganReal } from './patungan';
 
 afterEach(cleanup);

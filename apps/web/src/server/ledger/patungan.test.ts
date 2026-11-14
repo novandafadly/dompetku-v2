@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SplitCursor } from '@/features/patungan/types';
+import type { SplitCursor } from '@/features/ledger/patungan-types';
 import {
   createSplitSchema,
   encodeSplitCursor,

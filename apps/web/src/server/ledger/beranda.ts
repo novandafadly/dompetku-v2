@@ -11,7 +11,7 @@ import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
 import { amanStatus } from '@/features/beranda/aman-status';
 import { NEAR_PCT } from '@/features/rencana/copy';
 import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
-import type { SplitBalanceVM } from '@/features/patungan/types';
+import type { SplitBalanceVM } from '@/features/ledger/patungan-types';
 import type { DebtCardVM } from '@/features/utang/types';
 import type pg from 'pg';
 import { bersamaBerandaTx } from './bersama';

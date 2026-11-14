@@ -1,5 +1,5 @@
 import type { Rupiah } from '@dompetku/domain';
-import type { SplitBalanceVM, SplitBillVM } from './types';
+import type { SplitBalanceVM, SplitBillVM } from '@/features/ledger/patungan-types';
 
 /**
  * Pratinjau akibat di dialog (satu pengurangan, preseden S6-C3/S11); hasil akhir selalu dari SQL.

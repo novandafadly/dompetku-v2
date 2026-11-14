@@ -13,7 +13,7 @@ import type {
   SplitEffectVM,
   SplitHistoryItemVM,
   SplitPayerAccountVM,
-} from '@/features/patungan/types';
+} from '@/features/ledger/patungan-types';
 import { partnerOf, rosterTx } from './bersama';
 import { withLedger } from './retry';
 import { SpaceNotFoundError } from './space';
