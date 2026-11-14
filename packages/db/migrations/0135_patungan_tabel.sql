@@ -291,6 +291,17 @@ drop view app.member_balances;
 drop table app.settlements;
 drop table app.split_shares;
 drop table app.splits;
+-- Dompet sistem dan entrinya (beserta kaki Pribadi pasangannya) dihapus sesudah split_guard dibuang,
+-- supaya indeks lama tidak bentrok dengan dompet pengguna bernama `Patungan` dan tidak ada baris yatim.
+-- GUC purge (0005) mengizinkan cascade ke entry_history yang append-only.
+select pg_catalog.set_config('dompetku.purge', 'on', true);
+delete from app.entries e
+ where e.id in (select l.entry_id from app.entry_lines l join app.accounts a on a.id = l.account_id
+                 where a.pocket = 'patungan')
+    or e.link_id in (select p.link_id from app.entries p join app.entry_lines l on l.entry_id = p.id
+                      join app.accounts a on a.id = l.account_id where a.pocket = 'patungan');
+delete from app.accounts where pocket = 'patungan';
+select pg_catalog.set_config('dompetku.purge', 'off', true);
 drop index app.accounts_name_unique;
 create unique index accounts_name_unique on app.accounts (space_id, lower(btrim(name)))
   where archived_at is null;
