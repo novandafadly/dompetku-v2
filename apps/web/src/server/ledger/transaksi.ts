@@ -33,7 +33,7 @@ async function spaceMarksTx(
 ): Promise<{ firstMonth: string | null; hasAny: boolean }> {
   const { rows } = await c.query<{ first_month: string | null; has_any: boolean }>(
     `select (select to_char(min(a.opened_on), 'YYYY-MM') from app.accounts a
-              where a.space_id = $1) as first_month,
+              where a.space_id = $1 and a.pocket <> 'patungan') as first_month,
             exists (select 1 from app.entries e
                      where e.space_id = $1 and e.voided_at is null) as has_any`,
     [ctx.spaceId],

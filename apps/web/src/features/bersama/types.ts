@@ -31,6 +31,11 @@ export interface SharedActivityRow {
   description: string | null;
   sharedNote: string | null;
   moved: boolean;
+  /**
+   * Pengeluaran tagihan patungan (S12): dibayar dari dompet Pribadi pembayar. Diisi server
+   * (`systemWalletEntriesTx`), bukan kolom DB; hanya jenis `expense`.
+   */
+  viaPersonal?: true;
 }
 
 /** Anggota dari `app.space_roster` + `space_members.role` (warna avatar menurut peran). */

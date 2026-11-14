@@ -1,6 +1,9 @@
 'use server';
 
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
+import type { SplitContextVM } from '@/features/patungan/types';
+import { splitContextTx } from '@/server/ledger/patungan';
+import { withLedger } from '@/server/ledger/retry';
 import { recordProductEvent } from '@/server/ledger/events';
 import { listAccounts, listCategories, suggestCategories } from '@/server/ledger/read';
 import { createEntry, createSpaceTransfer, createTransfer } from '@/server/ledger/write';
@@ -81,6 +84,7 @@ export async function saveCatat(
 export interface CatatOptions {
   accounts: AccountVM[];
   categories: CategoryVM[];
+  split?: SplitContextVM;
 }
 
 /** Dompet dan kategori aktif ruang tujuan saat pindah ruang di sheet (data ruang itu saja). */
@@ -90,7 +94,12 @@ export async function catatOptions(ruang: unknown): Promise<ActionResult<CatatOp
       listAccounts(ledger(ctx)),
       listCategories(ledger(ctx)),
     ]);
-    return { accounts, categories };
+    // S12-CT1: hanya Bersama dua anggota (toggle `Dibayar dari dompet pribadi`).
+    if (ctx.kind !== 'shared') return { accounts, categories };
+    const split = await withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>
+      splitContextTx(c, ledger(ctx)),
+    );
+    return split === null ? { accounts, categories } : { accounts, categories, split };
   });
 }
 

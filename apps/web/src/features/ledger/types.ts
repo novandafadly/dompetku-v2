@@ -101,6 +101,13 @@ export interface EntryVM {
    * batal; pulihnya dari Utang, bukan dari entri). `voidedWithDebt` = entri ini dibatalkan oleh Hapus
    * utang (ikut pulih bersama utangnya); tanpa penanda berarti dibatalkan sendiri lebih dulu.
    */
+  /**
+   * Bagi tagihan Bersama (S12): `bill` = pengeluaran Bersama atau kaki Pribadi pembayar,
+   * `settle` = kaki Pribadi pelunas, `receive` = kaki Pribadi penerima. Entri ini tidak diubah
+   * lewat jalur generik (`split_locked`): kelola dari halaman Patungan. `payerName` hanya di
+   * pengeluaran Bersama (nama dompet sistem tidak pernah tampil, aturan 3 bingkai S12).
+   */
+  split?: { role: 'bill' | 'settle' | 'receive'; payerName?: string };
   debt?: {
     id: string;
     direction: 'borrowed' | 'lent';
@@ -257,6 +264,16 @@ export type LedgerErrorCode =
   | 'debt_principal_locked'
   // S12: dompet Trading hanya di Pribadi (0134, B10).
   | 'pocket_personal_only'
+  // S12: bagi tagihan Bersama / patungan (0136; bingkai S12 "Salinan galat S12").
+  | 'split_shared_only'
+  | 'split_needs_partner'
+  | 'split_account_invalid'
+  | 'split_locked'
+  | 'split_unsettled'
+  | 'split_member_left'
+  | 'settlement_received'
+  | 'settlement_voided'
+  | 'settlement_not_received'
   | 'not_found'
   | 'invalid'
   | 'network'

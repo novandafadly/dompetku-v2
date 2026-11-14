@@ -15,6 +15,7 @@ import { card, focusRing, rowDivider } from '@/components/ui/styles';
 import { openingEditable, openingLockedOn } from '@/features/ledger/opening';
 import type { EntryVM, Ruang, TalanganVM } from '@/features/ledger/types';
 import { buildEntryHref, buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
+import { buildPatunganHref } from '@/features/shell/patungan-hrefs';
 import { buildDebtHref, buildDebtListHref } from '@/features/shell/utang-hrefs';
 import { debtHeading } from '@/features/utang/copy';
 import { DetailRow, EntryDetailView } from '@/features/transaksi/entry-detail-view';
@@ -60,6 +61,9 @@ export function detailAbilities(
     reimbursable: null,
   };
   if (entry.voidedAt !== undefined) return none;
+  // S12: bagian dari patungan (pengeluaran Bersama atau kaki Pribadi): `split_locked` di semua jalur
+  // generik; ubah atau hapus dari halaman Patungan.
+  if (entry.split !== undefined) return none;
   if (entry.kind === 'opening_balance') {
     const opened = data.accounts.find((a) => a.id === entry.accountId)?.openedOn;
     const editable = opened !== undefined && openingEditable(opened, today);
@@ -270,6 +274,9 @@ export function DetailReal({
       {antarRuang && !voidable ? (
         <ActionNote>{`Hanya ${entry.createdBy.name} yang bisa membatalkan transfer ini.`}</ActionNote>
       ) : null}
+      {entry.split !== undefined ? (
+        <ActionNote>Ini bagian dari patungan. Ubah atau hapus dari halaman Patungan.</ActionNote>
+      ) : null}
       {entry.kind === 'debt_principal' ? (
         <ActionNote>
           Pokok utang tidak dibatalkan sendiri. Hapus utangnya dari halaman utang.
@@ -320,6 +327,14 @@ export function DetailReal({
               className={buttonClass('secondary', 'md', 'self-start')}
             >
               Lihat utang
+            </Link>
+          ) : null}
+          {entry.split !== undefined ? (
+            <Link
+              href={buildPatunganHref('')}
+              className={buttonClass('secondary', 'md', 'self-start')}
+            >
+              Lihat patungan
             </Link>
           ) : null}
           {entry.kind === 'reimbursement' && entry.reimbursesEntryId !== undefined ? (

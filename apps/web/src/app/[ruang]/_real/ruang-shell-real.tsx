@@ -1,6 +1,7 @@
 import type { IsoDate } from '@dompetku/domain';
 import type { ReactNode } from 'react';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
+import type { SplitContextVM } from '@/features/patungan/types';
 import { RuangShell } from '../ruang-shell';
 // Action entri didaftarkan untuk setiap page `[ruang]`: toast "Urungkan" hidup lebih lama daripada
 // page yang membuatnya (Batalkan di Detail → toast di daftar Transaksi → `restoreEntryAction`).
@@ -19,17 +20,23 @@ export function RuangShellReal({
   ruang,
   accounts,
   categories,
+  split,
   today,
   children,
 }: {
   ruang: Ruang;
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Bersama dua anggota (S12-CT1); tidak ada di Pribadi atau Bersama solo. */
+  split?: SplitContextVM | undefined;
   today: IsoDate;
   children: ReactNode;
 }) {
   return (
-    <RuangShell ruang={ruang} real={{ options: { accounts, categories }, today }}>
+    <RuangShell ruang={ruang} real={{
+        options: split === undefined ? { accounts, categories } : { accounts, categories, split },
+        today,
+      }}>
       {children}
     </RuangShell>
   );

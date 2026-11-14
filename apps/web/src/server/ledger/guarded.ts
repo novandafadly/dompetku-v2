@@ -14,7 +14,7 @@ function shouldRethrow(e: unknown): boolean {
 }
 
 /** Kartu Beranda yang dibaca di savepoint sendiri; nama = bagian nama savepoint dan log. */
-export type GuardedCard = 'activity' | 'contributions' | 'bills' | 'budgets' | 'debts';
+export type GuardedCard = 'activity' | 'contributions' | 'bills' | 'budgets' | 'debts' | 'splits';
 
 const PREFIX: Record<GuardedCard, string> = {
   activity: 'bersama',
@@ -22,6 +22,7 @@ const PREFIX: Record<GuardedCard, string> = {
   bills: 'beranda',
   budgets: 'beranda',
   debts: 'beranda',
+  splits: 'bersama',
 };
 
 /**

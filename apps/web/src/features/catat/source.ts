@@ -1,5 +1,6 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
+import type { SplitContextVM } from '@/features/patungan/types';
 
 /**
  * Sumber data sheet Catat. Prototipe memakai `demoCatatSource` (store demo, sinkron dibungkus
@@ -54,6 +55,11 @@ export interface CatatOptions {
   categories: CategoryVM[];
   /** Dompet bawaan (operasional terakhir dipakai); bila kosong, operasional pertama. */
   defaultAccountId?: string;
+  /**
+   * Bersama dua anggota (S12-CT1): penonton dan anggota lain. Ada = toggle `Dibayar dari dompet
+   * pribadi` tersedia; prototipe dan ruang lain tidak punya.
+   */
+  split?: SplitContextVM;
 }
 
 export type SaveOutcome =

@@ -15,6 +15,8 @@ import type {
   TrashVM,
   WalletType,
 } from '@/features/ledger/types';
+import type { SplitContextVM } from '@/features/patungan/types';
+import { splitContextTx } from './patungan';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
 
@@ -130,6 +132,9 @@ interface EntryRow {
   debt_contact_name: string | null;
   debt_deleted: boolean | null;
   voided_with_debt: boolean;
+  // S12: dompet sistem patungan (pengeluaran Bersama) dan kaki Pribadi yang berpasangan dengannya.
+  account_pocket: string;
+  split_leg: 'bill' | 'settle' | 'receive' | null;
 }
 
 /**
@@ -154,7 +159,22 @@ const ENTRY_COLUMNS = `
       where fl.space_id = e.space_id and fl.entry_id = e.id and fl.role = 'fee') end as fee, e.reimburses_entry_id,
   e.debt_id, dbt.direction as debt_direction, dbt.title as debt_title,
   dct.name as debt_contact_name, dbt.voided_at is not null as debt_deleted,
-  e.voided_with_debt`;
+  e.voided_with_debt, ma.pocket::text as account_pocket,
+  case when e.kind = 'space_transfer' and e.space_kind = 'personal' then (
+    select case when e.direction = 'in' then 'receive'
+                when exists (select 1 from app.settlements t where t.in_entry_id = p.id) then 'settle'
+                else 'bill' end
+      from app.entries p
+      join app.entry_lines pl on pl.space_id = p.space_id and pl.entry_id = p.id and pl.role = 'main'
+      join app.accounts pa on pa.space_id = pl.space_id and pa.id = pl.account_id
+     where p.link_id = e.link_id and p.space_id <> e.space_id and pa.pocket = 'patungan') end
+    as split_leg`;
+
+/**
+ * Kaki dompet sistem `patungan` di Bersama (masuk tagihan/pelunasan, keluar terima) tidak pernah
+ * tampil sebagai transaksi (bukan `Setoran dari {nama}`, S12-ADR1): mereka bagian dari baris Patungan.
+ */
+const HIDE_SYSTEM_LEG = `not (e.kind = 'space_transfer' and ma.pocket = 'patungan')`;
 
 const ENTRY_JOINS = `
   join app.entry_lines m
@@ -208,6 +228,13 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (row.fee !== null && row.fee > 0) vm.fee = row.fee;
   if (row.moved_at !== null) vm.movedAt = row.moved_at;
   if (row.reimburses_entry_id !== null) vm.reimbursesEntryId = row.reimburses_entry_id;
+  if (row.account_pocket === 'patungan' && kind === 'expense') {
+    // Pengeluaran Bersama dari tagihan patungan: dompet sistem tidak tampil; hanya kalimat pembayar.
+    vm.split = { role: 'bill', payerName: by.name };
+    vm.accountName = `Dibayar dari dompet pribadi ${by.name}`;
+  } else if (row.split_leg !== null) {
+    vm.split = { role: row.split_leg };
+  }
   if (row.debt_id !== null && row.debt_direction !== null && row.debt_contact_name !== null) {
     vm.debt = {
       id: row.debt_id,
@@ -241,7 +268,7 @@ export async function listEntriesTx(
     c,
     `select ${ENTRY_COLUMNS}
        from app.entries e ${ENTRY_JOINS}
-      where e.space_id = $1 and e.voided_at is null
+      where e.space_id = $1 and e.voided_at is null and ${HIDE_SYSTEM_LEG}
         and e.occurred_on >= $2::date
         and e.occurred_on < ($2::date + interval '1 month')::date
         and ($3::uuid is null or exists (
@@ -287,7 +314,7 @@ export async function accountEntriesTx(
     `select ${ENTRY_COLUMNS}
        from app.entries e ${ENTRY_JOINS}
       where e.space_id = $1 and e.voided_at is null and e.kind <> 'opening_balance'
-        and ${touches}
+        and ${HIDE_SYSTEM_LEG} and ${touches}
       ${ENTRY_ORDER}
       limit $3`,
     [ctx.spaceId, id, l + 1],
@@ -328,7 +355,7 @@ export async function recentEntriesTx(
     c,
     `select ${ENTRY_COLUMNS}
        from app.entries e ${ENTRY_JOINS}
-      where e.space_id = $1 and e.voided_at is null
+      where e.space_id = $1 and e.voided_at is null and ${HIDE_SYSTEM_LEG}
       ${ENTRY_ORDER}
       limit $2`,
     [ctx.spaceId, l],
@@ -364,7 +391,7 @@ export async function getEntryTx(
     c,
     `select ${ENTRY_COLUMNS}
        from app.entries e ${ENTRY_JOINS}
-      where e.space_id = $1 and e.id = $2`,
+      where e.space_id = $1 and e.id = $2 and ${HIDE_SYSTEM_LEG}`,
     [ctx.spaceId, parsed.data],
   );
   if (!entry) return null;
@@ -514,13 +541,16 @@ export async function listCategories(
 export interface RuangShellData {
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Bersama dua anggota (S12-CT1): penonton dan anggota lain untuk toggle patungan; selain itu tidak ada. */
+  split?: SplitContextVM;
 }
 
 export async function loadRuangShell(ctx: LedgerCtx): Promise<RuangShellData> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
     const accounts = await listAccountsTx(c, ctx);
     const categories = await listCategoriesTx(c, ctx);
-    return { accounts, categories };
+    const split = await splitContextTx(c, ctx);
+    return split === null ? { accounts, categories } : { accounts, categories, split };
   });
 }
 

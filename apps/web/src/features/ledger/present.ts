@@ -20,6 +20,13 @@ function debtKindLabel(e: EntryVM): string {
   return borrowed ? 'Pembayaran utang' : 'Penerimaan piutang';
 }
 
+/** Judul kaki Pribadi bagi tagihan (S12-PT, bingkai `Label transaksi`). */
+const SPLIT_LEG_TITLE = {
+  bill: 'Bayar untuk Bersama',
+  settle: 'Lunasi patungan',
+  receive: 'Terima patungan',
+} as const;
+
 /** Judul entri di daftar: deskripsi, lalu catatan bersama, lalu nama kategori. */
 export function entryTitleVM(e: EntryVM): string {
   switch (e.kind) {
@@ -40,6 +47,8 @@ export function entryTitleVM(e: EntryVM): string {
           ? e.debt.contactName
           : `${e.debt.contactName} · ${e.debt.title}`;
     case 'space_transfer':
+      // S12: kaki Pribadi bagi tagihan; judul tetap (deskripsi tagihan hanya di Bersama).
+      if (e.split !== undefined) return SPLIT_LEG_TITLE[e.split.role];
       // S7-D1: judul dari arah dan pencatat, bukan keterangan; kaki Bersama tidak menyebut Pribadi.
       if (e.spaceKind === 'shared') {
         return e.direction === 'in'
@@ -69,7 +78,7 @@ export function entryKindLabelVM(e: EntryVM): string {
     case 'transfer':
       return 'Pindah dompet';
     case 'space_transfer':
-      return 'Antar ruang';
+      return e.split === undefined ? 'Antar ruang' : 'Patungan';
     case 'reimbursement':
       return 'Reimburse';
     case 'debt_principal':

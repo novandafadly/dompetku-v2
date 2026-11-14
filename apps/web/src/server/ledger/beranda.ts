@@ -11,6 +11,7 @@ import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
 import { amanStatus } from '@/features/beranda/aman-status';
 import { NEAR_PCT } from '@/features/rencana/copy';
 import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
+import type { SplitBalanceVM } from '@/features/patungan/types';
 import type { DebtCardVM } from '@/features/utang/types';
 import type pg from 'pg';
 import { bersamaBerandaTx } from './bersama';
@@ -24,6 +25,7 @@ import {
   spendPaceTx,
   todayStatusTx,
 } from './read';
+import { sharedBalanceTx } from './patungan';
 import { billsDueTx, budgetOverviewTx } from './rencana';
 import { withLedger } from './retry';
 import { debtTotalsTx } from './utang';
@@ -102,6 +104,11 @@ export interface BerandaBersama {
   activity: ActivityItemVM[] | 'error' | null;
   /** S8-K1: Kontribusi periode gajian berjalan (K10); `null` = solo, `'error'` = gagal dimuat. */
   contributions: ContributionVM | 'error' | null;
+  /**
+   * S12-PT1 kartu `Saldo patungan` (`api.shared_balances`), hanya Bersama dua anggota (`null` =
+   * solo). `'error'` = gagal dimuat (savepoint): kartu galat, Beranda tetap.
+   */
+  split?: SplitBalanceVM | 'error' | null;
 }
 
 const RECENT = 5;
@@ -256,6 +263,10 @@ export async function loadBeranda(
               labelMonth: period.labelMonth,
             })
           : { partner: null, activity: null, contributions: null };
+      const split =
+        bersama && bersama.members >= 2
+          ? await guarded(c, 'splits', () => sharedBalanceTx(c, ctx))
+          : null;
       const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx, hasBills));
       const budgetsNear = await guarded(c, 'budgets', () =>
         budgetsCardTx(c, ctx, period.labelMonth),
@@ -274,6 +285,7 @@ export async function loadBeranda(
         invite,
         bersama,
         extra,
+        split,
         billsDue,
         budgetsNear,
         debts,
@@ -286,7 +298,7 @@ export async function loadBeranda(
   let bersama: BerandaBersama | null = null;
   if (read.bersama) {
     const { anyEntry, ...rest } = read.bersama;
-    bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra };
+    bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra, split: read.split };
   }
   return {
     period: read.period,
