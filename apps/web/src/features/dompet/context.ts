@@ -15,6 +15,9 @@ export const POCKET_LABEL = {
   operasional: 'Operasional',
   tabungan: 'Tabungan',
   kantor: 'Kantor',
+  trading: 'Trading',
+  // Dompet sistem Bersama: tidak pernah tampil; label hanya agar tipe lengkap.
+  patungan: 'Patungan',
 } as const;
 
 export const WALLET_TYPE_LABEL = { bank: 'Bank', ewallet: 'E-wallet', cash: 'Tunai' } as const;

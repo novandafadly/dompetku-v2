@@ -93,6 +93,7 @@ export function AddWalletHost({
               if (!next) dropAddParam();
             }}
             ruang={ruang}
+            allowTrading={ruang === 'pribadi'}
             existingNames={existingNames}
             onSubmit={(input) =>
               createAccount(ruang, input, () => {

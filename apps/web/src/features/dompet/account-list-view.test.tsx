@@ -87,4 +87,40 @@ describe('AccountListView (Dompet nyata)', () => {
       'laptop:hidden',
     );
   });
+
+  it('S12: kelompok Trading ikut kekayaan bersih, kartu modal di bawahnya; Patungan tidak pernah tampil', () => {
+    render(
+      <AccountListView
+        ruang="pribadi"
+        accounts={[
+          acc({ id: 'a1', name: 'BCA', balance: 1_000_000 }),
+          acc({ id: 't1', name: 'Stockbit', balance: 2_000_000, pocket: 'trading' }),
+          acc({ id: 'p1', name: 'Patungan', balance: 9_000_000, pocket: 'patungan' }),
+        ]}
+        accountHref={href}
+        renderAdd={add}
+        modal={<p>kartu-modal</p>}
+      />,
+    );
+    const trading = screen.getByRole('region', { name: 'Trading' });
+    expect(within(trading).getByRole('link', { name: /Stockbit/ })).toBeTruthy();
+    expect(trading.nextElementSibling).toHaveTextContent('kartu-modal');
+    expect(screen.getByTestId('net-worth')).toHaveTextContent('3.000.000');
+    expect(screen.queryByText('Patungan')).toBeNull();
+    expect(
+      screen.getByText('Operasional, tabungan, dan trading. Kas Kantor tidak dihitung.'),
+    ).toBeTruthy();
+  });
+
+  it('S12: tanpa dompet trading teks kekayaan lama', () => {
+    render(
+      <AccountListView
+        ruang="pribadi"
+        accounts={[acc({ id: 'a1', name: 'BCA', balance: 1 })]}
+        accountHref={href}
+        renderAdd={add}
+      />,
+    );
+    expect(screen.getByText('Operasional + tabungan. Kas Kantor tidak dihitung.')).toBeTruthy();
+  });
 });

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { CheckIcon } from '@/components/ui/icons/check';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { tile } from '@/components/ui/styles';
-import type { Ruang } from '@/features/ledger/types';
+import type { Pocket, Ruang } from '@/features/ledger/types';
 import type { CrossTargets } from './use-catat';
 
 /**
@@ -14,10 +14,12 @@ import type { CrossTargets } from './use-catat';
  * Bersama tidak tampil di layar Pribadi lewat angka dan sebaliknya.
  */
 
-const POCKET: Record<'operasional' | 'tabungan' | 'kantor', string> = {
+const POCKET: Record<Pocket, string> = {
   operasional: 'Operasional',
   tabungan: 'Tabungan',
   kantor: 'Kantor',
+  trading: 'Trading',
+  patungan: 'Patungan',
 };
 
 export default function SpaceTargetPage({

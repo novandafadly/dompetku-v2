@@ -12,6 +12,10 @@ export interface SegmentItem {
 export const segmentTrack =
   'flex max-w-full gap-0.5 rounded-toast border border-hairline bg-surface-2 p-0.5';
 
+/** Lebih dari tiga segmen tidak muat sebaris di 320 px: dua kolom (S12-TR1). */
+const segmentTrackGrid =
+  'grid max-w-full grid-cols-2 gap-0.5 rounded-toast border border-hairline bg-surface-2 p-0.5';
+
 export function segmentItem(selected: boolean): string {
   // Terpilih: lapisan naik (surface) + garis border + tebal, tidak hanya beda warna.
   return `flex h-11 min-w-0 flex-1 items-center justify-center rounded-lg border px-3 text-label ${focusRing} ${
@@ -42,7 +46,7 @@ export function SegmentedControl({
       aria-label={label}
       aria-labelledby={labelledBy}
       onKeyDown={handleRadioArrowKeys}
-      className={segmentTrack}
+      className={items.length > 3 ? segmentTrackGrid : segmentTrack}
     >
       {items.map((item, i) => {
         const selected = item.value === value;
