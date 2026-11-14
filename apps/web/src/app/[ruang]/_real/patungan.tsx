@@ -1,4 +1,4 @@
-import { dayLabel, formatRupiah, type IsoDate } from '@dompetku/domain';
+import { formatRupiah, type IsoDate } from '@dompetku/domain';
 import type { Route } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -147,7 +147,7 @@ function Pending({ vm }: { vm: SplitBalanceVM }) {
   );
 }
 
-function BillBody({ bill, vm, today }: { bill: SplitBillVM; vm: SplitBalanceVM; today: IsoDate }) {
+function BillBody({ bill, vm }: { bill: SplitBillVM; vm: SplitBalanceVM }) {
   const other = bill.payerId === vm.me.id ? vm.partner.name : 'kamu';
   const label = bill.description ?? bill.categoryName ?? 'Tagihan patungan';
   return (
@@ -160,7 +160,7 @@ function BillBody({ bill, vm, today }: { bill: SplitBillVM; vm: SplitBalanceVM; 
           {label}
         </span>
         <span className="text-meta font-medium text-text-muted">
-          {`Dibayar ${nameOf(bill.payerId, vm)} · bagian ${other} ${formatRupiah(partnerShareOf(bill))} · ${dayLabel(bill.occurredOn, today)}`}
+          {`Dibayar ${nameOf(bill.payerId, vm)} · bagian ${other} ${formatRupiah(partnerShareOf(bill))} · ${dateLabel(bill.occurredOn)}`}
         </span>
       </span>
       <span className="text-label font-bold whitespace-nowrap text-text">
@@ -170,15 +170,7 @@ function BillBody({ bill, vm, today }: { bill: SplitBillVM; vm: SplitBalanceVM; 
   );
 }
 
-function SettlementBody({
-  s,
-  vm,
-  today,
-}: {
-  s: SplitSettlementVM;
-  vm: SplitBalanceVM;
-  today: IsoDate;
-}) {
+function SettlementBody({ s, vm }: { s: SplitSettlementVM; vm: SplitBalanceVM }) {
   return (
     <>
       <span aria-hidden="true" className={`size-11 ${tile}`}>
@@ -189,7 +181,7 @@ function SettlementBody({
           {`${nameOf(s.fromId, vm, true)} melunasi ke ${nameOf(s.toId, vm)}`}
         </span>
         <span className="flex flex-wrap items-center gap-x-1.5 text-meta font-medium text-text-muted">
-          {dayLabel(s.occurredOn, today)}
+          {dateLabel(s.occurredOn)}
           <span aria-hidden="true">·</span>
           {s.voidedAt === null ? (
             <StatusMark received={s.received} />
@@ -211,13 +203,11 @@ function HistoryRow({
   item,
   vm,
   query,
-  today,
   deleted = false,
 }: {
   item: SplitHistoryItemVM;
   vm: SplitBalanceVM;
   query: string;
-  today: IsoDate;
   deleted?: boolean;
 }) {
   let body: ReactNode;
@@ -227,11 +217,11 @@ function HistoryRow({
     const label = item.description ?? item.categoryName ?? 'tagihan';
     body = deleted ? (
       <div className="-mx-4 flex min-h-15.5 min-w-0 items-center gap-3 px-4 py-2">
-        <BillBody bill={item} vm={vm} today={today} />
+        <BillBody bill={item} vm={vm} />
       </div>
     ) : (
       <Link href={href} className={ROW_BODY}>
-        <BillBody bill={item} vm={vm} today={today} />
+        <BillBody bill={item} vm={vm} />
       </Link>
     );
     if (item.payerId === vm.me.id) {
@@ -249,7 +239,7 @@ function HistoryRow({
   } else {
     body = (
       <div className="-mx-4 flex min-h-15.5 min-w-0 items-center gap-3 px-4 py-2">
-        <SettlementBody s={item} vm={vm} today={today} />
+        <SettlementBody s={item} vm={vm} />
       </div>
     );
     if (!deleted && item.fromId === vm.me.id) {
@@ -362,7 +352,7 @@ export function PatunganReal({
               ) : (
                 <ul>
                   {data.history.map((i) => (
-                    <HistoryRow key={i.id} item={i} vm={balance} query={query} today={today} />
+                    <HistoryRow key={i.id} item={i} vm={balance} query={query} />
                   ))}
                 </ul>
               )}
@@ -385,14 +375,7 @@ export function PatunganReal({
                 </summary>
                 <ul>
                   {data.deleted.map((i) => (
-                    <HistoryRow
-                      key={i.id}
-                      item={i}
-                      vm={balance}
-                      query={query}
-                      today={today}
-                      deleted
-                    />
+                    <HistoryRow key={i.id} item={i} vm={balance} query={query} deleted />
                   ))}
                 </ul>
               </details>
