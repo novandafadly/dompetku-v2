@@ -38,6 +38,15 @@ describe('ModalCard (S12-TR2/TR3)', () => {
     expect(warn.className).toContain('warning-tint');
   });
 
+  it('Kurang tidak tampil di kartu per dompet (detail), hanya dari baris total overview', () => {
+    render(
+      <ModalCard variant="detail" figures={fig({ balance: 3_800_000, shortfall: 1_200_000 })} />,
+    );
+    const card = screen.getByRole('region', { name: 'Modal' });
+    expect(card).not.toHaveTextContent('Kurang');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('modal ditarik semua: kalimat, bukan Rp 0; Hasil ditarik tampil bila > 0', () => {
     render(
       <ModalCard

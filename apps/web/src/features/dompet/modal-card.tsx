@@ -39,7 +39,8 @@ function Item({ label, children, note }: { label: string; children: ReactNode; n
  * (total semua dompet trading), `detail` = kartu `Modal` satu dompet di riwayatnya. Semua angka
  * dari `api.trading_overview`; modal bukan pemasukan/pengeluaran, jadi netral tanpa hue (juga
  * `Hasil ditarik`), dan `Kurang` hanya peringatan `warning-tint`. Nol tidak ditulis "Rp 0":
- * kalimat (`Modal sudah ditarik semua.`) atau baris tidak dirender.
+ * kalimat (`Modal sudah ditarik semua.`) atau baris tidak dirender. `Kurang` hanya di `overview`
+ * (baris total SQL), tidak di kartu per dompet.
  */
 export function ModalCard({
   variant,
@@ -90,7 +91,9 @@ export function ModalCard({
               </Item>
             ) : null}
           </dl>
-          {figures.shortfall > 0 ? (
+          {/* Kurang hanya dari baris total (overview): Σ sisa modal dibanding Σ saldo trading. Per dompet
+              tidak ditampilkan (keputusan S2: dompet trading lain bisa menutupnya). */}
+          {!detail && figures.shortfall > 0 ? (
             <div
               role="status"
               className="flex items-start gap-2 rounded-lg bg-warning-tint p-3 text-warning"

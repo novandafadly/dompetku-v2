@@ -151,16 +151,15 @@ test('Cocokkan saldo turun: peringatan Kurang dari SQL; Tarik modal ke dompet bi
   await expect(toasts(page).getByText(/selisih/)).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
+  // Kartu per dompet tidak menampilkan Kurang (keputusan S2); hanya baris total di Dompet.
   const card = main(page).getByRole('region', { name: 'Modal', exact: true });
-  const warn = card.getByRole('status');
+  await expect(card).not.toContainText('Kurang');
+  await expect(card.getByRole('status')).toHaveCount(0);
+  await page.goto('/pribadi/dompet');
+  const warn = main(page).getByRole('region', { name: 'Modal trading' }).getByRole('status');
   await expect(warn).toContainText(rpRe(300_000));
   await expect(warn).toContainText('Kurang');
   await expect(warn).toContainText('Saldo trading lebih kecil dari sisa modal yang kamu setor.');
-  // Di Dompet juga (kartu Modal trading).
-  await page.goto('/pribadi/dompet');
-  await expect(
-    main(page).getByRole('region', { name: 'Modal trading' }).getByRole('status'),
-  ).toContainText(rpRe(300_000));
 
   // Tarik semua saldo (700.000 < sisa modal 1.000.000): sisa modal 300.000, Kurang tetap 300.000.
   await page.goto(detailPath.value);
