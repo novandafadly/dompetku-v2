@@ -288,11 +288,13 @@ const DEFAULT_ACCOUNT_SQL = `
 /**
  * Dompet aktif ruang itu (RLS: hanya ruang anggota), untuk mencocokkan penanda `@nama`. Kantong
  * `kantor` ikut: hanya pilihan eksplisit yang boleh mencatat ke sana, bawaan tidak pernah.
+ * `trading` dan `patungan` (S12) tidak pernah dompet pencatatan WA: `@trading` = tidak ketemu,
+ * dan daftar penanda di balasan tidak memuatnya (modal trading hanya lewat transfer di web).
  */
 const ACCOUNTS_SQL = `
   select a.id, a.name, a.pocket::text as pocket
     from app.accounts a
-   where a.space_id = $1 and a.archived_at is null
+   where a.space_id = $1 and a.archived_at is null and a.pocket not in ('trading', 'patungan')
    order by a.sort_order, a.created_at, a.id`;
 
 interface Pick {

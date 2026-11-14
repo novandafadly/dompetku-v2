@@ -200,7 +200,7 @@ async function backdate(messageId: string, interval: string): Promise<void> {
 
 async function wallet(
   ctx: LedgerCtx,
-  pocket: 'operasional' | 'tabungan' | 'kantor' = 'operasional',
+  pocket: 'operasional' | 'tabungan' | 'kantor' | 'trading' = 'operasional',
   name = `Dompet ${pocket} ${randomUUID().slice(0, 4)}`,
   openingBalance = 1_000_000,
 ) {
@@ -922,6 +922,17 @@ describe('handleInbound: pilih dompet @nama (Postgres sungguhan)', () => {
     const last = (await entries()).at(-1);
     expect(last?.account_id).not.toBe(kantor);
     expect(last?.account_id).toBe(bca);
+  });
+
+  it('S12: dompet trading bukan dompet pencatatan WA: @trading/@stockbit tidak ketemu, tidak masuk daftar penanda', async () => {
+    await wallet(nPribadi, 'trading', 'Stockbit');
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @stockbit'));
+    await handleInbound(r.deps, msg('10rb kopi @trading'));
+    expect(await entries()).toHaveLength(0);
+    const handles = ['@bca', '@cimb-niaga', '@kas-kantor'];
+    expect(r.sent[0]?.text).toBe(REPLY.walletNone('stockbit', 'personal', handles));
+    expect(r.sent[1]?.text).toBe(REPLY.walletNone('trading', 'personal', handles));
   });
 
   it('"b ... @kantor" ditolak: kantong kantor hanya ada di Pribadi', async () => {
