@@ -16,14 +16,15 @@
 -- satu cicilan (C6), kegagalan di tengah pay_debt (trigger tests.fail_after sesudah line ditulis, hanya
 -- aktif bila GUC tests.fail_after diset di sesi itu) = rollback utuh termasuk kunci idempotensi
 -- (INT-12), arsip kontak paralel utang baru (kedua urutan), hapus utang paralel bayar (kedua urutan),
--- batal cicilan paralel hapus utang tanpa deadlock (kunci utang -> entri -> akun).
+-- batal cicilan paralel hapus utang tanpa deadlock (kunci utang -> entri -> akun). S12 (0132): purge
+-- menghapus utang di antara baca dan kunci = debt_not_found.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- ID: B8, C2, C3, C4, C6, C9, T15
 begin;
-select plan(104);
+select plan(107);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -647,6 +648,24 @@ select is(tests.peer_result('b'), '2', 'hapus sesudah bayar commit ikut membatal
 select tests.peer_exec('b', 'commit');
 select is(tests.owner_val(null, format($$select count(*) from app.entries where debt_id = %L and voided_at is null$$, :'kd3'))
   || ' ' || tests.balance(:'acc_u'), '0 0', 'tanpa entri hidup, saldo dompet kembali ke nol');
+-- K7 S12 (0132): purge menghapus utang di antara baca dan kunci private.lock_debt. Utang berjalan
+-- (tanpa entri) dihapus, voided_at dimundurkan 100 hari; purge_voided (belum commit) memegang baris,
+-- bayar membaca baris lama lalu menunggu kunci, dan sesudah purge commit mendapat debt_not_found.
+select (pg_temp.adm_api(format($$select api.create_debt(gen_random_uuid(), %L, 'borrowed', 10, 'berjalan', %L)$$,
+  :'np', :'kk')) ->> 'debt_id') as kd4 \gset
+select pg_temp.adm_api(format($$select api.void_debt(gen_random_uuid(), %L)$$, :'kd4'));
+select tests.peer_val('adm', format($$update app.debts set voided_at = voided_at - interval '100 days' where id = %L
+  returning 1$$, :'kd4'));
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', 'select jobs.purge_voided()');
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.bayar_sql(:'kd4', :'acc_u', 1) || $$ ->> 'remaining'$$);
+select ok(tests.peer_blocked('b'), 'bayar menunggu purge yang menghapus utang [K7]');
+select tests.peer_exec('adm', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*debt_not_found', 'utang hilang sesudah kunci = debt_not_found [K7]');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, format($$select count(*) from app.debts where id = %L$$, :'kd4')), '0',
+  'utang terhapus purge, tanpa cicilan yatim');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');

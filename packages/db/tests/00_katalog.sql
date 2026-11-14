@@ -70,8 +70,9 @@ select set_eq($$
         'trash_list', 'suggest_categories', 'open_reimbursables', 'shared_activity',
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
-        'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11)');
+        'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
+        'debt_totals'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang S12)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
@@ -340,7 +341,8 @@ select set_eq($$
                       'budget_progress', 'budget_overview', 'spend_pace', 'category_summary',
                       'period_trend', 'excluded_summary', 'wa_default_account',
                       'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
-                      'export_entries', 'list_contacts', 'list_debts', 'debt_detail']) f
+                      'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
+                      'debt_totals']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
