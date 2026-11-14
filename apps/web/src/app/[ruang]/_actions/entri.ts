@@ -8,6 +8,7 @@ import type {
   EntryVM,
   HistoryVM,
 } from '@/features/ledger/types';
+import { payableAccounts } from '@/features/ledger/accounts';
 import { getEntry, loadRuangShell } from '@/server/ledger/read';
 import {
   moveEntryToSpace,
@@ -126,7 +127,7 @@ export interface MoveTargets {
 
 /**
  * Pilihan sheet Pindahkan (dan tujuan transfer antar ruang): dompet aktif bukan Kantor (Kantor
- * tidak pernah ikut antar ruang: `cross_space_kantor`) dan kategori aktif ruang tujuan, dalam satu
+ * tidak pernah ikut antar ruang: `cross_space_kantor`) dan bukan Trading (S12) dan kategori aktif ruang tujuan, dalam satu
  * transaksi baca. Data ruang tujuan milik pemanggil sendiri (anggota; Pribadi = miliknya).
  */
 export async function moveTargetsAction(
@@ -138,7 +139,7 @@ export async function moveTargetsAction(
     const spaceId = await targetSpace(ctx, v.toRuang);
     const shell = await loadRuangShell({ pools: ctx.pools, userId: ctx.userId, spaceId });
     return {
-      accounts: shell.accounts.filter((a) => !a.archived && a.pocket !== 'kantor'),
+      accounts: payableAccounts(shell.accounts),
       categories: shell.categories,
     };
   });

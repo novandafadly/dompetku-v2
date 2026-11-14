@@ -80,6 +80,7 @@ export function detailAbilities(
       entry.reimbursable !== true &&
       pocket !== undefined &&
       pocket !== 'kantor' &&
+      pocket !== 'trading' &&
       (data.spaceCount ?? 0) >= 2,
     reimbursable:
       entry.kind === 'expense' && talangan !== null && talangan.remaining > 0
