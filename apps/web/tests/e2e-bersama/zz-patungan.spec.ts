@@ -309,7 +309,11 @@ test('Pribadi pasangan tidak bocor: HTML, payload RSC, dan navigasi Patungan/Ber
   await expect(
     main(page)
       .getByRole('listitem')
-      .filter({ hasText: new RegExp(`menyetor ke Bersama.*${digits(AMOUNT)}`) }),
+      .filter({
+        hasText: new RegExp(
+          `menyetor ke Bersama.*Rp\\s${digits(AMOUNT).replace(/\./g, '\\.')}(?![\\d.])`,
+        ),
+      }),
   ).toHaveCount(0);
 });
 
