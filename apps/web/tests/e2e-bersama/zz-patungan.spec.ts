@@ -134,8 +134,10 @@ test('Beranda Bersama: kartu Saldo patungan dari dua sudut pandang; Pribadi tanp
   await page.goto('/pribadi/transaksi');
   await expect(main(page).getByText('Bayar untuk Bersama')).toBeVisible();
   // Pribadi tidak punya halaman Patungan.
-  const res = await page.goto('/pribadi/patungan');
-  expect(res?.status()).toBe(404);
+  // Status stream bisa 200 saat page melempar notFound (Suspense); isi halaman = 404.
+  await page.goto('/pribadi/patungan');
+  await expect(page.getByRole('heading', { level: 1, name: '404' })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('Patungan · Bersama');
 });
 
 test('F melunasi dari dompet Pribadinya: Lunasi dari kartu, sheet terbuka, saldo impas, N menunggu terima', async ({
@@ -144,7 +146,7 @@ test('F melunasi dari dompet Pribadinya: Lunasi dari kartu, sheet terbuka, saldo
   await partnerPage.goto('/bersama/beranda');
   await card(partnerPage).getByRole('link', { name: 'Lunasi patungan ke Novanda' }).click();
   await expect(partnerPage).toHaveURL(/\/bersama\/patungan/);
-  const sheet = partnerPage.getByRole('dialog', { name: 'Lunasi patungan · Bersama' });
+  const sheet = partnerPage.getByRole('dialog', { name: /^Lunasi patungan\W*Bersama$/ });
   const amount = sheet.getByRole('textbox', { name: 'Jumlah dilunasi' });
   await expect(amount).toHaveValue(digits(HALF));
   await expect(sheet).toContainText(`Kamu berutang ${rp(HALF)} ke Novanda`);
@@ -176,7 +178,7 @@ test('N menerima ke dompetnya dari kartu Beranda; uang bukan pemasukan', async (
   await expect(card(page)).toContainText(`Farida sudah melunasi ${rp(HALF)}. Terima ke dompet?`);
   const before = await balances();
   await card(page).getByRole('link', { name: 'Terima' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Terima pelunasan · Bersama' });
+  const sheet = page.getByRole('dialog', { name: /^Terima pelunasan\W*Bersama$/ });
   await expect(sheet).toContainText(`Farida melunasi ${rp(HALF)}`);
   await expect(sheet.getByRole('combobox', { name: 'Terima ke dompet' })).toBeVisible();
   await expect(sheet).toContainText('Ini bukan pemasukan.');
@@ -221,7 +223,9 @@ test('F tidak bisa membatalkan pelunasan yang sudah diterima; N membatalkan pene
   );
 
   await partnerPage.goto('/bersama/patungan');
-  await main(partnerPage).getByRole('button', { name: /^Batalkan pelunasan/ }).click();
+  await main(partnerPage)
+    .getByRole('button', { name: /^Batalkan pelunasan/ })
+    .click();
   const confirm = partnerPage.getByRole('alertdialog', { name: 'Batalkan pelunasan ini?' });
   await expect(confirm).toContainText('utangmu ke Novanda bertambah lagi');
   await confirm.getByRole('button', { name: 'Batalkan pelunasan' }).click();
@@ -248,7 +252,10 @@ test('N menghapus tagihan lalu memulihkannya; F tidak melihat Patungan dihapus',
   expect((await balances()).n).toBe(before.n + AMOUNT);
   await expect(main(page).getByText('Patungan dihapus (1)')).toBeVisible();
   await partnerPage.goto('/bersama/patungan');
-  await expect(main(partnerPage).getByText(/^Patungan dihapus/)).toHaveCount(0);
+  // F hanya melihat yang ia hapus sendiri (pelunasan dibatalkan di tes sebelumnya), bukan tagihan N.
+  await expect(main(partnerPage).getByText('Patungan dihapus (1)')).toBeVisible();
+  await expect(main(partnerPage).getByRole('button', { name: /^Pulihkan tagihan/ })).toHaveCount(0);
+  await expect(main(partnerPage).getByText(BILL)).toHaveCount(0);
 
   await main(page).getByText('Patungan dihapus (1)').click();
   await main(page)
@@ -335,7 +342,7 @@ test('axe dan 320 px: Patungan, Beranda Bersama, sheet Lunasi dan dialog; budget
   // Sheet Lunasi terbuka di 320: tanpa gulir horizontal, tanpa pelanggaran serius.
   await partnerPage.setViewportSize({ width: 320, height: 720 });
   await partnerPage.goto('/bersama/patungan?lunasi=1');
-  const sheet = partnerPage.getByRole('dialog', { name: 'Lunasi patungan · Bersama' });
+  const sheet = partnerPage.getByRole('dialog', { name: /^Lunasi patungan\W*Bersama$/ });
   await expect(sheet.getByRole('textbox', { name: 'Jumlah dilunasi' })).toBeVisible();
   await noHorizontalScroll(partnerPage);
   await expectNoSeriousViolations(partnerPage, { tags: WCAG_TAGS });
@@ -346,7 +353,9 @@ test('axe dan 320 px: Patungan, Beranda Bersama, sheet Lunasi dan dialog; budget
   await main(page)
     .getByRole('button', { name: new RegExp(`^Hapus tagihan patungan ${BILL}`) })
     .click();
-  await expect(page.getByRole('alertdialog', { name: 'Hapus tagihan patungan ini?' })).toBeVisible();
+  await expect(
+    page.getByRole('alertdialog', { name: 'Hapus tagihan patungan ini?' }),
+  ).toBeVisible();
   await noHorizontalScroll(page);
   await expectNoSeriousViolations(page, { tags: WCAG_TAGS });
   await page.getByRole('button', { name: 'Kembali' }).click();
