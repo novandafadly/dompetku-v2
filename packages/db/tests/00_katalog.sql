@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(45);
+select plan(46);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -71,8 +71,8 @@ select set_eq($$
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
-        'debt_totals'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang S12)');
+        'debt_totals', 'trading_overview'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang dan modal trading S12)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
@@ -278,6 +278,10 @@ select set_eq($$
     ('dompetku_auditor', 'app.contacts', 'SELECT'),
     ('dompetku_auditor', 'app.debts', 'SELECT'),
     ('dompetku_auditor', 'app.debt_balances', 'SELECT'),
+    -- S12 (0134): view modal trading (security_invoker); auditor untuk DQ15.
+    ('dompetku_web', 'app.trading_capital', 'SELECT'),
+    ('dompetku_api', 'app.trading_capital', 'SELECT'),
+    ('dompetku_auditor', 'app.trading_capital', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -342,7 +346,7 @@ select set_eq($$
                       'period_trend', 'excluded_summary', 'wa_default_account',
                       'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
                       'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
-                      'debt_totals']) f
+                      'debt_totals', 'trading_overview']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -482,7 +486,11 @@ select is(tests.owner_val(null, $$
        unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
        (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
        unnest(array[true, false]) x $$),
-  '0/972', 'report_class tidak NULL untuk semua kombinasi (9 x 3 x 3 x 2 x 3 x 2)');
+  '0/1620', 'report_class tidak NULL untuk semua kombinasi (9 x 3 x 5 x 2 x 3 x 2)');
+
+-- S12 (0133): urutan label pocket; trading dan patungan ditambah di akhir.
+select enum_has_labels('app', 'pocket', array['operasional', 'tabungan', 'kantor', 'trading', 'patungan'],
+  'label pocket lengkap dan berurutan (S12: trading, patungan)');
 
 -- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
 -- DEFINER/owner (atau lewat private.purge_entries), ditambah deploy dan db_manual_access dari skrip
