@@ -109,3 +109,8 @@ Pemilik menjawab K1 (tabel Kontak), K2, K3, K5 pada 2026-11-12 dan mengizinkan P
 - **Kolom Jenis di ekspor tetap kunci mesin** (`debt_principal`, `debt_payment`) seperti semua kind lain — memberi label hanya kind baru tidak konsisten dan mengubah kontrak CSV S10 — pemilik menginginkan label Indonesia untuk semua kind.
 - **Tab `Beranda` menyala di `/pribadi/kontak`** (Task 6 fix I1: `hrefs.ts`/`nav-provider.tsx` dikembalikan persis ke baseline agar Beranda prototipe +0 byte) — budget Beranda prototipe hanya 0,4 kB di bawah batas — pengguna melihat tab Beranda menyala di Kontak; pemindah ruang dari Kontak jatuh ke Beranda ruang lain.
 - **Dialog Batalkan cicilan memakai salinan Transaksi generik** (`Saldo {dompet} bertambah Rp …`), bukan kalimat AK1 persis — kalimat benar arah dan dipakai bersama dialog Batalkan lain (pola S6) — toast tak persis seperti bingkai.
+
+## S12 (2026-11-14)
+
+- **Pemilik menyetujui (2026-11-14):** kartu "Utang yang harus dibayar" di Beranda Pribadi, perbaikan CSV utang (migrasi `0132`), definisi T6–T9 (K10 S11), dan lingkup S12 (modal trading, bagi tagihan Bersama, `allowNegative` batal cicilan, `lock_debt`) — "sepakat semua".
+- **Default agen, belum dibahas rinci dengan pemilik:** model modal trading (pocket `trading` + transfer, sisa modal dari view, T10 diinferensi dari S-41) dan model bagi tagihan (pembayar + bagian sama rata, pelunasan satu sisi, Pribadi pasangan tertutup) di `docs/superpowers/plans/2026-11-14-dompetku-v2-s12-modal-trading-bagi-tagihan.md` (K2, K3, K4, K9) — **[konfirmasi pemilik]** sebelum Task 4/6 dimulai; bila berbeda, hanya migrasi 0134–0136 dan UI terkait yang berubah.
