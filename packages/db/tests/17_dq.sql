@@ -7,9 +7,11 @@
 -- di dalam savepoint yang di-rollback) atau lewat api.* bila keadaannya sah (DQ07, saldo negatif
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
 -- DQ05 (S11, 0131): Σ cicilan hidup per utang <= pokok. DQ15 (S12, 0134): modal trading = Σ transfer.
+-- DQ16 (S12, 0136): patungan (dompet sistem = Σ pelunasan belum diterima, Σ bagian = nominal, status entri =
+-- status tagihan/pelunasan, entri dompet sistem dirujuk, saldo anggota nol-jumlah).
 -- ID: S7, T18
 begin;
-select plan(59);
+select plan(63);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -27,7 +29,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12', 'DQ13', 'DQ14', 'DQ15']) c
+                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -62,8 +64,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error',
-  'tepat 14 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error',
+  'tepat 15 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -281,6 +283,27 @@ savepoint s;
 select tests.raw_exec(format($$update app.entry_lines set amount = 1 where entry_id = %L and role = 'counter'$$, :'dq_dep'));
 select is(pg_temp.dq(), pg_temp.expect('DQ03=1', 'DQ04=1', 'DQ07=1', 'DQ15=1'),
   'DQ15: setoran rusak (counter ≠ −main) = modal tidak konsisten dengan Σ transfer (DQ07: dompet trading jadi negatif)');
+rollback to savepoint s;
+
+-- ===== DQ16: patungan (S12, 0136) =====
+select pg_temp.call(tests.n(), format($$select api.create_split(gen_random_uuid(), %L, %L, 100000, null, '2026-03-17')$$,
+  :'sh', :'bca')) as dq_s \gset
+select :'dq_s'::jsonb ->> 'split_id' as dq_split, :'dq_s'::jsonb ->> 'expense_entry_id' as dq_exp \gset
+select pg_temp.call(tests.f(), format($$select api.settle_split(gen_random_uuid(), %L, %L, 20000, '2026-03-17')$$,
+  :'sh', :'fbca')) ->> 'settlement_id' as dq_t \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ16: tagihan patungan + pelunasan menunggu diterima = nol temuan (DQ07 tidak membaca dompet sistem)');
+savepoint s;
+select tests.raw_exec(format($$update app.split_shares set amount = amount + 1 where split_id = %L and user_id = %L$$,
+  :'dq_split', tests.f()));
+select is(pg_temp.dq(), pg_temp.expect('DQ16=2'), 'DQ16: Σ bagian ≠ nominal (dan saldo anggota tidak lagi nol-jumlah)');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.entries set voided_at = now(), voided_by = created_by where id = %L$$, :'dq_exp'));
+select is(pg_temp.dq(), pg_temp.expect('DQ16=2'), 'DQ16: pengeluaran batal sendiri (status ≠ tagihan; dompet sistem tidak lagi = Σ menunggu)');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.settlements set voided_at = now(), voided_by = from_user where id = %L$$, :'dq_t'));
+select is(pg_temp.dq(), pg_temp.expect('DQ16=3'), 'DQ16: pelunasan batal tanpa entri (status, saldo dompet sistem, entri tak dirujuk)');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

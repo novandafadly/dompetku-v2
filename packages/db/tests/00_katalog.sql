@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(46);
+select plan(49);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -60,8 +60,10 @@ select set_eq($$
         'post_bill_occurrence', 'skip_bill_occurrence', 'unskip_bill_occurrence', 'set_budget',
         'delete_budget', 'copy_budgets', 'wa_create_link_code', 'wa_confirm_link',
         'wa_resolve_sender', 'wa_unlink', 'create_contact', 'rename_contact', 'archive_contact',
-        'create_debt', 'update_debt_info', 'pay_debt', 'void_debt', 'restore_debt'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11)');
+        'create_debt', 'update_debt_info', 'pay_debt', 'void_debt', 'restore_debt',
+        'create_split', 'void_split', 'restore_split', 'settle_split', 'void_settlement',
+        'receive_settlement', 'void_receipt'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -71,8 +73,8 @@ select set_eq($$
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
-        'debt_totals', 'trading_overview'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang dan modal trading S12)');
+        'debt_totals', 'trading_overview', 'shared_balances', 'split_history'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
@@ -95,8 +97,9 @@ select set_eq($$
         'private.purge_entries', 'private.assert_entry_shape', 'private.assert_space_transfer_pair',
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
-        'private.tg_budget_tree', 'private.tg_budget_cascade'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10');
+        'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
+        'private.tg_member_leave_guard'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -282,6 +285,24 @@ select set_eq($$
     ('dompetku_web', 'app.trading_capital', 'SELECT'),
     ('dompetku_api', 'app.trading_capital', 'SELECT'),
     ('dompetku_auditor', 'app.trading_capital', 'SELECT'),
+    -- S12 (0135): patungan (pola ruang; api tulis lewat fungsi, tanpa DELETE), view saldo anggota.
+    ('dompetku_web', 'app.splits', 'SELECT'),
+    ('dompetku_web', 'app.split_shares', 'SELECT'),
+    ('dompetku_web', 'app.settlements', 'SELECT'),
+    ('dompetku_web', 'app.member_balances', 'SELECT'),
+    ('dompetku_api', 'app.splits', 'SELECT'),
+    ('dompetku_api', 'app.splits', 'INSERT'),
+    ('dompetku_api', 'app.splits', 'UPDATE'),
+    ('dompetku_api', 'app.split_shares', 'SELECT'),
+    ('dompetku_api', 'app.split_shares', 'INSERT'),
+    ('dompetku_api', 'app.settlements', 'SELECT'),
+    ('dompetku_api', 'app.settlements', 'INSERT'),
+    ('dompetku_api', 'app.settlements', 'UPDATE'),
+    ('dompetku_api', 'app.member_balances', 'SELECT'),
+    ('dompetku_auditor', 'app.splits', 'SELECT'),
+    ('dompetku_auditor', 'app.split_shares', 'SELECT'),
+    ('dompetku_auditor', 'app.settlements', 'SELECT'),
+    ('dompetku_auditor', 'app.member_balances', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -336,7 +357,9 @@ select set_eq($$
                                    'wa_confirm_link', 'wa_resolve_sender', 'wa_unlink',
                                    'create_contact', 'rename_contact', 'archive_contact',
                                    'create_debt', 'update_debt_info', 'pay_debt', 'void_debt',
-                                   'restore_debt']) f
+                                   'restore_debt', 'create_split', 'void_split', 'restore_split',
+                                   'settle_split', 'void_settlement', 'receive_settlement',
+                                   'void_receipt']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -346,7 +369,7 @@ select set_eq($$
                       'period_trend', 'excluded_summary', 'wa_default_account',
                       'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
                       'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
-                      'debt_totals', 'trading_overview']) f
+                      'debt_totals', 'trading_overview', 'shared_balances', 'split_history']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -355,7 +378,9 @@ select set_eq($$
                       'clean_text', 'set_void_state', 'purge_entries', 'seed_categories',
                       'tg_seed_categories', 'materialize_bill', 'check_bill', 'lock_occurrence',
                       'occurrence_posted', 'wa_audit', 'assert_debt_space', 'lock_debt',
-                      'lock_contact', 'insert_contact', 'debt_numbers', 'debt_effects']) f
+                      'lock_contact', 'insert_contact', 'debt_numbers', 'debt_effects',
+                      'assert_split_space', 'patungan_account', 'split_payer_account', 'lock_split',
+                      'lock_settlement', 'split_entry_ids', 'split_set_void', 'split_pair']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -423,8 +448,12 @@ select set_eq($$
 -- Indeks unik nama (S7, 0109): nama dompet aktif unik per ruang tanpa beda huruf besar/spasi;
 -- server memetakan 23505 dari indeks ini ke name_taken, jadi nama dan bentuknya dikunci di sini.
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_name_unique'),
-  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
-  'indeks unik nama dompet aktif per ruang');
+  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE ((archived_at IS NULL) AND (pocket <> ''patungan''::app.pocket))',
+  'indeks unik nama dompet aktif per ruang (S12: dompet sistem patungan tidak dihitung)');
+-- S12 (0135): satu dompet sistem patungan per ruang, hanya Bersama.
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_patungan_one'),
+  'CREATE UNIQUE INDEX accounts_patungan_one ON app.accounts USING btree (space_id) WHERE (pocket = ''patungan''::app.pocket)',
+  'satu dompet sistem patungan per ruang');
 -- S11 (0130): nama kontak aktif unik per ruang (kontrak name_taken yang sama).
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'contacts_name_unique'),
   'CREATE UNIQUE INDEX contacts_name_unique ON app.contacts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
@@ -469,6 +498,20 @@ select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
            join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
            where n.nspname = 'app' and c.relname = 'debts' and g.tgname = 'debt_guard'),
           'trigger debt_guard di app.debts memakai private.tg_debt_guard INVOKER milik owner');
+-- S12 (0135): penjaga patungan DEFINER milik owner di entri, baris, dompet, tagihan rutin, dan anggota.
+select set_eq($$
+  select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = g.tgfoid
+  where n.nspname = 'app' and p.proname in ('tg_split_guard', 'tg_member_leave_guard')
+    and p.prosecdef and p.proowner = 'dompetku_owner'::regrole $$,
+  array['entries.split_guard', 'entry_lines.split_guard', 'accounts.split_guard', 'bills.split_guard',
+        'space_members.member_leave_guard'],
+  'trigger penjaga patungan terpasang');
+-- private.split_ctx tidak bisa ditulis web/worker (konteks fungsi patungan tidak bisa dipalsukan).
+select is(tests.owner_val(null, $q$select not has_table_privilege('dompetku_web', 'private.split_ctx', 'INSERT')
+          and not has_table_privilege('dompetku_worker', 'private.split_ctx', 'INSERT')
+          and not has_schema_privilege('dompetku_web', 'private', 'USAGE')$q$), 'true',
+          'konteks patungan hanya untuk dompetku_api');
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_debt_principal_live'),
   'CREATE UNIQUE INDEX entries_debt_principal_live ON app.entries USING btree (debt_id) WHERE ((kind = ''debt_principal''::app.entry_kind) AND (voided_at IS NULL))',
   'satu pokok hidup per utang');

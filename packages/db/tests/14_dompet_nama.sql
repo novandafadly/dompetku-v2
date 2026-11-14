@@ -14,8 +14,8 @@ select tests.space_id(tests.n(), 'personal') as np, tests.space_id(tests.f(), 'p
 select has_index('app', 'accounts', 'accounts_name_unique', 'indeks nama dompet ada');
 select index_is_unique('app', 'accounts', 'accounts_name_unique');
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'accounts_name_unique'),
-  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
-  'indeks per ruang, tanpa beda huruf besar/spasi, hanya dompet aktif');
+  'CREATE UNIQUE INDEX accounts_name_unique ON app.accounts USING btree (space_id, lower(btrim(name))) WHERE ((archived_at IS NULL) AND (pocket <> ''patungan''::app.pocket))',
+  'indeks per ruang, tanpa beda huruf besar/spasi, hanya dompet aktif (tanpa dompet sistem patungan, 0135)');
 
 -- ===== Ruang yang sama =====
 select tests.account(tests.n(), :'np', 'BCA', 'operasional') as bca \gset
