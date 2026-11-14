@@ -205,6 +205,7 @@ export function BerandaReal({
           />
           {invite}
           {checklist}
+          {patungan}
           {utang}
           {recent}
           {aktivitas}

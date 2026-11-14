@@ -696,3 +696,38 @@ describe('BerandaReal kartu Utang (S12-UT1)', () => {
     expect(container.textContent).not.toMatch(/utang|piutang/i);
   });
 });
+
+describe('BerandaReal Bersama: kartu Saldo patungan (S12-PT1)', () => {
+  const split = {
+    me: { id: 'n', name: 'Novanda', initial: 'N' },
+    partner: { id: 'f', name: 'Farida', initial: 'F' },
+    debtorId: 'f',
+    creditorId: 'n',
+    amount: 200_000,
+    splitCount: 1,
+    settlementCount: 0,
+    pending: [],
+  };
+
+  it('dirender di Bersama dua anggota, juga tanpa dompet operasional (Bersama tanpa dompet)', () => {
+    render(view({ bersama: dua({ split }) }));
+    expect(screen.getByRole('region', { name: 'Saldo patungan' })).toHaveTextContent(
+      'Farida berutang Rp 200.000 ke kamu',
+    );
+    cleanup();
+    render(view({ hasOperasional: false, bersama: dua({ split }) }));
+    expect(screen.getByRole('region', { name: 'Saldo patungan' })).toBeTruthy();
+  });
+
+  it('belum ada patungan atau Pribadi: tidak ada kartu; galat bacaan: kartu galat, Beranda tetap', () => {
+    render(view({ bersama: dua() }));
+    expect(screen.queryByRole('region', { name: 'Saldo patungan' })).toBeNull();
+    cleanup();
+    render(view({ bersama: dua({ split: 'error' }) }));
+    expect(screen.getByText('Saldo patungan belum bisa dimuat.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aktivitas' })).toBeTruthy();
+    cleanup();
+    render(view({}, 'pribadi'));
+    expect(screen.queryByText('Saldo patungan')).toBeNull();
+  });
+});
