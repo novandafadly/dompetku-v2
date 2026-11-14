@@ -305,7 +305,12 @@ test('Pribadi pasangan tidak bocor: HTML, payload RSC, dan navigasi Patungan/Ber
     main(page).getByRole('listitem').filter({ hasText: 'membayar' }).first(),
   ).toContainText(`membayar ${BILL} dari dompet pribadi`);
   await expect(main(page)).not.toContainText('Patungan');
-  await expect(main(page)).not.toContainText('menyetor ke Bersama');
+  // Spec lain mengisi setoran sungguhan; yang tidak boleh ada: setoran senilai tagihan patungan.
+  await expect(
+    main(page)
+      .getByRole('listitem')
+      .filter({ hasText: new RegExp(`menyetor ke Bersama.*${digits(AMOUNT)}`) }),
+  ).toHaveCount(0);
 });
 
 test('Menu Patungan di Bersama, bukan di Pribadi; solo dan Pribadi tanpa kartu', async ({
