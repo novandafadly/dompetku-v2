@@ -114,7 +114,10 @@ test('Setor modal: transfer biasa, saldo berubah sekali, pemasukan/pengeluaran t
   );
   // Pemilih sumber hanya dompet biasa (bukan trading, bukan kantor).
   const from = sheet.getByRole('combobox', { name: 'Dari dompet' });
-  await expect(from.locator('option')).toHaveText([BIASA]);
+  await expect(from.locator('option', { hasText: BIASA })).toHaveCount(1);
+  await expect(from.locator('option', { hasText: TRADING })).toHaveCount(0);
+  await expect(from.locator('option', { hasText: /Kantor/ })).toHaveCount(0);
+  await from.selectOption({ label: BIASA });
   await sheet.getByRole('textbox', { name: 'Nominal' }).fill('1000000');
   await sheet.getByRole('button', { name: /^Simpan/ }).click();
   await expect(
@@ -165,6 +168,7 @@ test('Cocokkan saldo turun: peringatan Kurang dari SQL; Tarik modal ke dompet bi
   const sheet = dialogOf(page, /^Tarik modal/);
   await openUntil(() => tarik, sheet, sheet.getByRole('textbox', { name: 'Nominal' }));
   await sheet.getByRole('textbox', { name: 'Nominal' }).fill('700000');
+  await sheet.getByRole('radio', { name: BIASA, exact: true }).click();
   await expect(sheet).not.toContainText('di atas sisa modal');
   await sheet.getByRole('button', { name: /^Simpan/ }).click();
   await expect(
