@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { todayWIB } from '@dompetku/domain';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAktivitas, sharedActivityTx } from '../bersama';
+import { exportLaporanCsv } from '../ekspor';
+import { loadLaporan } from '../laporan';
 import { loadBeranda } from '../beranda';
 import { toLedgerError } from '../errors';
 import {
@@ -386,6 +388,43 @@ describe('bagi tagihan Bersama (S12 Task 7)', () => {
     );
     expect(rest.items).toHaveLength(1);
     expect(rest.next).toBeNull();
+  });
+
+  it('Laporan, Ekspor, ringkasan dan Kontribusi Bersama: pengeluaran sekali, kaki sistem x_patungan, kontribusi nol', async () => {
+    await split(400_000);
+    const s = await settleSplit(fBersama, {
+      clientId: randomUUID(),
+      accountId: cimb,
+      amount: 100_000,
+    });
+    await receiveSettlement(bersama, {
+      clientId: randomUUID(),
+      settlementId: s.settlementId,
+      accountId: bca,
+    });
+    const month = todayWIB().slice(0, 7);
+    const lap = await loadLaporan(bersama);
+    expect(lap.summary.pengeluaran).toBe(400_000);
+    expect(lap.summary.pemasukan).toBe(0);
+    const pat = lap.classes.filter((c) => c.reportClass === 'x_patungan');
+    expect(pat.map((c) => [c.direction, c.amount]).sort()).toEqual([
+      ['in', 400_000 + 100_000],
+      ['out', 100_000],
+    ]);
+    // Kontribusi S8 tidak tercemar: patungan bukan setoran/pengambilan anggota.
+    expect(lap.contributions?.allZero).toBe(true);
+    expect(lap.classes.some((c) => c.reportClass === 'x_setoran_anggota')).toBe(false);
+    // Ringkasan Transaksi: Transfer antar dompet tidak menghitung kaki dompet sistem.
+    const tx = await loadTransaksi(bersama, month);
+    expect(tx.summary).toMatchObject({ pengeluaran: 400_000, transfer: 0 });
+    // Ekspor: Σ baris pengeluaran = Laporan; kaki sistem berkelas x_patungan.
+    const csv = await exportLaporanCsv(bersama);
+    const expense = csv.rows.filter((r) => r.reportClass === 'expense');
+    expect(expense.reduce((sum, r) => sum + Math.abs(r.amount), 0)).toBe(400_000);
+    expect(csv.rows.filter((r) => r.reportClass === 'x_patungan')).toHaveLength(3);
+    // Pribadi pembayar: kaki keluar tidak masuk Pengeluaran pribadi.
+    const lapN = await loadLaporan(nPribadi);
+    expect(lapN.summary.pengeluaran).toBe(0);
   });
 
   it('Beranda Bersama memuat saldo patungan; Pribadi tidak', async () => {

@@ -605,7 +605,15 @@ export async function monthSummaryTx(
     selisih: number;
     transfer: number;
   }>(
-    `select s.pemasukan, s.pengeluaran, s.selisih, s.transfer
+    // `transfer` dihitung ulang tanpa kaki dompet sistem patungan (`x_patungan`, S12): uang patungan
+    // lewat Bersama bukan pindah antar dompet pengguna; kolom lain dari SQL apa adanya.
+    `select s.pemasukan, s.pengeluaran, s.selisih,
+            (select coalesce(sum(abs(l.amount)), 0)::bigint
+               from app.report_lines l
+              where l.space_id = $1 and l.occurred_on >= $2::date
+                and l.occurred_on < ($2::date + interval '1 month')::date
+                and l.entry_kind in ('transfer', 'space_transfer') and l.role = 'main'
+                and l.report_class <> 'x_patungan') as transfer
        from api.month_summary(p_space_id => $1, p_month => $2::date) s`,
     [ctx.spaceId, first],
   );

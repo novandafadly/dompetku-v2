@@ -263,10 +263,19 @@ export async function loadBeranda(
               labelMonth: period.labelMonth,
             })
           : { partner: null, activity: null, contributions: null };
-      const split =
+      const splitRaw =
         bersama && bersama.members >= 2
           ? await guarded(c, 'splits', () => sharedBalanceTx(c, ctx))
           : null;
+      // Belum pernah ada patungan: tidak ada kartu (dan tidak ada muatan di payload).
+      const split =
+        splitRaw !== null &&
+        splitRaw !== 'error' &&
+        splitRaw.splitCount === 0 &&
+        splitRaw.settlementCount === 0 &&
+        splitRaw.pending.length === 0
+          ? null
+          : splitRaw;
       const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx, hasBills));
       const budgetsNear = await guarded(c, 'budgets', () =>
         budgetsCardTx(c, ctx, period.labelMonth),
@@ -298,7 +307,12 @@ export async function loadBeranda(
   let bersama: BerandaBersama | null = null;
   if (read.bersama) {
     const { anyEntry, ...rest } = read.bersama;
-    bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra, split: read.split };
+    bersama = {
+      ...rest,
+      empty: !hasOperasional && !anyEntry,
+      ...read.extra,
+      ...(read.split === null ? {} : { split: read.split }),
+    };
   }
   return {
     period: read.period,
