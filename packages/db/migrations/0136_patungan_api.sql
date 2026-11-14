@@ -953,8 +953,10 @@ language sql stable security definer set search_path = '' as $$
   union all
   -- DQ15 modal trading (S12, 0134): app.trading_capital = Σ ulang transfer hidup antara dompet
   -- trading dan dompet non-trading satu ruang (kueri independen membaca −main, view membaca
-  -- counter), capital_left/realized tidak negatif dan capital_left - realized = setor - tarik; dompet
-  -- trading wajib di Pribadi (B10, CHECK) dan wajib ada di view.
+  -- counter) ditambah kaki space_transfer hidup di dompet trading (kueri independen membaca kaki
+  -- pasangan di Bersama, view membaca kaki trading), capital_left/realized tidak negatif dan
+  -- capital_left - realized = setor - tarik; dompet trading wajib di Pribadi (B10, CHECK) dan wajib
+  -- ada di view.
   select 'DQ15', 'error', count(*)::int from (
     select a.id
     from app.accounts a
@@ -971,11 +973,20 @@ language sql stable security definer set search_path = '' as $$
         and a.id in (m.account_id, c.account_id)
         and (ma.pocket = 'trading') <> (ca.pocket = 'trading')
     ) s on true
+    left join lateral (
+      select coalesce(sum(-p.amount) filter (where e.direction = 'in'), 0) as cin,
+             coalesce(sum(p.amount) filter (where e.direction = 'out'), 0) as cout
+      from app.entries e
+      join app.entry_lines l on l.entry_id = e.id and l.role = 'main' and l.account_id = a.id
+      join app.entries pe on pe.link_id = e.link_id and pe.id <> e.id
+      join app.entry_lines p on p.entry_id = pe.id and p.role = 'main'
+      where e.kind = 'space_transfer' and e.voided_at is null
+    ) st on true
     where a.pocket = 'trading'
       and (a.space_kind <> 'personal' or tc.account_id is null
-           or tc.capital_in <> s.cin or tc.capital_out <> s.cout
+           or tc.capital_in <> s.cin + st.cin or tc.capital_out <> s.cout + st.cout
            or tc.capital_left < 0 or tc.realized < 0
-           or tc.capital_left - tc.realized <> s.cin - s.cout)
+           or tc.capital_left - tc.realized <> s.cin + st.cin - s.cout - st.cout)
   ) x
   union all
   -- DQ16 patungan (S12, 0136): (a) saldo dompet sistem = Σ pelunasan hidup belum diterima; (b) per
@@ -1286,8 +1297,10 @@ language sql stable security definer set search_path = '' as $$
   union all
   -- DQ15 modal trading (S12, 0134): app.trading_capital = Σ ulang transfer hidup antara dompet
   -- trading dan dompet non-trading satu ruang (kueri independen membaca −main, view membaca
-  -- counter), capital_left/realized tidak negatif dan capital_left - realized = setor - tarik; dompet
-  -- trading wajib di Pribadi (B10, CHECK) dan wajib ada di view.
+  -- counter) ditambah kaki space_transfer hidup di dompet trading (kueri independen membaca kaki
+  -- pasangan di Bersama, view membaca kaki trading), capital_left/realized tidak negatif dan
+  -- capital_left - realized = setor - tarik; dompet trading wajib di Pribadi (B10, CHECK) dan wajib
+  -- ada di view.
   select 'DQ15', 'error', count(*)::int from (
     select a.id
     from app.accounts a
@@ -1304,11 +1317,20 @@ language sql stable security definer set search_path = '' as $$
         and a.id in (m.account_id, c.account_id)
         and (ma.pocket = 'trading') <> (ca.pocket = 'trading')
     ) s on true
+    left join lateral (
+      select coalesce(sum(-p.amount) filter (where e.direction = 'in'), 0) as cin,
+             coalesce(sum(p.amount) filter (where e.direction = 'out'), 0) as cout
+      from app.entries e
+      join app.entry_lines l on l.entry_id = e.id and l.role = 'main' and l.account_id = a.id
+      join app.entries pe on pe.link_id = e.link_id and pe.id <> e.id
+      join app.entry_lines p on p.entry_id = pe.id and p.role = 'main'
+      where e.kind = 'space_transfer' and e.voided_at is null
+    ) st on true
     where a.pocket = 'trading'
       and (a.space_kind <> 'personal' or tc.account_id is null
-           or tc.capital_in <> s.cin or tc.capital_out <> s.cout
+           or tc.capital_in <> s.cin + st.cin or tc.capital_out <> s.cout + st.cout
            or tc.capital_left < 0 or tc.realized < 0
-           or tc.capital_left - tc.realized <> s.cin - s.cout)
+           or tc.capital_left - tc.realized <> s.cin + st.cin - s.cout - st.cout)
   ) x
 $$;
 

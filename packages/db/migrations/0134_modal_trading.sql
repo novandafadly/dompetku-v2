@@ -10,11 +10,15 @@
 --   pocket_personal_only (sebelum CHECK, supaya UI dapat kode mesin); `patungan` = DK400
 --   invalid_argument/pocket (dompet sistem dibuat fungsi patungan 0136, bukan pilihan pengguna).
 -- - app.trading_capital (security_invoker): per dompet trading (termasuk terarsip) capital_in = Σ
---   transfer hidup masuk dari dompet non-trading, capital_out = Σ transfer hidup keluar ke dompet
---   non-trading (nominal transfer, tanpa biaya), capital_left = max(0, in − out), realized =
---   max(0, out − in). Transfer antar dua dompet trading tidak dihitung (keputusan pemilik
---   2026-11-14, butir 4); transfer antar ruang (space_transfer), pemasukan/pengeluaran, dan Cocokkan
---   saldo di dompet trading juga tidak (untung/rugi = saldo, bukan modal). Void/restore transfer
+--   transfer hidup masuk dari dompet non-trading + Σ kaki space_transfer `in` hidup di dompet
+--   trading (ambil dari Bersama), capital_out = Σ transfer hidup keluar ke dompet non-trading + Σ
+--   kaki space_transfer `out` hidup (setor ke Bersama; temuan S2 review S12, tanpanya saldo turun
+--   tanpa modal turun dan `Kurang` muncul palsu). Nominal tanpa biaya, capital_left = max(0, in −
+--   out), realized = max(0, out − in). Lawan space_transfer selalu dompet Bersama (bukan trading,
+--   B10); kaki Pribadi patungan tidak pernah dari dompet trading (split_payer_account 0136).
+--   Transfer antar dua dompet trading tidak dihitung (keputusan pemilik 2026-11-14, butir 4);
+--   pemasukan/pengeluaran, tagihan, utang, dan Cocokkan saldo di dompet trading juga tidak
+--   (untung/rugi = saldo, bukan modal; dompet trading disaring dari pemilihnya di UI). Void/restore
 --   menggeser modal tepat sekali karena view membaca voided_at.
 -- - api.trading_overview(ruang) (INVOKER milik owner, STABLE): satu baris per dompet trading aktif
 --   (account_id, name, balance, capital_in, capital_out, capital_left, realized, shortfall =
@@ -28,7 +32,8 @@
 --   di luar; patungan (0135) tidak pernah ikut.
 -- - api.wa_default_account (0123): bawaan hanya operasional/tabungan (bukan kantor, trading, atau
 --   dompet sistem patungan). `@nama` eksplisit tetap boleh menunjuk dompet trading (server WA).
--- - private.dq_run: DQ15 (error) modal trading konsisten dengan Σ transfer. Sisanya sama dengan 0131.
+-- - private.dq_run: DQ15 (error) modal trading konsisten dengan Σ transfer dan kaki space_transfer
+--   (dihitung ulang dari kaki pasangan Bersama). Sisanya sama dengan 0131.
 -- "Aman dipakai" (0120) dan saldo Beranda tetap hanya pocket operasional: tidak diubah.
 alter table app.accounts
   add constraint accounts_trading_personal check (pocket <> 'trading' or space_kind = 'personal');
@@ -100,24 +105,35 @@ end $$;
 
 -- ===== Modal trading (tanpa kolom tersimpan) =====
 create view app.trading_capital with (security_invoker = true) as
-with moves as (
-  select e.space_id, m.account_id as from_acc, ma.pocket as from_pocket,
-         c.account_id as to_acc, ca.pocket as to_pocket, c.amount
+with flows as (
+  -- transfer satu ruang: nominal = counter (tanpa biaya); sisi lain dipastikan bukan trading.
+  select c.account_id, c.amount as cin, 0::bigint as cout
     from app.entries e
     join app.entry_lines m on m.space_id = e.space_id and m.entry_id = e.id and m.role = 'main'
     join app.entry_lines c on c.space_id = e.space_id and c.entry_id = e.id and c.role = 'counter'
     join app.accounts ma on ma.id = m.account_id
+   where e.kind = 'transfer' and e.voided_at is null and ma.pocket <> 'trading'
+  union all
+  select m.account_id, 0::bigint, c.amount
+    from app.entries e
+    join app.entry_lines m on m.space_id = e.space_id and m.entry_id = e.id and m.role = 'main'
+    join app.entry_lines c on c.space_id = e.space_id and c.entry_id = e.id and c.role = 'counter'
     join app.accounts ca on ca.id = c.account_id
-   where e.kind = 'transfer' and e.voided_at is null
+   where e.kind = 'transfer' and e.voided_at is null and ca.pocket <> 'trading'
+  union all
+  -- space_transfer (temuan S2): kaki main di dompet trading, lawan selalu dompet Bersama (B10).
+  -- Biaya ada di line fee, jadi main = nominal.
+  select l.account_id,
+         case when e.direction = 'in' then l.amount else 0 end::bigint,
+         case when e.direction = 'out' then -l.amount else 0 end::bigint
+    from app.entries e
+    join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
+   where e.kind = 'space_transfer' and e.voided_at is null
 ), t as (
   select a.space_id, a.id as account_id,
-         coalesce(sum(mv.amount) filter (where mv.to_acc = a.id), 0)::bigint   as capital_in,
-         coalesce(sum(mv.amount) filter (where mv.from_acc = a.id), 0)::bigint as capital_out
+         coalesce(sum(f.cin), 0)::bigint as capital_in, coalesce(sum(f.cout), 0)::bigint as capital_out
     from app.accounts a
-    left join moves mv
-      on mv.space_id = a.space_id
-     and ((mv.to_acc = a.id and mv.from_pocket <> 'trading')
-          or (mv.from_acc = a.id and mv.to_pocket <> 'trading'))
+    left join flows f on f.account_id = a.id
    where a.pocket = 'trading'
    group by a.space_id, a.id
 )
@@ -358,8 +374,10 @@ language sql stable security definer set search_path = '' as $$
   union all
   -- DQ15 modal trading (S12, 0134): app.trading_capital = Σ ulang transfer hidup antara dompet
   -- trading dan dompet non-trading satu ruang (kueri independen membaca −main, view membaca
-  -- counter), capital_left/realized tidak negatif dan capital_left - realized = setor - tarik; dompet
-  -- trading wajib di Pribadi (B10, CHECK) dan wajib ada di view.
+  -- counter) ditambah kaki space_transfer hidup di dompet trading (kueri independen membaca kaki
+  -- pasangan di Bersama, view membaca kaki trading), capital_left/realized tidak negatif dan
+  -- capital_left - realized = setor - tarik; dompet trading wajib di Pribadi (B10, CHECK) dan wajib
+  -- ada di view.
   select 'DQ15', 'error', count(*)::int from (
     select a.id
     from app.accounts a
@@ -376,11 +394,20 @@ language sql stable security definer set search_path = '' as $$
         and a.id in (m.account_id, c.account_id)
         and (ma.pocket = 'trading') <> (ca.pocket = 'trading')
     ) s on true
+    left join lateral (
+      select coalesce(sum(-p.amount) filter (where e.direction = 'in'), 0) as cin,
+             coalesce(sum(p.amount) filter (where e.direction = 'out'), 0) as cout
+      from app.entries e
+      join app.entry_lines l on l.entry_id = e.id and l.role = 'main' and l.account_id = a.id
+      join app.entries pe on pe.link_id = e.link_id and pe.id <> e.id
+      join app.entry_lines p on p.entry_id = pe.id and p.role = 'main'
+      where e.kind = 'space_transfer' and e.voided_at is null
+    ) st on true
     where a.pocket = 'trading'
       and (a.space_kind <> 'personal' or tc.account_id is null
-           or tc.capital_in <> s.cin or tc.capital_out <> s.cout
+           or tc.capital_in <> s.cin + st.cin or tc.capital_out <> s.cout + st.cout
            or tc.capital_left < 0 or tc.realized < 0
-           or tc.capital_left - tc.realized <> s.cin - s.cout)
+           or tc.capital_left - tc.realized <> s.cin + st.cin - s.cout - st.cout)
   ) x
 $$;
 

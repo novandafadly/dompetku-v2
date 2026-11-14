@@ -1,6 +1,7 @@
 -- Modal trading S12 (0133, 0134; plan S12 Task 4, K2, K9 = T10): pocket `trading` hanya Pribadi
 -- (B10: create_account DK422 pocket_personal_only, CHECK accounts_trading_personal), setor/tarik =
--- transfer satu ruang non-trading <-> trading, app.trading_capital dan api.trading_overview (sisa
+-- transfer satu ruang non-trading <-> trading atau kaki space_transfer trading <-> Bersama (temuan S2;
+-- patungan tidak pernah dari dompet trading), app.trading_capital dan api.trading_overview (sisa
 -- modal, hasil ditarik, `Kurang` per dompet dan total), void/restore menggeser modal tepat sekali,
 -- transfer antar dua dompet trading dan Cocokkan saldo tidak mengubah modal, I6 (Σ pemasukan/
 -- pengeluaran, Laporan, anggaran tidak berubah oleh setor/tarik), "aman dipakai" tetap hanya
@@ -8,7 +9,7 @@
 -- Jam dipatok 2026-03-20 WIB.
 -- ID: T10, B10, I6
 begin;
-select plan(40);
+select plan(52);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -200,6 +201,48 @@ select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)$$,
 select tests.account(tests.f(), :'fp', 'Celengan F', 'tabungan', 0, '2026-01-01') as ftab \gset
 select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)$$, :'fp')), :'ftab',
   'wa_default_account: tabungan dipilih, trading dilewati');
+
+-- ===== Antar ruang: kaki space_transfer di dompet trading = setor/tarik modal (temuan S2) =====
+-- Lawan selalu dompet Bersama (bukan trading, B10). Nominal tanpa biaya, entri hidup.
+select tests.account(tests.n(), :'sh', 'Kas Rumah', 'operasional', 0, '2026-01-01') as kas \gset
+select tests.account(tests.n(), :'np', 'Forex', 'trading', 0, '2026-01-01') as tr4 \gset
+select pg_temp.xfer(:'bca', :'tr4', 1000000, 0, '2026-03-18');
+select is(pg_temp.total(tests.n(), :'np'), '4500999/10000000/5500000/4500000/0/0/true',
+  'total sebelum setor ke Bersama: tidak kurang');
+select pg_temp.xfer(:'tr4', :'kas', 400000, 0, '2026-03-18') as st1 \gset
+select is(pg_temp.w(:'tr4'), '600000/1000000/400000/600000/0/0/true',
+  'trading -> Bersama 400 rb: tarik modal tepat sekali, tidak kurang [T10]');
+select is(pg_temp.total(tests.n(), :'np'), '4100999/10000000/5900000/4100000/0/0/true',
+  'total: setor ke Bersama tidak memunculkan Kurang palsu [T10]');
+select pg_temp.void(:'st1');
+select is(pg_temp.w(:'tr4'), '1000000/1000000/0/1000000/0/0/true', 'space_transfer dibatalkan: modal kembali [T10]');
+select pg_temp.restore(:'st1');
+select is(pg_temp.w(:'tr4'), '600000/1000000/400000/600000/0/0/true', 'space_transfer dipulihkan: dihitung tepat sekali [T10]');
+select (pg_temp.call(format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 250000, 0, '2026-03-18')$$,
+  :'sh', :'kas', :'tr4')) ->> 'entry_id')::uuid as st2 \gset
+select is(pg_temp.w(:'tr4'), '850000/1250000/400000/850000/0/0/true', 'ambil Bersama -> trading 250 rb: setor modal [T10]');
+select pg_temp.void(:'st2');
+select is(pg_temp.w(:'tr4'), '600000/1000000/400000/600000/0/0/true', 'ambil Bersama -> trading dibatalkan: setor hilang');
+select pg_temp.restore(:'st2');
+select pg_temp.xfer(:'tr4', :'kas', 100000, 2500, '2026-03-18');
+select is(pg_temp.w(:'tr4'), '747500/1250000/500000/750000/0/2500/true',
+  'trading -> Bersama dengan biaya: tarik = nominal, biaya pengeluaran (Kurang 2.500 nyata)');
+select is(tests.web_val(tests.n(), format($$select string_agg(report_class || ':' || direction || ':' || amount, ','
+    order by report_class, direction) from api.excluded_summary(%L, '2026-03-01', '2026-03-31')
+    where report_class in ('x_setor_bersama', 'x_ambil_bersama')$$, :'np')),
+  'x_ambil_bersama:in:250000,x_setor_bersama:out:500000', 'kelas laporan kaki Pribadi tidak berubah [I6]');
+
+-- Patungan: kaki Pribadi pembayar/pelunas bukan trading (split_payer_account), modal tidak bergerak.
+select throws_ok(format($$select pg_temp.call(format('select api.create_split(gen_random_uuid(), %%L, %%L, 100000, null, %%L)',
+    %L, %L, '2026-03-18'))$$, :'sh', :'tr4'),
+  'DK422', 'split_account_invalid', 'tagihan patungan dari dompet trading ditolak');
+select throws_ok(format($$select pg_temp.call(format('select api.settle_split(gen_random_uuid(), %%L, %%L, 1000, %%L)',
+    %L, %L, '2026-03-18'))$$, :'sh', :'tr4'),
+  'DK422', 'split_account_invalid', 'pelunasan patungan dari dompet trading ditolak');
+select pg_temp.total(tests.n(), :'np') as tot_before_split \gset
+select pg_temp.call(format($$select api.create_split(gen_random_uuid(), %L, %L, 100000, null, '2026-03-18')$$,
+  :'sh', :'bca'));
+select is(pg_temp.total(tests.n(), :'np'), :'tot_before_split', 'tagihan patungan dari BCA: modal trading tidak berubah');
 
 -- ===== DQ15 =====
 select is(tests.worker_val(null, $$select violations::text from jobs.dq_reconcile() where check_id = 'DQ15'$$),

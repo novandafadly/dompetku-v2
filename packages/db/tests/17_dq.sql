@@ -6,12 +6,12 @@
 -- diuji positif: data dirusak lewat tests.raw_exec (superuser, session_replication_role = replica,
 -- di dalam savepoint yang di-rollback) atau lewat api.* bila keadaannya sah (DQ07, saldo negatif
 -- diizinkan). Jam dipatok 2026-03-20 WIB, jadi tiga hari terakhir = 17, 18, 19 Maret.
--- DQ05 (S11, 0131): Σ cicilan hidup per utang <= pokok. DQ15 (S12, 0134): modal trading = Σ transfer.
+-- DQ05 (S11, 0131): Σ cicilan hidup per utang <= pokok. DQ15 (S12, 0134): modal trading = Σ transfer + kaki space_transfer.
 -- DQ16 (S12, 0136): patungan (dompet sistem = Σ pelunasan belum diterima, Σ bagian = nominal, status entri =
 -- status tagihan/pelunasan, entri dompet sistem dirujuk, saldo anggota nol-jumlah).
 -- ID: S7, T18
 begin;
-select plan(63);
+select plan(65);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -283,6 +283,15 @@ savepoint s;
 select tests.raw_exec(format($$update app.entry_lines set amount = 1 where entry_id = %L and role = 'counter'$$, :'dq_dep'));
 select is(pg_temp.dq(), pg_temp.expect('DQ03=1', 'DQ04=1', 'DQ07=1', 'DQ15=1'),
   'DQ15: setoran rusak (counter ≠ −main) = modal tidak konsisten dengan Σ transfer (DQ07: dompet trading jadi negatif)');
+rollback to savepoint s;
+-- Kaki space_transfer di dompet trading = tarik modal; DQ15 menghitung ulang dari kaki pasangan Bersama.
+select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 50000, 0, '2026-03-07')$$,
+  :'np', :'dq_tr', :'kas')) ->> 'entry_id' as dq_st \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ15: setor trading -> Bersama sah = nol temuan');
+savepoint s;
+select tests.raw_exec(format($$update app.entry_lines set amount = -40000 where entry_id = %L and role = 'main'$$, :'dq_st'));
+select is(pg_temp.dq(), pg_temp.expect('DQ04b=1', 'DQ15=1'),
+  'DQ15: kaki trading space_transfer ≠ kaki pasangan = modal tidak konsisten (DQ04b: Σ pasangan ≠ 0)');
 rollback to savepoint s;
 
 -- ===== DQ16: patungan (S12, 0136) =====
