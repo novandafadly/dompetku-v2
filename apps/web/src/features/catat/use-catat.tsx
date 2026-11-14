@@ -44,7 +44,8 @@ export type FieldCode = 'before_opening' | 'account_archived' | 'category_archiv
  */
 export type GalatKind = 'network' | 'server' | 'not_found';
 /** Galat Catat (S7): `GalatKind` ditambah dua galat transfer antar ruang (S7-C1) tanpa Coba lagi. */
-export type CatatGalatKind = GalatKind | 'cross_space_not_allowed' | 'cross_space_kantor';
+export type CatatGalatKind =
+  GalatKind | 'cross_space_not_allowed' | 'cross_space_kantor' | 'split_needs_partner';
 
 /** Dompet tujuan di ruang lain (S7-C1): dimuat saat halaman "Ruang lain…" dibuka. */
 export interface CrossTargets {
@@ -53,6 +54,16 @@ export interface CrossTargets {
   status: 'idle' | 'loading' | 'ready' | 'error';
   accounts: AccountVM[];
 }
+
+/** Dompet Pribadi pembayar patungan (S12-CT1): dimuat malas saat toggle pertama kali menyala. */
+export interface PersonalWallets {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  accounts: AccountVM[];
+}
+
+/** Dompet Pribadi yang boleh membayar patungan: aktif, operasional/tabungan (sama dengan DB). */
+const payerOk = (a: AccountVM) =>
+  !a.archived && (a.pocket === 'operasional' || a.pocket === 'tabungan');
 
 const otherRuang = (r: Ruang): Ruang => (r === 'pribadi' ? 'bersama' : 'pribadi');
 
@@ -100,6 +111,8 @@ function clear(
     description?: boolean;
     reimbursable?: boolean;
     sharedNote?: boolean;
+    /** Bagi tagihan (S12-CT1). */
+    split?: boolean;
   },
 ): CatatDraft {
   const next = { ...d };
@@ -112,6 +125,7 @@ function clear(
   if (fields.description === true) delete next.description;
   if (fields.reimbursable === true) delete next.reimbursable;
   if (fields.sharedNote === true) delete next.sharedNote;
+  if (fields.split === true) delete next.split;
   return next;
 }
 
@@ -154,6 +168,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     accounts: [],
   }));
   const crossSeq = useRef(0);
+  // Dompet Pribadi untuk toggle `Dibayar dari dompet pribadi` (S12-CT1), dimuat malas.
+  const [personal, setPersonal] = useState<PersonalWallets>({ status: 'idle', accounts: [] });
+  const personalSeq = useRef(0);
 
   // Ref, bukan state: klik ganda dalam satu tick (sebelum render ulang) tetap satu permintaan.
   const busy = useRef(false);
@@ -226,6 +243,19 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const saving = status === 'menyimpan';
   const accounts = usable(opts, hidden);
   const selectedAccount = opts?.accounts.find((a) => a.id === draft.accountId);
+  // Bagi tagihan (S12-CT1): hanya pengeluaran Bersama dengan dua anggota (`options.split`).
+  const splitAvailable =
+    draft.ruang === 'bersama' &&
+    draft.type === 'expense' &&
+    opts?.split !== undefined &&
+    preset === undefined;
+  const personalAccounts = personal.accounts.filter((a) => !hidden.has(a.id));
+  const splitAccount =
+    draft.split === undefined
+      ? undefined
+      : personalAccounts.find((a) => a.id === draft.split?.accountId);
+  // Dompet yang saldonya berkurang: dompet Pribadi pembayar bila dibagi, selain itu dompet terpilih.
+  const payerAccount = draft.split === undefined ? selectedAccount : splitAccount;
   // Setor modal: tujuan hanya dompet trading ini; Tarik modal: sumber hanya dompet trading ini.
   const lockedTo = preset?.kind === 'setor' ? preset.account.id : undefined;
   const destinations =
@@ -265,7 +295,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const valid =
     !loading &&
     hasAmount &&
-    draft.accountId !== '' &&
+    (draft.split === undefined ? draft.accountId !== '' : draft.split.accountId !== '') &&
     (draft.type === 'transfer'
       ? draft.counterAccountId !== undefined
       : draft.categoryId !== undefined);
@@ -286,7 +316,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const setAmount = (amount: Rupiah | null) => {
     if (busy.current) return;
     update((d) => ({ ...d, amount }));
-    if (status === 'saldo_kurang' && enough({ ...draft, amount }, selectedAccount)) toIdle();
+    if (status === 'saldo_kurang' && enough({ ...draft, amount }, payerAccount)) toIdle();
   };
   const setCategory = (categoryId: string) => {
     if (busy.current) return;
@@ -310,7 +340,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     );
     if (galatKind === 'cross_space_kantor') toIdle();
     if (status === 'field' && fieldCode === 'account_archived') toIdle();
-    if (status === 'saldo_kurang' && enough(draft, next)) toIdle();
+    if (status === 'saldo_kurang' && draft.split === undefined && enough(draft, next)) toIdle();
   };
   const dropCrossError = () => {
     if (galatKind === 'cross_space_not_allowed' || galatKind === 'cross_space_kantor') toIdle();
@@ -369,6 +399,82 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
       return on && allowed ? { ...d, reimbursable: true } : clear(d, { reimbursable: true });
     });
   };
+  /** Muat dompet Pribadi (sekali; ulang setelah galat) dan isi dompet bawaan toggle. */
+  const loadPersonal = () => {
+    if (personal.status === 'ready' || personal.status === 'loading') return;
+    const seq = ++personalSeq.current;
+    const arrived = (o: CatatOptions) => {
+      const accounts = o.accounts.filter(payerOk);
+      setPersonal({ status: 'ready', accounts });
+      const pick = (accounts.find((a) => a.pocket === 'operasional') ?? accounts[0])?.id ?? '';
+      setDraft((d) =>
+        d.split?.accountId === '' ? { ...d, split: { ...d.split, accountId: pick } } : d,
+      );
+    };
+    let got: CatatOptions | Promise<CatatOptions>;
+    try {
+      got = source.options('pribadi');
+    } catch {
+      setPersonal({ status: 'error', accounts: [] });
+      return;
+    }
+    if (!isPromise(got)) {
+      arrived(got);
+      return;
+    }
+    setPersonal({ status: 'loading', accounts: [] });
+    got.then(
+      (o) => {
+        if (seq === personalSeq.current) arrived(o);
+      },
+      () => {
+        if (seq === personalSeq.current) setPersonal({ status: 'error', accounts: [] });
+      },
+    );
+  };
+  /** Sakelar `Dibayar dari dompet pribadi`: menyala = dompet Pribadi pembayar + bagian sama rata. */
+  const setSplit = (on: boolean) => {
+    if (busy.current || (on && !splitAvailable)) return;
+    const pick =
+      personal.status === 'ready'
+        ? ((personalAccounts.find((a) => a.pocket === 'operasional') ?? personalAccounts[0])?.id ??
+          '')
+        : '';
+    update((d) => (on ? { ...d, split: { accountId: pick } } : clear(d, { split: true })));
+    if (status === 'saldo_kurang' || (status === 'galat' && galatKind === 'split_needs_partner')) {
+      toIdle();
+    }
+    if (on) loadPersonal();
+  };
+  const setSplitAccount = (accountId: string) => {
+    if (busy.current) return;
+    update((d) => (d.split === undefined ? d : { ...d, split: { ...d.split, accountId } }));
+    if (status === 'field' && fieldCode === 'account_archived') toIdle();
+    if (
+      status === 'saldo_kurang' &&
+      enough(
+        draft,
+        personalAccounts.find((a) => a.id === accountId),
+      )
+    ) {
+      toIdle();
+    }
+  };
+  /** Bagian anggota lain (CT2); kosong = sama rata. */
+  const setPartnerShare = (partnerShare: Rupiah | undefined) => {
+    if (busy.current) return;
+    update((d) =>
+      d.split === undefined
+        ? d
+        : {
+            ...d,
+            split: {
+              accountId: d.split.accountId,
+              ...(partnerShare === undefined ? {} : { partnerShare }),
+            },
+          },
+    );
+  };
   const setDate = (date: IsoDate) => {
     if (busy.current) return;
     update((d) => ({ ...d, date, dateChosen: true }));
@@ -381,7 +487,10 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     if (busy.current) return;
     typeRef.current = type;
     update((d) => {
-      const next = clear({ ...d, type }, { category: true, counter: true, reimbursable: true });
+      const next = clear(
+        { ...d, type },
+        { category: true, counter: true, reimbursable: true, split: true },
+      );
       // Trading hanya sumber/tujuan transfer: jenis lain memindahkan dompet ke bawaan.
       return type !== 'transfer' &&
         opts !== null &&
@@ -424,7 +533,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
       setDraft((d) =>
         clear(
           { ...d, ruang: next, accountId, clientId: newClientId() },
-          { category: true, counter: true, reimbursable: true },
+          { category: true, counter: true, reimbursable: true, split: true },
         ),
       );
     };
@@ -488,7 +597,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     else if (field !== undefined) {
       setStatus('field');
       setFieldCode(out.code as FieldCode);
-      if (out.code === 'account_archived') setHidden((h) => new Set([...h, draft.accountId]));
+      if (out.code === 'account_archived') {
+        setHidden((h) => new Set([...h, draft.split?.accountId ?? draft.accountId]));
+      }
       if (out.code === 'category_archived' && draft.categoryId !== undefined) {
         const archived = draft.categoryId;
         setArchivedCategoryId(archived);
@@ -504,7 +615,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
           out.code === 'cross_space_not_allowed' ||
           out.code === 'cross_space_kantor'
           ? out.code
-          : 'server',
+          : out.code === 'split_needs_partner' || out.code === 'split_shared_only'
+            ? 'split_needs_partner'
+            : 'server',
       );
     }
     return out;
@@ -551,6 +664,14 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     crossBlocked,
     sharedNoteVisible,
     canReimburse,
+    splitAvailable,
+    splitPeople: opts?.split,
+    personal: { ...personal, accounts: personalAccounts },
+    payerAccount,
+    loadPersonal,
+    setSplit,
+    setSplitAccount,
+    setPartnerShare,
     loadCrossTargets,
     setCrossTarget,
     setSharedNote,

@@ -7,6 +7,8 @@ import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SaveCatatInput } from '../_actions/inputs';
 import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
 import { moveTargetsAction, voidEntryAction } from '../_actions/entri';
+import { createSplitAction, voidSplitAction } from '../_actions/patungan';
+import { savedToast as splitSavedToast } from '@/features/patungan/copy';
 
 /**
  * Sumber Catat mode nyata (modul klien): hanya referensi Server Action dari `_actions/*`, tidak
@@ -78,6 +80,58 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
     return active.slice(0, SUGGESTIONS);
   };
 
+  /** `api.create_split` lewat action; bagian anggota lain dikirim bila dipilih (Σ dijaga SQL). */
+  const saveSplit = async (
+    d: Parameters<CatatSource['save']>[0] & { amount: number },
+    split: NonNullable<Parameters<CatatSource['save']>[0]['split']>,
+  ): Promise<SaveOutcome> => {
+    const people = loaded.get('bersama')?.split;
+    if (people === undefined) return { ok: false, code: 'split_needs_partner' };
+    const shares =
+      split.partnerShare === undefined
+        ? undefined
+        : [
+            { userId: people.partner.id, amount: split.partnerShare },
+            // Pratinjau satu pengurangan; SQL menolak Σ ≠ nominal (`invalid shares`).
+            { userId: people.me.id, amount: d.amount - split.partnerShare },
+          ];
+    try {
+      const res = await createSplitAction('bersama', {
+        clientId: d.clientId,
+        accountId: split.accountId,
+        amount: d.amount,
+        categoryId: d.categoryId ?? '',
+        ...(d.dateChosen ? { occurredOn: d.date } : {}),
+        ...(d.description === undefined ? {} : { description: d.description }),
+        ...(shares === undefined ? {} : { shares }),
+        allowNegative: d.allowNegative,
+      });
+      if (!res.ok) {
+        return res.error.field === undefined
+          ? { ok: false, code: res.error.code }
+          : { ok: false, code: res.error.code, field: res.error.field };
+      }
+      const wallet = loaded.get('pribadi')?.accounts.find((a) => a.id === split.accountId)?.name;
+      const theirs = res.value.shares.find((s) => s.userId === people.partner.id)?.amount ?? 0;
+      return {
+        ok: true,
+        entryId: res.value.expenseEntryId,
+        version: 1,
+        replayed: res.value.replayed,
+        splitId: res.value.splitId,
+        toast: splitSavedToast(
+          res.value.amount,
+          wallet ?? 'dompet pribadi',
+          people.partner.name,
+          theirs,
+        ),
+      };
+    } catch {
+      // Fetch Server Action putus: "Coba lagi" dengan clientId yang sama.
+      return { ok: false, code: 'network' };
+    }
+  };
+
   return {
     ruangLabel,
     options(r) {
@@ -121,6 +175,10 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
     },
     async save(d): Promise<SaveOutcome> {
       if (d.amount === null) return { ok: false, code: 'invalid', field: 'amount' };
+      // Bagi tagihan (S12-CT1): pengeluaran Bersama dibayar dari dompet Pribadi pembayar.
+      if (d.split !== undefined && d.type === 'expense' && d.ruang === 'bersama') {
+        return saveSplit({ ...d, amount: d.amount }, d.split);
+      }
       const common = {
         clientId: d.clientId,
         amount: d.amount,
@@ -191,8 +249,12 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
         // Referensi action gagal dipanggil (mis. fetch tidak tersedia): telemetri diam.
       }
     },
-    async undo({ entryId, version, ruang: r }) {
+    async undo({ entryId, version, ruang: r, splitId }) {
       try {
+        if (splitId !== undefined) {
+          const res = await voidSplitAction('bersama', { clientId: newClientId(), splitId });
+          return res.ok;
+        }
         const res = await voidEntryAction(r, {
           clientId: newClientId(),
           entryId,

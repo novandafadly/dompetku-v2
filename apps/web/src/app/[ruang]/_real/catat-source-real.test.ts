@@ -12,6 +12,8 @@ const m = vi.hoisted(() => ({
   suggestFor: vi.fn(),
   voidEntryAction: vi.fn(),
   moveTargetsAction: vi.fn(),
+  createSplitAction: vi.fn(),
+  voidSplitAction: vi.fn(),
 }));
 
 vi.mock('../_actions/catat', () => ({
@@ -22,6 +24,11 @@ vi.mock('../_actions/catat', () => ({
 vi.mock('../_actions/entri', () => ({
   voidEntryAction: m.voidEntryAction,
   moveTargetsAction: m.moveTargetsAction,
+}));
+
+vi.mock('../_actions/patungan', () => ({
+  createSplitAction: m.createSplitAction,
+  voidSplitAction: m.voidSplitAction,
 }));
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -260,9 +267,119 @@ describe('realCatatSource', () => {
       (x) => x[1],
     );
     for (const p of valueImports) {
-      if (p?.includes('_actions')) expect(p).toMatch(/_actions\/(catat|entri)$/);
+      if (p?.includes('_actions')) expect(p).toMatch(/_actions\/(catat|entri|patungan)$/);
     }
     expect(src).not.toMatch(/^import (?!type )[^;]*_actions\/inputs/m);
+  });
+
+  describe('bagi tagihan Bersama (S12)', () => {
+    const N = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const F = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const SPLIT_ID = '99999999-9999-4999-8999-999999999999';
+    const bersamaSource = () =>
+      realCatatSource({
+        ruang: 'bersama',
+        options: {
+          ...BERSAMA,
+          split: {
+            me: { id: N, name: 'Novanda', initial: 'N' },
+            partner: { id: F, name: 'Farida', initial: 'F' },
+          },
+        },
+        ruangLabel: { pribadi: 'Pribadi', bersama: 'Bersama' },
+      });
+    const OKSPLIT = {
+      ok: true,
+      value: {
+        splitId: SPLIT_ID,
+        expenseEntryId: ENTRY,
+        amount: 400_000,
+        shares: [
+          { userId: N, amount: 200_000 },
+          { userId: F, amount: 200_000 },
+        ],
+        replayed: false,
+      },
+    };
+
+    it('save: createSplitAction di ruang bersama, sama rata tanpa shares, toast dari SQL', async () => {
+      m.createSplitAction.mockResolvedValue(OKSPLIT);
+      m.catatOptions.mockResolvedValue({ ok: true, value: PRIBADI });
+      const s = bersamaSource();
+      await s.options('pribadi');
+      const out = await s.save(
+        draft({
+          amount: 400_000,
+          ruang: 'bersama',
+          accountId: RUMAH,
+          categoryId: 'b1',
+          description: 'Listrik',
+          split: { accountId: BCA },
+        }),
+      );
+      expect(m.saveCatat).not.toHaveBeenCalled();
+      expect(m.createSplitAction).toHaveBeenCalledTimes(1);
+      const [ruang, input] = m.createSplitAction.mock.calls[0] as [string, Record<string, unknown>];
+      expect(ruang).toBe('bersama');
+      expect(input).toMatchObject({
+        clientId: CLIENT,
+        accountId: BCA,
+        amount: 400_000,
+        categoryId: 'b1',
+        description: 'Listrik',
+        allowNegative: false,
+      });
+      expect(input).not.toHaveProperty('shares');
+      expect(out).toMatchObject({ ok: true, entryId: ENTRY, splitId: SPLIT_ID, version: 1 });
+      expect(out.ok && out.toast.replace(/\u00a0/g, ' ')).toBe(
+        'Patungan dicatat di Bersama · Rp 400.000 dari BCA · Farida menanggung Rp 200.000',
+      );
+    });
+
+    it('bagian anggota lain dikirim bersama bagian pembayar (Σ dijaga SQL)', async () => {
+      m.createSplitAction.mockResolvedValue(OKSPLIT);
+      const s = bersamaSource();
+      await s.save(
+        draft({
+          amount: 400_000,
+          ruang: 'bersama',
+          categoryId: 'b1',
+          split: { accountId: BCA, partnerShare: 150_000 },
+        }),
+      );
+      const input = (m.createSplitAction.mock.calls[0] as [string, { shares: unknown }])[1];
+      expect(input.shares).toEqual([
+        { userId: F, amount: 150_000 },
+        { userId: N, amount: 250_000 },
+      ]);
+    });
+
+    it('galat server diteruskan dengan kode dan kolom; jaringan putus = network', async () => {
+      m.createSplitAction.mockResolvedValue({
+        ok: false,
+        error: { code: 'invalid', field: 'shares' },
+      });
+      const s = bersamaSource();
+      const d = draft({
+        amount: 400_000,
+        ruang: 'bersama',
+        categoryId: 'b1',
+        split: { accountId: BCA },
+      });
+      await expect(s.save(d)).resolves.toEqual({ ok: false, code: 'invalid', field: 'shares' });
+      m.createSplitAction.mockRejectedValue(new Error('fetch gagal'));
+      await expect(s.save(d)).resolves.toEqual({ ok: false, code: 'network' });
+    });
+
+    it('Urungkan tagihan patungan = voidSplitAction, bukan void entri', async () => {
+      m.voidSplitAction.mockResolvedValue({ ok: true, value: {} });
+      await expect(
+        bersamaSource().undo({ entryId: ENTRY, version: 1, ruang: 'bersama', splitId: SPLIT_ID }),
+      ).resolves.toBe(true);
+      expect(m.voidEntryAction).not.toHaveBeenCalled();
+      const input = (m.voidSplitAction.mock.calls[0] as [string, { splitId: string }])[1];
+      expect(input.splitId).toBe(SPLIT_ID);
+    });
   });
 
   describe('transfer antar ruang dan talangan (S7)', () => {

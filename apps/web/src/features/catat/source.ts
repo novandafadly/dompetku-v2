@@ -38,6 +38,11 @@ export interface CatatDraft {
   sharedNote?: string;
   /** Talangan kantor (S7-C2): hanya pengeluaran Pribadi dari dompet bukan Kantor. */
   reimbursable?: boolean;
+  /**
+   * Bagi tagihan Bersama (S12-CT1): pengeluaran Bersama dibayar dari dompet Pribadi `accountId`
+   * (bukan `draft.accountId`). `partnerShare` = bagian anggota lain (tidak ada = sama rata).
+   */
+  split?: { accountId: string; partnerShare?: Rupiah };
   date: IsoDate;
   /**
    * Tanggal dipilih pengguna. Bila tidak, sumber nyata tidak mengirim `occurredOn` sehingga server
@@ -63,7 +68,15 @@ export interface CatatOptions {
 }
 
 export type SaveOutcome =
-  | { ok: true; entryId: string; version: number; replayed: boolean; toast: string }
+  | {
+      ok: true;
+      entryId: string;
+      version: number;
+      replayed: boolean;
+      toast: string;
+      /** Tagihan patungan (S12): `Urungkan` menghapus tagihan, bukan entri biasa. */
+      splitId?: string;
+    }
   | { ok: false; code: LedgerErrorCode; field?: string };
 
 export type CatatStatus =
@@ -103,7 +116,12 @@ export interface CatatSource {
    */
   sharedAudience?(): string | undefined;
   save(draft: CatatDraft & { allowNegative: boolean }): Promise<SaveOutcome>;
-  undo(saved: { entryId: string; version: number; ruang: Ruang }): Promise<boolean>;
+  undo(saved: {
+    entryId: string;
+    version: number;
+    ruang: Ruang;
+    splitId?: string;
+  }): Promise<boolean>;
   /** Event produk; kirim-dan-lupakan, tidak pernah melempar. Prototipe tidak menulis apa pun. */
   track?(e: CatatTrackEvent): void;
 }

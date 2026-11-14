@@ -21,8 +21,15 @@ export const CATAT_COPY = {
 
 /** Salinan galat simpan per jenis (s6-bingkai.md, "Tambahan salinan (keputusan controller)"). */
 export function galatText(
-  kind: 'network' | 'server' | 'not_found' | 'cross_space_not_allowed' | 'cross_space_kantor',
+  kind:
+    | 'network'
+    | 'server'
+    | 'not_found'
+    | 'cross_space_not_allowed'
+    | 'cross_space_kantor'
+    | 'split_needs_partner',
 ): string {
+  if (kind === 'split_needs_partner') return 'Patungan butuh dua anggota di Bersama.';
   if (kind === 'cross_space_not_allowed') {
     return 'Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.';
   }

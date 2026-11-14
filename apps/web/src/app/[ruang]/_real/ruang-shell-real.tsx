@@ -33,10 +33,13 @@ export function RuangShellReal({
   children: ReactNode;
 }) {
   return (
-    <RuangShell ruang={ruang} real={{
+    <RuangShell
+      ruang={ruang}
+      real={{
         options: split === undefined ? { accounts, categories } : { accounts, categories, split },
         today,
-      }}>
+      }}
+    >
       {children}
     </RuangShell>
   );
