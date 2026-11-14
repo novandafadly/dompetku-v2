@@ -437,6 +437,7 @@ export interface AccountRow {
 /**
  * Dompet ruang ini dengan saldo (`app.account_balances`). Dompet terarsip disembunyikan kecuali
  * saldonya ≠ 0 (tidak mungkin: `api.archive_account` mewajibkan saldo 0, BSD §2.2 butir 4).
+ * Dompet sistem `patungan` (S12) tidak pernah ikut: bukan dompet pengguna.
  */
 export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<AccountVM[]> {
   const { rows } = await c.query<AccountRow>(
@@ -445,6 +446,7 @@ export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<
        from app.accounts a
        join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
       where a.space_id = $1 and (a.archived_at is null or b.balance <> 0)
+        and a.pocket <> 'patungan'
       order by a.sort_order, a.created_at, a.id`,
     [ctx.spaceId],
   );

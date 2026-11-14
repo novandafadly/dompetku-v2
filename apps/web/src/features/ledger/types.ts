@@ -2,7 +2,13 @@ import type { IsoDate, Rupiah } from '@dompetku/domain';
 
 /** View-model ledger: bentuk data yang dikonsumsi UI, sama untuk mode prototipe dan nyata. */
 export type Ruang = 'pribadi' | 'bersama';
-export type Pocket = 'operasional' | 'tabungan' | 'kantor';
+/**
+ * `trading` (S12, hanya Pribadi) dan `patungan` (dompet sistem bagi tagihan Bersama, tidak pernah
+ * tampil di daftar atau pemilih dompet: disaring `listAccountsTx`).
+ */
+export type Pocket = 'operasional' | 'tabungan' | 'kantor' | 'trading' | 'patungan';
+/** Kantong yang boleh dipilih pengguna saat menambah dompet (`patungan` hanya dibuat DB). */
+export type UserPocket = Exclude<Pocket, 'patungan'>;
 export type WalletType = 'cash' | 'bank' | 'ewallet';
 
 export interface AccountVM {
@@ -13,6 +19,30 @@ export interface AccountVM {
   openedOn: IsoDate;
   archived: boolean;
   balance: Rupiah;
+}
+
+/** Angka modal trading dari `api.trading_overview` (SQL; UI tidak menjumlah). */
+export interface TradingFiguresVM {
+  balance: Rupiah;
+  capitalIn: Rupiah;
+  capitalOut: Rupiah;
+  /** `max(0, disetor − ditarik)`. */
+  capitalLeft: Rupiah;
+  /** `max(0, ditarik − disetor)`: penarikan di atas modal. */
+  realized: Rupiah;
+  /** `max(0, sisa modal − saldo)`: nominal peringatan `Kurang`. */
+  shortfall: Rupiah;
+  hasDeposit: boolean;
+}
+
+export interface TradingAccountVM extends TradingFiguresVM {
+  id: string;
+  name: string;
+}
+
+export interface TradingOverviewVM {
+  accounts: TradingAccountVM[];
+  total: TradingFiguresVM;
 }
 
 export interface CategoryVM {
@@ -225,6 +255,8 @@ export type LedgerErrorCode =
   | 'payment_before_opened'
   | 'debt_account_kantor'
   | 'debt_principal_locked'
+  // S12: dompet Trading hanya di Pribadi (0134, B10).
+  | 'pocket_personal_only'
   | 'not_found'
   | 'invalid'
   | 'network'

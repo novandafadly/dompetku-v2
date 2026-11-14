@@ -53,6 +53,8 @@ const RULES = new Set<LedgerErrorCode>([
   'payment_before_opened',
   'debt_account_kantor',
   'debt_principal_locked',
+  // S12: dompet Trading di ruang Bersama ditolak (0134).
+  'pocket_personal_only',
 ]);
 
 /**

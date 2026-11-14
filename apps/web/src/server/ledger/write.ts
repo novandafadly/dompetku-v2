@@ -150,7 +150,8 @@ export const restoreEntrySchema = voidEntrySchema;
 export const createAccountSchema = z.object({
   clientId: id,
   name: z.string().trim().min(1).max(40),
-  pocket: z.enum(['operasional', 'tabungan', 'kantor']),
+  // `patungan` = dompet sistem (dibuat DB), tidak pernah dari pengguna.
+  pocket: z.enum(['operasional', 'tabungan', 'kantor', 'trading']),
   walletType: z.enum(['cash', 'bank', 'ewallet']),
   openingBalance: z
     .number()
