@@ -24,8 +24,8 @@ test.describe.configure({ mode: 'serial' });
 const N_WALLET = 'KANARI-DOMPET-N';
 const F_WALLET = 'KANARI-DOMPET-F';
 const BILL = 'Listrik patungan uji';
-const AMOUNT = 400_000;
-const HALF = 200_000;
+const AMOUNT = 412_000;
+const HALF = 206_000;
 
 const main = (page: Page) => page.getByRole('main');
 const rp = (n: number) => `Rp ${digits(n)}`;
