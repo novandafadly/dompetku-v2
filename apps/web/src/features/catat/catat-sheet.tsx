@@ -1,6 +1,6 @@
 'use client';
 
-import { addDays, dayLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
+import { addDays, dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import {
   lazy,
   Suspense,
@@ -25,6 +25,7 @@ import { NotePencilIcon } from '@/components/ui/icons/note-pencil';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
+import { SpaceTag } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import type { Ruang } from '@/features/ledger/types';
@@ -43,8 +44,8 @@ import {
   saldoKurangText,
 } from './catat-status';
 import { CategoryChips } from './category-chips';
-import { undoOrNotify } from './saved-toast';
-import type { CatatSource, CatatType, SaveOutcome } from './source';
+import { modalToast, undoOrNotify } from './saved-toast';
+import type { CatatPreset, CatatSource, CatatType, SaveOutcome } from './source';
 import { createCatatFlow } from './telemetry';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
@@ -85,7 +86,18 @@ export interface CatatSheetProps {
   hourWIB?: number;
   /** Cara sheet dibuka (telemetri ketukan): tombol Catat (bawaan) atau pintasan `c`. */
   via?: 'pointer' | 'shortcut';
+  /** Setor/tarik modal trading (S12-TR4): transfer satu ruang dengan arah terkunci. */
+  preset?: CatatPreset;
 }
+
+/** Salinan final S12-TR4. */
+const PRESET_COPY = {
+  setor: {
+    title: 'Setor modal',
+    note: 'Setor modal bukan pengeluaran. Laporan dan anggaran tidak berubah.',
+  },
+  tarik: { title: 'Tarik modal', note: 'Tarik modal bukan pemasukan.' },
+} as const;
 
 /** Hari ini dan 13 hari ke belakang; mencatat ke masa depan tidak ditawarkan. */
 const DATE_CHOICES = 14;
@@ -115,12 +127,14 @@ function CatatSession({
   onAddAccount,
   hourWIB,
   via = 'pointer',
+  preset,
 }: CatatSheetProps) {
   const c = useCatat({
     source,
     today,
     ruang,
     initialAmount,
+    preset,
     ...(hourWIB === undefined ? {} : { hourWIB }),
   });
   const { draft, status } = c;
@@ -198,7 +212,7 @@ function CatatSession({
   const audience = source.sharedAudience?.();
   const target = other(draft.ruang);
   const toLabel = draft.toRuang === undefined ? undefined : ruangLabel[draft.toRuang];
-  const baseTitle = `${TYPE_TITLE[draft.type]} · ${label}`;
+  const baseTitle = `${preset === undefined ? TYPE_TITLE[draft.type] : PRESET_COPY[preset.kind].title} · ${label}`;
   // Antar ruang: kedua ruang tertulis di judul (S7-C1), bukan hanya lewat warna.
   const title = toLabel === undefined ? baseTitle : `${baseTitle} → ${toLabel}`;
 
@@ -258,8 +272,18 @@ function CatatSession({
     if (out?.ok !== true) return;
     flow.saved();
     const saved = { entryId: out.entryId, version: out.version, ruang: draft.ruang };
+    const nameOf = (id: string | undefined) => c.accounts.find((a) => a.id === id)?.name ?? '';
     toast({
-      message: out.toast,
+      message:
+        preset === undefined || draft.amount === null
+          ? out.toast
+          : modalToast(
+              preset.kind,
+              ruangLabel[draft.ruang],
+              draft.amount,
+              preset.account.name,
+              nameOf(preset.kind === 'setor' ? draft.accountId : draft.counterAccountId),
+            ),
       action: {
         label: 'Urungkan',
         onAction: () => {
@@ -444,7 +468,7 @@ function CatatSession({
       </p>
       <div className="flex items-center gap-2">
         {/* Transfer antar ruang sedang disusun: pindah ruang akan membuang pilihannya, jadi disembunyikan. */}
-        {draft.toRuang === undefined ? (
+        {draft.toRuang === undefined && preset === undefined ? (
           <Button
             variant="text"
             size="sm"
@@ -524,7 +548,12 @@ function CatatSession({
       onOpenChange={onSheetOpenChange}
       title={title}
       titleContent={
-        hasAccounts ? (
+        preset !== undefined ? (
+          <>
+            {PRESET_COPY[preset.kind].title}
+            <SpaceTag space={draft.ruang} />
+          </>
+        ) : hasAccounts ? (
           <TypeMenuButton
             ref={titleRef}
             space={draft.ruang}
@@ -549,24 +578,26 @@ function CatatSession({
         ) : undefined
       }
       headerAction={
-        <>
-          <span id={typeHintId} className="sr-only">
-            Ganti jenis transaksi
-          </span>
-          {menuOpen ? (
-            <TypeMenu
-              value={draft.type}
-              onChange={(t: CatatType) => {
-                c.setType(t);
-              }}
-              onClose={() => {
-                setMenuOpen(false);
-                titleRef.current?.focus();
-              }}
-              ignore={titleRef}
-            />
-          ) : null}
-        </>
+        preset !== undefined ? undefined : (
+          <>
+            <span id={typeHintId} className="sr-only">
+              Ganti jenis transaksi
+            </span>
+            {menuOpen ? (
+              <TypeMenu
+                value={draft.type}
+                onChange={(t: CatatType) => {
+                  c.setType(t);
+                }}
+                onClose={() => {
+                  setMenuOpen(false);
+                  titleRef.current?.focus();
+                }}
+                ignore={titleRef}
+              />
+            ) : null}
+          </>
+        )
       }
       tint={draft.ruang}
       footer={footer}
@@ -595,13 +626,23 @@ function CatatSession({
             onChange={c.setAmount}
             readOnly={saving}
           />
+          {preset === undefined ? null : (
+            <div className="flex flex-col gap-0.5 text-caption font-medium text-text-muted">
+              <p>{PRESET_COPY[preset.kind].note}</p>
+              {preset.kind === 'tarik' &&
+              draft.amount !== null &&
+              draft.amount > preset.capitalLeft ? (
+                <p>{`${formatRupiah(draft.amount - preset.capitalLeft)} di atas sisa modal dicatat sebagai hasil ditarik.`}</p>
+              ) : null}
+            </div>
+          )}
           {isTransfer ? (
             <DestinationChips
               accounts={c.destinations}
               value={draft.counterAccountId}
               onChange={c.setCounterAccount}
               busy={saving}
-              crossEnabled
+              crossEnabled={preset === undefined && c.selectedAccount?.pocket !== 'trading'}
               crossLabel={
                 draft.toRuang === undefined || toLabel === undefined
                   ? undefined

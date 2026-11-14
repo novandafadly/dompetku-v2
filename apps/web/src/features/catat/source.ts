@@ -9,6 +9,18 @@ import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/l
 
 export type CatatType = 'expense' | 'income' | 'transfer';
 
+/**
+ * Setor/tarik modal trading (S12-TR4): sheet transfer dengan jenis dan arah terkunci. Setor = tujuan
+ * dompet trading ini, sumber dompet biasa; Tarik = sebaliknya. Dompet Kantor dan Trading lain tidak
+ * ditawarkan; tanpa transfer antar ruang.
+ */
+export interface CatatPreset {
+  kind: 'setor' | 'tarik';
+  account: { id: string; name: string };
+  /** Sisa modal dompet ini (SQL): pratinjau `di atas sisa modal` saat Tarik. */
+  capitalLeft: Rupiah;
+}
+
 export interface CatatDraft {
   type: CatatType;
   amount: Rupiah | null;

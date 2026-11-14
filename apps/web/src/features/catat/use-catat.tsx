@@ -8,6 +8,7 @@ import {
   isPromise,
   type CatatDraft,
   type CatatOptions,
+  type CatatPreset,
   type CatatSource,
   type CatatStatus,
   type CatatType,
@@ -24,6 +25,8 @@ export interface UseCatatArgs {
   hourWIB?: number;
   /** Nominal yang sudah diketik sebelum sheet selesai dimuat. */
   initialAmount?: Rupiah | null | undefined;
+  /** Setor/tarik modal trading: transfer dengan arah dan dompet trading terkunci (S12-TR4). */
+  preset?: CatatPreset | undefined;
 }
 
 /** Galat yang terikat ke satu kolom (S6-C5): kode → nama kolom server. */
@@ -57,13 +60,35 @@ function usable(o: CatatOptions | null, hidden: ReadonlySet<string>): AccountVM[
   return (o?.accounts ?? []).filter((a) => !a.archived && !hidden.has(a.id));
 }
 
-/** `defaultAccountId` dari sumber; lalu operasional pertama; lalu dompet pertama. */
+/** Dompet biasa: bukan Kantor dan bukan Trading (pemilih setor/tarik modal, S12-TR4). */
+const ordinary = (a: AccountVM) => a.pocket !== 'kantor' && a.pocket !== 'trading';
+
+/**
+ * `defaultAccountId` dari sumber; lalu operasional pertama; lalu dompet pertama. Dompet Trading
+ * tidak pernah bawaan (bukan sumber pengeluaran/pemasukan); hanya Trading yang ada = kosong.
+ */
 function defaultAccountId(o: CatatOptions): string {
-  const accounts = usable(o, new Set());
+  const accounts = usable(o, new Set()).filter((a) => a.pocket !== 'trading');
   if (o.defaultAccountId !== undefined && accounts.some((a) => a.id === o.defaultAccountId)) {
     return o.defaultAccountId;
   }
   return accounts.find((a) => a.pocket === 'operasional')?.id ?? accounts[0]?.id ?? '';
+}
+
+/** Dompet awal sheet setor/tarik: dompet biasa pertama (operasional lebih dulu) di sisi lawan. */
+function presetDraft(
+  o: CatatOptions,
+  preset: CatatPreset,
+): Pick<CatatDraft, 'accountId' | 'counterAccountId'> {
+  const other = usable(o, new Set()).filter(ordinary);
+  const pick = (other.find((a) => a.pocket === 'operasional') ?? other[0])?.id;
+  if (preset.kind === 'setor') {
+    return { accountId: pick ?? '', counterAccountId: preset.account.id };
+  }
+  return {
+    accountId: preset.account.id,
+    ...(pick === undefined ? {} : { counterAccountId: pick }),
+  };
 }
 
 function clear(
@@ -99,14 +124,14 @@ function enough(d: CatatDraft, account: AccountVM | undefined): boolean {
 /** Layout effect di klien; `useEffect` di server (tanpa peringatan SSR). */
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCatatArgs) {
+export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset }: UseCatatArgs) {
   const [hour] = useState(() => hourWIB ?? Number(nowTimeWIB().slice(0, 2)));
   // Opsi ruang awal dimuat di efek (bukan di initializer state): sumber nyata memicu Server Action,
   // dan initializer StrictMode berjalan dua kali. Sumber sinkron (prototipe) terisi di layout effect,
   // sebelum cat pertama, sehingga tidak ada kedipan keadaan memuat.
   const [opts, setOpts] = useState<CatatOptions | null>(null);
   const [draft, setDraft] = useState<CatatDraft>(() => ({
-    type: 'expense',
+    type: preset === undefined ? 'expense' : 'transfer',
     amount: initialAmount ?? null,
     accountId: '',
     date: today,
@@ -136,7 +161,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const optsSeq = useRef(0);
   const chipsSeq = useRef(0);
   // Jenis terbaru untuk jawaban opsi yang tiba terlambat (state di closure bisa basi).
-  const typeRef = useRef<CatatType>('expense');
+  const typeRef = useRef<CatatType>(preset === undefined ? 'expense' : 'transfer');
 
   const requestChips = (r: Ruang, type: CatatType) => {
     const seq = ++chipsSeq.current;
@@ -163,7 +188,14 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   /** Opsi ruang tiba (Promise): dompet bawaan ruang itu, lalu chip. */
   const receive = (r: Ruang, o: CatatOptions) => {
     setOpts(o);
-    setDraft((d) => (d.ruang === r ? { ...d, accountId: defaultAccountId(o) } : d));
+    setDraft((d) =>
+      d.ruang === r
+        ? {
+            ...d,
+            ...(preset === undefined ? { accountId: defaultAccountId(o) } : presetDraft(o, preset)),
+          }
+        : d,
+    );
     requestChips(r, typeRef.current);
   };
 
@@ -194,10 +226,23 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const saving = status === 'menyimpan';
   const accounts = usable(opts, hidden);
   const selectedAccount = opts?.accounts.find((a) => a.id === draft.accountId);
-  const destinations = accounts.filter((a) => a.id !== draft.accountId);
-  // Dompet Kantor tidak pernah ikut antar ruang (S7-C1): bukan sumber bila tujuan di ruang lain.
+  // Setor modal: tujuan hanya dompet trading ini; Tarik modal: sumber hanya dompet trading ini.
+  const lockedTo = preset?.kind === 'setor' ? preset.account.id : undefined;
+  const destinations =
+    preset === undefined
+      ? accounts.filter((a) => a.id !== draft.accountId)
+      : accounts.filter((a) => (lockedTo === undefined ? ordinary(a) : a.id === lockedTo));
+  // Dompet Kantor dan Trading tidak pernah ikut antar ruang (S7-C1; modal hanya satu ruang): bukan
+  // sumber bila tujuan di ruang lain. Trading juga bukan sumber pengeluaran/pemasukan (S12-TR4).
   const isCross = draft.toRuang !== undefined;
-  const sourceAccounts = isCross ? accounts.filter((a) => a.pocket !== 'kantor') : accounts;
+  const sourceAccounts =
+    preset !== undefined
+      ? accounts.filter((a) => (preset.kind === 'tarik' ? a.id === preset.account.id : ordinary(a)))
+      : isCross
+        ? accounts.filter(ordinary)
+        : draft.type === 'transfer'
+          ? accounts
+          : accounts.filter((a) => a.pocket !== 'trading');
   const crossBlocked = selectedAccount?.pocket === 'kantor';
   const crossAccount = isCross
     ? cross.accounts.find((a) => a.id === draft.counterAccountId)
@@ -258,7 +303,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
           // Tujuan satu ruang yang sama dengan sumber baru gugur; Kantor memutus antar ruang.
           counter:
             (d.toRuang === undefined && d.counterAccountId === accountId) ||
-            (d.toRuang !== undefined && next?.pocket === 'kantor'),
+            (d.toRuang !== undefined && (next?.pocket === 'kantor' || next?.pocket === 'trading')),
           reimbursable: next?.pocket === 'kantor',
         },
       ),
@@ -335,7 +380,15 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount }: UseCa
   const setType = (type: CatatType) => {
     if (busy.current) return;
     typeRef.current = type;
-    update((d) => clear({ ...d, type }, { category: true, counter: true, reimbursable: true }));
+    update((d) => {
+      const next = clear({ ...d, type }, { category: true, counter: true, reimbursable: true });
+      // Trading hanya sumber/tujuan transfer: jenis lain memindahkan dompet ke bawaan.
+      return type !== 'transfer' &&
+        opts !== null &&
+        opts.accounts.find((a) => a.id === d.accountId)?.pocket === 'trading'
+        ? { ...next, accountId: defaultAccountId(opts) }
+        : next;
+    });
     dropCrossError();
     if (status === 'saldo_kurang' || (status === 'field' && fieldCode === 'category_archived')) {
       toIdle();
