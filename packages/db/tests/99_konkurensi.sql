@@ -20,13 +20,16 @@
 -- menghapus utang di antara baca dan kunci = debt_not_found. Patungan (0136): dua pelunasan paralel melebihi
 -- utang = satu payment_exceeds (kunci dompet sistem), hapus tagihan paralel pelunasan tanpa deadlock,
 -- purge menghapus tagihan/pelunasan di antara baca dan kunci = split_not_found/settlement_not_found.
+-- Tujuan (0138): dua create_goal paralel pada dompet sama = satu goal_exists, restore_goal paralel
+-- create_goal (kedua urutan) = goal_exists, archive_account paralel create_goal (kedua urutan) =
+-- account_archived / account_has_goal; tidak pernah dua tujuan aktif atau tujuan aktif di dompet terarsip.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
--- ID: B8, C2, C3, C4, C6, C9, T15
+-- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(118);
+select plan(131);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -734,6 +737,78 @@ select is(tests.owner_val(null, format($$select (select count(*) from app.splits
     + (select count(*) from app.settlements where id = %L)$$, :'sp1', :'t50')), '0', 'keduanya terhapus purge [R1]');
 select tests.peer_close('pa');
 select tests.peer_close('pb');
+
+-- ===== Tujuan (0138): 1 dompet = 1 tujuan aktif di bawah paralel (kunci dompet -> tujuan) =====
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, %L, 'tabungan', 0)$$, :'np', 'G' || i))
+  from generate_series(1, 5) i;
+select tests.owner_val(null, format($$select string_agg(id::text, ',' order by name collate "C") from app.accounts
+  where space_id = %L and name in ('G1', 'G2', 'G3', 'G4', 'G5')$$, :'np')) as gacc \gset
+select split_part(:'gacc', ',', 1) as g1, split_part(:'gacc', ',', 2) as g2, split_part(:'gacc', ',', 3) as g3,
+       split_part(:'gacc', ',', 4) as g4, split_part(:'gacc', ',', 5) as g5 \gset
+create function pg_temp.cg_sql(p_acc uuid, p_name text) returns text
+language sql as $$
+  select format($q$select api.create_goal(gen_random_uuid(), %L, %L, %L, 1000) ->> 'goal_id'$q$,
+    tests.space_id(tests.n(), 'personal'), p_acc, p_name)
+$$;
+create function pg_temp.aktif(p_acc uuid) returns text
+language sql as $$
+  select tests.owner_val(null, format($q$select count(*) from app.goals where account_id = %L and status = 'active'$q$, p_acc))
+$$;
+-- Dua create_goal paralel pada dompet yang sama: yang kedua menunggu kunci dompet, lalu goal_exists.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.cg_sql(:'g1', 'A'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.cg_sql(:'g1', 'B'));
+select ok(tests.peer_blocked('b'), 'tujuan kedua pada dompet sama menunggu kunci dompet [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*goal_exists', 'dua create_goal paralel: yang kedua goal_exists [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.aktif(:'g1'), '1', 'tepat satu tujuan aktif [T11]');
+-- restore_goal paralel create_goal (kedua urutan): tujuan lama diarsip lebih dulu (ter-commit).
+select pg_temp.adm_api(format($$select api.create_goal(gen_random_uuid(), %L, %L, 'Lama 2', 1000)$$, :'np', :'g2'))
+  ->> 'goal_id' as gold2 \gset
+select pg_temp.adm_api(format($$select api.create_goal(gen_random_uuid(), %L, %L, 'Lama 3', 1000)$$, :'np', :'g3'))
+  ->> 'goal_id' as gold3 \gset
+select pg_temp.adm_api(format($$select api.archive_goal(%L)$$, :'gold2'));
+select pg_temp.adm_api(format($$select api.archive_goal(%L)$$, :'gold3'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.cg_sql(:'g2', 'Baru 2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.restore_goal(%L) ->> 'status'$$, :'gold2'));
+select ok(tests.peer_blocked('b'), 'pulihkan menunggu tujuan baru paralel (kunci dompet) [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*goal_exists', 'pulihkan sesudah tujuan baru commit = goal_exists [T11]');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.restore_goal(%L) ->> 'status'$$, :'gold3'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.cg_sql(:'g3', 'Baru 3'));
+select ok(tests.peer_blocked('b'), 'tujuan baru menunggu pulihkan paralel (kunci dompet) [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*goal_exists', 'tujuan baru sesudah pulihkan commit = goal_exists [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.aktif(:'g2') || ',' || pg_temp.aktif(:'g3'), '1,1', 'tepat satu tujuan aktif per dompet [T11]');
+-- archive_account paralel create_goal (kedua urutan): tidak pernah ada tujuan aktif di dompet terarsip.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_account(%L) ->> 'archived'$$, :'g4'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.cg_sql(:'g4', 'Telat'));
+select ok(tests.peer_blocked('b'), 'tujuan baru menunggu arsip dompet paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*account_archived', 'tujuan baru sesudah arsip dompet commit = account_archived');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.cg_sql(:'g5', 'Duluan'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_account(%L) ->> 'archived'$$, :'g5'));
+select ok(tests.peer_blocked('b'), 'arsip dompet menunggu tujuan baru paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*account_has_goal', 'arsip dompet sesudah tujuan baru commit = account_has_goal');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, $$select count(*) from app.goals g join app.accounts a on a.id = g.account_id
+    where g.status = 'active' and a.archived_at is not null$$) || ' '
+    || tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ17'$$), '0 0',
+  'tanpa tujuan aktif di dompet terarsip; DQ17 nol');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');

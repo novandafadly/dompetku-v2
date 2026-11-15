@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDompetRiwayat } from '@/server/ledger/dompet';
+import { loadGoalForAccount } from '@/server/ledger/tujuan';
 import { loadTrading } from '@/server/ledger/trading';
 import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { ACCOUNT_HISTORY_MAX } from '@/server/ledger/read';
@@ -66,6 +67,18 @@ export default async function Page({
       trading = 'error' as const;
     }
   }
+  // S13: kartu tujuan hanya untuk dompet tabungan aktif (kueri lain tidak dijalankan); galatnya
+  // mematikan kartu itu saja.
+  let goal;
+  if (data.account.pocket === 'tabungan' && !data.account.archived) {
+    try {
+      goal = await loadGoalForAccount(ctx, id);
+    } catch (e) {
+      rethrowOrNotFound(e);
+      console.error('[dompet] tujuan gagal memuat', errorTag(e));
+      goal = 'error' as const;
+    }
+  }
   const moreQuery = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
   moreQuery.set('tampil', String(shown + HISTORY_PAGE));
   return (
@@ -82,6 +95,7 @@ export default async function Page({
       data={data}
       accounts={accounts}
       trading={trading ?? null}
+      {...(goal === undefined ? {} : { goal })}
     />
   );
 }

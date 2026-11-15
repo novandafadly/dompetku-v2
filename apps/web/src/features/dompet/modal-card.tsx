@@ -75,9 +75,12 @@ export function ModalCard({
                 <Item label={COPY.deposited}>
                   <MoneyText value={figures.capitalIn} />
                 </Item>
-                <Item label={COPY.withdrawn}>
-                  <MoneyText value={figures.capitalOut} />
-                </Item>
+                {figures.capitalOut > 0 ? (
+                  // Belum ada penarikan: baris tidak dirender (bukan "Rp 0", S12C-aturan 2).
+                  <Item label={COPY.withdrawn}>
+                    <MoneyText value={figures.capitalOut} />
+                  </Item>
+                ) : null}
               </>
             ) : figures.balance === 0 ? null : (
               // Saldo nol tidak ditulis "Rp 0" (sisa modal/Kurang sudah menjelaskan).

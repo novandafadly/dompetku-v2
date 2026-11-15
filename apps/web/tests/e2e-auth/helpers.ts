@@ -92,6 +92,7 @@ export async function resetData(adminUrl: string, ownerEmail: string): Promise<v
     delete from app.bill_occurrences;
     delete from app.bills;
     delete from app.budgets;
+    delete from app.goals;
     delete from app.accounts;
     delete from app.categories;
     delete from app.no_spend_days;

@@ -65,6 +65,12 @@ const RULES = new Set<LedgerErrorCode>([
   'settlement_received',
   'settlement_voided',
   'settlement_not_received',
+  // S13: tujuan tabungan (0137–0138); DK404 goal_not_found/account_not_found = not_found.
+  'goal_target_past',
+  'goal_not_active',
+  'goal_not_reached',
+  'account_has_goal',
+  'goal_pocket_invalid',
 ]);
 
 /**
@@ -115,7 +121,8 @@ export function toLedgerError(e: unknown): LedgerError | null {
   if (d) {
     switch (d.code) {
       case 'DK409':
-        return { code: 'conflict' };
+        // S13: tujuan aktif kedua pada dompet yang sama punya teks sendiri; DK409 lain = bentrok versi.
+        return { code: d.message === 'goal_exists' ? 'goal_exists' : 'conflict' };
       case 'DK410':
         return { code: 'idem_mismatch' };
       case 'DK401':

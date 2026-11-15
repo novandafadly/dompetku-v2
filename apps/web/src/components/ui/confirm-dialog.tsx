@@ -68,7 +68,9 @@ export function ConfirmDialog({
             e.preventDefault();
             if (returnTo.current?.isConnected) returnTo.current.focus();
           }}
-          className="fixed inset-x-4 top-1/2 z-30 mx-auto flex max-w-90 -translate-y-1/2 flex-col gap-3.5 rounded-2xl border border-hairline bg-surface p-5 text-text shadow-float"
+          // Batas tinggi lewat style (kelas nilai arbitrer dilarang lint): isi lebih tinggi dari layar menggulir.
+          style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+          className="fixed inset-x-4 top-1/2 z-30 mx-auto flex max-w-90 -translate-y-1/2 flex-col gap-3.5 overflow-y-auto overscroll-contain rounded-2xl border border-hairline bg-surface p-5 text-text shadow-float"
         >
           {icon ? (
             <span

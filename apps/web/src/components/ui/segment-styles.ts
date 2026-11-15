@@ -16,3 +16,15 @@ export function segmentItem(selected: boolean): string {
       : 'border-transparent font-semibold text-text-soft hover-pointer:text-text active:bg-surface'
   }`;
 }
+
+/**
+ * Segmen Rencana dengan empat item di Pribadi (S13-TJ1): di bawah 360 px huruf 13 dan padding 4
+ * supaya `Anggaran` tidak terpotong; mulai 360 px sama dengan `segmentItem`. Khusus tautan Rencana,
+ * bukan salinan `segmented-control` (formulir tidak memakainya).
+ */
+export function segmentItemDense(selected: boolean): string {
+  return segmentItem(selected).replace(
+    'px-3 text-label',
+    'px-1 text-meta narrow:px-3 narrow:text-label',
+  );
+}

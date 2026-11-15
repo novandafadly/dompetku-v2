@@ -9,7 +9,7 @@ import { InfoIcon } from '@/components/ui/icons/info';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
 import { EmptyState, ErrorState } from '@/components/ui/state';
-import { segmentItem, segmentTrack } from '@/components/ui/segment-styles';
+import { segmentItemDense, segmentTrack } from '@/components/ui/segment-styles';
 import { card, focusRing, rowDivider } from '@/components/ui/styles';
 import type { Ruang } from '@/features/ledger/types';
 import { PageHeader } from '@/features/shell/page-header';
@@ -32,6 +32,7 @@ import {
   unbudgetedRows,
 } from '@/features/rencana/copy';
 import type { RencanaData } from '@/features/rencana/types';
+import { TUJUAN_COPY } from '@/features/tujuan/copy';
 import { UTANG_COPY } from '@/features/utang/copy';
 import { REVIEW_COPY } from './review-copy';
 import {
@@ -56,8 +57,11 @@ import { RetryIsland } from './transaksi-islands';
  */
 
 export type Bagian = 'anggaran' | 'tagihan';
-/** Segmen Rencana (S11): Utang hanya di Pribadi, dirender halaman sendiri (`utang-section.tsx`). */
-export type Segment = Bagian | 'utang';
+/**
+ * Segmen Rencana: Utang (S11) hanya di Pribadi, Tujuan (S13) di kedua ruang; keduanya dirender
+ * halaman sendiri (`utang-section.tsx`, `tujuan-section.tsx`) dan dimuat terpisah dari `loadRencana`.
+ */
+export type Segment = Bagian | 'utang' | 'tujuan';
 
 // Lebar eksplisit: `w-full` + `-mx-4` hanya menggeser; baris harus melebar 2 × 16 px agar bilah dan
 // isinya selebar garis pemisah.
@@ -89,11 +93,12 @@ function reviewLink(ruang: Ruang, query: string): Route {
   return `/${ruang}/rencana/review${q === '' ? '' : `?${q}`}` as Route;
 }
 
-/** Segmen Anggaran | Tagihan, dan Utang di Pribadi saja (di Bersama tidak ada tautan mati, ui-ux:20). */
+/** Segmen Anggaran | Tagihan | Tujuan, dan Utang di Pribadi saja (di Bersama tidak ada tautan mati, ui-ux:20). */
 export function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Segment; query: string }) {
   const items: { b: Segment; label: string }[] = [
     { b: 'anggaran', label: 'Anggaran' },
     { b: 'tagihan', label: 'Tagihan' },
+    { b: 'tujuan', label: TUJUAN_COPY.segment },
     ...(ruang === 'pribadi' ? [{ b: 'utang' as const, label: UTANG_COPY.segment }] : []),
   ];
   return (
@@ -104,7 +109,7 @@ export function Segmen({ ruang, bagian, query }: { ruang: Ruang; bagian: Segment
           href={bagianHref(ruang, b, query)}
           scroll={false}
           aria-current={b === bagian ? 'page' : undefined}
-          className={segmentItem(b === bagian)}
+          className={segmentItemDense(b === bagian)}
         >
           {label}
         </Link>

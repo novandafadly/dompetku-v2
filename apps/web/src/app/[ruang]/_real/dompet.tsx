@@ -7,6 +7,8 @@ import { ArchivedAccounts } from '@/features/dompet/archived-accounts';
 import { ModalCard } from '@/features/dompet/modal-card';
 import { waitingItems, WaitingReimburseList } from '@/features/dompet/reimburse-list';
 import type { AccountVM, ReimbursableVM, Ruang, TradingOverviewVM } from '@/features/ledger/types';
+import { GoalLine } from '@/features/tujuan/goal-line';
+import type { GoalLineVM } from '@/features/tujuan/types';
 import { buildAccountHref, buildEntryHref, buildHref } from '@/features/shell/hrefs';
 import { PageHeader } from '@/features/shell/page-header';
 import { AddWalletHostIsland, AddWalletTriggerIsland } from './dompet-islands';
@@ -27,6 +29,7 @@ export function DompetReal({
   reimbursables,
   archived,
   trading,
+  goalLines = {},
 }: {
   ruang: Ruang;
   /** Query yang dibawa tautan (mode nyata: hanya `theme`), '' atau '?a=b'. */
@@ -38,6 +41,8 @@ export function DompetReal({
   archived: AccountVM[];
   /** Hanya Pribadi dengan dompet trading aktif: angka modal, atau `error` bila gagal dimuat. */
   trading?: TradingOverviewVM | 'error' | null;
+  /** Tujuan aktif per id dompet tabungan (S13-TJ10); menggantikan baris tipe dompet itu. */
+  goalLines?: Readonly<Record<string, GoalLineVM>>;
 }) {
   const accountHref = (id: string) => buildAccountHref(ruang, id, query);
   // Bersama tidak pernah menampilkan talangan, apa pun yang diterima (page juga tidak memuatnya).
@@ -72,6 +77,10 @@ export function DompetReal({
         }
         below={<ArchivedAccounts accounts={archived} accountHref={accountHref} />}
         modal={modal}
+        walletSub={(a) => {
+          const line = goalLines[a.id];
+          return line === undefined ? undefined : <GoalLine goal={line} />;
+        }}
       />
     </AddWalletHostIsland>
   );

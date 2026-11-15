@@ -274,6 +274,13 @@ export type LedgerErrorCode =
   | 'settlement_received'
   | 'settlement_voided'
   | 'settlement_not_received'
+  // S13: tujuan tabungan (0137–0138; bingkai S13 "Salinan galat S13").
+  | 'goal_exists'
+  | 'goal_target_past'
+  | 'goal_not_active'
+  | 'goal_not_reached'
+  | 'account_has_goal'
+  | 'goal_pocket_invalid'
   | 'not_found'
   | 'invalid'
   | 'network'

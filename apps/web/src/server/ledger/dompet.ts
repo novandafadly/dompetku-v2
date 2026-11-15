@@ -2,9 +2,11 @@ import 'server-only';
 import { z } from 'zod';
 import type pg from 'pg';
 import type { AccountVM, EntryVM, ReimbursableVM } from '@/features/ledger/types';
+import type { GoalLineVM } from '@/features/tujuan/types';
 import { accountEntries, accountEntriesTx, type AccountRow, mapAccountRow } from './read';
 import { openReimbursablesTx } from './reimburse';
 import { withLedger } from './retry';
+import { activeGoalLinesTx } from './tujuan';
 import type { LedgerCtx } from './write';
 
 /**
@@ -16,6 +18,8 @@ export interface DompetDaftar {
   /** Dompet terarsip ruang ini (saldo 0), untuk kartu `Diarsipkan`. */
   archived: AccountVM[];
   reimbursables: ReimbursableVM[];
+  /** Tujuan aktif per id dompet tabungan (S13-TJ10); kosong bila `withGoals` salah. */
+  goalLines: Record<string, GoalLineVM>;
 }
 
 async function archivedTx(c: pg.PoolClient, ctx: LedgerCtx, accountId?: string) {
@@ -35,10 +39,13 @@ async function archivedTx(c: pg.PoolClient, ctx: LedgerCtx, accountId?: string) 
 export async function loadDompetDaftar(
   ctx: LedgerCtx,
   kind: 'personal' | 'shared',
+  /** Ada dompet tabungan aktif: hanya saat itu teks tujuan dimuat (satu kueri tambahan). */
+  withGoals = false,
 ): Promise<DompetDaftar> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => ({
     archived: await archivedTx(c, ctx),
     reimbursables: kind === 'personal' ? await openReimbursablesTx(c, ctx) : [],
+    goalLines: withGoals ? await activeGoalLinesTx(c, ctx) : {},
   }));
 }
 

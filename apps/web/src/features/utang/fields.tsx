@@ -1,12 +1,8 @@
 'use client';
 
-import { shortDateLabel } from '@dompetku/domain';
 import Link from 'next/link';
-import { useId, type ReactNode, type RefObject } from 'react';
-import { Button, buttonClass } from '@/components/ui/button';
-import { FieldLabel, fieldShell } from '@/components/ui/field';
-import { FieldError } from '@/components/ui/field-messages';
-import { CircleNotchIcon } from '@/components/ui/icons/circle-notch';
+import { type ReactNode, type RefObject } from 'react';
+import { buttonClass } from '@/components/ui/button';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { UserPlusIcon } from '@/components/ui/icons/user-plus';
 import { WalletIcon } from '@/components/ui/icons/wallet';
@@ -22,93 +18,8 @@ import type { ContactVM } from './types';
  * kotak peringatan. Client Component (dimuat di chunk sheet, bukan di halaman).
  */
 
-/** `<input type="date">` berlabel + teks pasti (pemilih tanggal browser memakai format lokal). */
-export function DateInput({
-  label,
-  value,
-  onChange,
-  max,
-  min,
-  error,
-  busy,
-  inputRef,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  max: string;
-  min?: string;
-  error?: string | undefined;
-  busy: boolean;
-  inputRef?: RefObject<HTMLInputElement | null>;
-}) {
-  const id = useId();
-  const errorId = `${id}-e`;
-  const textId = `${id}-t`;
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <div className={`${fieldShell(error !== undefined)} px-3.5`}>
-        <input
-          id={id}
-          ref={inputRef}
-          type="date"
-          value={value}
-          min={min ?? '2020-01-01'}
-          max={max}
-          aria-invalid={error !== undefined || undefined}
-          aria-describedby={error === undefined ? textId : `${textId} ${errorId}`}
-          aria-disabled={busy || undefined}
-          onChange={(e) => {
-            if (!busy) onChange(e.target.value);
-          }}
-          className="min-h-11 w-full min-w-0 bg-transparent text-body font-medium text-text outline-none"
-        />
-      </div>
-      <p id={textId} className="text-meta font-semibold text-text-soft">
-        {value === '' ? 'Belum diisi' : `${shortDateLabel(value)} ${value.slice(0, 4)}`}
-      </p>
-      {error === undefined ? null : (
-        <div role="alert">
-          <FieldError id={errorId}>{error}</FieldError>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Tombol footer sheet: spinner + `Menyimpan…`, `aria-disabled` (fokus tidak lepas). */
-export function SaveButton({
-  formId,
-  saving,
-  label,
-  disabled = false,
-}: {
-  formId: string;
-  saving: boolean;
-  label: string;
-  /** Tidak bisa disimpan (mis. tanpa dompet di mode Baru): `aria-disabled`, fokus tidak lepas. */
-  disabled?: boolean;
-}) {
-  return (
-    <Button
-      type="submit"
-      form={formId}
-      aria-disabled={saving || disabled || undefined}
-      aria-busy={saving || undefined}
-      className="w-full aria-disabled:border-hairline aria-disabled:bg-surface-2 aria-disabled:text-text-muted aria-disabled:hover-pointer:bg-surface-2"
-    >
-      {saving ? (
-        <>
-          <CircleNotchIcon size={18} weight="bold" className="shrink-0 motion-safe:animate-spin" />
-          Menyimpan…
-        </>
-      ) : (
-        label
-      )}
-    </Button>
-  );
-}
+export { DateInput } from '@/components/ui/date-input';
+export { SaveButton } from '@/components/ui/save-button';
 
 /** Kotak `warning-tint` (bukan galat): saldo kurang, nominal dari data dompet. */
 export function WarningBox({ id, children }: { id?: string; children: ReactNode }) {

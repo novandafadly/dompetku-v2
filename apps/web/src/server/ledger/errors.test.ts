@@ -31,6 +31,20 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(toLedgerError(pgError('DK404', 'entry_not_found'))).toEqual({ code: 'not_found' });
   });
 
+  it('S13: DK409 goal_exists berbeda dari conflict; aturan DK422 tujuan = kode sama', () => {
+    expect(toLedgerError(pgError('DK409', 'goal_exists'))).toEqual({ code: 'goal_exists' });
+    for (const rule of [
+      'goal_target_past',
+      'goal_not_active',
+      'goal_not_reached',
+      'account_has_goal',
+      'goal_pocket_invalid',
+    ] as const) {
+      expect(toLedgerError({ code: 'DK422', message: rule })).toEqual({ code: rule });
+    }
+    expect(toLedgerError(pgError('DK404', 'goal_not_found'))).toEqual({ code: 'not_found' });
+  });
+
   it('DK400 membawa field dari detail', () => {
     expect(
       toLedgerError({ code: 'DK400', message: 'invalid_argument', detail: 'occurred_on' }),

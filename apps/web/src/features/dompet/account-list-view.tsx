@@ -19,10 +19,12 @@ function Group({
   pocket,
   accounts,
   accountHref,
+  walletSub,
 }: {
   pocket: Pocket;
   accounts: AccountVM[];
   accountHref: (id: string) => Route;
+  walletSub?: ((a: AccountVM) => ReactNode) | undefined;
 }) {
   const subtotal = accounts.reduce((sum, a) => sum + a.balance, 0);
   return (
@@ -52,7 +54,7 @@ function Group({
             href={accountHref(a.id)}
             icon={<WalletTypeIcon type={a.walletType} size={20} />}
             name={a.name}
-            type={WALLET_TYPE_LABEL[a.walletType]}
+            type={walletSub?.(a) ?? WALLET_TYPE_LABEL[a.walletType]}
             balance={a.balance}
           />
         ))}
@@ -75,6 +77,7 @@ export function AccountListView({
   above,
   below,
   modal,
+  walletSub,
 }: {
   ruang: Ruang;
   accounts: AccountVM[];
@@ -87,6 +90,8 @@ export function AccountListView({
   below?: ReactNode;
   /** Kartu tepat di bawah kelompok Trading (mode nyata, Pribadi: Modal trading, S12-TR2). */
   modal?: ReactNode;
+  /** Pengganti baris tipe dompet (mode nyata: teks tujuan, S13-TJ10); `undefined` = tipe biasa. */
+  walletSub?: (a: AccountVM) => ReactNode;
 }) {
   if (accounts.length === 0) {
     return (
@@ -138,7 +143,13 @@ export function AccountListView({
           const inPocket = accounts.filter((a) => a.pocket === pocket);
           if (inPocket.length === 0) return null;
           const group = (
-            <Group key={pocket} pocket={pocket} accounts={inPocket} accountHref={accountHref} />
+            <Group
+              key={pocket}
+              pocket={pocket}
+              accounts={inPocket}
+              accountHref={accountHref}
+              walletSub={walletSub}
+            />
           );
           // Kartu Modal ikut kolom kelompok Trading (urutan DOM: kelompok lalu kartu).
           return pocket === 'trading' && modal !== undefined ? (

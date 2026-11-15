@@ -70,7 +70,7 @@ function StatusMark({ received }: { received: boolean }) {
       {C.received}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 font-semibold text-warning">
+    <span className="inline-flex items-center gap-1 font-semibold text-text-soft">
       <ClockIcon size={14} className="shrink-0" />
       {C.waiting}
     </span>
@@ -115,11 +115,14 @@ function Pending({ vm }: { vm: SplitBalanceVM }) {
         {vm.pending.map((p) => {
           const mine = p.toId === vm.me.id;
           return (
-            <li key={p.id} className={`flex min-h-15.5 items-center gap-3 py-2 ${rowDivider}`}>
+            <li
+              key={p.id}
+              className={`flex min-h-15.5 flex-wrap items-center gap-x-3 gap-y-1 py-2 ${rowDivider}`}
+            >
               <span aria-hidden="true" className={`size-11 ${tile}`}>
                 <HandCoinsIcon size={20} />
               </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex min-w-24 flex-1 flex-col gap-0.5">
                 <span className="text-body/tight font-semibold text-text">
                   {`${nameOf(p.fromId, vm, true)} melunasi `}
                   <span className="whitespace-nowrap">{formatRupiah(p.amount)}</span>
@@ -134,7 +137,7 @@ function Pending({ vm }: { vm: SplitBalanceVM }) {
                   label={`Terima pelunasan dari ${vm.partner.name}`}
                 />
               ) : (
-                <span className="inline-flex items-center gap-1 text-meta font-semibold text-warning">
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-meta font-semibold text-text-soft">
                   <ClockIcon size={14} className="shrink-0" />
                   {`Menunggu ${vm.partner.name}`}
                 </span>
@@ -155,7 +158,7 @@ function BillBody({ bill, vm }: { bill: SplitBillVM; vm: SplitBalanceVM }) {
       <span aria-hidden="true" className={`size-11 ${tile}`}>
         <CategoryIcon name={bill.categoryName ?? undefined} kind="expense" size={20} />
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-24 flex-1 flex-col gap-0.5">
         <span className="line-clamp-2 text-body/tight font-semibold break-words text-text">
           {label}
         </span>
@@ -163,7 +166,7 @@ function BillBody({ bill, vm }: { bill: SplitBillVM; vm: SplitBalanceVM }) {
           {`Dibayar ${nameOf(bill.payerId, vm)} · bagian ${other} ${formatRupiah(partnerShareOf(bill))} · ${dateLabel(bill.occurredOn)}`}
         </span>
       </span>
-      <span className="text-label font-bold whitespace-nowrap text-text">
+      <span className="ml-auto text-label font-bold whitespace-nowrap text-text">
         {formatRupiah(bill.amount)}
       </span>
     </>
@@ -176,7 +179,7 @@ function SettlementBody({ s, vm }: { s: SplitSettlementVM; vm: SplitBalanceVM })
       <span aria-hidden="true" className={`size-11 ${tile}`}>
         <HandCoinsIcon size={20} />
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-24 flex-1 flex-col gap-0.5">
         <span className="text-body/tight font-semibold break-words text-text">
           {`${nameOf(s.fromId, vm, true)} melunasi ke ${nameOf(s.toId, vm)}`}
         </span>
@@ -190,14 +193,14 @@ function SettlementBody({ s, vm }: { s: SplitSettlementVM; vm: SplitBalanceVM })
           )}
         </span>
       </span>
-      <span className="text-label font-bold whitespace-nowrap text-text">
+      <span className="ml-auto text-label font-bold whitespace-nowrap text-text">
         {formatRupiah(s.amount)}
       </span>
     </>
   );
 }
 
-const ROW_BODY = `-mx-4 flex min-h-15.5 min-w-0 items-center gap-3 px-4 py-2 hover-pointer:bg-hover active:bg-hover ${focusRing}`;
+const ROW_BODY = `-mx-4 flex min-h-15.5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 hover-pointer:bg-hover active:bg-hover ${focusRing}`;
 
 function HistoryRow({
   item,
@@ -216,7 +219,7 @@ function HistoryRow({
     const href = buildEntryHref('bersama', item.expenseEntryId, query);
     const label = item.description ?? item.categoryName ?? 'tagihan';
     body = deleted ? (
-      <div className="-mx-4 flex min-h-15.5 min-w-0 items-center gap-3 px-4 py-2">
+      <div className="-mx-4 flex min-h-15.5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
         <BillBody bill={item} vm={vm} />
       </div>
     ) : (
@@ -238,7 +241,7 @@ function HistoryRow({
     }
   } else {
     body = (
-      <div className="-mx-4 flex min-h-15.5 min-w-0 items-center gap-3 px-4 py-2">
+      <div className="-mx-4 flex min-h-15.5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
         <SettlementBody s={item} vm={vm} />
       </div>
     );

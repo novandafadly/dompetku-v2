@@ -87,6 +87,9 @@ export const pairs: Pair[] = [
   pair('bersama', 'surface', TEXT, [7.7, 6.7]),
   pair('bersama', 'bersama-tint', TEXT, [6.7, 5.6]),
   pair('bersama', 'surface-3', TEXT),
+  // Isi bilah progres tujuan (bg-pribadi/bg-bersama) terhadap jalur bilah (surface-2), S13.
+  pair('pribadi', 'surface-2', NON_TEXT),
+  pair('bersama', 'surface-2', NON_TEXT),
   // Toast dibalik dari tema.
   pair('toast-text', 'toast-bg', TEXT, [16.5, 16.4]),
   pair('toast-action', 'toast-bg', TEXT, [6.9, 13.4]),

@@ -172,6 +172,10 @@ describe('PatunganReal (S12-PT2)', () => {
       'Menunggu Farida',
     );
     expect(screen.getByRole('button', { name: /^Batalkan pelunasan 14 Nov/ })).toBeTruthy();
+    // Status menunggu bukan peringatan: netral (ikon + teks), tanpa amber (S12S13-C4).
+    for (const el of screen.getAllByText(/^Menunggu/)) {
+      expect(el.className).not.toContain('text-warning');
+    }
   });
 
   it('pelunasan sudah diterima: pelunas tanpa Batalkan, dengan penjelasan; penerima dapat Batalkan penerimaan', () => {

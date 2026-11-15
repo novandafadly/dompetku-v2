@@ -35,7 +35,11 @@ export default async function Page({
   try {
     // Berurutan: puncak satu koneksi pool dari page ini (pool max 5).
     accounts = await ruangAccounts(ctx);
-    extra = await loadDompetDaftar(ctx, ctx.kind);
+    extra = await loadDompetDaftar(
+      ctx,
+      ctx.kind,
+      accounts.some((a) => a.pocket === 'tabungan' && !a.archived),
+    );
   } catch (e) {
     rethrowOrNotFound(e);
     console.error('[dompet] gagal memuat', errorTag(e));
@@ -62,6 +66,7 @@ export default async function Page({
       reimbursables={extra.reimbursables}
       archived={extra.archived}
       trading={trading ?? null}
+      goalLines={extra.goalLines}
     />
   );
 }
