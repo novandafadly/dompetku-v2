@@ -157,37 +157,40 @@ test('siapkan dompet; segmen Tujuan ada di Rencana; kosong tanpa dompet tabungan
   base.exp = (await incomeExpense()).exp;
 });
 
-test('Tambah tujuan; tab lain yang mendahului membuat goal_exists di kolom Dompet', async ({
-  page,
-  context,
-}) => {
-  await page.goto(tujuanUrl('pribadi'));
-  await expect(main(page).getByRole('heading', { name: 'Belum ada tujuan.' })).toBeVisible();
-  const sheetA = await openAdd(page);
-  await expect(sheetA.getByRole('combobox', { name: 'Dompet tabungan' })).toHaveValue(/.+/);
-  await fillGoal(sheetA, 'Tujuan kalah balapan', 3_000_000);
+test(
+  'Tambah tujuan; tab lain yang mendahului membuat goal_exists di kolom Dompet',
+  { tag: ['@T11'] },
+  async ({ page, context }) => {
+    await page.goto(tujuanUrl('pribadi'));
+    await expect(main(page).getByRole('heading', { name: 'Belum ada tujuan.' })).toBeVisible();
+    const sheetA = await openAdd(page);
+    await expect(sheetA.getByRole('combobox', { name: 'Dompet tabungan' })).toHaveValue(/.+/);
+    await fillGoal(sheetA, 'Tujuan kalah balapan', 3_000_000);
 
-  // Tab lain membuat tujuan pada dompet yang sama lebih dulu.
-  const other = await context.newPage();
-  await other.goto(tujuanUrl('pribadi'));
-  const sheetB = await openAdd(other);
-  await fillGoal(sheetB, G1, 10_000_000, TARGET_ON);
-  await sheetB.getByRole('button', { name: 'Simpan tujuan' }).click();
-  await expect(toasts(other).getByText(`Tujuan ${G1} dibuat di Pribadi`)).toBeVisible();
-  await expect(other.getByRole('dialog')).toHaveCount(0);
-  await other.close();
+    // Tab lain membuat tujuan pada dompet yang sama lebih dulu.
+    const other = await context.newPage();
+    await other.goto(tujuanUrl('pribadi'));
+    const sheetB = await openAdd(other);
+    await fillGoal(sheetB, G1, 10_000_000, TARGET_ON);
+    await sheetB.getByRole('button', { name: 'Simpan tujuan' }).click();
+    await expect(toasts(other).getByText(`Tujuan ${G1} dibuat di Pribadi`)).toBeVisible();
+    await expect(other.getByRole('dialog')).toHaveCount(0);
+    await other.close();
 
-  await sheetA.getByRole('button', { name: 'Simpan tujuan' }).click();
-  await expect(
-    sheetA.getByText(`${TAB} sudah punya tujuan aktif. Selesaikan atau arsipkan tujuan itu dulu.`),
-  ).toBeVisible();
-  await expect(toasts(page).getByText(/dibuat di/)).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+    await sheetA.getByRole('button', { name: 'Simpan tujuan' }).click();
+    await expect(
+      sheetA.getByText(
+        `${TAB} sudah punya tujuan aktif. Selesaikan atau arsipkan tujuan itu dulu.`,
+      ),
+    ).toBeVisible();
+    await expect(toasts(page).getByText(/dibuat di/)).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  expect(await goalRows(G1)).toEqual([{ status: 'active', target_on: TARGET_ON }]);
-  expect(await goalRows('Tujuan kalah balapan')).toEqual([]);
-});
+    expect(await goalRows(G1)).toEqual([{ status: 'active', target_on: TARGET_ON }]);
+    expect(await goalRows('Tujuan kalah balapan')).toEqual([]);
+  },
+);
 
 test('kartu kosong: Belum ada yang terkumpul tanpa Rp 0; semua dompet bertujuan: tanpa Tambah tujuan', async ({
   page,
@@ -207,75 +210,79 @@ test('kartu kosong: Belum ada yang terkumpul tanpa Rp 0; semua dompet bertujuan:
   await expect(main(page).getByText(/Semua dompet tabungan sudah punya tujuan/)).toBeVisible();
 });
 
-test('transfer menggeser progres dan Perlu; Urungkan mengembalikannya; I6 tetap', async ({
-  page,
-}) => {
-  await page.goto(tujuanUrl('pribadi'));
-  const perluNol = await perluOf(page, G1);
+test(
+  'transfer menggeser progres dan Perlu; Urungkan mengembalikannya; I6 tetap',
+  { tag: ['@T11'] },
+  async ({ page }) => {
+    await page.goto(tujuanUrl('pribadi'));
+    const perluNol = await perluOf(page, G1);
 
-  await transfer(page, SUMBER, TAB, 4_000_000);
-  await page.goto(tujuanUrl('pribadi'));
-  let c = card(page, G1);
-  await expect(c).toContainText(rpRe(4_000_000));
-  await expect(c).toContainText('40%');
-  await expect(c).toContainText(`Sisa Rp ${digits(6_000_000)}`);
-  await expect(c.getByRole('progressbar', { name: G1 })).toHaveAttribute('aria-valuenow', '40');
-  expect(await perluOf(page, G1)).toBeLessThan(perluNol);
+    await transfer(page, SUMBER, TAB, 4_000_000);
+    await page.goto(tujuanUrl('pribadi'));
+    let c = card(page, G1);
+    await expect(c).toContainText(rpRe(4_000_000));
+    await expect(c).toContainText('40%');
+    await expect(c).toContainText(`Sisa Rp ${digits(6_000_000)}`);
+    await expect(c.getByRole('progressbar', { name: G1 })).toHaveAttribute('aria-valuenow', '40');
+    expect(await perluOf(page, G1)).toBeLessThan(perluNol);
 
-  // Urungkan dari toast Transfer: progres kembali ke nol.
-  await transfer(page, SUMBER, TAB, 1_000_000);
-  await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
-  await expect.poll(() => balanceOf(TAB)).toBe(4_000_000);
-  await page.goto(tujuanUrl('pribadi'));
-  c = card(page, G1);
-  await expect(c).toContainText('40%');
-  await expect(c).toContainText(`Sisa Rp ${digits(6_000_000)}`);
+    // Urungkan dari toast Transfer: progres kembali ke nol.
+    await transfer(page, SUMBER, TAB, 1_000_000);
+    await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
+    await expect.poll(() => balanceOf(TAB)).toBe(4_000_000);
+    await page.goto(tujuanUrl('pribadi'));
+    c = card(page, G1);
+    await expect(c).toContainText('40%');
+    await expect(c).toContainText(`Sisa Rp ${digits(6_000_000)}`);
 
-  const now = await incomeExpense();
-  expect(now).toEqual(base);
-});
+    const now = await incomeExpense();
+    expect(now).toEqual(base);
+  },
+);
 
-test('Tercapai: Selesaikan tujuan memakai dialog; kartu pindah ke Selesai dan diarsipkan; Urungkan memulihkan', async ({
-  page,
-}) => {
-  await transfer(page, SUMBER, TAB, 6_500_000);
-  await page.goto(tujuanUrl('pribadi'));
-  const c = card(page, G1);
-  await expect(c).toContainText('Tercapai');
-  await expect(c).toContainText('100%');
-  await expect(c).toContainText(`Selesaikan supaya ${TAB} bisa dipakai untuk tujuan baru.`);
-  await expect(c).not.toContainText('Sisa');
-  await expect(c.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+test(
+  'Tercapai: Selesaikan tujuan memakai dialog; kartu pindah ke Selesai dan diarsipkan; Urungkan memulihkan',
+  { tag: ['@T11'] },
+  async ({ page }) => {
+    await transfer(page, SUMBER, TAB, 6_500_000);
+    await page.goto(tujuanUrl('pribadi'));
+    const c = card(page, G1);
+    await expect(c).toContainText('Tercapai');
+    await expect(c).toContainText('100%');
+    await expect(c).toContainText(`Selesaikan supaya ${TAB} bisa dipakai untuk tujuan baru.`);
+    await expect(c).not.toContainText('Sisa');
+    await expect(c.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
 
-  const finish = c.getByRole('button', { name: `Selesaikan tujuan ${G1}` });
-  const dialog = page.getByRole('alertdialog', { name: `Selesaikan ${G1}?` });
-  await expect(async () => {
-    if ((await dialog.count()) === 0) await finish.click();
-    await expect(dialog).toBeVisible({ timeout: 2_000 });
-  }).toPass();
-  await expect(dialog.getByRole('button', { name: 'Kembali' })).toBeFocused();
-  await dialog.getByRole('button', { name: 'Selesaikan', exact: true }).click();
-  await expect(toasts(page).getByText(`Tujuan ${G1} selesai`)).toBeVisible();
-  await expect(card(page, G1)).toHaveCount(0);
-  expect((await goalRows(G1))[0]?.status).toBe('completed');
+    const finish = c.getByRole('button', { name: `Selesaikan tujuan ${G1}` });
+    const dialog = page.getByRole('alertdialog', { name: `Selesaikan ${G1}?` });
+    await expect(async () => {
+      if ((await dialog.count()) === 0) await finish.click();
+      await expect(dialog).toBeVisible({ timeout: 2_000 });
+    }).toPass();
+    await expect(dialog.getByRole('button', { name: 'Kembali' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Selesaikan', exact: true }).click();
+    await expect(toasts(page).getByText(`Tujuan ${G1} selesai`)).toBeVisible();
+    await expect(card(page, G1)).toHaveCount(0);
+    expect((await goalRows(G1))[0]?.status).toBe('completed');
 
-  await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
-  await expect.poll(async () => (await goalRows(G1))[0]?.status).toBe('active');
-  await page.goto(tujuanUrl('pribadi'));
-  await expect(card(page, G1)).toBeVisible();
+    await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
+    await expect.poll(async () => (await goalRows(G1))[0]?.status).toBe('active');
+    await page.goto(tujuanUrl('pribadi'));
+    await expect(card(page, G1)).toBeVisible();
 
-  // Selesaikan lagi (tanpa urungkan) untuk langkah berikutnya.
-  await card(page, G1)
-    .getByRole('button', { name: `Selesaikan tujuan ${G1}` })
-    .click();
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'Selesaikan', exact: true })
-    .click();
-  await expect(toasts(page).getByText(`Tujuan ${G1} selesai`).last()).toBeVisible();
-  await expect.poll(async () => (await goalRows(G1))[0]?.status).toBe('completed');
-  expect(await incomeExpense()).toEqual(base);
-});
+    // Selesaikan lagi (tanpa urungkan) untuk langkah berikutnya.
+    await card(page, G1)
+      .getByRole('button', { name: `Selesaikan tujuan ${G1}` })
+      .click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Selesaikan', exact: true })
+      .click();
+    await expect(toasts(page).getByText(`Tujuan ${G1} selesai`).last()).toBeVisible();
+    await expect.poll(async () => (await goalRows(G1))[0]?.status).toBe('completed');
+    expect(await incomeExpense()).toEqual(base);
+  },
+);
 
 test('tujuan baru di dompet yang sama; Pulihkan yang lama terhalang; Ubah; Arsipkan + Urungkan', async ({
   page,
@@ -334,34 +341,36 @@ test('tujuan baru di dompet yang sama; Pulihkan yang lama terhalang; Ubah; Arsip
   expect(await incomeExpense()).toEqual(base);
 });
 
-test('Bersama: tujuan dibuat, solo tanpa "Dibuat", tanpa jejak tujuan Pribadi (HTML + RSC)', async ({
-  page,
-}) => {
-  await page.goto(tujuanUrl('bersama'));
-  await expect(
-    main(page).getByRole('heading', { name: 'Belum ada dompet tabungan.' }),
-  ).toBeVisible();
-  await addSavings(page, 'bersama', TAB_B);
-  await page.goto(tujuanUrl('bersama'));
-  const sheet = await openAdd(page);
-  await expect(sheet).toContainText('Bersama');
-  await fillGoal(sheet, NAME60, 12_345_678_900);
-  await sheet.getByRole('button', { name: 'Simpan tujuan' }).click();
-  await expect(toasts(page).getByText(`Tujuan ${NAME60} dibuat di Bersama`)).toBeVisible();
-  const c = card(page, NAME60);
-  await expect(c).toBeVisible();
-  await expect(c).not.toContainText('Dibuat ');
-  const nav = page.getByRole('navigation', { name: 'Bagian Rencana' });
-  await expect(nav.getByRole('link')).toHaveText(['Anggaran', 'Tagihan', 'Tujuan']);
+test(
+  'Bersama: tujuan dibuat, solo tanpa "Dibuat", tanpa jejak tujuan Pribadi (HTML + RSC)',
+  { tag: ['@B22'] },
+  async ({ page }) => {
+    await page.goto(tujuanUrl('bersama'));
+    await expect(
+      main(page).getByRole('heading', { name: 'Belum ada dompet tabungan.' }),
+    ).toBeVisible();
+    await addSavings(page, 'bersama', TAB_B);
+    await page.goto(tujuanUrl('bersama'));
+    const sheet = await openAdd(page);
+    await expect(sheet).toContainText('Bersama');
+    await fillGoal(sheet, NAME60, 12_345_678_900);
+    await sheet.getByRole('button', { name: 'Simpan tujuan' }).click();
+    await expect(toasts(page).getByText(`Tujuan ${NAME60} dibuat di Bersama`)).toBeVisible();
+    const c = card(page, NAME60);
+    await expect(c).toBeVisible();
+    await expect(c).not.toContainText('Dibuat ');
+    const nav = page.getByRole('navigation', { name: 'Bagian Rencana' });
+    await expect(nav.getByRole('link')).toHaveText(['Anggaran', 'Tagihan', 'Tujuan']);
 
-  const { bodies, unread } = await bersamaResponses(page, () => page.goto(tujuanUrl('bersama')));
-  expect(unread).toEqual([]);
-  for (const body of bodies) {
-    expect(body).not.toContain(G1);
-    expect(body).not.toContain(G2);
-    expect(body).not.toContain(TAB);
-  }
-});
+    const { bodies, unread } = await bersamaResponses(page, () => page.goto(tujuanUrl('bersama')));
+    expect(unread).toEqual([]);
+    for (const body of bodies) {
+      expect(body).not.toContain(G1);
+      expect(body).not.toContain(G2);
+      expect(body).not.toContain(TAB);
+    }
+  },
+);
 
 test('segmen empat item di 320 px terbaca utuh; tanpa gulir samping; axe di dua tema dan tiga lebar', async ({
   page,

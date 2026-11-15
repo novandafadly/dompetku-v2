@@ -197,37 +197,39 @@ test('Ubah dan Arsipkan dari kartu Detail dompet memakai host yang sama', async 
   await expect(main(page).getByRole('region', { name: GOAL, exact: true })).toContainText('50%');
 });
 
-test('arsip dompet bertujuan: kartu penjelas (saldo 0) lalu berhasil sesudah tujuan diarsipkan', async ({
-  page,
-}) => {
-  // Kosongkan dompet: tujuan masih aktif, jadi tombol arsip tidak ada dan kartu menjelaskan.
-  await transfer(page, TAB, SUMBER, 1_000_000);
-  await expect.poll(() => balanceOf(TAB)).toBe(0);
-  await openDetail(page, TAB);
-  await expect(main(page).getByRole('button', { name: 'Arsipkan dompet' })).toHaveCount(0);
-  await expect(
-    main(page).getByText(
-      `${TAB} masih punya tujuan aktif ${GOAL}. Selesaikan atau arsipkan tujuannya dulu, lalu arsipkan dompet ini.`,
-    ),
-  ).toBeVisible();
-  await main(page).getByRole('link', { name: 'Lihat tujuan' }).click();
-  await expect(page).toHaveURL(/\/pribadi\/rencana\?bagian=tujuan/);
+test(
+  'arsip dompet bertujuan: kartu penjelas (saldo 0) lalu berhasil sesudah tujuan diarsipkan',
+  { tag: ['@T11'] },
+  async ({ page }) => {
+    // Kosongkan dompet: tujuan masih aktif, jadi tombol arsip tidak ada dan kartu menjelaskan.
+    await transfer(page, TAB, SUMBER, 1_000_000);
+    await expect.poll(() => balanceOf(TAB)).toBe(0);
+    await openDetail(page, TAB);
+    await expect(main(page).getByRole('button', { name: 'Arsipkan dompet' })).toHaveCount(0);
+    await expect(
+      main(page).getByText(
+        `${TAB} masih punya tujuan aktif ${GOAL}. Selesaikan atau arsipkan tujuannya dulu, lalu arsipkan dompet ini.`,
+      ),
+    ).toBeVisible();
+    await main(page).getByRole('link', { name: 'Lihat tujuan' }).click();
+    await expect(page).toHaveURL(/\/pribadi\/rencana\?bagian=tujuan/);
 
-  const card = main(page).getByRole('region', { name: GOAL, exact: true });
-  await card.getByRole('button', { name: `Arsipkan tujuan ${GOAL}` }).click();
-  const dialog = page.getByRole('alertdialog', { name: `Arsipkan ${GOAL}?` });
-  await dialog.getByRole('button', { name: 'Arsipkan', exact: true }).click();
-  await expect(toasts(page).getByText(`Tujuan ${GOAL} diarsipkan`)).toBeVisible();
-  expect(await goalStatus(GOAL)).toBe('archived');
+    const card = main(page).getByRole('region', { name: GOAL, exact: true });
+    await card.getByRole('button', { name: `Arsipkan tujuan ${GOAL}` }).click();
+    const dialog = page.getByRole('alertdialog', { name: `Arsipkan ${GOAL}?` });
+    await dialog.getByRole('button', { name: 'Arsipkan', exact: true }).click();
+    await expect(toasts(page).getByText(`Tujuan ${GOAL} diarsipkan`)).toBeVisible();
+    expect(await goalStatus(GOAL)).toBe('archived');
 
-  await openDetail(page, TAB);
-  await expect(main(page).getByText(`Belum ada tujuan untuk ${TAB}.`)).toBeVisible();
-  await main(page).getByRole('button', { name: 'Arsipkan dompet' }).click();
-  const archive = page.getByRole('alertdialog', { name: `Arsipkan ${TAB}?` });
-  await archive.getByRole('button', { name: 'Arsipkan', exact: true }).click();
-  await expect(toasts(page).getByText(new RegExp(`${TAB}.*diarsipkan`))).toBeVisible();
-  await expect(page).toHaveURL(/\/pribadi\/dompet(\?|$)/);
-});
+    await openDetail(page, TAB);
+    await expect(main(page).getByText(`Belum ada tujuan untuk ${TAB}.`)).toBeVisible();
+    await main(page).getByRole('button', { name: 'Arsipkan dompet' }).click();
+    const archive = page.getByRole('alertdialog', { name: `Arsipkan ${TAB}?` });
+    await archive.getByRole('button', { name: 'Arsipkan', exact: true }).click();
+    await expect(toasts(page).getByText(new RegExp(`${TAB}.*diarsipkan`))).toBeVisible();
+    await expect(page).toHaveURL(/\/pribadi\/dompet(\?|$)/);
+  },
+);
 
 test('balapan: tujuan dibuat di tab lain sesudah dialog arsip dibuka = account_has_goal di dialog', async ({
   page,

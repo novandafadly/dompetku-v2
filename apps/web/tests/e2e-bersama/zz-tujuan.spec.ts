@@ -155,114 +155,118 @@ test('N membuat tujuan Bersama; "Dibuat Novanda" tampil di N dan F', async ({
   expect(row).toMatchObject({ status: 'active', target: String(TARGET) });
 });
 
-test('F mengubah tujuan yang dibuat N (K1: semua anggota boleh menulis)', async ({
-  page,
-  partnerPage,
-}) => {
-  await partnerPage.goto(rencana);
-  const sheet = await openSheet(
-    partnerPage,
-    main(partnerPage).getByRole('button', { name: `Ubah tujuan ${GOAL}` }),
-    /^Ubah tujuan/,
-    /Target/,
-  );
-  await expect(sheet.getByText(`Dompet: ${SAV}`)).toBeVisible();
-  await sheet.getByRole('textbox', { name: /Target/ }).fill(String(TARGET_EDIT));
-  await sheet.getByRole('button', { name: 'Simpan perubahan' }).click();
-  await expect(toasts(partnerPage).getByText(`Tujuan ${GOAL} diperbarui di Bersama`)).toBeVisible();
-  await expect(card(partnerPage, GOAL)).toContainText(rp(TARGET_EDIT));
-  // Pembuat tetap N; yang mengubah F.
-  const row = await goalRow(GOAL);
-  expect(row?.target).toBe(String(TARGET_EDIT));
-  expect(row?.updated_by).not.toBe(row?.created_by);
-  await expect(card(partnerPage, GOAL)).toContainText('Dibuat Novanda');
-  await page.goto(rencana);
-  await expect(card(page, GOAL)).toContainText(rp(TARGET_EDIT));
-});
-
-test('F setor dari dompet Pribadinya ke tabungan Bersama: progres naik di kedua anggota; Detail dompet', async ({
-  page,
-  partnerPage,
-  kanari,
-}) => {
-  const before = await balanceOf('personal', PARTNER, kanari.f.wallet);
-  await setorKeTabungan(partnerPage, kanari.f.wallet, SETOR);
-  expect(await balanceOf('personal', PARTNER, kanari.f.wallet)).toBe(before - SETOR);
-  expect(await balanceOf('shared', OWNER, SAV)).toBe(SETOR);
-
-  for (const p of [page, partnerPage]) {
-    await p.goto(rencana);
-    await expect(card(p, GOAL)).toContainText('25%');
-    await expect(card(p, GOAL).getByRole('progressbar', { name: GOAL })).toHaveAttribute(
-      'aria-valuenow',
-      '25',
+test(
+  'F mengubah tujuan yang dibuat N (K1: semua anggota boleh menulis)',
+  { tag: ['@T11'] },
+  async ({ page, partnerPage }) => {
+    await partnerPage.goto(rencana);
+    const sheet = await openSheet(
+      partnerPage,
+      main(partnerPage).getByRole('button', { name: `Ubah tujuan ${GOAL}` }),
+      /^Ubah tujuan/,
+      /Target/,
     );
-    await expect(card(p, GOAL)).toContainText(`Sisa ${rp(TARGET_EDIT - SETOR)}`);
-    // Detail dompet tabungan Bersama: kartu tujuan yang sama.
-    await p.goto('/bersama/dompet');
-    await main(p)
-      .getByRole('link', { name: new RegExp(SAV) })
-      .first()
-      .click();
-    await expect(p.getByRole('heading', { level: 1, name: SAV })).toBeVisible();
-    await expect(card(p, GOAL)).toContainText('25%');
-    await expect(card(p, GOAL)).toContainText('Dibuat Novanda');
-  }
-  // Daftar Dompet Bersama: teks tujuan di baris tabungan.
-  await page.goto('/bersama/dompet');
-  await expect(main(page).getByRole('link', { name: new RegExp(SAV) })).toContainText(
-    `${GOAL} · 25%`,
-  );
-});
+    await expect(sheet.getByText(`Dompet: ${SAV}`)).toBeVisible();
+    await sheet.getByRole('textbox', { name: /Target/ }).fill(String(TARGET_EDIT));
+    await sheet.getByRole('button', { name: 'Simpan perubahan' }).click();
+    await expect(
+      toasts(partnerPage).getByText(`Tujuan ${GOAL} diperbarui di Bersama`),
+    ).toBeVisible();
+    await expect(card(partnerPage, GOAL)).toContainText(rp(TARGET_EDIT));
+    // Pembuat tetap N; yang mengubah F.
+    const row = await goalRow(GOAL);
+    expect(row?.target).toBe(String(TARGET_EDIT));
+    expect(row?.updated_by).not.toBe(row?.created_by);
+    await expect(card(partnerPage, GOAL)).toContainText('Dibuat Novanda');
+    await page.goto(rencana);
+    await expect(card(page, GOAL)).toContainText(rp(TARGET_EDIT));
+  },
+);
 
-test('tujuan Pribadi kanari N tidak ada di HTML/RSC pasangan maupun ruang Bersama', async ({
-  page,
-  partnerPage,
-}) => {
-  test.setTimeout(180_000);
-  // Kontrol positif: N sendiri melihat tujuan Pribadinya.
-  await page.goto('/pribadi/rencana?bagian=tujuan');
-  await expect(card(page, N_GOAL)).toContainText(rp(9_876_543));
-  const ids = await adminQuery<{ id: string }>(
-    `select a.id::text from app.accounts a where a.name = $1
+test(
+  'F setor dari dompet Pribadinya ke tabungan Bersama: progres naik di kedua anggota; Detail dompet',
+  { tag: ['@T11'] },
+  async ({ page, partnerPage, kanari }) => {
+    const before = await balanceOf('personal', PARTNER, kanari.f.wallet);
+    await setorKeTabungan(partnerPage, kanari.f.wallet, SETOR);
+    expect(await balanceOf('personal', PARTNER, kanari.f.wallet)).toBe(before - SETOR);
+    expect(await balanceOf('shared', OWNER, SAV)).toBe(SETOR);
+
+    for (const p of [page, partnerPage]) {
+      await p.goto(rencana);
+      await expect(card(p, GOAL)).toContainText('25%');
+      await expect(card(p, GOAL).getByRole('progressbar', { name: GOAL })).toHaveAttribute(
+        'aria-valuenow',
+        '25',
+      );
+      await expect(card(p, GOAL)).toContainText(`Sisa ${rp(TARGET_EDIT - SETOR)}`);
+      // Detail dompet tabungan Bersama: kartu tujuan yang sama.
+      await p.goto('/bersama/dompet');
+      await main(p)
+        .getByRole('link', { name: new RegExp(SAV) })
+        .first()
+        .click();
+      await expect(p.getByRole('heading', { level: 1, name: SAV })).toBeVisible();
+      await expect(card(p, GOAL)).toContainText('25%');
+      await expect(card(p, GOAL)).toContainText('Dibuat Novanda');
+    }
+    // Daftar Dompet Bersama: teks tujuan di baris tabungan.
+    await page.goto('/bersama/dompet');
+    await expect(main(page).getByRole('link', { name: new RegExp(SAV) })).toContainText(
+      `${GOAL} · 25%`,
+    );
+  },
+);
+
+test(
+  'tujuan Pribadi kanari N tidak ada di HTML/RSC pasangan maupun ruang Bersama',
+  { tag: ['@B22'] },
+  async ({ page, partnerPage }) => {
+    test.setTimeout(180_000);
+    // Kontrol positif: N sendiri melihat tujuan Pribadinya.
+    await page.goto('/pribadi/rencana?bagian=tujuan');
+    await expect(card(page, N_GOAL)).toContainText(rp(9_876_543));
+    const ids = await adminQuery<{ id: string }>(
+      `select a.id::text from app.accounts a where a.name = $1
      union select g.id::text from app.goals g where g.name = $2`,
-    [N_SAV, N_GOAL],
-  );
-  expect(ids).toHaveLength(2);
-  const secrets = [N_GOAL, N_SAV, '9.876.543', ...ids.map((r) => r.id)];
-  const urls = [
-    '/bersama/rencana?bagian=tujuan',
-    '/bersama/dompet',
-    '/bersama/beranda',
-    '/pribadi/rencana?bagian=tujuan',
-    '/pribadi/dompet',
-  ];
-  // Hanya F yang diperiksa pada /pribadi/* (Pribadi F bukan Pribadi N); N pada /bersama/*.
-  const checks: [string, Page, string[]][] = [
-    ['F', partnerPage, urls],
-    ['N', page, urls.filter((u) => u.startsWith('/bersama'))],
-  ];
-  for (const [who, p, list] of checks) {
-    for (const url of list) {
-      const doc = await bersamaResponses(p, () => p.goto(url));
-      expect(doc.unread, `${who} ${url}`).toEqual([]);
-      const rsc = await p.evaluate(async (u) => {
-        const r = await fetch(`${u}${u.includes('?') ? '&' : '?'}_rsc`, {
-          headers: { RSC: '1' },
-          redirect: 'manual',
-        });
-        return { status: r.status, body: await r.text() };
-      }, url);
-      expect(rsc.status, `${who} RSC ${url}`).toBe(200);
-      const html = await p.content();
-      for (const s of secrets) {
-        for (const body of [...doc.bodies, html, rsc.body]) {
-          expect(body.includes(s), `${who} ${url}: ${s}`).toBe(false);
+      [N_SAV, N_GOAL],
+    );
+    expect(ids).toHaveLength(2);
+    const secrets = [N_GOAL, N_SAV, '9.876.543', ...ids.map((r) => r.id)];
+    const urls = [
+      '/bersama/rencana?bagian=tujuan',
+      '/bersama/dompet',
+      '/bersama/beranda',
+      '/pribadi/rencana?bagian=tujuan',
+      '/pribadi/dompet',
+    ];
+    // Hanya F yang diperiksa pada /pribadi/* (Pribadi F bukan Pribadi N); N pada /bersama/*.
+    const checks: [string, Page, string[]][] = [
+      ['F', partnerPage, urls],
+      ['N', page, urls.filter((u) => u.startsWith('/bersama'))],
+    ];
+    for (const [who, p, list] of checks) {
+      for (const url of list) {
+        const doc = await bersamaResponses(p, () => p.goto(url));
+        expect(doc.unread, `${who} ${url}`).toEqual([]);
+        const rsc = await p.evaluate(async (u) => {
+          const r = await fetch(`${u}${u.includes('?') ? '&' : '?'}_rsc`, {
+            headers: { RSC: '1' },
+            redirect: 'manual',
+          });
+          return { status: r.status, body: await r.text() };
+        }, url);
+        expect(rsc.status, `${who} RSC ${url}`).toBe(200);
+        const html = await p.content();
+        for (const s of secrets) {
+          for (const body of [...doc.bodies, html, rsc.body]) {
+            expect(body.includes(s), `${who} ${url}: ${s}`).toBe(false);
+          }
         }
       }
     }
-  }
-});
+  },
+);
 
 test('axe dan 320 px: Tujuan Bersama, Detail dompet tabungan, sheet Ubah (N dan F); budget JS', async ({
   page,
