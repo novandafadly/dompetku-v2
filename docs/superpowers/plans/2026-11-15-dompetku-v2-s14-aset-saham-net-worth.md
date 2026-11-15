@@ -90,6 +90,19 @@ Rekomendasi: S14 dikirim dengan **manual**; bila setelah dua minggu pemakaian pe
 - [x] `docs/design/s14-bingkai.md` (format `s13-bingkai.md`, ID `S14-AS…`/`S14-SH…`/`S14-NW…`): hero `Kekayaan bersih` (komponen sebagai baris teks: Kas, Aset, Saham, Piutang, Utang; `30 hari lalu`; label `Harga {tanggal}` / `Sebagian saham belum ada harga`); kelompok `Aset` di daftar Dompet; sheet `Tambah aset` (jenis, nama, nilai sekarang); Detail aset (`Perbarui nilai`, riwayat dengan baris `Perubahan nilai`); Detail dompet saham (holding: kode, lot/lembar, harga rata-rata, harga terakhir + tanggal, nilai pasar, P/L belum terealisasi, P/L terealisasi; keadaan `Belum ada harga`, `Harga perlu dicek`, `usang`); sheet `Beli saham`, `Jual saham` (pratinjau P/L dari server sebelum simpan), `Isi harga` (konfirmasi lonjakan), `Saham yang sudah dimiliki`; dialog `Batalkan transaksi saham terakhir?`; arsip ditolak (`archive-blocked-card`); salinan galat tanpa nominal; 320/390/1280 terang dan gelap. Salinan tanpa "Net worth", "Portfolio", tanpa hijau/merah sebagai satu-satunya penanda untung/rugi (tanda + kata `untung`/`rugi`, minus U+2212).
 - [x] Bagian "Untuk kursi design reviewer" (daftar periksa untuk Task 9–11).
 
+### Ruling pengendali atas hasil Task 1 (2026-11-15; rujukan: `docs/design/s14-bingkai.md` bagian "Kendala")
+
+Pemilik meminta "best recommendation", jadi usulan agen Task 1 diambil sebagai berikut (bisa dibalik tanpa migrasi destruktif; tandai `[konfirmasi pemilik]`):
+
+- **Dompet saham keluar dari sheet Transfer** dan DB menolak jalur generik ke/dari dompet saham (transfer, `space_transfer`, saldo awal, `reconcile_balance`, `move_entry_to_space`) dengan `stock_account_trade_only`; hanya fungsi trade (Task 4–5) yang boleh menyentuh saldonya (DQ18). Dikerjakan di Task 4–5, bukan Task 2.
+- **`reconcile_balance` menolak pocket `aset`** (Task 3): di Detail aset `Cocokkan saldo` diganti `Perbarui nilai` dan `Ubah saldo awal` menjadi `Ubah nilai awal`.
+- **Tambah aset berjenis Saham tanpa `Nilai sekarang`**; `create_account` menolak saldo awal untuk saham (Task 3).
+- **`app.accounts.wallet_type` NOT NULL**: dompet aset memakai nilai tetap yang diputuskan Task 2 (laporkan nilainya).
+- **Kelompok Aset tanpa subtotal; baris dompet saham memakai nilai pasar dari SQL**: `asset_overview` membawa `market_value` dan `missing_price_count` per dompet saham (Task 3/5).
+- **Total keluar sheet Beli dihitung di server** lewat `api.preview_buy` bila murah; jika tidak, perkiraan klien diberi label (Task 5/10).
+- **Label**: `Isi dari dompet` / `Cairkan ke dompet`; urutan hero Kas · Aset · Saham · Piutang · Utang; label usang `Harga lama`; tanpa "Dibeli dari dompet" di sheet Tambah aset (isi lewat Transfer).
+- `modalMoveOf` (`dompet-detail.tsx:57–74`) dan jumlah subtotal kelompok di TS (`account-list-view.tsx:29`) ikut diperbaiki di Task 9–10.
+
 ### Task 2: Migrasi `0139` enum + `0140` tabel aset (DB) — opus, test-first
 
 - [ ] `0139`: `alter type app.pocket add value 'aset'`, `alter type app.entry_kind add value 'valuation'` (tanpa pemakaian di berkas yang sama).
