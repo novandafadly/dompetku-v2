@@ -100,8 +100,11 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
 -- ===== Keadaan awal =====
 select is(pg_temp.total(tests.f(), :'fp'), '0/0/0/0/0/0/false', 'tanpa dompet trading: satu baris total nol');
 select is(pg_temp.w(:'tr1'), '0/0/0/0/0/0/false', 'dompet trading baru: belum ada setoran');
-select is(tests.web_val(tests.n(), format($$select string_agg(coalesce(name, 'TOTAL'), ',' order by coalesce(name, '~'))
-    || ':' || ((array_agg(account_id))[count(*)] is null) from api.trading_overview(%L)$$, :'np')),
+-- Urutan memakai nomor baris asli fungsi (ordinality), bukan collation: '~' terurut sebelum huruf di en_US.
+select is(tests.web_val(tests.n(), format($$select string_agg(coalesce(name, 'TOTAL'), ',' order by ord)
+    || ':' || ((array_agg(account_id order by ord))[count(*)] is null)
+    from api.trading_overview(%L) with ordinality as t(account_id, name, balance, capital_in, capital_out,
+         capital_left, realized, shortfall, has_deposit, ord)$$, :'np')),
   'Kripto,Saham,TOTAL:true', 'satu baris per dompet trading + total (baris terakhir); non-trading tidak ikut');
 
 -- Pengeluaran berkategori + anggaran sebagai pembanding I6.
