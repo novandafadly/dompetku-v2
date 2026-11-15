@@ -70,7 +70,7 @@ function StatusMark({ received }: { received: boolean }) {
       {C.received}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 font-semibold text-warning">
+    <span className="inline-flex items-center gap-1 font-semibold text-text-soft">
       <ClockIcon size={14} className="shrink-0" />
       {C.waiting}
     </span>
@@ -134,7 +134,7 @@ function Pending({ vm }: { vm: SplitBalanceVM }) {
                   label={`Terima pelunasan dari ${vm.partner.name}`}
                 />
               ) : (
-                <span className="inline-flex items-center gap-1 text-meta font-semibold text-warning">
+                <span className="inline-flex items-center gap-1 text-meta font-semibold text-text-soft">
                   <ClockIcon size={14} className="shrink-0" />
                   {`Menunggu ${vm.partner.name}`}
                 </span>
