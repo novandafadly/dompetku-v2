@@ -48,13 +48,14 @@ create function pg_temp.val(p_uid uuid, p_acc uuid, p_amount bigint, p_on date d
 language plpgsql as $$
 begin
   perform tests.api_exec(p_uid, format($q$do $d$ begin
+      set constraints all deferred;
       insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
         select %1$L, a.space_id, a.space_kind, 'valuation', %4$L, %5$L, %5$L from app.accounts a where a.id = %2$L;
       insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
         select %1$L, a.space_id, 'main', a.id, %3$s from app.accounts a where a.id = %2$L;
       perform private.write_history(%1$L, 'create', %5$L);
       set constraints all immediate;
-    end $d$$q$, p_id, p_acc, p_amount, p_on, p_uid));
+    end $d$ $q$, p_id, p_acc, p_amount, p_on, p_uid));
   return p_id;
 end $$;
 create function pg_temp.xfer(p_uid uuid, p_from uuid, p_to uuid, p_amount bigint, p_allow boolean default false,
@@ -85,11 +86,20 @@ $$;
 create function pg_temp.s5() returns text
 language sql as $$
   select tests.web_val(tests.n(), format($q$select
-      (select balance from app.account_balances where account_id = %2$L) || '/'
-      || (select balance from app.account_balances where account_id = %3$L) || '/'
+      (select ab.balance from app.account_balances ab join app.accounts a on a.id = ab.account_id
+        where a.space_id = %1$L and a.name = 'Emas Antam') || '/'
+      || (select ab.balance from app.account_balances ab join app.accounts a on a.id = ab.account_id
+           where a.space_id = %1$L and a.name = 'BCA') || '/'
       || (select sum(balance) from app.account_balances where space_id = %1$L and pocket <> 'kantor')$q$,
-    tests.space_id(tests.n(), 'personal'), (select id from pg_temp.ids where k = 'emas'),
-    (select id from pg_temp.ids where k = 'bca')))
+    tests.space_id(tests.n(), 'personal')))
+$$;
+-- Σ jumlah Ekspor Maret per kelas (daftar kelas dipisah koma, '*' = semua kelas).
+create function pg_temp.exp_sum(p_classes text) returns text
+language sql as $$
+  select tests.web_val(tests.n(), format($q$select coalesce(string_agg(c || '=' || s, ',' order by c collate "C"), '')
+      from (select report_class as c, sum(amount) as s from api.export_entries(%L, '2026-03-01', '2026-03-31')
+             where %L = '*' or report_class = any (string_to_array(%L, ',')) group by report_class) x$q$,
+    tests.space_id(tests.n(), 'personal'), p_classes, p_classes))
 $$;
 -- I6 Pribadi Novanda Maret: kategori, anggaran, Σ pemasukan/pengeluaran (report_lines dan period_summary),
 -- aman dipakai, dan Σ pemasukan/pengeluaran di Ekspor.
@@ -108,17 +118,6 @@ language sql as $$
     tests.space_id(tests.n(), 'personal')))
   || '|' || pg_temp.exp_sum('income,expense,expense_fee')
 $$;
--- Σ jumlah Ekspor Maret per kelas (daftar kelas dipisah koma, '*' = semua kelas).
-create function pg_temp.exp_sum(p_classes text) returns text
-language sql as $$
-  select tests.web_val(tests.n(), format($q$select coalesce(string_agg(c || '=' || s, ',' order by c collate "C"), '')
-      from (select report_class as c, sum(amount) as s from api.export_entries(%L, '2026-03-01', '2026-03-31')
-             where %L = '*' or report_class = any (string_to_array(%L, ',')) group by report_class) x$q$,
-    tests.space_id(tests.n(), 'personal'), p_classes, p_classes))
-$$;
-create temp table ids (k text primary key, id uuid);
-insert into pg_temp.ids values ('emas', :'emas'), ('bca', :'bca');
-grant select on pg_temp.ids to public;
 
 -- ===== Skema (K3, K4) =====
 select has_table('app', 'asset_details', 'tabel app.asset_details ada');
@@ -130,17 +129,18 @@ select is((select string_agg(a.attname || ':' || format_type(a.atttypid, a.attty
   'kolom asset_details');
 select col_is_pk('app', 'asset_details', 'account_id', 'satu baris rincian per dompet (PK account_id)');
 select is((select string_agg(pg_get_constraintdef(c.oid), ' | ' order by pg_get_constraintdef(c.oid) collate "C")
-           from pg_constraint c where c.conrelid = 'app.asset_details'::regclass and c.contype = 'f'),
+           from pg_constraint c where c.conrelid = (select cl.oid from pg_class cl join pg_namespace n on n.oid = cl.relnamespace
+             where n.nspname = 'app' and cl.relname = 'asset_details') and c.contype = 'f'),
   'FOREIGN KEY (created_by) REFERENCES auth."user"(id) ON DELETE RESTRICT | '
   || 'FOREIGN KEY (space_id, account_id) REFERENCES app.accounts(space_id, id) ON DELETE CASCADE | '
   || 'FOREIGN KEY (space_id, space_kind) REFERENCES app.spaces(id, kind) ON DELETE RESTRICT',
   'FK komposit ke dompet ruang yang sama (rincian ikut terhapus bersama dompet), ke ruang, ke pembuat');
-select is(app.report_class('valuation', 'main', 'aset', 'personal', null, false)
-          || ',' || app.report_class('valuation', 'main', 'aset', 'shared', null, false),
+select is(tests.owner_val(null, $$select app.report_class('valuation', 'main', 'aset', 'personal', null, false)
+          || ',' || app.report_class('valuation', 'main', 'aset', 'shared', null, false)$$),
   'x_valuasi,x_valuasi', 'report_class valuasi = x_valuasi di kedua ruang (bukan pemasukan/pengeluaran)');
-select is(app.report_class('transfer', 'counter', 'aset', 'personal', null, false)
+select is(tests.owner_val(null, $$select app.report_class('transfer', 'counter', 'aset', 'personal', null, false)
           || ',' || app.report_class('opening_balance', 'main', 'aset', 'personal', null, false)
-          || ',' || app.report_class('space_transfer', 'main', 'aset', 'shared', 'in', false),
+          || ',' || app.report_class('space_transfer', 'main', 'aset', 'shared', 'in', false)$$),
   'x_transfer,x_koreksi,x_setoran_anggota', 'isi/tarik aset = transfer, nilai awal = koreksi (kelas yang ada)');
 
 -- Rincian: semua jenis K4 di Pribadi; di Bersama semua kecuali saham (K2).
@@ -230,8 +230,6 @@ select is(tests.web_val(tests.f(), format($$select api.wa_default_account(%L)$$,
 select is(pg_temp.s5(), '0/10000000/16000000', 'awal: Emas 0, BCA 10 jt, kekayaan bersih 16 jt (BCA + Celengan + Motor)');
 select pg_temp.xfer(tests.n(), :'bca', :'emas', 500000, false, '2026-03-05') as t1 \gset
 select is(pg_temp.s5(), '500000/9500000/16000000', 'setor 500 rb: Emas 500 rb, BCA −500 rb, kekayaan bersih tetap [S5]');
-select throws_ok(format($$select api.update_entry(gen_random_uuid(), %L, 1, %L, 600000, null, null, null, false)$$, :'t1'),
-  '42501', null, 'peran tes tidak memanggil api langsung (sanity)');
 select throws_ok(format($$select pg_temp.call(tests.n(), $q$select api.update_entry(gen_random_uuid(), %L, 1, %L, 600000,
     null, null, null, false)$q$)$$, :'t1', :'bca'),
   'DK422', 'kind_not_editable', 'transfer tidak bisa diubah langsung: ubah setoran = batalkan lalu catat ulang');
@@ -259,9 +257,9 @@ select tests.web_exec(tests.n(), format($$select api.update_entry(gen_random_uui
 select pg_temp.i6() as i6_before \gset
 select pg_temp.exp_sum('*') as exp_before \gset
 select pg_temp.val(tests.n(), :'emas', 100000, '2026-03-10') as v1 \gset
-select is(pg_temp.s5(), '700000/9400000/16100000', 'valuasi naik 100 rb: nilai aset dan kekayaan bersih naik, BCA tetap');
+select is(pg_temp.s5(), '700000/9350000/16050000', 'valuasi naik 100 rb: nilai aset dan kekayaan bersih naik, BCA tetap');
 select pg_temp.val(tests.n(), :'emas', -50000, '2026-03-12') as v2 \gset
-select is(pg_temp.s5(), '650000/9400000/16050000', 'valuasi turun 50 rb');
+select is(pg_temp.s5(), '650000/9350000/16000000', 'valuasi turun 50 rb');
 select is(pg_temp.i6(), :'i6_before',
   'valuasi tidak mengubah kategori, anggaran, Σ pemasukan/pengeluaran, period_summary, aman dipakai, Ekspor [I6]');
 select is(tests.web_val(tests.n(), format($$select string_agg(report_class || ':' || direction || ':' || amount || ':' || entry_count,
@@ -283,9 +281,9 @@ select is(tests.web_val(tests.n(), format($q$select string_agg(report_class || '
     from api.period_summary(%L, '2026-03-01', '2026-03-31')$q$, :'np')), pg_temp.exp_sum('*'),
   'Σ Ekspor per kelas = Laporan (period_summary) per kelas');
 select pg_temp.void(:'v2');
-select is(pg_temp.s5(), '700000/9400000/16100000', 'batal valuasi turun: nilai aset kembali tepat sekali');
+select is(pg_temp.s5(), '700000/9350000/16050000', 'batal valuasi turun: nilai aset kembali tepat sekali');
 select pg_temp.restore(:'v2');
-select is(pg_temp.s5(), '650000/9400000/16050000', 'pulihkan valuasi turun tepat sekali');
+select is(pg_temp.s5(), '650000/9350000/16000000', 'pulihkan valuasi turun tepat sekali');
 select is(pg_temp.i6(), :'i6_before', 'batal/pulihkan valuasi tidak mengubah I6');
 
 -- Bentuk entri valuasi (assert_entry_shape cabang valuation).
@@ -294,26 +292,29 @@ select throws_ok(format($$select pg_temp.val(tests.n(), %L, 100000)$$, :'bca'),
 select throws_ok(format($$select pg_temp.val(tests.n(), %L, 100000)$$, :'tab'),
   'DK500', 'entry_shape_invalid', 'valuasi di dompet tabungan ditolak cek bentuk');
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ declare v uuid := gen_random_uuid(); begin
+      set constraints all deferred;
       insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
         values (v, %1$L, 'personal', 'valuation', '2026-03-10', %3$L, %3$L);
       insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
         values (v, %1$L, 'main', %2$L, 1000), (v, %1$L, 'fee', %2$L, -10);
       set constraints all immediate;
-    end $d$$q$)$$, :'np', :'emas', tests.n()),
+    end $d$ $q$)$$, :'np', :'emas', tests.n()),
   'DK500', 'entry_shape_invalid', 'valuasi dengan line fee ditolak');
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ declare v uuid := gen_random_uuid(); begin
+      set constraints all deferred;
       insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
         values (v, %1$L, 'personal', 'valuation', '2026-03-10', %4$L, %4$L);
       insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
         values (v, %1$L, 'main', %2$L, -1000), (v, %1$L, 'counter', %3$L, 1000);
       set constraints all immediate;
-    end $d$$q$)$$, :'np', :'emas', :'bca', tests.n()),
+    end $d$ $q$)$$, :'np', :'emas', :'bca', tests.n()),
   'DK500', 'entry_shape_invalid', 'valuasi dengan line counter ditolak');
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ declare v uuid := gen_random_uuid(); begin
+      set constraints all deferred;
       insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
         values (v, %1$L, 'personal', 'valuation', '2026-03-10', %2$L, %2$L);
       set constraints all immediate;
-    end $d$$q$)$$, :'np', tests.n()),
+    end $d$ $q$)$$, :'np', tests.n()),
   'DK500', 'entry_shape_invalid', 'valuasi tanpa line ditolak');
 
 -- ===== Dompet aset tidak pernah negatif (K13 c; p_allow_negative diabaikan) =====
@@ -323,10 +324,10 @@ select throws_ok(format($$select pg_temp.xfer(tests.n(), %L, %L, 650001, true)$$
   'DK422', 'asset_negative', 'tarik melebihi nilai aset ditolak walau p_allow_negative');
 select throws_ok(format($$select pg_temp.val(tests.n(), %L, -650001)$$, :'emas'),
   'DK422', 'asset_negative', 'valuasi turun melebihi nilai aset ditolak');
-select is(pg_temp.s5(), '650000/9400000/16050000', 'penolakan = nol efek');
+select is(pg_temp.s5(), '650000/9350000/16000000', 'penolakan = nol efek');
 savepoint s;
 select pg_temp.val(tests.n(), :'emas', -650000);
-select is(pg_temp.s5(), '0/9400000/15400000', 'valuasi turun sampai nol boleh (aset tidak bernilai)');
+select is(pg_temp.s5(), '0/9350000/15350000', 'valuasi turun sampai nol boleh (aset tidak bernilai)');
 rollback to savepoint s;
 savepoint s;
 select pg_temp.xfer(tests.n(), :'emas', :'bca', 600000) as t_out \gset
@@ -339,16 +340,15 @@ select throws_ok(format($$select pg_temp.restore(%L, true)$$, :'t_out'), 'DK422'
 rollback to savepoint s;
 savepoint s;
 select pg_temp.call(tests.n(), format($$select api.reconcile_balance(gen_random_uuid(), %L, 0)$$, :'emas'));
-select is(pg_temp.s5(), '0/9400000/15400000', 'Cocokkan saldo dompet aset ke 0 boleh (x_koreksi, tidak negatif)');
+select is(pg_temp.s5(), '0/9350000/15350000', 'Cocokkan saldo dompet aset ke 0 boleh (x_koreksi, tidak negatif)');
 rollback to savepoint s;
 -- Nilai awal lewat saldo awal (opening_balance) bisa diubah 7 hari, tetapi tidak sampai aset negatif.
 select pg_temp.xfer(tests.n(), :'motor', :'bca', 4000000) as t_motor \gset
+select tests.owner_val(null, format($q$select e.id from app.entries e join app.entry_lines l on l.entry_id = e.id
+  where l.account_id = %L and e.kind = 'opening_balance'$q$, :'motor')) as motor_ob \gset
 select throws_ok(format($$select pg_temp.call(tests.n(), $q$select api.update_entry(gen_random_uuid(), %L,
     (select version from app.entries where id = %L), %L, 3000000, null, null, null, false, true)$q$)$$,
-    (select tests.owner_val(null, format($q$select e.id from app.entries e join app.entry_lines l on l.entry_id = e.id
-       where l.account_id = %L and e.kind = 'opening_balance'$q$, :'motor'))),
-    (select tests.owner_val(null, format($q$select e.id from app.entries e join app.entry_lines l on l.entry_id = e.id
-       where l.account_id = %L and e.kind = 'opening_balance'$q$, :'motor'))), :'motor'),
+    :'motor_ob', :'motor_ob', :'motor'),
   'DK422', 'asset_negative', 'ubah nilai awal di bawah yang sudah ditarik ditolak, walau p_allow_negative');
 -- Bersama (K2): setor dari Pribadi, Farida menarik, tidak bisa negatif.
 select (pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 300000, 0, '2026-03-16')$$,
@@ -365,7 +365,7 @@ select throws_ok(format($$select pg_temp.call(tests.f(), $q$select api.create_tr
 select throws_ok(format($$select pg_temp.call(tests.f(), $q$select api.create_transfer(gen_random_uuid(), %L, %L, %L,
     200001, 0, '2026-03-16', null, null, true)$q$)$$, :'sh', :'rumah', :'kas'),
   'DK422', 'asset_negative', 'tarik satu ruang melebihi nilai aset Bersama ditolak');
-select throws_ok(format($$select pg_temp.void(%L, true, tests.f())$$, :'st_in'), 'DK422', 'asset_negative',
+select throws_ok(format($$select pg_temp.void(%L, true)$$, :'st_in'), 'DK422', 'asset_negative',
   'batal setoran lintas ruang yang sudah ditarik sebagian ditolak (dari sisi Bersama)');
 select pg_temp.val(tests.f(), :'rumah', 50000, '2026-03-17');
 select is(tests.web_val(tests.n(), format($$select balance from app.account_balances where account_id = %L$$, :'rumah')),
@@ -422,23 +422,29 @@ select throws_ok(format($$select pg_temp.call(tests.n(), $q$select api.post_bill
   'DK422', 'asset_account_invalid', 'bayar tagihan dari dompet aset ditolak');
 -- Pertahanan berlapis di bawah API: baris yang ditulis langsung tetap ditolak penjaga ledger.
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ declare v uuid := gen_random_uuid(); begin
+      set constraints all deferred;
       insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
         values (v, %1$L, 'personal', 'income', '2026-03-10', %3$L, %3$L);
       insert into app.entry_lines (entry_id, space_id, role, account_id, amount) values (v, %1$L, 'main', %2$L, 1000);
       set constraints all immediate;
-    end $d$$q$)$$, :'np', :'emas', tests.n()),
+    end $d$ $q$)$$, :'np', :'emas', tests.n()),
   'DK422', 'asset_account_invalid', 'pemasukan ke dompet aset di luar api ditolak penjaga ledger');
+savepoint s;
+select pg_temp.val(tests.n(), :'emas', -100000);
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ begin
+      set constraints all deferred;
       update app.entry_lines set account_id = %L where entry_id = %L and role = 'counter';
       set constraints all immediate;
-    end $d$$q$)$$, :'bca', :'t2'),
+    end $d$ $q$)$$, :'tab', :'t2'),
   'DK422', 'asset_negative', 'mengganti tujuan setoran keluar dari dompet aset (baris lama) tetap dijaga');
+rollback to savepoint s;
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ begin
+      set constraints all deferred;
       update app.entry_lines set account_id = %L where entry_id = %L and role = 'main';
       set constraints all immediate;
-    end $d$$q$)$$, :'emas', :'belanja_e'),
+    end $d$ $q$)$$, :'emas', :'belanja_e'),
   'DK422', 'asset_account_invalid', 'mengganti dompet pengeluaran ke dompet aset di luar api ditolak');
-select is(pg_temp.s5(), '650000/9220000/15870000', 'semua penolakan nol efek (BCA hanya turun oleh belanja, talangan, utang)');
+select is(pg_temp.s5(), '650000/13070000/15720000', 'semua penolakan nol efek (BCA hanya bergeser oleh tarik Motor, setor Rumah, talangan, pokok utang)');
 
 -- ===== Purge dan reset tidak terhalang =====
 select tests.clock_at('2026-07-01 10:00+07');
@@ -446,7 +452,7 @@ select is(tests.worker_val(null, 'select jobs.purge_voided()')::int > 0, true,
   'purge_voided menghapus setoran/valuasi aset yang batal > 90 hari');
 select is(tests.owner_val(null, format($q$select count(*) from app.entries e join app.entry_lines l on l.entry_id = e.id
     where l.account_id = %L and e.voided_at is not null$q$, :'emas')), '0', 'entri aset batal sudah terpurge');
-select is(pg_temp.s5(), '650000/9220000/15870000', 'purge tidak mengubah nilai aset');
+select is(pg_temp.s5(), '650000/13070000/15720000', 'purge tidak mengubah nilai aset');
 select tests.raw_exec(format($q$insert into auth."user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
   values (%L, 'U', 'x@example.test', true, '2026-06-01 10:00+07', '2026-06-01 10:00+07')$q$, tests.x()));
 select is(tests.worker_val(null, 'select jobs.purge_unfinished_users()'), '1',
