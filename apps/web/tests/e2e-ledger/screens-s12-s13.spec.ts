@@ -34,6 +34,7 @@ const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString(
 let uid = '';
 let sid = '';
 const ids: Record<string, string> = {};
+const id = (k: string): string => ids[k] ?? '';
 
 async function api<T extends Record<string, unknown>>(sql: string, params: unknown[] = []) {
   return asUser<T>(uid, sql, params);
@@ -129,9 +130,9 @@ async function auditPage(page: Page, name: string, w: number, theme: string): Pr
     };
     const mainEl = document.querySelector('main');
     const text = (mainEl ?? document.body).innerText;
-    const banned = [...text.matchAll(/Hutang|hutang|rumah tangga|Goal|goal|!|\p{Extended_Pictographic}/gu)].map(
-      (m) => m[0],
-    );
+    const banned = [
+      ...text.matchAll(/Hutang|hutang|rumah tangga|Goal|goal|!|\p{Extended_Pictographic}/gu),
+    ].map((m) => m[0]);
     const rpZero = [...text.matchAll(/.{0,30}Rp\s?0(?![\d.])(?!\s?\/).{0,20}/g)].map((m) => m[0]);
     const colored: string[] = [];
     (mainEl ?? document.body).querySelectorAll<HTMLElement>('*').forEach((el) => {
@@ -245,7 +246,12 @@ test('data awal dan layar kosong (sebelum dompet apa pun)', async ({ browser, ow
   ids.bersama = bersama.sid;
   // Beranda tanpa utang: kartu Utang tidak dirender; Tujuan kosong tanpa dompet tabungan.
   await shoot(browser, ownerState, 'tj-kosong-tanpa-dompet', rencanaTujuan);
-  await shoot(browser, ownerState, 'tj-kosong-tanpa-dompet-bersama', '/bersama/rencana?bagian=tujuan');
+  await shoot(
+    browser,
+    ownerState,
+    'tj-kosong-tanpa-dompet-bersama',
+    '/bersama/rencana?bagian=tujuan',
+  );
   await shoot(browser, ownerState, 'pt-bersama-solo', '/bersama/patungan');
   await wallet('BCA Utama', 'operasional', 10_000_000);
   await wallet(LONG_WALLET, 'operasional', BIG);
@@ -254,10 +260,9 @@ test('data awal dan layar kosong (sebelum dompet apa pun)', async ({ browser, ow
 test('trading: kosong, setor, Kurang, hasil ditarik, nominal besar', async ({
   browser,
   ownerState,
-  page,
 }) => {
   await wallet('Stockbit', 'trading', 0);
-  const dompetId = () => ids['Stockbit'];
+  const dompetId = () => id('Stockbit');
   // Kartu Modal belum ada setoran.
   await shoot(browser, ownerState, 'tr-dompet-kosong', '/pribadi/dompet');
   await shoot(browser, ownerState, 'tr-detail-kosong', `/pribadi/dompet/${dompetId()}`);
@@ -316,7 +321,7 @@ test('trading: kosong, setor, Kurang, hasil ditarik, nominal besar', async ({
   await transfer(LONG_WALLET, big, BIG);
   await reconcile(big, 100);
   await shoot(browser, ownerState, 'tr-dompet-besar', '/pribadi/dompet');
-  await shoot(browser, ownerState, 'tr-detail-besar', `/pribadi/dompet/${ids[big]}`);
+  await shoot(browser, ownerState, 'tr-detail-besar', `/pribadi/dompet/${id(big)}`);
   // Tambah dompet: opsi Trading di 320 (empat jenis) + keterangan.
   await shoot(
     browser,
@@ -331,7 +336,6 @@ test('trading: kosong, setor, Kurang, hasil ditarik, nominal besar', async ({
     },
     { viewport: true },
   );
-  void page;
 });
 
 test('kartu Utang di Beranda Pribadi: hanya piutang, keduanya, nominal besar', async ({
@@ -380,11 +384,16 @@ test('tujuan: tanpa tujuan, satu, banyak, dompet, sheet dan dialog', async ({
     `select api.create_entry(p_client_id => $1, p_space_id => $2, p_account_id => $3,
        p_kind => 'expense', p_amount => 300000::bigint, p_category_id => $4,
        p_description => 'Bayar darurat', p_allow_negative => true)`,
-    [randomUUID(), sid, ids['Tabungan Minus'], cat?.id],
+    [randomUUID(), sid, id('Tabungan Minus'), cat?.id],
   );
 
   await shoot(browser, ownerState, 'tj-dompet-tanpa-tujuan', '/pribadi/dompet');
-  await shoot(browser, ownerState, 'tj-detail-ajakan', `/pribadi/dompet/${ids['Tabungan Tanpa Tujuan']}`);
+  await shoot(
+    browser,
+    ownerState,
+    'tj-detail-ajakan',
+    `/pribadi/dompet/${id('Tabungan Tanpa Tujuan')}`,
+  );
   // Sheet Tambah tujuan dari Rencana (pemilih banyak dompet).
   await shoot(
     browser,
@@ -409,7 +418,7 @@ test('tujuan: tanpa tujuan, satu, banyak, dompet, sheet dan dialog', async ({
     browser,
     ownerState,
     'tj-sheet-tambah-terkunci',
-    `/pribadi/dompet/${ids['Tabungan Tanpa Tujuan']}`,
+    `/pribadi/dompet/${id('Tabungan Tanpa Tujuan')}`,
     async (p) => {
       const sheet = p.getByRole('dialog', { name: /^Tambah tujuan/ });
       await openUntil(
@@ -424,7 +433,12 @@ test('tujuan: tanpa tujuan, satu, banyak, dompet, sheet dan dialog', async ({
   // Satu tujuan.
   await goal('Dana Darurat', 'Dana darurat', 10_000_000, inDays(200));
   await shoot(browser, ownerState, 'tj-satu', rencanaTujuan);
-  await shoot(browser, ownerState, 'tj-detail-dengan-tujuan', `/pribadi/dompet/${ids['Dana Darurat']}`);
+  await shoot(
+    browser,
+    ownerState,
+    'tj-detail-dengan-tujuan',
+    `/pribadi/dompet/${id('Dana Darurat')}`,
+  );
 
   // Banyak tujuan, berbagai keadaan.
   await goal('Tabungan Liburan', 'Liburan Desember', 10_000_000);
@@ -432,23 +446,34 @@ test('tujuan: tanpa tujuan, satu, banyak, dompet, sheet dan dialog', async ({
   await goal('Tabungan Minus', 'Perbaikan dapur', 5_000_000, inDays(90));
   await goal('Tabungan Mobil', 'Mobil bekas', 10_000_000);
   await goal('Tabungan Lewat', 'Renovasi kamar', 8_000_000, inDays(5));
-  await adminQuery(`update app.goals set target_on = date '2026-10-01' where name = 'Renovasi kamar'`);
+  await adminQuery(
+    `update app.goals set target_on = date '2026-10-01' where name = 'Renovasi kamar'`,
+  );
   await goal(LONG_SAV, LONG_GOAL, 98_765_432_100, inDays(100));
   await goal('Tabungan Selesai', 'Laptop kerja', 3_000_000);
-  await api('select api.complete_goal($1::uuid)', [ids['goal:Laptop kerja']]);
+  await api('select api.complete_goal($1::uuid)', [id('goal:Laptop kerja')]);
   await goal('Tabungan Arsip', 'Tujuan lama', 1_000_000);
-  await api('select api.archive_goal($1::uuid)', [ids['goal:Tujuan lama']]);
-  await api('select api.archive_account($1::uuid)', [ids['Tabungan Arsip']]);
+  await api('select api.archive_goal($1::uuid)', [id('goal:Tujuan lama')]);
+  await api('select api.archive_account($1::uuid)', [id('Tabungan Arsip')]);
 
   await shoot(browser, ownerState, 'tj-banyak', rencanaTujuan);
   await shoot(browser, ownerState, 'tj-banyak-terlipat-terbuka', rencanaTujuan, async (p) => {
-    await main(p).locator('details').filter({ hasText: /Selesai dan diarsipkan/ }).locator('summary').click();
+    await main(p)
+      .locator('details')
+      .filter({ hasText: /Selesai dan diarsipkan/ })
+      .locator('summary')
+      .click();
     await expect(main(p).getByText('Dompet sudah diarsipkan')).toBeVisible();
   });
   await shoot(browser, ownerState, 'tj-dompet-teks-tujuan', '/pribadi/dompet');
-  await shoot(browser, ownerState, 'tj-detail-tercapai', `/pribadi/dompet/${ids['Tabungan Mobil']}`);
-  await shoot(browser, ownerState, 'tj-detail-saldo-nol', `/pribadi/dompet/${ids['Tabungan Rumah']}`);
-  await shoot(browser, ownerState, 'tj-detail-panjang', `/pribadi/dompet/${ids[LONG_SAV]}`);
+  await shoot(browser, ownerState, 'tj-detail-tercapai', `/pribadi/dompet/${id('Tabungan Mobil')}`);
+  await shoot(
+    browser,
+    ownerState,
+    'tj-detail-saldo-nol',
+    `/pribadi/dompet/${id('Tabungan Rumah')}`,
+  );
+  await shoot(browser, ownerState, 'tj-detail-panjang', `/pribadi/dompet/${id(LONG_SAV)}`);
 
   // Dialog dan sheet dari kartu.
   const cardOf = (p: Page, name: string) => main(p).getByRole('region', { name, exact: true });
@@ -497,9 +522,17 @@ test('tujuan: tanpa tujuan, satu, banyak, dompet, sheet dan dialog', async ({
   );
 
   // Arsip dompet bertujuan: saldo 0 dengan tujuan aktif (Tabungan Rumah) = kartu tolakan.
-  await shoot(browser, ownerState, 'tj-detail-arsip-ditolak', `/pribadi/dompet/${ids['Tabungan Rumah']}`, async (p) => {
-    await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  });
+  await shoot(
+    browser,
+    ownerState,
+    'tj-detail-arsip-ditolak',
+    `/pribadi/dompet/${id('Tabungan Rumah')}`,
+    async (p) => {
+      await p.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+    },
+  );
 
   // Semua dompet tabungan bertujuan.
   await goal('Tabungan Tanpa Tujuan', 'Cadangan', 2_000_000);
@@ -510,12 +543,12 @@ test('Bersama solo: tujuan dengan dompet tabungan Bersama, tanpa "Dibuat"', asyn
   browser,
   ownerState,
 }) => {
-  await wallet('Tabungan Bersama Solo', 'tabungan', 2_000_000, ids.bersama);
+  await wallet('Tabungan Bersama Solo', 'tabungan', 2_000_000, id('bersama'));
   await shoot(browser, ownerState, 'tj-bersama-solo-kosong', '/bersama/rencana?bagian=tujuan');
   await api(
     `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
        p_name => 'Dana liburan bersama', p_target_amount => 8000000::bigint, p_target_on => $4::date)`,
-    [randomUUID(), ids.bersama, ids['Tabungan Bersama Solo'], inDays(240)],
+    [randomUUID(), id('bersama'), id('Tabungan Bersama Solo'), inDays(240)],
   );
   await shoot(browser, ownerState, 'tj-bersama-solo-satu', '/bersama/rencana?bagian=tujuan');
 });

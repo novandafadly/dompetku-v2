@@ -35,7 +35,7 @@ interface Who {
 let n: Who;
 let f: Who;
 const ids: Record<string, string> = {};
-let splitIds: Record<string, string> = {};
+const splitIds: Record<string, string> = {};
 
 async function who(email: string): Promise<Who> {
   const p = await spaceOf(email, 'personal');
@@ -247,327 +247,366 @@ async function openUntil(open: () => Locator, dialog: Locator, field?: Locator) 
 const patungan = '/bersama/patungan';
 const beranda = '/bersama/beranda';
 
-test('sebelum patungan: kosong, Catat toggle (F tanpa dompet Pribadi), Pembagian', { tag: '@screens' }, async ({
-  browser,
-  ownerState,
-  partnerState,
-}) => {
-  await mkdir(OUT, { recursive: true });
-  n = await who(OWNER);
-  f = await who(PARTNER);
-  await wallet(n, n.psid, 'BCA Novanda', 'operasional', 15_000_000);
-  await shoot(browser, ownerState, 'N', 'pt-beranda-belum-ada', beranda);
-  await shoot(browser, ownerState, 'N', 'pt-halaman-kosong', patungan);
-  await shoot(browser, ownerState, 'N', 'tj-bersama-tanpa-dompet', '/bersama/rencana?bagian=tujuan');
-
-  const catat = async (p: Page, extra?: (s: Locator) => Promise<void>) => {
-    const sheet = await openAndFill(p, { amount: 400_000, description: 'Listrik Desember' });
-    const toggle = sheet.getByRole('switch', { name: 'Dibayar dari dompet pribadi' });
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-checked', 'true');
-    if (extra) await extra(sheet);
-  };
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'ct-toggle-mati',
-    beranda,
-    async (p) => {
-      await openAndFill(p, { amount: 400_000, description: 'Listrik Desember' });
-    },
-    { viewport: true },
-  );
-  await shoot(browser, ownerState, 'N', 'ct-toggle-nyala', beranda, (p) => catat(p), {
-    viewport: true,
-  });
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'ct-pembagian-sheet',
-    beranda,
-    (p) =>
-      catat(p, async (sheet) => {
-        await sheet.getByRole('button', { name: 'Ubah pembagian' }).click();
-        // Halaman Pembagian ada di dalam sheet Catat yang sama (bukan dialog baru).
-        const radio = p.getByRole('radio', { name: 'Atur nominal' });
-        await expect(radio).toBeVisible({ timeout: 15_000 });
-        await radio.click();
-        await p.getByRole('textbox', { name: /^Bagian Farida/ }).fill('150000');
-      }),
-    { viewport: true },
-  );
-  // F belum punya dompet Pribadi: toggle menyala menampilkan pesan.
-  await shoot(
-    browser,
-    partnerState,
-    'F',
-    'ct-toggle-tanpa-dompet',
-    beranda,
-    (p) => catat(p),
-    { viewport: true },
-  );
-
-  await wallet(f, f.psid, 'Jago Farida', 'operasional', 8_000_000);
-});
-
-test('tagihan patungan: dua pandangan, riwayat, Lunasi, dialog hapus', { tag: '@screens' }, async ({
-  browser,
-  ownerState,
-  partnerState,
-}) => {
-  await split(n, 'BCA Novanda', 412_000, 'Listrik Desember');
-  await split(n, 'BCA Novanda', 1_250_000, 'Belanja bulanan pasar induk', [
-    { user: n.uid, amount: 1_000_000 },
-    { user: f.uid, amount: 250_000 },
-  ]);
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-beranda', beranda);
-    await shoot(browser, state, user, 'pt-halaman', patungan);
-  }
-  // Sheet Lunasi (F): normal dan bayar lebih.
-  const lunasi = async (p: Page, over: boolean) => {
-    const sheet = p.getByRole('dialog', { name: /^Lunasi patungan/ });
-    await openUntil(
-      () => main(p).getByRole('button', { name: /^Lunasi/ }).first(),
-      sheet,
-      sheet.getByRole('textbox', { name: 'Jumlah dilunasi' }),
+test(
+  'sebelum patungan: kosong, Catat toggle (F tanpa dompet Pribadi), Pembagian',
+  { tag: '@screens' },
+  async ({ browser, ownerState, partnerState }) => {
+    await mkdir(OUT, { recursive: true });
+    n = await who(OWNER);
+    f = await who(PARTNER);
+    await wallet(n, n.psid, 'BCA Novanda', 'operasional', 15_000_000);
+    await shoot(browser, ownerState, 'N', 'pt-beranda-belum-ada', beranda);
+    await shoot(browser, ownerState, 'N', 'pt-halaman-kosong', patungan);
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'tj-bersama-tanpa-dompet',
+      '/bersama/rencana?bagian=tujuan',
     );
-    if (over) await sheet.getByRole('textbox', { name: 'Jumlah dilunasi' }).fill('9000000');
-  };
-  await shoot(browser, partnerState, 'F', 'pt-sheet-lunasi', patungan, (p) => lunasi(p, false), {
-    viewport: true,
-  });
-  await shoot(browser, partnerState, 'F', 'pt-sheet-lunasi-lebih', patungan, (p) => lunasi(p, true), {
-    viewport: true,
-  });
-  // Dialog hapus tagihan (N).
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'pt-dialog-hapus-tagihan',
-    patungan,
-    async (p) => {
-      const dlg = p.getByRole('alertdialog', { name: 'Hapus tagihan patungan ini?' });
-      await openUntil(
-        () => main(p).getByRole('button', { name: /^Hapus tagihan patungan Listrik/ }),
-        dlg,
-      );
-    },
-    { viewport: true },
-  );
-});
 
-test('pelunasan: menunggu diterima, Terima, diterima, impas, arah berbalik', { tag: '@screens' }, async ({
-  browser,
-  ownerState,
-  partnerState,
-}) => {
-  // F melunasi sebagian.
-  await asUser(
-    f.uid,
-    `select api.settle_split(p_client_id => $1, p_space_id => $2, p_account_id => $3,
-       p_amount => 300000::bigint)`,
-    [randomUUID(), n.sid, ids[`${f.psid}:Jago Farida`]],
-  );
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-menunggu-beranda', beranda);
-    await shoot(browser, state, user, 'pt-menunggu-halaman', patungan);
-  }
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'pt-sheet-terima',
-    patungan,
-    async (p) => {
-      const sheet = p.getByRole('dialog', { name: /^Terima pelunasan/ });
-      await openUntil(
-        () => main(p).getByRole('button', { name: /^Terima/ }).first(),
-        sheet,
-      );
-    },
-    { viewport: true },
-  );
-  await shoot(
-    browser,
-    partnerState,
-    'F',
-    'pt-dialog-batal-pelunasan',
-    patungan,
-    async (p) => {
-      const dlg = p.getByRole('alertdialog', { name: 'Batalkan pelunasan ini?' });
-      await openUntil(() => main(p).getByRole('button', { name: /^Batalkan pelunasan/ }), dlg);
-    },
-    { viewport: true },
-  );
+    const catat = async (p: Page, extra?: (s: Locator) => Promise<void>) => {
+      const sheet = await openAndFill(p, { amount: 400_000, description: 'Listrik Desember' });
+      const toggle = sheet.getByRole('switch', { name: 'Dibayar dari dompet pribadi' });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-checked', 'true');
+      if (extra) await extra(sheet);
+    };
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'ct-toggle-mati',
+      beranda,
+      async (p) => {
+        await openAndFill(p, { amount: 400_000, description: 'Listrik Desember' });
+      },
+      { viewport: true },
+    );
+    await shoot(browser, ownerState, 'N', 'ct-toggle-nyala', beranda, (p) => catat(p), {
+      viewport: true,
+    });
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'ct-pembagian-sheet',
+      beranda,
+      (p) =>
+        catat(p, async (sheet) => {
+          await sheet.getByRole('button', { name: 'Ubah pembagian' }).click();
+          // Halaman Pembagian ada di dalam sheet Catat yang sama (bukan dialog baru).
+          const radio = p.getByRole('radio', { name: 'Atur nominal' });
+          await expect(radio).toBeVisible({ timeout: 15_000 });
+          await radio.click();
+          await p.getByRole('textbox', { name: /^Bagian Farida/ }).fill('150000');
+        }),
+      { viewport: true },
+    );
+    // F belum punya dompet Pribadi: toggle menyala menampilkan pesan.
+    await shoot(browser, partnerState, 'F', 'ct-toggle-tanpa-dompet', beranda, (p) => catat(p), {
+      viewport: true,
+    });
 
-  // N menerima ke dompetnya.
-  const [t] = await adminQuery<{ id: string }>(
-    'select id::text from app.settlements where space_id = $1 and voided_at is null limit 1',
-    [n.sid],
-  );
-  await asUser(
-    n.uid,
-    `select api.receive_settlement(p_client_id => $1, p_settlement_id => $2::uuid, p_account_id => $3)`,
-    [randomUUID(), t?.id, ids[`${n.psid}:BCA Novanda`]],
-  );
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-diterima-halaman', patungan);
-  }
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'pt-dialog-batal-penerimaan',
-    patungan,
-    async (p) => {
-      const dlg = p.getByRole('alertdialog', { name: 'Batalkan penerimaan?' });
-      await openUntil(() => main(p).getByRole('button', { name: /^Batalkan penerimaan/ }), dlg);
-    },
-    { viewport: true },
-  );
+    await wallet(f, f.psid, 'Jago Farida', 'operasional', 8_000_000);
+  },
+);
 
-  // Impas: F melunasi sisanya.
-  await asUser(
-    f.uid,
-    `select api.settle_split(p_client_id => $1, p_space_id => $2, p_account_id => $3,
-       p_amount => $4::bigint)`,
-    [randomUUID(), n.sid, ids[`${f.psid}:Jago Farida`], await owedByF()],
-  );
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-impas-beranda', beranda);
-    await shoot(browser, state, user, 'pt-impas-halaman', patungan);
-  }
-
-  // Hapus tagihan: arah berbalik (N berutang ke F) dan bagian "Patungan dihapus".
-  await asUser(n.uid, `select api.void_split($1, $2::uuid)`, [
-    randomUUID(),
-    splitIds['Listrik Desember'],
-  ]);
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-berbalik-beranda', beranda);
-  }
-  await shoot(browser, ownerState, 'N', 'pt-dihapus-terbuka', patungan, async (p) => {
-    await main(p).locator('details').filter({ hasText: /Patungan dihapus/ }).locator('summary').click();
-  });
-  await shoot(browser, partnerState, 'F', 'pt-berbalik-halaman', patungan);
-
-  // Nominal besar.
-  await wallet(n, n.psid, 'Rekening Besar Novanda Dengan Nama Panjang Sekali Untuk Uji', 'operasional', BIG * 2);
-  await split(
-    n,
-    'Rekening Besar Novanda Dengan Nama Panjang Sekali Untuk Uji',
-    BIG,
-    'Renovasi rumah dan perabot ruang tamu serta dapur seluruhnya',
-  );
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'pt-besar-beranda', beranda);
-    await shoot(browser, state, user, 'pt-besar-halaman', patungan);
-  }
-  await shoot(
-    browser,
-    partnerState,
-    'F',
-    'pt-sheet-lunasi-besar',
-    patungan,
-    async (p) => {
+test(
+  'tagihan patungan: dua pandangan, riwayat, Lunasi, dialog hapus',
+  { tag: '@screens' },
+  async ({ browser, ownerState, partnerState }) => {
+    await split(n, 'BCA Novanda', 412_000, 'Listrik Desember');
+    await split(n, 'BCA Novanda', 1_250_000, 'Belanja bulanan pasar induk', [
+      { user: n.uid, amount: 1_000_000 },
+      { user: f.uid, amount: 250_000 },
+    ]);
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-beranda', beranda);
+      await shoot(browser, state, user, 'pt-halaman', patungan);
+    }
+    // Sheet Lunasi (F): normal dan bayar lebih.
+    const lunasi = async (p: Page, over: boolean) => {
       const sheet = p.getByRole('dialog', { name: /^Lunasi patungan/ });
       await openUntil(
-        () => main(p).getByRole('button', { name: /^Lunasi/ }).first(),
+        () =>
+          main(p)
+            .getByRole('button', { name: /^Lunasi/ })
+            .first(),
         sheet,
         sheet.getByRole('textbox', { name: 'Jumlah dilunasi' }),
       );
-    },
-    { viewport: true },
-  );
-});
+      if (over) await sheet.getByRole('textbox', { name: 'Jumlah dilunasi' }).fill('9000000');
+    };
+    await shoot(browser, partnerState, 'F', 'pt-sheet-lunasi', patungan, (p) => lunasi(p, false), {
+      viewport: true,
+    });
+    await shoot(
+      browser,
+      partnerState,
+      'F',
+      'pt-sheet-lunasi-lebih',
+      patungan,
+      (p) => lunasi(p, true),
+      {
+        viewport: true,
+      },
+    );
+    // Dialog hapus tagihan (N).
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'pt-dialog-hapus-tagihan',
+      patungan,
+      async (p) => {
+        const dlg = p.getByRole('alertdialog', { name: 'Hapus tagihan patungan ini?' });
+        await openUntil(
+          () => main(p).getByRole('button', { name: /^Hapus tagihan patungan Listrik/ }),
+          dlg,
+        );
+      },
+      { viewport: true },
+    );
+  },
+);
 
-test('Tujuan Bersama dua anggota: Dibuat {nama}, banyak keadaan', { tag: '@screens' }, async ({
-  browser,
-  ownerState,
-  partnerState,
-}) => {
-  await wallet(n, n.sid, 'Tabungan Liburan Bersama', 'tabungan', 3_000_000);
-  await shoot(browser, ownerState, 'N', 'tj-bersama-belum-tujuan', '/bersama/rencana?bagian=tujuan');
-  await wallet(n, n.sid, 'Dana Darurat Bersama', 'tabungan', 12_000_000);
-  await wallet(n, n.sid, 'Tabungan Pendidikan Anak Dengan Nama Panjang Sekali', 'tabungan', 0);
-  await asUser(
-    n.uid,
-    `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+test(
+  'pelunasan: menunggu diterima, Terima, diterima, impas, arah berbalik',
+  { tag: '@screens' },
+  async ({ browser, ownerState, partnerState }) => {
+    // F melunasi sebagian.
+    await asUser(
+      f.uid,
+      `select api.settle_split(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+       p_amount => 300000::bigint)`,
+      [randomUUID(), n.sid, ids[`${f.psid}:Jago Farida`]],
+    );
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-menunggu-beranda', beranda);
+      await shoot(browser, state, user, 'pt-menunggu-halaman', patungan);
+    }
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'pt-sheet-terima',
+      patungan,
+      async (p) => {
+        const sheet = p.getByRole('dialog', { name: /^Terima pelunasan/ });
+        await openUntil(
+          () =>
+            main(p)
+              .getByRole('button', { name: /^Terima/ })
+              .first(),
+          sheet,
+        );
+      },
+      { viewport: true },
+    );
+    await shoot(
+      browser,
+      partnerState,
+      'F',
+      'pt-dialog-batal-pelunasan',
+      patungan,
+      async (p) => {
+        const dlg = p.getByRole('alertdialog', { name: 'Batalkan pelunasan ini?' });
+        await openUntil(() => main(p).getByRole('button', { name: /^Batalkan pelunasan/ }), dlg);
+      },
+      { viewport: true },
+    );
+
+    // N menerima ke dompetnya.
+    const [t] = await adminQuery<{ id: string }>(
+      'select id::text from app.settlements where space_id = $1 and voided_at is null limit 1',
+      [n.sid],
+    );
+    await asUser(
+      n.uid,
+      `select api.receive_settlement(p_client_id => $1, p_settlement_id => $2::uuid, p_account_id => $3)`,
+      [randomUUID(), t?.id, ids[`${n.psid}:BCA Novanda`]],
+    );
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-diterima-halaman', patungan);
+    }
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'pt-dialog-batal-penerimaan',
+      patungan,
+      async (p) => {
+        const dlg = p.getByRole('alertdialog', { name: 'Batalkan penerimaan?' });
+        await openUntil(() => main(p).getByRole('button', { name: /^Batalkan penerimaan/ }), dlg);
+      },
+      { viewport: true },
+    );
+
+    // Impas: F melunasi sisanya.
+    await asUser(
+      f.uid,
+      `select api.settle_split(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+       p_amount => $4::bigint)`,
+      [randomUUID(), n.sid, ids[`${f.psid}:Jago Farida`], await owedByF()],
+    );
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-impas-beranda', beranda);
+      await shoot(browser, state, user, 'pt-impas-halaman', patungan);
+    }
+
+    // Hapus tagihan: arah berbalik (N berutang ke F) dan bagian "Patungan dihapus".
+    await asUser(n.uid, `select api.void_split($1, $2::uuid)`, [
+      randomUUID(),
+      splitIds['Listrik Desember'],
+    ]);
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-berbalik-beranda', beranda);
+    }
+    await shoot(browser, ownerState, 'N', 'pt-dihapus-terbuka', patungan, async (p) => {
+      await main(p)
+        .locator('details')
+        .filter({ hasText: /Patungan dihapus/ })
+        .locator('summary')
+        .click();
+    });
+    await shoot(browser, partnerState, 'F', 'pt-berbalik-halaman', patungan);
+
+    // Nominal besar.
+    await wallet(
+      n,
+      n.psid,
+      'Rekening Besar Novanda Dengan Nama Panjang Sekali Untuk Uji',
+      'operasional',
+      BIG * 2,
+    );
+    await split(
+      n,
+      'Rekening Besar Novanda Dengan Nama Panjang Sekali Untuk Uji',
+      BIG,
+      'Renovasi rumah dan perabot ruang tamu serta dapur seluruhnya',
+    );
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'pt-besar-beranda', beranda);
+      await shoot(browser, state, user, 'pt-besar-halaman', patungan);
+    }
+    await shoot(
+      browser,
+      partnerState,
+      'F',
+      'pt-sheet-lunasi-besar',
+      patungan,
+      async (p) => {
+        const sheet = p.getByRole('dialog', { name: /^Lunasi patungan/ });
+        await openUntil(
+          () =>
+            main(p)
+              .getByRole('button', { name: /^Lunasi/ })
+              .first(),
+          sheet,
+          sheet.getByRole('textbox', { name: 'Jumlah dilunasi' }),
+        );
+      },
+      { viewport: true },
+    );
+  },
+);
+
+test(
+  'Tujuan Bersama dua anggota: Dibuat {nama}, banyak keadaan',
+  { tag: '@screens' },
+  async ({ browser, ownerState, partnerState }) => {
+    await wallet(n, n.sid, 'Tabungan Liburan Bersama', 'tabungan', 3_000_000);
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'tj-bersama-belum-tujuan',
+      '/bersama/rencana?bagian=tujuan',
+    );
+    await wallet(n, n.sid, 'Dana Darurat Bersama', 'tabungan', 12_000_000);
+    await wallet(n, n.sid, 'Tabungan Pendidikan Anak Dengan Nama Panjang Sekali', 'tabungan', 0);
+    await asUser(
+      n.uid,
+      `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
        p_name => 'Liburan berdua ke Jepang', p_target_amount => 5000000::bigint, p_target_on => $4::date)`,
-    [randomUUID(), n.sid, ids[`${n.sid}:Tabungan Liburan Bersama`], inDays(240)],
-  );
-  await asUser(
-    f.uid,
-    `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+      [randomUUID(), n.sid, ids[`${n.sid}:Tabungan Liburan Bersama`], inDays(240)],
+    );
+    await asUser(
+      f.uid,
+      `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
        p_name => 'Dana darurat keluarga', p_target_amount => 10000000::bigint, p_target_on => null)`,
-    [randomUUID(), n.sid, ids[`${n.sid}:Dana Darurat Bersama`]],
-  );
-  await asUser(
-    n.uid,
-    `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
+      [randomUUID(), n.sid, ids[`${n.sid}:Dana Darurat Bersama`]],
+    );
+    await asUser(
+      n.uid,
+      `select api.create_goal(p_client_id => $1, p_space_id => $2, p_account_id => $3,
        p_name => 'Biaya sekolah anak pertama dan kedua tahun ajaran baru', p_target_amount => 98765432100::bigint,
        p_target_on => $4::date)`,
-    [
-      randomUUID(),
-      n.sid,
-      ids[`${n.sid}:Tabungan Pendidikan Anak Dengan Nama Panjang Sekali`],
-      inDays(400),
-    ],
-  );
-  for (const [user, state] of [
-    ['N', ownerState],
-    ['F', partnerState],
-  ] as const) {
-    await shoot(browser, state, user, 'tj-bersama-banyak', '/bersama/rencana?bagian=tujuan');
-  }
-  await shoot(
-    browser,
-    partnerState,
-    'F',
-    'tj-bersama-sheet-ubah',
-    '/bersama/rencana?bagian=tujuan',
-    async (p) => {
-      const sheet = p.getByRole('dialog', { name: /^Ubah tujuan/ });
-      await openUntil(
-        () => main(p).getByRole('button', { name: /^Ubah/ }).first(),
-        sheet,
-        sheet.getByRole('textbox', { name: /Nama tujuan/ }),
-      );
-    },
-    { viewport: true },
-  );
-  await shoot(
-    browser,
-    ownerState,
-    'N',
-    'tj-bersama-dialog-arsipkan',
-    '/bersama/rencana?bagian=tujuan',
-    async (p) => {
-      const dlg = p.getByRole('alertdialog').or(p.getByRole('dialog', { name: /^Arsipkan/ }));
-      await openUntil(() => main(p).getByRole('button', { name: /^Arsipkan/ }).first(), dlg);
-    },
-    { viewport: true },
-  );
-});
+      [
+        randomUUID(),
+        n.sid,
+        ids[`${n.sid}:Tabungan Pendidikan Anak Dengan Nama Panjang Sekali`],
+        inDays(400),
+      ],
+    );
+    for (const [user, state] of [
+      ['N', ownerState],
+      ['F', partnerState],
+    ] as const) {
+      await shoot(browser, state, user, 'tj-bersama-banyak', '/bersama/rencana?bagian=tujuan');
+    }
+    await shoot(
+      browser,
+      partnerState,
+      'F',
+      'tj-bersama-sheet-ubah',
+      '/bersama/rencana?bagian=tujuan',
+      async (p) => {
+        const sheet = p.getByRole('dialog', { name: /^Ubah tujuan/ });
+        await openUntil(
+          () => main(p).getByRole('button', { name: /^Ubah/ }).first(),
+          sheet,
+          sheet.getByRole('textbox', { name: /Nama tujuan/ }),
+        );
+      },
+      { viewport: true },
+    );
+    await shoot(
+      browser,
+      ownerState,
+      'N',
+      'tj-bersama-dialog-arsipkan',
+      '/bersama/rencana?bagian=tujuan',
+      async (p) => {
+        const dlg = p.getByRole('alertdialog').or(p.getByRole('dialog', { name: /^Arsipkan/ }));
+        await openUntil(
+          () =>
+            main(p)
+              .getByRole('button', { name: /^Arsipkan/ })
+              .first(),
+          dlg,
+        );
+      },
+      { viewport: true },
+    );
+  },
+);
