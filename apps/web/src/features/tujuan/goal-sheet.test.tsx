@@ -150,6 +150,22 @@ describe('GoalSheet: Tambah (S13-TJ4)', () => {
     expect(screen.getByRole('button', { name: 'Coba lagi' })).toBeTruthy();
   });
 
+  it('invalid_argument/target_on dari server menempel di kolom Tanggal target', async () => {
+    const user = userEvent.setup();
+    setup({ wallets: [BCA] }, { ok: false, code: 'invalid', field: 'target_on' });
+    await user.type(await screen.findByRole('textbox', { name: /Nama tujuan/ }), 'X');
+    await user.type(screen.getByRole('textbox', { name: /Target/ }), '1000');
+    await user.click(screen.getByRole('button', { name: 'Simpan tujuan' }));
+    expect(await screen.findByText('Tanggal target tidak valid.')).toBeTruthy();
+  });
+
+  it('batas isian tanggal: min hari ini, max paling jauh 2100-12-31', async () => {
+    setup({ wallets: [BCA], today: '2070-05-01' });
+    const date = await screen.findByLabelText(/Tanggal target/);
+    expect(date).toHaveAttribute('min', '2070-05-01');
+    expect(date).toHaveAttribute('max', '2100-12-31');
+  });
+
   it('galat kolom dari server (invalid + field) menempel di kolomnya', async () => {
     const user = userEvent.setup();
     setup({ wallets: [BCA] }, { ok: false, code: 'invalid', field: 'target_amount' });

@@ -150,6 +150,18 @@ describe('input', () => {
     expect(m.updateGoal).not.toHaveBeenCalled();
   });
 
+  it('tanggal target di atas 2100-12-31 ditolak sebelum DB', async () => {
+    await expect(
+      call('updateGoalAction', 'pribadi', {
+        goalId: A,
+        name: 'X',
+        target: 5,
+        targetOn: '2101-01-01',
+      }),
+    ).resolves.toEqual({ ok: false, error: { code: 'invalid', field: 'targetOn' } });
+    expect(m.updateGoal).not.toHaveBeenCalled();
+  });
+
   it('galat DB dipetakan ke kode tanpa nominal atau nama', async () => {
     m.createGoal.mockRejectedValue(Object.assign(new Error('goal_exists'), { code: 'DK409' }));
     await expect(call('createGoalAction')).resolves.toEqual({
