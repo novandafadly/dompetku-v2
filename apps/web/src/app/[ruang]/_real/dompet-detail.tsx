@@ -25,8 +25,11 @@ import {
 } from '@/features/ledger/present';
 import type { AccountVM, EntryVM, Ruang, TradingAccountVM } from '@/features/ledger/types';
 import { buildAccountHref, buildEntryHref } from '@/features/shell/hrefs';
+import { buildGoalListHref } from '@/features/tujuan/hrefs';
+import type { GoalVM } from '@/features/tujuan/types';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
 import { ArchiveIsland, ReconcileIsland } from './dompet-actions-islands';
+import { DompetGoalCard } from './dompet-goal';
 import { ModalActionsIsland } from './trading-islands';
 import { RetryIsland } from './transaksi-islands';
 
@@ -84,6 +87,7 @@ export function DompetDetailReal({
   data,
   accounts = [],
   trading,
+  goal,
 }: {
   ruang: Ruang;
   today: IsoDate;
@@ -96,6 +100,11 @@ export function DompetDetailReal({
   accounts?: AccountVM[];
   /** Hanya dompet trading: angka modal dompet ini, atau `error` bila gagal dimuat. */
   trading?: TradingAccountVM | 'error' | null;
+  /**
+   * Hanya dompet tabungan aktif (S13-TJ9): tujuan aktifnya (`goal: null` = belum ada) dan nama
+   * anggota lain, atau `error` bila gagal dimuat. `undefined` = dompet lain (tidak ditampilkan apa pun).
+   */
+  goal?: { goal: GoalVM | null; partnerName: string | null } | 'error';
 }) {
   const { account } = data;
   const isTrading = account.pocket === 'trading';
@@ -179,7 +188,25 @@ export function DompetDetailReal({
         )
       }
       afterHero={
-        !isTrading || trading === undefined || trading === null ? null : trading === 'error' ? (
+        goal !== undefined ? (
+          goal === 'error' ? (
+            <section aria-label="Tujuan" className={`px-4 pt-3 ${card}`}>
+              <CardError
+                message="Tujuan belum bisa dimuat."
+                retryHref={buildAccountHref(ruang, account.id, query)}
+              />
+            </section>
+          ) : (
+            <DompetGoalCard
+              ruang={ruang}
+              query={query}
+              today={today}
+              account={{ id: account.id, name: account.name, balance: account.balance }}
+              goal={goal.goal}
+              partnerName={goal.partnerName}
+            />
+          )
+        ) : !isTrading || trading === undefined || trading === null ? null : trading === 'error' ? (
           <section aria-label="Modal" className={`px-4 pt-3 ${card}`}>
             <CardError
               message="Modal trading belum bisa dimuat."
@@ -195,14 +222,19 @@ export function DompetDetailReal({
           <p className="text-meta font-medium text-text-muted">
             Dompet ini sudah diarsipkan. Riwayatnya tetap bisa dilihat.
           </p>
-        ) : account.balance === 0 ? (
+        ) : account.balance === 0 && !(typeof goal === 'object' && goal.goal !== null) ? (
           <ArchiveIsland
             ruang={ruang}
             account={{ id: account.id, name: account.name }}
             dompetHref={dompetHref}
           />
         ) : (
-          <ArchiveBlockedCard name={account.name} />
+          <ArchiveBlockedCard
+            name={account.name}
+            {...(account.balance === 0 && typeof goal === 'object' && goal.goal !== null
+              ? { goal: { name: goal.goal.name, href: buildGoalListHref(ruang, query) } }
+              : {})}
+          />
         )
       }
       more={

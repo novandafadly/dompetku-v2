@@ -47,3 +47,10 @@ export interface GoalData {
   /** Nama anggota lain; `null` = Pribadi atau Bersama solo. */
   partnerName: string | null;
 }
+
+/** Teks tujuan di baris daftar Dompet (S13-TJ10): tujuan aktif satu dompet tabungan. */
+export interface GoalLineVM {
+  name: string;
+  pct: number;
+  reached: boolean;
+}

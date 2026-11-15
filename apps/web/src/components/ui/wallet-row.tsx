@@ -24,7 +24,8 @@ export function WalletRow({
   href: Route;
   icon: ReactNode;
   name: string;
-  type: string;
+  /** Baris kedua: tipe dompet (teks) atau teks tujuan (mode nyata, S13-TJ10). */
+  type: ReactNode;
   balance: Rupiah;
 }) {
   return (

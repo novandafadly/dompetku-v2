@@ -18,6 +18,8 @@ export function archiveFailedText(code: LedgerErrorCode, name: string): string {
   switch (code) {
     case 'balance_not_zero':
       return `${name} masih berisi saldo, jadi belum bisa diarsipkan. Pindahkan isinya dulu.`;
+    case 'account_has_goal':
+      return `${name} masih punya tujuan aktif, jadi belum bisa diarsipkan. Selesaikan atau arsipkan tujuannya dulu.`;
     case 'network':
       return 'Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.';
     case 'not_found':
@@ -65,8 +67,8 @@ export function ArchiveWalletDialog({
       onConfirm={onConfirm}
       holdOpen
       busy={busy}
-      // Server sudah menjawab saldo ≠ 0: mengulang tidak ada gunanya sampai halaman dimuat ulang.
-      confirmDisabled={failure === 'balance_not_zero'}
+      // Server sudah menjawab saldo ≠ 0 atau tujuan aktif: mengulang tidak ada gunanya sampai halaman dimuat ulang.
+      confirmDisabled={failure === 'balance_not_zero' || failure === 'account_has_goal'}
       alert={failure === null ? undefined : archiveFailedText(failure, name)}
     />
   );

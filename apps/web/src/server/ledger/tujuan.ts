@@ -1,7 +1,7 @@
 import 'server-only';
 import type pg from 'pg';
 import { z } from 'zod';
-import type { GoalData, GoalStatus, GoalVM } from '@/features/tujuan/types';
+import type { GoalData, GoalLineVM, GoalStatus, GoalVM } from '@/features/tujuan/types';
 import { rosterTx } from './bersama';
 import { withLedger } from './retry';
 import { assertInSpace, callApi, NotInSpaceError, type LedgerCtx } from './write';
@@ -84,19 +84,67 @@ const goalRow = z.object({
   account_has_other_active: z.boolean(),
 });
 
+const goalLine = z.object({
+  account_id: z.guid(),
+  name: z.string(),
+  pct: z.number().int().min(0).max(100),
+  reached: z.boolean(),
+});
+
 // ===== Baca =====
+const GOAL_COLS = `g.goal_id, g.name, g.account_id, g.account_name, g.account_archived, g.status,
+            g.target_amount, g.target_on,
+            (g.completed_at at time zone 'Asia/Jakarta')::date::text as completed_on,
+            (g.archived_at at time zone 'Asia/Jakarta')::date::text as archived_on,
+            g.created_by, g.balance, g.saved, g.remaining, g.pct, g.reached, g.periods_left,
+            g.per_period, g.account_has_other_active`;
+
+/** Anggota ruang: nama pembuat dan anggota lain hanya untuk Bersama dua anggota (Pribadi/solo = `null`). */
+async function rosterNames(c: pg.PoolClient, ctx: LedgerCtx) {
+  const roster = await rosterTx(c, ctx);
+  const two = roster.length === 2;
+  return {
+    two,
+    byId: new Map(roster.map((m) => [m.id, m.name])),
+    partnerName: (two ? roster.find((m) => m.id !== ctx.userId)?.name : undefined) ?? null,
+  };
+}
+
+function toGoalVM(
+  raw: Record<string, unknown>,
+  { two, byId }: { two: boolean; byId: ReadonlyMap<string, string> },
+): GoalVM {
+  const r = goalRow.parse(raw);
+  return {
+    goalId: r.goal_id,
+    name: r.name,
+    accountId: r.account_id,
+    accountName: r.account_name,
+    accountArchived: r.account_archived,
+    status: r.status,
+    target: r.target_amount,
+    targetOn: r.target_on,
+    completedOn: r.completed_on,
+    archivedOn: r.archived_on,
+    createdByName: two ? (byId.get(r.created_by) ?? null) : null,
+    balance: r.balance,
+    saved: r.saved,
+    remaining: r.remaining,
+    pct: r.pct,
+    reached: r.reached,
+    periodsLeft: r.periods_left,
+    perPeriod: r.per_period,
+    accountHasOtherActive: r.account_has_other_active,
+  };
+}
+
 /**
  * `api.list_goals` (urutan SQL: aktif tercapai, tanggal terdekat, tanpa tanggal; lalu selesai/arsip
  * terbaru) + nama pembuat dan anggota lain (hanya Bersama dua anggota; Pribadi/solo = `null`).
  */
 export async function listGoalsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<GoalData> {
   const { rows } = await c.query<Record<string, unknown>>(
-    `select g.goal_id, g.name, g.account_id, g.account_name, g.account_archived, g.status,
-            g.target_amount, g.target_on,
-            (g.completed_at at time zone 'Asia/Jakarta')::date::text as completed_on,
-            (g.archived_at at time zone 'Asia/Jakarta')::date::text as archived_on,
-            g.created_by, g.balance, g.saved, g.remaining, g.pct, g.reached, g.periods_left,
-            g.per_period, g.account_has_other_active
+    `select ${GOAL_COLS}
        from api.list_goals(p_space_id => $1) with ordinality as g (
               goal_id, name, account_id, account_name, account_archived, status, target_amount,
               target_on, completed_at, archived_at, created_by, created_at, balance, saved,
@@ -104,40 +152,59 @@ export async function listGoalsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<Goa
       order by g.n`,
     [ctx.spaceId],
   );
-  const roster = await rosterTx(c, ctx);
-  const two = roster.length === 2;
-  const byId = new Map(roster.map((m) => [m.id, m.name]));
-  const other = two ? roster.find((m) => m.id !== ctx.userId) : undefined;
-  const goals = rows.map((raw): GoalVM => {
-    const r = goalRow.parse(raw);
-    return {
-      goalId: r.goal_id,
-      name: r.name,
-      accountId: r.account_id,
-      accountName: r.account_name,
-      accountArchived: r.account_archived,
-      status: r.status,
-      target: r.target_amount,
-      targetOn: r.target_on,
-      completedOn: r.completed_on,
-      archivedOn: r.archived_on,
-      createdByName: two ? (byId.get(r.created_by) ?? null) : null,
-      balance: r.balance,
-      saved: r.saved,
-      remaining: r.remaining,
-      pct: r.pct,
-      reached: r.reached,
-      periodsLeft: r.periods_left,
-      perPeriod: r.per_period,
-      accountHasOtherActive: r.account_has_other_active,
-    };
-  });
-  return { goals, partnerName: other?.name ?? null };
+  const names = await rosterNames(c, ctx);
+  return { goals: rows.map((r) => toGoalVM(r, names)), partnerName: names.partnerName };
 }
 
 /** Segmen Tujuan di Rencana (S13-TJ1/TJ2): satu transaksi, terpisah dari `loadRencana`. */
 export async function loadTujuan(ctx: LedgerCtx): Promise<GoalData> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listGoalsTx(c, ctx));
+}
+
+/**
+ * Tujuan aktif satu dompet tabungan (Detail dompet, S13-TJ9): `api.goal_for_account` (0 atau 1
+ * baris). Dipanggil hanya untuk dompet tabungan aktif; dompet di luar ruang = `not_found` (DB).
+ */
+export async function loadGoalForAccount(
+  ctx: LedgerCtx,
+  accountId: string,
+): Promise<{ goal: GoalVM | null; partnerName: string | null }> {
+  const id = z.uuid().parse(accountId);
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, async (c) => {
+    // Dompet ruang lain (mis. Bersama dari rute Pribadi) = tidak ada: DB sendiri hanya menilai keanggotaan.
+    await assertInSpace(c, 'accounts', [id], ctx.spaceId);
+    const { rows } = await c.query<Record<string, unknown>>(
+      `select ${GOAL_COLS} from api.goal_for_account($1) g`,
+      [id],
+    );
+    const names = await rosterNames(c, ctx);
+    const row = rows[0];
+    return {
+      goal: row === undefined ? null : toGoalVM(row, names),
+      partnerName: names.partnerName,
+    };
+  });
+}
+
+/**
+ * Teks tujuan di daftar Dompet (S13-TJ10): SATU kueri `list_goals` ruang ini, hanya tujuan aktif.
+ * `pct`/`reached` dari SQL; kunci = id dompet.
+ */
+export async function activeGoalLinesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+): Promise<Record<string, GoalLineVM>> {
+  const { rows } = await c.query<Record<string, unknown>>(
+    `select g.account_id, g.name, g.pct, g.reached from api.list_goals(p_space_id => $1) g
+      where g.status = 'active'`,
+    [ctx.spaceId],
+  );
+  const lines: Record<string, GoalLineVM> = {};
+  for (const raw of rows) {
+    const r = goalLine.parse(raw);
+    lines[r.account_id] = { name: r.name, pct: r.pct, reached: r.reached };
+  }
+  return lines;
 }
 
 // ===== Tulis =====

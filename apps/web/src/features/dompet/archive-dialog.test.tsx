@@ -110,3 +110,17 @@ describe('ArchiveBlockedCard (saldo ≠ 0)', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 });
+
+describe('ArchiveWalletDialog: dompet bertujuan (S13-TJ11)', () => {
+  it('account_has_goal: pesan tanpa nama tujuan dan tombol Arsipkan nonaktif', async () => {
+    dialog({ failure: 'account_has_goal' });
+    const d = await screen.findByRole('alertdialog', { name: 'Arsipkan BCA?' });
+    expect(d).toHaveTextContent(
+      'BCA masih punya tujuan aktif, jadi belum bisa diarsipkan. Selesaikan atau arsipkan tujuannya dulu.',
+    );
+    expect(screen.getByRole('button', { name: 'Arsipkan' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+});

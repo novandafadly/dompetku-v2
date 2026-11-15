@@ -59,6 +59,11 @@ export const TUJUAN_COPY = {
   edit: 'Ubah',
   archive: 'Arsipkan',
   viewWallet: 'Lihat dompet',
+  // Detail dompet (TJ9)
+  viewAll: 'Lihat semua tujuan',
+  walletNoGoal: (wallet: string) => `Belum ada tujuan untuk ${wallet}.`,
+  walletNoGoalHint: 'Pasang target, dan progresnya mengikuti saldo dompet ini.',
+  create: 'Buat tujuan',
   createdBy: (name: string) => `Dibuat ${name}`,
   progressText: (pct: number, saved: Rupiah, target: Rupiah) =>
     saved === 0

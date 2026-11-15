@@ -271,10 +271,13 @@ export function AddGoalButton({
   variant,
   plus = false,
   className = '',
+  label = C.add,
 }: {
   variant: 'primary' | 'secondary';
   plus?: boolean;
   className?: string;
+  /** Detail dompet memakai `Buat tujuan` (dompet terkunci di host). */
+  label?: string;
 }) {
   const { openAdd } = useHost();
   return (
@@ -287,7 +290,7 @@ export function AddGoalButton({
       onClick={openAdd}
     >
       {plus ? <PlusIcon size={18} weight="bold" /> : null}
-      {C.add}
+      {label}
     </Button>
   );
 }

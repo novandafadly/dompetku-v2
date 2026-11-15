@@ -15,7 +15,7 @@ import {
   TujuanHostIsland,
 } from './tujuan-islands';
 
-const SLOTS: TujuanSlots = {
+export const SLOTS: TujuanSlots = {
   add: (opts) => <AddGoalIsland {...opts} />,
   complete: (g) => <CompleteGoalIsland goalId={g.goalId} name={g.name} />,
   edit: (g) => <EditGoalIsland goalId={g.goalId} name={g.name} />,
