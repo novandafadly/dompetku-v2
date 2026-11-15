@@ -6,7 +6,7 @@ Repo /home/user/dompetku-v2, branch `ccr-93c19006-ivqnyt` (sudah checkout). Kamu
 - `docs/superpowers/handoff/s7-konteks-subagent.md` — wajib (cara menjalankan test:int, e2e:ledger, e2e prototipe; Postgres lokal sudah siap).
 - Plan `docs/superpowers/plans/2026-11-03-dompetku-v2-s7-transfer-talangan.md`: Global Constraints, Review Focus (#1–#3), "Task 17", "Kriteria keluar S7".
 - Ledger `docs/superpowers/handoff/s7-ledger.md`: semua ruling (R24 navigasi sesudah pindah ke `/{tujuan}/transaksi`, R25, R27, R28) dan butir "minor (deferred)" yang menyebut Task 17.
-- Spec e2e:ledger yang ada: `apps/web/tests/e2e-ledger/*`, config `apps/web/playwright.ledger.config.ts`, job CI `auth` dan `db` di `.github/workflows/ci.yml`; budget prototipe `apps/web/tests/e2e/budget.spec.ts`.
+- Spec e2e:ledger yang ada: `apps/web/tests/e2e-ledger/*`, config `apps/web/playwright.ledger.config.ts`, job CI `auth-ledger` dan `db` di `.github/workflows/ci.yml`; budget prototipe `apps/web/tests/e2e/budget.spec.ts`.
 
 ## Lingkup (plan Task 17 Step 1–2) + utang yang diarahkan ke T17
 1. `e2e:ledger` baru (mode nyata) — pakai helper/seed yang ada:
