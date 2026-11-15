@@ -6,7 +6,8 @@
 --
 -- - app.goals: ruang Pribadi atau Bersama (K1; di Bersama semua anggota menulis, pola anggaran), dompet
 --   lewat FK komposit (space_id, account_id) -> accounts (ruang yang sama), nama 1..60 sesudah btrim,
---   target 1..1e13, tanggal target opsional (>= 2000-01-01; ">= hari ini" dijaga api 0138, bukan CHECK,
+--   target 1..1e13, tanggal target opsional (2000-01-01..2100-12-31: app.pay_period menghitung date +
+--   interval, tanggal di luar rentang timestamp merusak seluruh daftar; ">= hari ini" dijaga api 0138, bukan CHECK,
 --   supaya tujuan lama tidak menjadi tidak sah saat waktu berjalan). status text + CHECK (tanpa enum):
 --   active | completed (completed_at) | archived (archived_at; completed_at tetap bila pernah selesai).
 --   Tanpa kolom progres tersimpan, tanpa hapus fisik dan tanpa purge (K7).
@@ -30,6 +31,9 @@
 --   hanya bila target_on >= app.today() (WIB, jam tiruan tes); per_period = ceil(remaining / periods_left)
 --   bila belum tercapai. target_on terisi + periods_left NULL = tanggal target lewat. Semua tujuan
 --   (termasuk selesai/arsip); pemanggil menyaring status.
+-- - app.pay_period, app.period_of_label, api.pay_period: ROWS 1 (selalu satu baris). Perkiraan bawaan
+--   1000 baris per pemanggilan LATERAL membuat kueri app.goal_progress melewati jit_above_cost (~300 ms
+--   kompilasi JIT per kueri); juga mempercepat pemanggil lama. Hanya metadata perencana.
 -- - private.dq_run: + DQ17 (error) tujuan aktif pada dompet terarsip, bukan tabungan, atau beda ruang.
 --   Selebihnya = 0136.
 -- - RLS ENABLE + FORCE pola ruang; web/api/auditor SELECT, tulis hanya dompetku_api (INSERT, UPDATE;
@@ -44,7 +48,7 @@ create table app.goals (
   account_id    uuid not null,
   name          text not null check (length(btrim(name)) between 1 and 60),
   target_amount bigint not null check (target_amount > 0 and target_amount <= 10000000000000),
-  target_on     date check (target_on >= date '2000-01-01'),
+  target_on     date check (target_on between date '2000-01-01' and date '2100-12-31'),
   status        text not null default 'active' check (status in ('active', 'completed', 'archived')),
   completed_at  timestamptz,
   archived_at   timestamptz,
@@ -96,6 +100,9 @@ create trigger goal_guard before insert or update on app.goals
   for each row execute function private.tg_goal_guard();
 
 -- ===== Progres (tanpa kolom tersimpan) =====
+alter function app.pay_period(uuid, date) rows 1;
+alter function app.period_of_label(uuid, date) rows 1;
+alter function api.pay_period(uuid, date) rows 1;
 -- pay_period dipanggil dengan tanggal yang selalu terisi (coalesce): fungsi menolak NULL, dan filter di
 -- subkueri LATERAL tidak menjamin fungsi tidak dievaluasi lebih dulu.
 create view app.goal_progress with (security_invoker = true) as
@@ -409,6 +416,9 @@ drop view app.goal_progress;
 drop trigger goal_guard on app.goals;
 drop function private.tg_goal_guard();
 drop table app.goals;
+alter function app.pay_period(uuid, date) rows 1000;
+alter function app.period_of_label(uuid, date) rows 1000;
+alter function api.pay_period(uuid, date) rows 1000;
 
 -- private.dq_run kembali ke badan 0136.
 create or replace function private.dq_run()

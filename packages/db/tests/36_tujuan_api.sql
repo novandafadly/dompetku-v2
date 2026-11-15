@@ -11,7 +11,7 @@
 -- Jam dipatok 2026-03-20 WIB (periode gajian payday_rule 25 berjalan = 25 Feb sampai 24 Mar).
 -- ID: T11, B1, B22, I6
 begin;
-select plan(96);
+select plan(99);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -168,6 +168,9 @@ select is(pg_temp.err(tests.n(), pg_temp.cg_sql(:'np', :'ems', 'X', null)), 'DK4
   'target kosong');
 select is(pg_temp.err(tests.n(), pg_temp.cg_sql(:'np', :'ems', 'X', 1000, '2026-03-19')), 'DK422:goal_target_past:target_on',
   'tanggal target kemarin (WIB) ditolak');
+select is(pg_temp.err(tests.n(), pg_temp.cg_sql(:'np', :'ems', 'X', 1000, '2101-01-01')) || ' '
+          || pg_temp.err(tests.n(), pg_temp.cg_sql(:'np', :'ems', 'X', 1000, '300000-01-01')),
+  'DK400:invalid_argument:target_on DK400:invalid_argument:target_on', 'tanggal target > 2100-12-31 ditolak, tanpa nilai');
 select is(pg_temp.err(tests.n(), pg_temp.cg_sql(:'np', null, 'X', 1000)), 'DK400:invalid_argument:account_id',
   'dompet kosong');
 select is(pg_temp.err(tests.n(), format($$select api.create_goal(null, %L, %L, 'X', 1000)$$, :'np', :'ems')),
@@ -187,6 +190,11 @@ select is(pg_temp.err(tests.n(), pg_temp.cg_sql(:'fp', :'ftab', 'X', 1000)), 'DK
 select is(pg_temp.err(tests.x(), pg_temp.cg_sql(:'sh', :'lib', 'X', 1000)), 'DK404:space_not_found:', 'Luar = DK404');
 select is(pg_temp.err(null, pg_temp.cg_sql(:'np', :'ems', 'X', 1000)), 'DK401:unauthenticated:', 'tanpa pengguna = DK401');
 select is(pg_temp.n_goals(), :'n0', 'semua penolakan nol efek (tujuan dan kunci idempotensi)');
+savepoint jauh;
+select pg_temp.cg(tests.n(), :'np', :'ems', 'Pensiun', 1000, '2100-12-31') as gj \gset
+select is(tests.web_val(tests.n(), format($$select count(*) filter (where goal_id = %L and periods_left > 0)
+    from api.list_goals(%L)$$, :'gj', :'np')), '1', 'tanggal target 2100-12-31 diterima, daftar tetap terbaca');
+rollback to savepoint jauh;
 
 -- ===== K1: Bersama, semua anggota menulis =====
 select pg_temp.cg(tests.f(), :'sh', :'lib', 'Bali', 2000000, '2026-03-20') as gl \gset
@@ -229,6 +237,8 @@ select is(pg_temp.err(tests.n(), pg_temp.upd_sql(:'g1', '', 6000000, null)) || '
           || pg_temp.err(tests.n(), pg_temp.upd_sql(:'g1', 'X', 1000, '2026-03-01')),
   'DK400:invalid_argument:name DK400:invalid_argument:target_amount DK422:goal_target_past:target_on',
   'validasi update_goal');
+select is(pg_temp.err(tests.n(), pg_temp.upd_sql(:'g1', 'Laptop Kerja', 6000000, '2101-01-01')),
+  'DK400:invalid_argument:target_on', 'update_goal: tanggal target > 2100-12-31 ditolak');
 select is(pg_temp.g(:'g1'), 'active|Laptop Kerja|6000000|2026-07-31|false|false|N|N', 'validasi gagal = nol efek');
 select is(pg_temp.err(tests.n(), pg_temp.upd_sql(:'g1', 'Laptop Kerja', 6000000, null)) || ' ' || pg_temp.g(:'g1'),
   'ok active|Laptop Kerja|6000000|-|false|false|N|N', 'tanggal target boleh dihapus');

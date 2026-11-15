@@ -10,7 +10,7 @@
 -- gajian efektif April = Jumat 24 Apr (25 Apr Sabtu).
 -- ID: T11, B1, B22, I6
 begin;
-select plan(83);
+select plan(86);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 select tests.owner_exec(null, 'update app.households set payday_rule = 25');
@@ -322,6 +322,24 @@ select throws_ok($$select tests.worker_val(null, 'select count(*) from app.goals
 select is(tests.web_val(tests.n(), format($$select pct from app.goal_progress where goal_id = %L$$, :'gs'))
           || '/' || tests.web_val(tests.f(), format($$select pct from app.goal_progress where goal_id = %L$$, :'gs')),
   '0/0', 'progres tujuan Bersama sama untuk kedua anggota');
+
+-- ===== Tanggal target sangat jauh (review DB S13) dan perkiraan baris fungsi periode =====
+-- pay_period menghitung date + interval: tanggal di luar rentang timestamp merusak seluruh daftar ruang.
+savepoint jauh;
+select tests.account(tests.n(), :'np', 'Jauh 1', 'tabungan', 0, '2026-01-01') as j1,
+       tests.account(tests.n(), :'np', 'Jauh 2', 'tabungan', 0, '2026-01-01') as j2 \gset
+select pg_temp.goal(tests.n(), :'np', 'personal', :'j1', 'Pensiun', 1000, '2100-12-31') as gj \gset
+select ok(tests.web_val(tests.n(), format($$select periods_left > 0 from app.goal_progress where goal_id = %L$$, :'gj'))::boolean,
+  'tanggal target 2100-12-31 diterima tabel dan progresnya terbaca');
+select throws_ok(format($$select pg_temp.goal(tests.n(), %L, 'personal', %L, 'X', 1000, '2101-01-01')$$, :'np', :'j2'),
+  '23514', null, 'tanggal target > 2100-12-31 ditolak CHECK');
+rollback to savepoint jauh;
+-- Fungsi periode selalu satu baris; perkiraan bawaan 1000 baris membuat kueri app.goal_progress melewati
+-- ambang JIT (ratusan ms per kueri).
+select is((select string_agg(n.nspname || '.' || p.proname || ':' || p.prorows, ',' order by n.nspname, p.proname collate "C")
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where (n.nspname, p.proname) in (('app', 'pay_period'), ('app', 'period_of_label'), ('api', 'pay_period'))),
+  'api.pay_period:1,app.pay_period:1,app.period_of_label:1', 'fungsi periode diperkirakan satu baris (ROWS 1)');
 
 -- ===== purge_unfinished_users tidak terhalang FK created_by/updated_by =====
 -- Akun setengah jadi (tanpa profil) disuntik langsung: batas 2 pengguna berprofil sudah penuh.

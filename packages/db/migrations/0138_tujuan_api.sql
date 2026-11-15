@@ -10,6 +10,7 @@
 -- - Penjaga dompet tetap private.tg_goal_guard (0137): pocket tabungan (goal_pocket_invalid), dompet ruang
 --   yang sama dan terlihat (account_not_found), tidak terarsip saat aktif (account_archived). 23505 dari
 --   goals_one_active_per_account (create_goal, restore_goal) = DK409 goal_exists.
+-- - Tanggal target > 2100-12-31 = DK400 invalid_argument target_on (= CHECK 0137), sebelum menyentuh data.
 -- - Tanggal target lampau (< app.today(), WIB) = DK422 goal_target_past; di update_goal hanya bila tanggal
 --   berubah, jadi tujuan yang sudah lewat tanggal tetap bisa diganti nama/target (bingkai Dampak 2).
 -- - Urutan kunci: dompet (private.lock_accounts, FOR NO KEY UPDATE) -> baris tujuan (FOR NO KEY UPDATE) ->
@@ -80,6 +81,9 @@ begin
   end if;
   perform app.assert_member(p_space_id);
   v_name := private.check_goal(v_name, p_target_amount);
+  if p_target_on > date '2100-12-31' then  -- = CHECK app.goals (0137)
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'target_on';
+  end if;
   if p_target_on < app.today() then
     raise exception using errcode = 'DK422', message = 'goal_target_past', detail = 'target_on';
   end if;
@@ -108,6 +112,9 @@ declare
   v_name text := private.check_goal(p_name, p_target_amount);
   v_g    app.goals%rowtype;
 begin
+  if p_target_on > date '2100-12-31' then  -- = CHECK app.goals (0137)
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'target_on';
+  end if;
   v_g := private.lock_goal(p_goal_id);
   if v_g.status <> 'active' then
     raise exception using errcode = 'DK422', message = 'goal_not_active';
