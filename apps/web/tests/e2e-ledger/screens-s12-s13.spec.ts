@@ -94,7 +94,7 @@ async function debt(
 ) {
   await api(
     `select api.create_debt(p_client_id => $1, p_space_id => $2, p_direction => $3,
-       p_principal => $4::bigint, p_mode => 'new', p_contact_name => $5, p_account_id => $6,
+       p_principal => $4::bigint, p_mode => 'baru', p_contact_name => $5, p_account_id => $6,
        p_title => $7)`,
     [randomUUID(), sid, direction, principal, contact, ids[account], title ?? null],
   );
@@ -311,8 +311,8 @@ test('trading: kosong, setor, Kurang, hasil ditarik, nominal besar', async ({
   await shoot(browser, ownerState, 'tr-detail-ditarik-semua', `/pribadi/dompet/${dompetId()}`);
 
   // Nominal besar + Kurang besar + nama dompet panjang.
-  await wallet('Kripto Besar Dengan Nama Rekening Yang Panjang Sekali di Luar Negeri', 'trading', 0);
-  const big = 'Kripto Besar Dengan Nama Rekening Yang Panjang Sekali di Luar Negeri';
+  const big = 'Kripto Besar Dengan Nama Rekening Yang Panjang Sekali di Luar Negeri'.slice(0, 60);
+  await wallet(big, 'trading', 0);
   await transfer(LONG_WALLET, big, BIG);
   await reconcile(big, 100);
   await shoot(browser, ownerState, 'tr-dompet-besar', '/pribadi/dompet');
