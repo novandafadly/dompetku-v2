@@ -315,7 +315,14 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
 
   const setAmount = (amount: Rupiah | null) => {
     if (busy.current) return;
-    update((d) => ({ ...d, amount }));
+    // Bagian pasangan yang melebihi nominal baru dibuang (kembali sama rata), bukan dikirim tak sah.
+    update((d) => ({
+      ...d,
+      amount,
+      ...(d.split?.partnerShare !== undefined && (amount === null || d.split.partnerShare > amount)
+        ? { split: { accountId: d.split.accountId } }
+        : {}),
+    }));
     if (status === 'saldo_kurang' && enough({ ...draft, amount }, payerAccount)) toIdle();
   };
   const setCategory = (categoryId: string) => {

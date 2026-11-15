@@ -156,6 +156,37 @@ describe('CatatSheet · bagi tagihan Bersama (S12-CT1, CT2)', () => {
     expect(draft[0].ruang).toBe('bersama');
   });
 
+  it('nominal diturunkan di bawah bagian Farida → bagian dibuang, kembali sama rata', async () => {
+    const user = userEvent.setup();
+    const { save } = setup();
+    const amount = await screen.findByRole('textbox', { name: 'Nominal' });
+    await user.type(amount, '400000');
+    await user.click(screen.getByRole('radio', { name: 'Listrik' }));
+    await user.click(screen.getByRole('switch', { name: 'Dibayar dari dompet pribadi' }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole<HTMLSelectElement>('combobox', { name: 'Dari dompet pribadi' }).value,
+      ).toBe('bca');
+    });
+    await user.click(screen.getByRole('button', { name: 'Ubah pembagian' }));
+    await user.click(await screen.findByRole('radio', { name: 'Atur nominal' }));
+    const share = screen.getByRole('textbox', { name: 'Bagian Farida' });
+    await user.clear(share);
+    await user.type(share, '300000');
+    await user.click(screen.getByRole('button', { name: 'Pakai pembagian ini' }));
+    expect(await screen.findByText(/Farida menanggung Rp\s300\.000/)).toBeTruthy();
+    const again = await screen.findByRole('textbox', { name: 'Nominal' });
+    await user.clear(again);
+    await user.type(again, '100000');
+    expect(await screen.findByText('Dibagi rata dengan Farida')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Simpan' }));
+    await waitFor(() => {
+      expect(save).toHaveBeenCalledTimes(1);
+    });
+    const draft = save.mock.calls[0] as unknown as [{ split?: { partnerShare?: number } }];
+    expect(draft[0].split?.partnerShare).toBeUndefined();
+  });
+
   it('Pembagian: bagian lebih dari total ditolak dengan salinan bingkai', async () => {
     const user = userEvent.setup();
     setup();
