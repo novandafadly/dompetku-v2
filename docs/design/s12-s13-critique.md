@@ -97,3 +97,4 @@ Layar terkait dipotret ulang dari build sesudah perbaikan (putaran kedua, 486 PN
 - Perbaikan C2, C3, C4, C5 hanya menyentuh kelas Tailwind dan satu `style`; tidak ada perubahan SQL. `ConfirmDialog` dipakai di semua dialog aplikasi: perilaku baru hanya aktif bila isi lebih tinggi dari layar.
 - Spesifikasi screenshot memakai data seed lewat `api.*` dan, untuk `Lewat tanggal target`, satu `update app.goals` superuser (API menolak tanggal lampau); jangan dipakai sebagai contoh alur pengguna.
 - Penilaian dari satu penilai tanpa pemeriksaan piksel kontras; butir kontras dan target sentuh bersandar pada tes yang sudah ada.
+- Gerbang sesudah perbaikan: `pnpm lint`, `pnpm typecheck`, `pnpm format:check` bersih; unit web 3293 lulus; e2e `e2e:ledger` (`trading`, `utang2`, `tujuan`, `zz-dompet-tujuan`, 29 tes) dan `e2e:bersama` (`zz-patungan`, `zz-tujuan`, 17 tes) lulus pada build sesudah perbaikan, termasuk axe 320/390/1280 dan budget JS (Beranda nyata 157,5 kB).
