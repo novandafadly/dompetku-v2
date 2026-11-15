@@ -46,7 +46,7 @@ describe('GoalSheet: Tambah (S13-TJ4)', () => {
   it('judul memuat ruang; pemilih hanya dompet yang diberikan; kalimat saldo mengikuti pilihan', async () => {
     const user = userEvent.setup();
     setup({ ruang: 'bersama' });
-    expect(await screen.findByRole('dialog', { name: 'Tambah tujuan · Bersama' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: /^Tambah tujuan\s*Bersama$/ })).toBeTruthy();
     const select = screen.getByRole('combobox', { name: 'Dompet tabungan' });
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Pilih dompet',
@@ -196,7 +196,7 @@ describe('GoalSheet: Tambah (S13-TJ4)', () => {
 describe('GoalSheet: Ubah (S13-TJ5)', () => {
   it('terisi dari tujuan; dompet terkunci dengan catatan; tanpa pemilih', async () => {
     setup({ goal: goal(), wallets: [] });
-    expect(await screen.findByRole('dialog', { name: 'Ubah tujuan · Pribadi' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: /^Ubah tujuan\s*Pribadi$/ })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: /Nama tujuan/ })).toHaveValue('Dana darurat');
     expect(screen.getByLabelText(/Tanggal target/)).toHaveValue('2027-03-25');
     expect(screen.getByText('Dompet: Tabungan BCA')).toBeTruthy();

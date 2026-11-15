@@ -3,9 +3,11 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import { useId, useRef, useState } from 'react';
 import { Alert, SelectField } from '@/components/ui/form-parts';
+import { DateInput } from '@/components/ui/date-input';
 import { FieldError } from '@/components/ui/field-messages';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { MoneyInput } from '@/components/ui/money-input';
+import { SaveButton } from '@/components/ui/save-button';
 import { Sheet } from '@/components/ui/sheet';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
@@ -13,7 +15,6 @@ import { TextField } from '@/components/ui/text-field';
 import { Button } from '@/components/ui/button';
 import { newClientId } from '@/features/ledger/client-id';
 import type { LedgerErrorCode, Ruang } from '@/features/ledger/types';
-import { DateInput, SaveButton } from '@/features/utang/fields';
 import { TUJUAN_COPY as C } from './copy';
 import { FIELD_DATE, FIELD_NAME, FIELD_TARGET, goalFailedText } from './galat';
 import type { GoalVM } from './types';
@@ -21,6 +22,8 @@ import type { GoalVM } from './types';
 const FORM_ID = 'tujuan';
 const NAME_MAX = 60;
 const MAX_TARGET = 10 ** 13;
+/** Batas DB untuk tanggal target (0137). */
+const MAX_DATE = '2100-12-31';
 
 /** Dompet tabungan aktif ruang ini yang boleh dipilih (tanpa tujuan aktif). */
 export interface GoalWallet {
@@ -66,9 +69,10 @@ interface Errors {
   date?: string | undefined;
 }
 
-/** Hari ini + 50 tahun (batas isian tanggal target; teks pasti, bukan hitung uang). */
+/** Hari ini + 50 tahun, paling jauh 2100-12-31 (batas isian tanggal target; bukan hitung uang). */
 function maxDate(today: IsoDate): IsoDate {
-  return `${String(Number(today.slice(0, 4)) + 50)}${today.slice(4)}`;
+  const d = `${String(Number(today.slice(0, 4)) + 50)}${today.slice(4)}`;
+  return d > MAX_DATE ? MAX_DATE : d;
 }
 
 /**

@@ -26,7 +26,11 @@ const target = z
   .positive()
   .max(10 ** 13);
 const name = z.string().trim().min(1).max(60);
-const isoDate = z.iso.date().regex(/^20\d{2}-/);
+// Batas sama dengan DB (0137): 2000-01-01..2100-12-31.
+const isoDate = z.iso
+  .date()
+  .regex(/^20\d{2}-/)
+  .refine((d) => d <= '2100-12-31');
 
 export const createGoalSchema = z.object({
   clientId: id,
