@@ -243,6 +243,7 @@ describe('materialize_bills (S9, K3)', () => {
       delete from app.bill_occurrences;
       delete from app.bills;
       delete from app.budgets;
+      delete from app.goals;
       delete from app.categories;
       delete from app.space_members;
       delete from app.profiles;

@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(49);
+select plan(51);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -303,6 +303,15 @@ select set_eq($$
     ('dompetku_auditor', 'app.split_shares', 'SELECT'),
     ('dompetku_auditor', 'app.settlements', 'SELECT'),
     ('dompetku_auditor', 'app.member_balances', 'SELECT'),
+    -- S13 (0137): tujuan tabungan (pola ruang; api tulis lewat fungsi, tanpa DELETE), view progres.
+    ('dompetku_web', 'app.goals', 'SELECT'),
+    ('dompetku_web', 'app.goal_progress', 'SELECT'),
+    ('dompetku_api', 'app.goals', 'SELECT'),
+    ('dompetku_api', 'app.goals', 'INSERT'),
+    ('dompetku_api', 'app.goals', 'UPDATE'),
+    ('dompetku_api', 'app.goal_progress', 'SELECT'),
+    ('dompetku_auditor', 'app.goals', 'SELECT'),
+    ('dompetku_auditor', 'app.goal_progress', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -458,6 +467,10 @@ select is((select indexdef from pg_indexes where schemaname = 'app' and indexnam
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'contacts_name_unique'),
   'CREATE UNIQUE INDEX contacts_name_unique ON app.contacts USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
   'indeks unik nama kontak aktif per ruang');
+-- S13 (0137): 1 dompet = 1 tujuan aktif; api 0138 memetakan 23505 dari indeks ini ke goal_exists.
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'goals_one_active_per_account'),
+  'CREATE UNIQUE INDEX goals_one_active_per_account ON app.goals USING btree (account_id) WHERE (status = ''active''::text)',
+  'satu tujuan aktif per dompet');
 
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');
@@ -498,6 +511,12 @@ select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
            join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
            where n.nspname = 'app' and c.relname = 'debts' and g.tgname = 'debt_guard'),
           'trigger debt_guard di app.debts memakai private.tg_debt_guard INVOKER milik owner');
+-- S13 (0137): penjaga tujuan INVOKER (dompet tabungan ruang yang sama tanpa oracle, dompet/ruang tetap).
+select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
+           from pg_trigger g join pg_proc p on p.oid = g.tgfoid
+           join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname = 'goals' and g.tgname = 'goal_guard'),
+          'trigger goal_guard di app.goals memakai private.tg_goal_guard INVOKER milik owner');
 -- S12 (0135): penjaga patungan DEFINER milik owner di entri, baris, dompet, tagihan rutin, dan anggota.
 select set_eq($$
   select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid

@@ -9,9 +9,10 @@
 -- DQ05 (S11, 0131): Σ cicilan hidup per utang <= pokok. DQ15 (S12, 0134): modal trading = Σ transfer + kaki space_transfer.
 -- DQ16 (S12, 0136): patungan (dompet sistem = Σ pelunasan belum diterima, Σ bagian = nominal, status entri =
 -- status tagihan/pelunasan, entri dompet sistem dirujuk, saldo anggota nol-jumlah).
+-- DQ17 (S13, 0137): tujuan aktif hanya pada dompet tabungan aktif di ruang yang sama.
 -- ID: S7, T18
 begin;
-select plan(65);
+select plan(70);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -29,7 +30,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16']) c
+                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -64,8 +65,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error',
-  'tepat 15 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error',
+  'tepat 16 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -313,6 +314,26 @@ rollback to savepoint s;
 savepoint s;
 select tests.raw_exec(format($$update app.settlements set voided_at = now(), voided_by = from_user where id = %L$$, :'dq_t'));
 select is(pg_temp.dq(), pg_temp.expect('DQ16=3'), 'DQ16: pelunasan batal tanpa entri (status, saldo dompet sistem, entri tak dirujuk)');
+rollback to savepoint s;
+
+-- ===== DQ17: tujuan aktif pada dompet tabungan aktif di ruang yang sama (S13, 0137) =====
+select tests.api_val(tests.n(), format($$insert into app.goals (space_id, space_kind, account_id, name, target_amount,
+  created_by, updated_by) values (%L, 'personal', %L, 'Laptop', 5000000, %L, %L) returning id$$,
+  :'np', :'tab', tests.n(), tests.n())) as dq_goal \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ17: tujuan aktif pada dompet tabungan = nol temuan');
+savepoint s;
+select tests.raw_exec(format($$update app.accounts set archived_at = now() where id = %L$$, :'tab'));
+select is(pg_temp.dq(), pg_temp.expect('DQ17=1'), 'DQ17: dompet tujuan aktif terarsip');
+select tests.raw_exec(format($$update app.goals set status = 'completed', completed_at = now() where id = %L$$, :'dq_goal'));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ17: tujuan selesai pada dompet terarsip bukan pelanggaran');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.goals set account_id = %L where id = %L$$, :'bca', :'dq_goal'));
+select is(pg_temp.dq(), pg_temp.expect('DQ17=1'), 'DQ17: tujuan aktif pada dompet bukan tabungan');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.goals set space_id = %L, space_kind = 'shared' where id = %L$$, :'sh', :'dq_goal'));
+select is(pg_temp.dq(), pg_temp.expect('DQ17=1'), 'DQ17: tujuan di ruang lain dari dompetnya');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.
