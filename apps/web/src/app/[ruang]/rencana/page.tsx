@@ -7,6 +7,8 @@ import { errorTag } from '@/server/ledger/transaksi';
 import { ruangContext, ruangShell } from '../_real/context';
 import { RencanaFailed, RencanaReal } from '../_real/rencana';
 import { UtangLoading } from '../_real/utang';
+import { TujuanLoading } from '../_real/tujuan';
+import { TujuanSection } from '../_real/tujuan-section';
 import { UtangSection } from '../_real/utang-section';
 import { RencanaPage } from './view';
 
@@ -16,7 +18,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
  * Prototipe: keadaan kosong tetap (data demo di klien). Nyata: gerbang di page (`ruangContext` =
  * `requireDataUser()` → `resolveSpace`), lalu anggaran periode berjalan, anggaran periode lalu
  * (salin, K13), tagihan, dompet, dan kategori ruang ini lewat `withLedger`. `?bagian=` rusak =
- * Anggaran (Pribadi: `utang` = segmen Utang, `UtangSection`). Galat loader = layar gagal muat; redirect/404 dari gerbang tetap dilempar. Halaman
+ * Anggaran (Pribadi: `utang` = segmen Utang, `UtangSection`; kedua ruang: `tujuan` = `TujuanSection`). Galat loader = layar gagal muat; redirect/404 dari gerbang tetap dilempar. Halaman
  * berdata: dirender per request, `Cache-Control: no-store`.
  */
 export default async function Page({
@@ -38,6 +40,14 @@ export default async function Page({
     return (
       <Suspense fallback={<UtangLoading ruang={ctx.ruang} query={query} />}>
         <UtangSection ctx={ctx} query={query} />
+      </Suspense>
+    );
+  }
+  // Tujuan (S13) di kedua ruang, dimuat per bagian seperti Utang.
+  if (sp.get('bagian') === 'tujuan') {
+    return (
+      <Suspense fallback={<TujuanLoading ruang={ctx.ruang} query={query} />}>
+        <TujuanSection ctx={ctx} query={query} />
       </Suspense>
     );
   }
