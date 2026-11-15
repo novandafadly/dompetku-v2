@@ -7,7 +7,7 @@
   `bash docs/superpowers/handoff/db-reset-lokal.sh` (bila container restart: `rm -f /tmp/pgdata-dk/postmaster.pid` dulu)
   - pgTAP: `pg_prove -h 127.0.0.1 -U dompetku_test -d dompetku packages/db/tests/*.sql` (dompetku_test bukan superuser; helper superuser ada di `packages/db/tests/support/setup.sql`)
   - test:int: `TEST_DATABASE_URL='postgres://dompetku_web@127.0.0.1:5432/dompetku' TEST_DATABASE_ADMIN_URL='postgres://postgres@127.0.0.1:5432/dompetku' pnpm --filter @dompetku/web test:int`
-  - `e2e:auth` / `e2e:ledger`: lihat skrip di `apps/web/package.json` dan job CI `auth` di `.github/workflows/ci.yml`.
+  - `e2e:auth` / `e2e:ledger`: lihat skrip di `apps/web/package.json` dan job CI `auth` / `auth-ledger` di `.github/workflows/ci.yml`.
 - e2e prototipe: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium pnpm e2e` (port 3100 harus bebas: `pgrep -fa server.js`; tidak ada proses Playwright lain: `pgrep -f playwright`).
 - Gerbang sebelum melapor DONE (yang relevan dengan task): `pnpm lint && pnpm typecheck && pnpm test && pnpm format:check`, `pnpm build`, e2e; task DB: pg_prove seluruh suite; task server/UI nyata: test:int + e2e:ledger.
 
