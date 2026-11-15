@@ -14,7 +14,7 @@
 -- Kantor (api.net_worth baru memuat aset di 0144, Task 6). Jam dipatok 2026-03-20 WIB.
 -- ID: T11, S5, I6, B23
 begin;
-select plan(118);
+select plan(106);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -406,12 +406,10 @@ select throws_ok(format($$select pg_temp.call(tests.n(), $q$select api.move_entr
     (select version from app.entries where id = %L), %L, %L, null)$q$)$$, :'belanja_e', :'belanja_e', :'sh', :'rumah'),
   'DK422', 'asset_account_invalid', 'pindah pengeluaran ke dompet aset ruang lain ditolak');
 select throws_ok(format($$select pg_temp.call(tests.n(), $q$select api.create_bill(gen_random_uuid(), %L, 'Listrik',
-    200000, (select id from app.categories where space_id = %L and name = 'Listrik & Air'), 5::smallint,
-    '2026-03-01', null, %L)$q$)$$, :'np', :'np', :'emas'),
+    200000, %L, 5::smallint, '2026-03-01', null, %L)$q$)$$, :'np', :'belanja', :'emas'),
   'DK422', 'asset_account_invalid', 'tagihan rutin dengan dompet aset ditolak');
-select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Air', 100000,
-  (select id from app.categories where space_id = %L and name = 'Listrik & Air'), 5::smallint, '2026-03-01', null, %L)$$,
-  :'np', :'np', :'bca')) ->> 'bill_id' as bill \gset
+select pg_temp.call(tests.n(), format($$select api.create_bill(gen_random_uuid(), %L, 'Air', 100000, %L, 5::smallint,
+  '2026-03-01', null, %L)$$, :'np', :'belanja', :'bca')) ->> 'bill_id' as bill \gset
 select throws_ok(format($$select tests.api_exec(tests.n(), $q$update app.bills set account_id = %L where id = %L$q$)$$,
     :'emas', :'bill'),
   'DK422', 'asset_account_invalid', 'ganti dompet tagihan rutin ke dompet aset ditolak');
@@ -431,14 +429,14 @@ select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ declare v u
   'DK422', 'asset_account_invalid', 'pemasukan ke dompet aset di luar api ditolak penjaga ledger');
 savepoint s;
 select pg_temp.val(tests.n(), :'emas', -100000);
-select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ begin
+select throws_ok(format($$select tests.owner_exec(null, $q$do $d$ begin
       set constraints all deferred;
       update app.entry_lines set account_id = %L where entry_id = %L and role = 'counter';
       set constraints all immediate;
     end $d$ $q$)$$, :'tab', :'t2'),
-  'DK422', 'asset_negative', 'mengganti tujuan setoran keluar dari dompet aset (baris lama) tetap dijaga');
+  'DK422', 'asset_negative', 'mengganti tujuan setoran keluar dari dompet aset (baris lama) tetap dijaga, juga di luar api');
 rollback to savepoint s;
-select throws_ok(format($$select tests.api_exec(tests.n(), $q$do $d$ begin
+select throws_ok(format($$select tests.owner_exec(null, $q$do $d$ begin
       set constraints all deferred;
       update app.entry_lines set account_id = %L where entry_id = %L and role = 'main';
       set constraints all immediate;

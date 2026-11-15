@@ -10,9 +10,11 @@
 -- DQ16 (S12, 0136): patungan (dompet sistem = Σ pelunasan belum diterima, Σ bagian = nominal, status entri =
 -- status tagihan/pelunasan, entri dompet sistem dirujuk, saldo anggota nol-jumlah).
 -- DQ17 (S13, 0137): tujuan aktif hanya pada dompet tabungan aktif di ruang yang sama.
--- ID: S7, T18
+-- DQ19 (S14, 0140): dompet aset tidak negatif, tidak dipakai pemasukan/pengeluaran/reimburse/utang/patungan
+-- atau tagihan rutin, rincian aset 1:1 dengan dompet aset (DQ08/DQ18 menyusul di 0142/0144).
+-- ID: S7, T18, T11
 begin;
-select plan(70);
+select plan(77);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -30,7 +32,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17']) c
+                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17', 'DQ19']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -65,8 +67,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error',
-  'tepat 16 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error,DQ19:error',
+  'tepat 17 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -334,6 +336,53 @@ rollback to savepoint s;
 savepoint s;
 select tests.raw_exec(format($$update app.goals set space_id = %L, space_kind = 'shared' where id = %L$$, :'sh', :'dq_goal'));
 select is(pg_temp.dq(), pg_temp.expect('DQ17=1'), 'DQ17: tujuan di ruang lain dari dompetnya');
+rollback to savepoint s;
+
+-- ===== DQ19: dompet aset (S14, 0140) =====
+select tests.account(tests.n(), :'np', 'Emas', 'aset', 0, '2026-01-01') as dq_emas \gset
+select tests.api_val(tests.n(), format($$insert into app.asset_details (account_id, space_id, space_kind, asset_kind,
+  created_by) values (%L, %L, 'personal', 'emas', %L) returning account_id$$, :'dq_emas', :'np', tests.n()));
+select pg_temp.call(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 100000, 0, '2026-03-17')$$,
+  :'np', :'bca', :'dq_emas')) ->> 'entry_id' as dq_ae \gset
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ19: setor ke dompet aset berincian = nol temuan');
+savepoint s;
+select gen_random_uuid() as dq_v \gset
+select tests.raw_exec(format($$
+  insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
+    values (%1$L, %2$L, 'personal', 'valuation', '2026-03-18', %4$L, %4$L);
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount) values (%1$L, %2$L, 'main', %3$L, -150000);
+  insert into app.entry_history (entry_id, space_id, version, op, snapshot, changed_by)
+    values (%1$L, %2$L, 1, 'create', '{}', %4$L)$$, :'dq_v', :'np', :'dq_emas', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: dompet aset negatif (valuasi melewati penjaga; DQ03 sah)');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.entry_lines set account_id = %L where entry_id = %L$$, :'dq_emas', :'e_in'));
+select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: pemasukan ke dompet aset');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.entry_lines set account_id = %L where entry_id = %L and role = 'main'$$,
+  :'dq_emas', :'st'));
+select tests.raw_exec(format($$update app.entry_lines l set account_id = (select id from app.accounts where pocket = 'patungan')
+  from app.entries e where e.id = l.entry_id and e.link_id = (select link_id from app.entries where id = %L)
+   and e.id <> %L$$, :'st', :'st'));
+select is(pg_temp.dq(), pg_temp.expect('DQ16=2', 'DQ19=1'),
+  'DQ19: kaki antar ruang dari dompet aset berpasangan dompet sistem patungan (DQ16: saldo dompet sistem dan entri tak dirujuk)');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$insert into app.bills (space_id, name, amount, category_id, day_of_month, starts_on,
+  account_id, created_by) select %L, 'Iuran', 10000, c.id, 5, '2026-03-01', %L, %L
+  from app.categories c where c.space_id = %L and c.type = 'expense' and c.parent_id is null limit 1$$,
+  :'np', :'dq_emas', tests.n(), :'np'));
+select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: tagihan rutin menunjuk dompet aset');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$delete from app.asset_details where account_id = %L$$, :'dq_emas'));
+select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: dompet aset tanpa rincian');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$insert into app.asset_details (account_id, space_id, space_kind, asset_kind, created_by)
+  values (%L, %L, 'personal', 'emas', %L)$$, :'tab', :'np', tests.n()));
+select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: rincian aset pada dompet tabungan');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(51);
+select plan(52);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -99,8 +99,8 @@ select set_eq($$
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
         'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
-        'private.tg_member_leave_guard'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12');
+        'private.tg_member_leave_guard', 'private.tg_asset_ledger'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset S14');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -313,6 +313,12 @@ select set_eq($$
     ('dompetku_api', 'app.goal_progress', 'SELECT'),
     ('dompetku_auditor', 'app.goals', 'SELECT'),
     ('dompetku_auditor', 'app.goal_progress', 'SELECT'),
+    -- S14 (0140): rincian aset (pola ruang; api tulis lewat fungsi, tanpa DELETE).
+    ('dompetku_web', 'app.asset_details', 'SELECT'),
+    ('dompetku_api', 'app.asset_details', 'SELECT'),
+    ('dompetku_api', 'app.asset_details', 'INSERT'),
+    ('dompetku_api', 'app.asset_details', 'UPDATE'),
+    ('dompetku_auditor', 'app.asset_details', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -496,8 +502,19 @@ select set_eq($$
   select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'app' and g.tgconstraint <> 0 and g.tgdeferrable and g.tginitdeferred $$,
-  array['entries.entries_shape', 'entry_lines.entry_lines_shape'],
-  'cek bentuk entri = constraint trigger deferred');
+  array['entries.entries_shape', 'entry_lines.entry_lines_shape',
+        'entries.entries_asset_guard', 'entry_lines.entry_lines_asset_guard'],
+  'cek bentuk entri dan penjaga ledger aset (S14) = constraint trigger deferred');
+-- S14 (0140): penjaga ledger aset DEFINER milik owner (saldo dari semua line dompet), penjaga rincian dan
+-- tagihan rutin INVOKER milik owner (dompet ruang lain tidak terlihat = DK404 tanpa oracle).
+select set_eq($$
+  select c.relname || '.' || g.tgname || ':' || p.prosecdef from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = g.tgfoid
+  where n.nspname = 'app' and p.proname in ('tg_asset_guard', 'tg_asset_ledger')
+    and p.proowner = 'dompetku_owner'::regrole $$,
+  array['asset_details.asset_guard:false', 'bills.asset_guard:false', 'entries.entries_asset_guard:true',
+        'entry_lines.entry_lines_asset_guard:true'],
+  'trigger penjaga aset terpasang (rincian dan tagihan INVOKER, ledger DEFINER)');
 select has_trigger('app', 'categories', 'category_depth', 'penjaga kedalaman kategori');
 -- S9: satu kewajiban (tagihan ATAU anggaran wajib) dijaga trigger di kedua tabel.
 select set_eq($$
@@ -542,8 +559,8 @@ select is((select indexdef from pg_indexes where schemaname = 'app' and indexnam
 -- S11 (0129): urutan label entry_kind; nilai baru ditambah di akhir (ALTER TYPE ADD VALUE).
 select enum_has_labels('app', 'entry_kind',
   array['income', 'expense', 'transfer', 'space_transfer', 'opening_balance', 'adjustment',
-        'reimbursement', 'debt_principal', 'debt_payment'],
-  'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment)');
+        'reimbursement', 'debt_principal', 'debt_payment', 'valuation'],
+  'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment; S14: valuation)');
 
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
 select is(tests.owner_val(null, $$
@@ -552,11 +569,11 @@ select is(tests.owner_val(null, $$
        unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
        (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
        unnest(array[true, false]) x $$),
-  '0/1620', 'report_class tidak NULL untuk semua kombinasi (9 x 3 x 5 x 2 x 3 x 2)');
+  '0/2160', 'report_class tidak NULL untuk semua kombinasi (10 x 3 x 6 x 2 x 3 x 2; S14: valuation, aset)');
 
 -- S12 (0133): urutan label pocket; trading dan patungan ditambah di akhir.
-select enum_has_labels('app', 'pocket', array['operasional', 'tabungan', 'kantor', 'trading', 'patungan'],
-  'label pocket lengkap dan berurutan (S12: trading, patungan)');
+select enum_has_labels('app', 'pocket', array['operasional', 'tabungan', 'kantor', 'trading', 'patungan', 'aset'],
+  'label pocket lengkap dan berurutan (S12: trading, patungan; S14: aset)');
 
 -- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
 -- DEFINER/owner (atau lewat private.purge_entries), ditambah deploy dan db_manual_access dari skrip
