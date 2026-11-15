@@ -89,4 +89,12 @@ describe('ModalCard (S12-TR2/TR3)', () => {
     expect(card).toHaveTextContent('Disetor');
     expect(card).toHaveTextContent('Ditarik');
   });
+
+  it('detail: belum ada penarikan = tanpa baris Ditarik dan tanpa Rp 0 (S12S13-C2)', () => {
+    render(<ModalCard variant="detail" figures={fig()} />);
+    const card = screen.getByRole('region', { name: 'Modal' });
+    expect(card).toHaveTextContent('Disetor');
+    expect(card).not.toHaveTextContent('Ditarik');
+    expect(card).not.toHaveTextContent('Rp 0');
+  });
 });
