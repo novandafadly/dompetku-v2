@@ -194,6 +194,11 @@ function GoalSession({
       case 'goal_exists':
       case 'goal_pocket_invalid':
       case 'account_archived':
+        // Dompet terkunci (Detail dompet) tidak punya pemilih untuk menampung galatnya.
+        if (lockedWalletId !== undefined) {
+          setGalat({ text: goalFailedText(res.code, walletName), retry: false });
+          break;
+        }
         setErrors({ wallet: goalFailedText(res.code, walletName) });
         walletRef.current?.focus();
         break;
@@ -404,7 +409,9 @@ function WalletNote({ wallet, id }: { wallet: GoalWallet; id: string }) {
     <p id={id} className="text-meta font-medium text-text-soft">
       {wallet.balance > 0
         ? C.walletHasMoney(wallet.name, wallet.balance)
-        : C.walletEmpty(wallet.name)}
+        : wallet.balance < 0
+          ? C.walletNegative(wallet.name)
+          : C.walletEmpty(wallet.name)}
     </p>
   );
 }

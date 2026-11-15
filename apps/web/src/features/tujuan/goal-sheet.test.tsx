@@ -192,6 +192,20 @@ describe('GoalSheet: Tambah (S13-TJ4)', () => {
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
+  it('dompet terkunci + goal_exists: galat tetap tampil (tanpa pemilih) dan sheet terbuka', async () => {
+    const user = userEvent.setup();
+    const { onSaved } = setup({ lockedWalletId: 'a2' }, { ok: false, code: 'goal_exists' });
+    await user.type(await screen.findByRole('textbox', { name: /Nama tujuan/ }), 'X');
+    await user.type(screen.getByRole('textbox', { name: /Target/ }), '1000');
+    await user.click(screen.getByRole('button', { name: 'Simpan tujuan' }));
+    expect(
+      await screen.findByText(
+        'Tabungan Jago sudah punya tujuan aktif. Selesaikan atau arsipkan tujuan itu dulu.',
+      ),
+    ).toBeTruthy();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('hitungan sisa huruf mulai 50', async () => {
     const user = userEvent.setup();
     setup({ wallets: [BCA] });

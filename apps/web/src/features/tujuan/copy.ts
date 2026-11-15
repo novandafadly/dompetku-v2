@@ -68,7 +68,9 @@ export const TUJUAN_COPY = {
   progressText: (pct: number, saved: Rupiah, target: Rupiah) =>
     saved === 0
       ? `Belum ada yang terkumpul dari ${formatRupiah(target)}`
-      : `${String(pct)} persen, ${formatRupiah(saved)} dari ${formatRupiah(target)}`,
+      : pct === 0
+        ? `Kurang dari 1 persen, ${formatRupiah(saved)} dari ${formatRupiah(target)}`
+        : `${String(pct)} persen, ${formatRupiah(saved)} dari ${formatRupiah(target)}`,
   // Sheet Tambah / Ubah (TJ4, TJ5)
   addTitle: 'Tambah tujuan',
   editTitle: 'Ubah tujuan',
