@@ -11,6 +11,8 @@ import type { ActivityItemVM, ContributionVM } from '@/features/bersama/types';
 import { amanStatus } from '@/features/beranda/aman-status';
 import { NEAR_PCT } from '@/features/rencana/copy';
 import type { BillDueVM, BudgetOverviewVM } from '@/features/rencana/types';
+import type { SplitBalanceVM } from '@/features/ledger/patungan-types';
+import type { DebtCardVM } from '@/features/utang/types';
 import type pg from 'pg';
 import { bersamaBerandaTx } from './bersama';
 import { guarded } from './guarded';
@@ -23,8 +25,10 @@ import {
   spendPaceTx,
   todayStatusTx,
 } from './read';
+import { sharedBalanceTx } from './patungan';
 import { billsDueTx, budgetOverviewTx } from './rencana';
 import { withLedger } from './retry';
+import { debtTotalsTx } from './utang';
 import type { LedgerCtx } from './write';
 
 /**
@@ -64,6 +68,11 @@ export interface BerandaData {
   billsDue: BerandaBillsVM | 'error';
   /** S9-BR2 `Anggaran hampir habis`; `'error'` = gagal dimuat (savepoint). */
   budgetsNear: BerandaBudgetsVM | 'error';
+  /**
+   * S12-UT1 kartu `Utang yang harus dibayar`, hanya Pribadi. `null` = tidak dirender: Bersama,
+   * tanpa utang berjalan, atau gagal dimuat (savepoint, galat dicatat; Aman dipakai tidak ikut gagal).
+   */
+  debts: DebtCardVM | null;
 }
 
 export interface BerandaBillsVM {
@@ -95,6 +104,11 @@ export interface BerandaBersama {
   activity: ActivityItemVM[] | 'error' | null;
   /** S8-K1: Kontribusi periode gajian berjalan (K10); `null` = solo, `'error'` = gagal dimuat. */
   contributions: ContributionVM | 'error' | null;
+  /**
+   * S12-PT1 kartu `Saldo patungan` (`api.shared_balances`), hanya Bersama dua anggota (`null` =
+   * solo). `'error'` = gagal dimuat (savepoint): kartu galat, Beranda tetap.
+   */
+  split?: SplitBalanceVM | 'error' | null;
 }
 
 const RECENT = 5;
@@ -249,10 +263,27 @@ export async function loadBeranda(
               labelMonth: period.labelMonth,
             })
           : { partner: null, activity: null, contributions: null };
+      const splitRaw =
+        bersama && bersama.members >= 2
+          ? await guarded(c, 'splits', () => sharedBalanceTx(c, ctx))
+          : null;
+      // Belum pernah ada patungan: tidak ada kartu (dan tidak ada muatan di payload).
+      const split =
+        splitRaw !== null &&
+        splitRaw !== 'error' &&
+        splitRaw.splitCount === 0 &&
+        splitRaw.settlementCount === 0 &&
+        splitRaw.pending.length === 0
+          ? null
+          : splitRaw;
       const billsDue = await guarded(c, 'bills', () => billsCardTx(c, ctx, hasBills));
       const budgetsNear = await guarded(c, 'budgets', () =>
         budgetsCardTx(c, ctx, period.labelMonth),
       );
+      // S12 K1: satu kueri tambahan, hanya Pribadi; galat = tanpa kartu (kartu sekunder).
+      const debtsRaw =
+        ctx.kind === 'personal' ? await guarded(c, 'debts', () => debtTotalsTx(c, ctx)) : null;
+      const debts = debtsRaw === 'error' ? null : debtsRaw;
       return {
         period,
         safe,
@@ -263,8 +294,10 @@ export async function loadBeranda(
         invite,
         bersama,
         extra,
+        split,
         billsDue,
         budgetsNear,
+        debts,
       };
     }),
     given ?? null,
@@ -274,7 +307,12 @@ export async function loadBeranda(
   let bersama: BerandaBersama | null = null;
   if (read.bersama) {
     const { anyEntry, ...rest } = read.bersama;
-    bersama = { ...rest, empty: !hasOperasional && !anyEntry, ...read.extra };
+    bersama = {
+      ...rest,
+      empty: !hasOperasional && !anyEntry,
+      ...read.extra,
+      ...(read.split === null ? {} : { split: read.split }),
+    };
   }
   return {
     period: read.period,
@@ -287,5 +325,6 @@ export async function loadBeranda(
     bersama,
     billsDue: read.billsDue,
     budgetsNear: read.budgetsNear,
+    debts: read.debts,
   };
 }

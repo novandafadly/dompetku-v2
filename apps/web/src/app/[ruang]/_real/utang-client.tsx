@@ -144,6 +144,8 @@ export function UtangHost({
   // Hapus utang: sekali server menolak `saldo_negatif`, pengguna yang mengonfirmasi `Tetap hapus` tetap
   // dianggap sudah mengonfirmasi walau percobaan berikutnya gagal karena hal lain (jaringan).
   const [forceDelete, setForceDelete] = useState(false);
+  // Batal cicilan: pola yang sama (`Tetap batalkan`).
+  const [forceCancel, setForceCancel] = useState(false);
   const dialogClientId = useRef('');
   const running = useRef(false);
   const addMounted = useOpenedOnce(addOpen);
@@ -168,6 +170,7 @@ export function UtangHost({
     openCancel: (entryId) => {
       dialogClientId.current = newClientId();
       setDialogFailure(null);
+      setForceCancel(false);
       setCancelId(entryId);
       setCancelOpen(true);
     },
@@ -264,16 +267,19 @@ export function UtangHost({
     setDialogBusy(true);
     setDialogFailure(null);
     const clientId = dialogClientId.current;
+    const force = forceCancel;
     const res = await call(() =>
       voidEntryAction(ruang, {
         clientId,
         entryId: cancelPayment.entryId,
         expectedVersion: cancelPayment.version,
+        allowNegative: force,
       }),
     );
     running.current = false;
     setDialogBusy(false);
     if (!res.ok) {
+      if (res.error.code === 'saldo_negatif') setForceCancel(true);
       setDialogFailure(res.error.code);
       return;
     }
@@ -412,6 +418,7 @@ export function UtangHost({
             account={accounts.find((a) => a.id === cancelPayment?.accountId)}
             busy={dialogBusy}
             failure={dialogFailure}
+            force={forceCancel}
             onConfirm={() => {
               void confirmCancel();
             }}

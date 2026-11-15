@@ -49,6 +49,7 @@ const base: BerandaData = {
   },
   billsDue: { items: [], hasBills: false },
   budgetsNear: { items: [], hasBudgets: false },
+  debts: null,
   today: { hasExpense: false, noSpendMarked: false },
   hasOperasional: true,
   hasExpense: false,
@@ -661,5 +662,72 @@ describe('BerandaReal S9 (BR1, BR2)', () => {
       }),
     );
     expect(screen.queryByRole('region', { name: 'Tagihan 7 hari' })).toBeNull();
+  });
+});
+
+describe('BerandaReal kartu Utang (S12-UT1)', () => {
+  const debts = { borrowed: 1_250_000, lent: 0, activeCount: 2 };
+
+  it('Pribadi dengan utang: kartu tampil, urutan sesudah Anggaran dan sebelum Terakhir', () => {
+    render(view({ debts }, 'pribadi'));
+    const card = screen.getByRole('region', { name: 'Utang yang harus dibayar' });
+    const anggaran = screen.getByRole('region', { name: 'Anggaran hampir habis' });
+    const terakhir = screen.getByRole('region', { name: 'Terakhir' });
+    const after = (a: HTMLElement, b: HTMLElement) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(after(anggaran, card)).toBeTruthy();
+    expect(after(card, terakhir)).toBeTruthy();
+  });
+
+  it('tanpa utang (null): kartu tidak dirender', () => {
+    render(view({ debts: null }, 'pribadi'));
+    expect(screen.queryByRole('region', { name: /Utang yang harus dibayar/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: /Piutang yang masih ditagih/ })).toBeNull();
+  });
+
+  it('Pribadi tanpa dompet operasional: kartu tetap tampil sesudah checklist', () => {
+    render(view({ debts, hasOperasional: false }, 'pribadi'));
+    expect(screen.getByRole('region', { name: 'Utang yang harus dibayar' })).toBeTruthy();
+  });
+
+  it('Bersama: tanpa kartu dan tanpa kata utang/piutang di markup', () => {
+    const { container } = render(view({}, 'bersama'));
+    expect(screen.queryByRole('region', { name: /Utang|Piutang/ })).toBeNull();
+    expect(container.textContent).not.toMatch(/utang|piutang/i);
+  });
+});
+
+describe('BerandaReal Bersama: kartu Saldo patungan (S12-PT1)', () => {
+  const split = {
+    me: { id: 'n', name: 'Novanda', initial: 'N' },
+    partner: { id: 'f', name: 'Farida', initial: 'F' },
+    debtorId: 'f',
+    creditorId: 'n',
+    amount: 200_000,
+    splitCount: 1,
+    settlementCount: 0,
+    pending: [],
+  };
+
+  it('dirender di Bersama dua anggota, juga tanpa dompet operasional (Bersama tanpa dompet)', () => {
+    render(view({ bersama: dua({ split }) }));
+    expect(screen.getByRole('region', { name: 'Saldo patungan' })).toHaveTextContent(
+      'Farida berutang Rp 200.000 ke kamu',
+    );
+    cleanup();
+    render(view({ hasOperasional: false, bersama: dua({ split }) }));
+    expect(screen.getByRole('region', { name: 'Saldo patungan' })).toBeTruthy();
+  });
+
+  it('belum ada patungan atau Pribadi: tidak ada kartu; galat bacaan: kartu galat, Beranda tetap', () => {
+    render(view({ bersama: dua() }));
+    expect(screen.queryByRole('region', { name: 'Saldo patungan' })).toBeNull();
+    cleanup();
+    render(view({ bersama: dua({ split: 'error' }) }));
+    expect(screen.getByText('Saldo patungan belum bisa dimuat.')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aktivitas' })).toBeTruthy();
+    cleanup();
+    render(view({}, 'pribadi'));
+    expect(screen.queryByText('Saldo patungan')).toBeNull();
   });
 });

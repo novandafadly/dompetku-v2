@@ -1,5 +1,6 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
+import type { SplitContextVM } from '@/features/ledger/patungan-types';
 
 /**
  * Sumber data sheet Catat. Prototipe memakai `demoCatatSource` (store demo, sinkron dibungkus
@@ -8,6 +9,18 @@ import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/l
  */
 
 export type CatatType = 'expense' | 'income' | 'transfer';
+
+/**
+ * Setor/tarik modal trading (S12-TR4): sheet transfer dengan jenis dan arah terkunci. Setor = tujuan
+ * dompet trading ini, sumber dompet biasa; Tarik = sebaliknya. Dompet Kantor dan Trading lain tidak
+ * ditawarkan; tanpa transfer antar ruang.
+ */
+export interface CatatPreset {
+  kind: 'setor' | 'tarik';
+  account: { id: string; name: string };
+  /** Sisa modal dompet ini (SQL): pratinjau `di atas sisa modal` saat Tarik. */
+  capitalLeft: Rupiah;
+}
 
 export interface CatatDraft {
   type: CatatType;
@@ -25,6 +38,11 @@ export interface CatatDraft {
   sharedNote?: string;
   /** Talangan kantor (S7-C2): hanya pengeluaran Pribadi dari dompet bukan Kantor. */
   reimbursable?: boolean;
+  /**
+   * Bagi tagihan Bersama (S12-CT1): pengeluaran Bersama dibayar dari dompet Pribadi `accountId`
+   * (bukan `draft.accountId`). `partnerShare` = bagian anggota lain (tidak ada = sama rata).
+   */
+  split?: { accountId: string; partnerShare?: Rupiah };
   date: IsoDate;
   /**
    * Tanggal dipilih pengguna. Bila tidak, sumber nyata tidak mengirim `occurredOn` sehingga server
@@ -42,10 +60,23 @@ export interface CatatOptions {
   categories: CategoryVM[];
   /** Dompet bawaan (operasional terakhir dipakai); bila kosong, operasional pertama. */
   defaultAccountId?: string;
+  /**
+   * Bersama dua anggota (S12-CT1): penonton dan anggota lain. Ada = toggle `Dibayar dari dompet
+   * pribadi` tersedia; prototipe dan ruang lain tidak punya.
+   */
+  split?: SplitContextVM;
 }
 
 export type SaveOutcome =
-  | { ok: true; entryId: string; version: number; replayed: boolean; toast: string }
+  | {
+      ok: true;
+      entryId: string;
+      version: number;
+      replayed: boolean;
+      toast: string;
+      /** Tagihan patungan (S12): `Urungkan` menghapus tagihan, bukan entri biasa. */
+      splitId?: string;
+    }
   | { ok: false; code: LedgerErrorCode; field?: string };
 
 export type CatatStatus =
@@ -85,7 +116,12 @@ export interface CatatSource {
    */
   sharedAudience?(): string | undefined;
   save(draft: CatatDraft & { allowNegative: boolean }): Promise<SaveOutcome>;
-  undo(saved: { entryId: string; version: number; ruang: Ruang }): Promise<boolean>;
+  undo(saved: {
+    entryId: string;
+    version: number;
+    ruang: Ruang;
+    splitId?: string;
+  }): Promise<boolean>;
   /** Event produk; kirim-dan-lupakan, tidak pernah melempar. Prototipe tidak menulis apa pun. */
   track?(e: CatatTrackEvent): void;
 }

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDompetRiwayat } from '@/server/ledger/dompet';
+import { loadTrading } from '@/server/ledger/trading';
 import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { ACCOUNT_HISTORY_MAX } from '@/server/ledger/read';
 import { errorTag } from '@/server/ledger/transaksi';
@@ -43,14 +44,28 @@ export default async function Page({
   const shown = shownCount(raw.tampil);
 
   let data;
+  let accounts;
   try {
-    data = await loadDompetRiwayat(ctx, id, shown, await ruangAccounts(ctx));
+    accounts = await ruangAccounts(ctx);
+    data = await loadDompetRiwayat(ctx, id, shown, accounts);
   } catch (e) {
     rethrowOrNotFound(e);
     console.error('[dompet] riwayat gagal memuat', errorTag(e));
     return <DompetDetailFailed dompetHref={dompetHref} />;
   }
   if (data === null) notFound();
+  // S12: kartu Modal hanya untuk dompet trading aktif; galatnya mematikan kartu itu saja.
+  let trading;
+  if (data.account.pocket === 'trading' && !data.account.archived) {
+    try {
+      const overview = await loadTrading(ctx);
+      trading = overview.accounts.find((a) => a.id === id) ?? null;
+    } catch (e) {
+      rethrowOrNotFound(e);
+      console.error('[dompet] modal trading gagal memuat', errorTag(e));
+      trading = 'error' as const;
+    }
+  }
   const moreQuery = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
   moreQuery.set('tampil', String(shown + HISTORY_PAGE));
   return (
@@ -65,6 +80,8 @@ export default async function Page({
           : null
       }
       data={data}
+      accounts={accounts}
+      trading={trading ?? null}
     />
   );
 }

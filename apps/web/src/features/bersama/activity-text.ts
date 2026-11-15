@@ -65,6 +65,13 @@ function sentence(row: SharedActivityRow, ctx: ActivityTextCtx): string {
   // R26: hanya void yang bertanda dipindah; kaki di ruang tujuan adalah create biasa.
   if (op === 'void' && row.moved) return 'memindahkan transaksi ke ruang lain';
 
+  if (kind === 'expense' && row.viaPersonal === true && op !== 'update') {
+    // S12: tagihan patungan; nama dompet Pribadi tidak pernah ikut (K1), hanya kata tetap.
+    const title = present(row.description) ? row.description : categoryLabel(row.categoryId, ctx);
+    return op === 'create'
+      ? `membayar ${title} dari dompet pribadi`
+      : `${VERB[op]} pembayaran ${title} dari dompet pribadi`;
+  }
   if (kind === 'expense' || kind === 'income') {
     const noun = kind === 'expense' ? 'pengeluaran' : 'pemasukan';
     if (op === 'update') {

@@ -14,13 +14,15 @@ function shouldRethrow(e: unknown): boolean {
 }
 
 /** Kartu Beranda yang dibaca di savepoint sendiri; nama = bagian nama savepoint dan log. */
-export type GuardedCard = 'activity' | 'contributions' | 'bills' | 'budgets';
+export type GuardedCard = 'activity' | 'contributions' | 'bills' | 'budgets' | 'debts' | 'splits';
 
 const PREFIX: Record<GuardedCard, string> = {
   activity: 'bersama',
   contributions: 'bersama',
   bills: 'beranda',
   budgets: 'beranda',
+  debts: 'beranda',
+  splits: 'bersama',
 };
 
 /**

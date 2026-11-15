@@ -30,7 +30,9 @@ const DATA_SPECS = [
   /[\\/]laporan\.spec\.ts$/,
   /[\\/]s9-keluar\.spec\.ts$/,
   /[\\/]tagihan\.spec\.ts$/,
+  /[\\/]trading\.spec\.ts$/,
   /[\\/]utang\.spec\.ts$/,
+  /[\\/]utang2\.spec\.ts$/,
   /[\\/]vitals\.spec\.ts$/,
 ];
 

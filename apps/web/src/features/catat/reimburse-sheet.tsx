@@ -21,6 +21,7 @@ import {
 import { newClientId } from './client-id';
 import { undoOrNotify } from './saved-toast';
 import { MetaSelect } from './wallet-picker';
+import { payableAccounts } from '@/features/ledger/accounts';
 import type { AccountVM, ActionResult, EntryVM, LedgerErrorCode } from '@/features/ledger/types';
 
 /**
@@ -121,7 +122,7 @@ function ReimburseSession({
   onSaved,
   returnFocus,
 }: ReimburseSheetProps) {
-  const choices = accounts.filter((a) => !a.archived && a.pocket !== 'kantor');
+  const choices = payableAccounts(accounts);
   const [amount, setAmount] = useState<number | null>(remaining);
   const [accountId, setAccountId] = useState(
     choices.find((a) => a.id === entry.accountId)?.id ?? choices[0]?.id ?? '',

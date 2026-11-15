@@ -1,6 +1,7 @@
 import type { Route } from 'next';
 import type { ReactNode } from 'react';
 import { WalletTypeIcon } from '@/components/ui/category-icon';
+import { ChartLineUpIcon } from '@/components/ui/icons/chart-line-up';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { ListCard } from '@/components/ui/list-card';
@@ -12,7 +13,7 @@ import { WalletRow } from '@/components/ui/wallet-row';
 import type { AccountVM, Pocket, Ruang } from '@/features/ledger/types';
 import { POCKET_LABEL, RUANG_NAME, WALLET_TYPE_LABEL } from './context';
 
-const POCKETS: Pocket[] = ['operasional', 'tabungan', 'kantor'];
+const POCKETS: Pocket[] = ['operasional', 'tabungan', 'trading', 'kantor'];
 
 function Group({
   pocket,
@@ -27,6 +28,7 @@ function Group({
   return (
     <ListCard
       title={POCKET_LABEL[pocket]}
+      icon={pocket === 'trading' ? <ChartLineUpIcon size={18} /> : undefined}
       aside={
         <MoneyText
           value={subtotal}
@@ -72,6 +74,7 @@ export function AccountListView({
   renderAdd,
   above,
   below,
+  modal,
 }: {
   ruang: Ruang;
   accounts: AccountVM[];
@@ -82,6 +85,8 @@ export function AccountListView({
   above?: ReactNode;
   /** Kartu di paling bawah (mode nyata: Diarsipkan, S7-W3). */
   below?: ReactNode;
+  /** Kartu tepat di bawah kelompok Trading (mode nyata, Pribadi: Modal trading, S12-TR2). */
+  modal?: ReactNode;
 }) {
   if (accounts.length === 0) {
     return (
@@ -97,8 +102,9 @@ export function AccountListView({
       </div>
     );
   }
+  // Trading ikut (aset pengguna, S12); Kantor tidak; dompet sistem Patungan tidak pernah dompet.
   const netWorth = accounts
-    .filter((a) => a.pocket !== 'kantor')
+    .filter((a) => a.pocket !== 'kantor' && a.pocket !== 'patungan')
     .reduce((sum, a) => sum + a.balance, 0);
 
   return (
@@ -118,7 +124,9 @@ export function AccountListView({
         </p>
         <p className="text-meta font-medium text-text-soft">
           {ruang === 'pribadi'
-            ? 'Operasional + tabungan. Kas Kantor tidak dihitung.'
+            ? accounts.some((a) => a.pocket === 'trading')
+              ? 'Operasional, tabungan, dan trading. Kas Kantor tidak dihitung.'
+              : 'Operasional + tabungan. Kas Kantor tidak dihitung.'
             : 'Operasional + tabungan.'}
         </p>
       </section>
@@ -128,8 +136,18 @@ export function AccountListView({
       <div className="grid grid-cols-1 gap-3 tablet:grid-cols-2 tablet:gap-4 laptop:grid-cols-3 laptop:items-start laptop:gap-5">
         {POCKETS.map((pocket) => {
           const inPocket = accounts.filter((a) => a.pocket === pocket);
-          return inPocket.length === 0 ? null : (
+          if (inPocket.length === 0) return null;
+          const group = (
             <Group key={pocket} pocket={pocket} accounts={inPocket} accountHref={accountHref} />
+          );
+          // Kartu Modal ikut kolom kelompok Trading (urutan DOM: kelompok lalu kartu).
+          return pocket === 'trading' && modal !== undefined ? (
+            <div key={pocket} className="flex flex-col gap-3 tablet:gap-4 laptop:gap-5">
+              {group}
+              {modal}
+            </div>
+          ) : (
+            group
           );
         })}
       </div>

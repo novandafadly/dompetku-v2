@@ -3,7 +3,7 @@
 export interface WalletOption {
   id: string;
   name: string;
-  pocket: 'operasional' | 'tabungan' | 'kantor';
+  pocket: 'operasional' | 'tabungan' | 'kantor' | 'trading' | 'patungan';
 }
 
 export type WalletMatch =

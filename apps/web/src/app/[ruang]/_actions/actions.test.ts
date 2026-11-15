@@ -331,6 +331,16 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
 };
 
 const NAMES = Object.keys(CASES);
+const PATUNGAN_ACTIONS = [
+  'createSplitAction',
+  'voidSplitAction',
+  'restoreSplitAction',
+  'settleSplitAction',
+  'voidSettlementAction',
+  'receiveSettlementAction',
+  'voidReceiptAction',
+  'patunganWalletsAction',
+];
 const WRAPPERS = [
   'createEntry',
   'createTransfer',
@@ -500,7 +510,10 @@ describe('gerbang (Review Focus 5)', () => {
       seen.push(...names);
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
-    expect(seen.sort()).toEqual([...NAMES, 'createLinkCode', 'unlinkWa'].sort());
+    // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
+    expect(seen.sort()).toEqual(
+      [...NAMES, ...PATUNGAN_ACTIONS, 'createLinkCode', 'unlinkWa'].sort(),
+    );
   });
 
   it('pemindai menolak bentuk yang melompati gerbang', () => {

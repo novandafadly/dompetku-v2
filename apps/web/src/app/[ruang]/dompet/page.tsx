@@ -2,6 +2,7 @@ import { todayWIB } from '@dompetku/domain';
 import { keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
 import { loadDompetDaftar } from '@/server/ledger/dompet';
+import { loadTrading } from '@/server/ledger/trading';
 import { rethrowOrNotFound } from '@/server/ledger/page-guard';
 import { errorTag } from '@/server/ledger/transaksi';
 import { ruangAccounts, ruangContext } from '../_real/context';
@@ -40,6 +41,18 @@ export default async function Page({
     console.error('[dompet] gagal memuat', errorTag(e));
     return <DompetFailed />;
   }
+  // S12: kartu Modal trading hanya di Pribadi dan hanya bila ada dompet trading aktif; galatnya
+  // mematikan kartu itu saja (daftar dompet tetap tampil).
+  let trading;
+  if (ctx.kind === 'personal' && accounts.some((a) => a.pocket === 'trading' && !a.archived)) {
+    try {
+      trading = await loadTrading(ctx);
+    } catch (e) {
+      rethrowOrNotFound(e);
+      console.error('[dompet] modal trading gagal memuat', errorTag(e));
+      trading = 'error' as const;
+    }
+  }
   return (
     <DompetReal
       ruang={ctx.ruang}
@@ -48,6 +61,7 @@ export default async function Page({
       accounts={accounts}
       reimbursables={extra.reimbursables}
       archived={extra.archived}
+      trading={trading ?? null}
     />
   );
 }

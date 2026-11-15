@@ -167,3 +167,20 @@ describe('excludedLines utang (S11)', () => {
     }
   });
 });
+
+describe('excludedLines patungan (S12)', () => {
+  it('x_patungan: masuk dan keluar bernama Patungan, bukan Lainnya', () => {
+    const lines = excludedLines(
+      [
+        { reportClass: 'x_patungan', direction: 'in', amount: 400_000, entryCount: 2 },
+        { reportClass: 'x_patungan', direction: 'out', amount: 150_000, entryCount: 1 },
+      ],
+      'bersama',
+    );
+    expect(lines.map((l) => [l.key, l.name, l.amount])).toEqual([
+      ['x_patungan:in', 'Patungan · masuk', 400_000],
+      ['x_patungan:out', 'Patungan · keluar', 150_000],
+    ]);
+    for (const l of lines) expect(l.name).not.toBe('Lainnya');
+  });
+});

@@ -209,4 +209,47 @@ describe('AddWalletHost (Dompet nyata)', () => {
     rerender(host());
     expect(await screen.findByRole('dialog', { name: /Tambah dompet/ })).toBeTruthy();
   });
+
+  it('S12-TR1: Trading hanya di Pribadi; dipilih = keterangan, dan terkirim sebagai pocket trading', async () => {
+    const user = userEvent.setup();
+    mocks.create.mockResolvedValue({ ok: true, value: { accountId: 'a-9' } });
+    const { unmount } = render(host());
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await screen.findByRole('dialog');
+    expect(screen.queryByRole('radio', { name: 'Trading' })).toBeNull();
+    unmount();
+    render(
+      <AddWalletHost ruang="pribadi" existingNames={[]}>
+        <AddWalletTrigger />
+      </AddWalletHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Stockbit');
+    await user.click(screen.getByRole('radio', { name: 'Trading' }));
+    expect(
+      screen.getByText(
+        'Untuk rekening saham, kripto, atau sejenisnya. Saldonya tidak dihitung di Aman dipakai.',
+      ),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.create.mock.calls[0]?.[1]).toMatchObject({ pocket: 'trading' });
+  });
+
+  it('S12-TR1: pocket_personal_only dari server = galat kolom Jenis', async () => {
+    const user = userEvent.setup();
+    mocks.create.mockResolvedValue({ ok: false, error: { code: 'pocket_personal_only' } });
+    render(
+      <AddWalletHost ruang="pribadi" existingNames={[]}>
+        <AddWalletTrigger />
+      </AddWalletHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Tambah dompet' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Nama' }), 'Stockbit');
+    await user.click(screen.getByRole('radio', { name: 'Trading' }));
+    await user.click(screen.getByRole('button', { name: 'Simpan dompet' }));
+    expect(await screen.findByText('Dompet Trading hanya ada di Pribadi.')).toBeTruthy();
+  });
 });

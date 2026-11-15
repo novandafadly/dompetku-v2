@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { z } from 'zod';
 import type {
   ContactVM,
+  DebtCardVM,
   DebtDetailVM,
   DebtEffectVM,
   DebtListItemVM,
@@ -209,6 +210,13 @@ const debtRow = z.object({
   direction_contacts: z.number().int(),
 });
 
+const debtTotalsRow = z.object({
+  // bigint dari pg = string; Zod mengubahnya, nilai di atas 2^53 ditolak (ledger tidak sampai sana).
+  borrowed_remaining: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  lent_remaining: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  active_count: z.number().int().min(0),
+});
+
 const contactRow = z.object({
   contact_id: z.guid(),
   name: z.string(),
@@ -302,6 +310,25 @@ export async function listDebtsTx(
     };
   });
   return { debts, totals };
+}
+
+/**
+ * `api.debt_totals` (S12 K1, kartu Beranda Pribadi): Σ sisa per arah dan jumlah utang aktif, semua
+ * dari SQL (tanpa penjumlahan di sini). `null` = tidak ada utang berjalan di kedua arah (kartu
+ * tidak dirender). Hanya ruang Pribadi (Bersama = `debt_personal_only` dari DB).
+ */
+export async function debtTotalsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<DebtCardVM | null> {
+  const { rows } = await c.query<Record<string, unknown>>(
+    'select borrowed_remaining, lent_remaining, active_count from api.debt_totals(p_space_id => $1)',
+    [ctx.spaceId],
+  );
+  const r = debtTotalsRow.parse(rows[0]);
+  if (r.borrowed_remaining === 0 && r.lent_remaining === 0) return null;
+  return {
+    borrowed: r.borrowed_remaining,
+    lent: r.lent_remaining,
+    activeCount: r.active_count,
+  };
 }
 
 /** `api.list_contacts`: kontak aktif urut nama + Σ sisa dan jumlah utang aktif per arah (SQL). */

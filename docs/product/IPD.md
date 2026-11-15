@@ -215,6 +215,19 @@ Rincian dan tes (T6 sampai T15) ada di `docs/team/round1/qa.md`. Sprint M3 sampa
   - Angka: pgTAP 2221, unit web 3049, `test:int` 294, e2e prototipe 308, `e2e:ledger` 119 (+30 dilewati), `e2e:bersama` 34, `e2e:auth` 22; budget JS nyata Rencana 150,5, utang 150,5, detail utang 150,6, Kontak 148,5 kB (batas 162).
 - **T10 tidak termasuk S11:** tetap `belum` di registry; dikerjakan bersama S12 (gerbang M3). "Aman dipakai" tetap kas murni, jadi meminjam menaikkan angka itu; kartu "Utang yang harus dibayar" menunggu keputusan pemilik (S12).
 
+### S12: status (modal trading, bagi tagihan Bersama, kartu utang, perbaikan S11)
+
+- **Status (2026-11-14).** Selesai di branch `ccr-6b15bf5f-1cnpb6`, menunggu review akhir (task + keamanan), gerbang penuh, PR, dan merge (belum merge). **Merge = deploy + migrasi `0132`–`0136` di produksi**, tanpa langkah VM baru; DB hanya maju, jadi image web jangan di-rollback ke versi pra-S12 sesudah ada patungan. Catatan teknis: BSD §16 "Catatan S12"; desain dan S12-ADR1: `docs/design/s12-bingkai.md`; serah-terima: `docs/superpowers/handoff/s12.md`; keputusan agen: `docs/m0a-keputusan.md`. Pemilik menyetujui semua saran S12 (2026-11-14). Delivery Gate antislop dan design critique visual belum dijalankan (tidak ada screenshot); tercatat terbuka di handoff.
+- **Bukti kriteria keluar (T10, B10, B21, I6, T19; lokasi lengkap di `packages/db/tests/REGISTRY.md`):**
+  - T10 (modal trading: setor modal bukan pemasukan/pengeluaran, tarik sebagian benar, tarik > setor = hasil ditarik, `Kurang Rp…` tepat di batas, void/restore menggeser modal tepat sekali, saldo dompet berubah sekali): pgTAP `32_modal_trading` (juga kaki `space_transfer` trading ↔ Bersama dan antar dompet trading), `17_dq` (DQ15), `trading.int`, e2e `trading.spec` (`e2e:ledger`).
+  - I6 (setor/tarik modal tidak mengubah Σ pemasukan/pengeluaran, Laporan, anggaran): `32_modal_trading`, e2e `trading.spec` (setor modal: pemasukan/pengeluaran tidak berubah).
+  - B10 (dompet trading dan utang tidak ada di Bersama; dompet sistem patungan tidak ada di Pribadi): `32_modal_trading`, `33_patungan`, `34_patungan_api`, `31_utang_perbaikan` (`debt_totals` Bersama).
+  - T19 dan B21 (bagi tagihan: saldo antar-anggota nol-jumlah dari data, pelunasan berlebih ditolak atomik, hapus/pulihkan membalik tepat sekali, Pribadi pasangan tidak terbaca atau tertulis): pgTAP `33_patungan`, `34_patungan_api`, `99_konkurensi` (pelunasan paralel, hapus paralel pelunasan, purge, `fail_after` di tengah `create_split`), `17_dq` (DQ16), `patungan.int`, e2e `zz-patungan.spec` (`e2e:bersama`: dua user, Pribadi pasangan tidak bocor di HTML/RSC).
+  - Gerbang M3 (T6 sampai T10): T6 sampai T9 aktif sejak S11 (`30_utang_api`, `utang.int`, `utang.spec`), T10 aktif di S12; `pnpm test:registry` lulus dengan `MAX_MILESTONE = 3`.
+  - Angka: pgTAP 2449, unit web 3182, worker unit 36, `test:int` 321, e2e prototipe 308, `e2e:ledger` 130 (+30 dilewati), `e2e:bersama` 43; budget JS nyata Beranda Pribadi 157,5, Beranda Bersama dua anggota 157,5, `/bersama/patungan` 148,8, Dompet 153,2, Rencana 150,5 kB (batas 162).
+- **Keputusan pemilik yang sudah dijawab:** kartu "Utang yang harus dibayar" dan perbaikan CSV utang (`0132`); definisi T6 sampai T9 (K10 S11); dompet sistem `patungan` (S12-ADR1 opsi C); langkah `Terima ke dompet`; saldo trading ikut kekayaan bersih; transfer antar dua dompet trading tidak dihitung; keluar dari Bersama ditolak selama belum impas; Laporan Pribadi menghitung uang patungan di "Tidak termasuk · Setor ke Bersama"; definisi T10.
+- **Belum dikerjakan (ke S13 dan sesudahnya):** tujuan tabungan (S13); gerbang M2 (masa pakai 7 hari dua akun) masih menunggu pemilik. Utang kecil S12 ada di `handoff/s12.md`.
+
 ## 7. Risiko lintas milestone
 
 | Risiko                                     | Mitigasi                                                                       |

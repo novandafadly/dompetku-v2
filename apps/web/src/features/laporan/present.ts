@@ -153,6 +153,13 @@ function excludedName(
       return dir === 'out'
         ? { name: 'Pelunasan utang', note: 'Cicilan utang; bukan pengeluaran.' }
         : { name: 'Penerimaan piutang', note: 'Cicilan piutang yang diterima; bukan pemasukan.' };
+    // S12: kaki dompet sistem bagi tagihan Bersama (tagihan masuk, pelunasan masuk, terima keluar);
+    // pengeluarannya sendiri tetap di Pengeluaran Bersama.
+    case 'x_patungan':
+      return {
+        name: `Patungan · ${dir === 'in' ? 'masuk' : 'keluar'}`,
+        note: 'Uang patungan yang lewat Bersama; bukan pemasukan atau pengeluaran.',
+      };
     case 'x_koreksi':
       return { name: `Saldo awal dan koreksi · ${dir === 'in' ? 'naik' : 'turun'}`, note: KOREKSI };
     default:

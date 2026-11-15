@@ -34,6 +34,27 @@ function row(over: Partial<SharedActivityRow> = {}): SharedActivityRow {
 
 const rp = (n: number) => formatRupiah(n);
 
+describe('tagihan patungan (S12)', () => {
+  const via = (over: Partial<SharedActivityRow> = {}) =>
+    activityText(row({ viaPersonal: true, description: 'Listrik', ...over }), ctx);
+
+  it('create: membayar {deskripsi} dari dompet pribadi, tanpa nama dompet', () => {
+    expect(via().text).toBe('membayar Listrik dari dompet pribadi');
+  });
+
+  it('tanpa deskripsi memakai nama kategori; void dan restore memakai kata kerja tetap', () => {
+    expect(via({ description: null }).text).toBe('membayar Makan dari dompet pribadi');
+    expect(via({ op: 'void' }).text).toBe('membatalkan pembayaran Listrik dari dompet pribadi');
+    expect(via({ op: 'restore' }).text).toBe('memulihkan pembayaran Listrik dari dompet pribadi');
+  });
+
+  it('pengeluaran biasa tidak berubah', () => {
+    expect(activityText(row({ description: 'Listrik' }), ctx).text).toBe(
+      'mencatat pengeluaran Listrik',
+    );
+  });
+});
+
 describe('activityText: expense dan income [B20]', () => {
   it.each([
     ['expense', 'create', 'mencatat pengeluaran Makan siang'],

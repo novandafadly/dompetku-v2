@@ -24,7 +24,7 @@ async function archivedTx(c: pg.PoolClient, ctx: LedgerCtx, accountId?: string) 
             a.opened_on, a.archived_at is not null as archived, b.balance
        from app.accounts a
        join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
-      where a.space_id = $1 and a.archived_at is not null
+      where a.space_id = $1 and a.archived_at is not null and a.pocket <> 'patungan'
         and ($2::uuid is null or a.id = $2::uuid)
       order by a.archived_at desc, a.id`,
     [ctx.spaceId, accountId ?? null],

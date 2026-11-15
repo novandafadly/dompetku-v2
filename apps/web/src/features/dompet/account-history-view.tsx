@@ -73,6 +73,7 @@ export function AccountHistoryView({
   dompetHref,
   more,
   actions,
+  afterHero,
   footer,
 }: {
   account: { name: string; pocket: Pocket; walletType: WalletType; balance: Rupiah };
@@ -83,6 +84,8 @@ export function AccountHistoryView({
   more?: ReactNode;
   /** Di kepala dompet, di bawah saldo (mode nyata: Cocokkan saldo, Ubah saldo awal; S7-W1/W2). */
   actions?: ReactNode;
+  /** Kartu tepat di bawah kepala dompet (mode nyata, dompet trading: kartu Modal, S12-TR3). */
+  afterHero?: ReactNode;
   /** Di paling bawah halaman (mode nyata: arsip dompet, S7-W3). */
   footer?: ReactNode;
 }) {
@@ -111,6 +114,7 @@ export function AccountHistoryView({
         </div>
         {actions}
       </section>
+      {afterHero}
       {groups.length === 0 && opening.length === 0 ? (
         <EmptyState
           icon={<ListBulletsIcon size={26} />}

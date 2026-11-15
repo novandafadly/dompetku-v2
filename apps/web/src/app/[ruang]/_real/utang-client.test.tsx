@@ -327,6 +327,7 @@ describe('UtangHost: dialog akibat', () => {
         clientId: expect.any(String) as string,
         entryId: 'pay1',
         expectedVersion: 3,
+        allowNegative: false,
       });
     });
     await waitFor(() => {
@@ -342,5 +343,23 @@ describe('UtangHost: dialog akibat', () => {
         expectedVersion: 4,
       });
     });
+  });
+
+  it('Batalkan ditolak saldo_negatif: pesan, Tetap batalkan, kirim ulang dengan allowNegative dan clientId sama (S12 K5)', async () => {
+    const user = userEvent.setup();
+    m.voidEntry.mockResolvedValueOnce({ ok: false, error: { code: 'saldo_negatif' } });
+    host(<CancelPaymentButton entryId="pay1" occurredOn="2026-10-14" />, DETAIL);
+    await user.click(screen.getByRole('button', { name: 'Batalkan pembayaran 14 Okt 2026' }));
+    await user.click(await screen.findByRole('button', { name: 'Batalkan pembayaran' }));
+    const again = await screen.findByRole('button', { name: 'Tetap batalkan' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Ketuk Tetap batalkan untuk melanjutkan.');
+    m.voidEntry.mockResolvedValueOnce({ ok: true, value: { version: 4 } });
+    await user.click(again);
+    await waitFor(() => {
+      expect(m.voidEntry).toHaveBeenCalledTimes(2);
+    });
+    expect(m.voidEntry.mock.calls[0]?.[1]).toMatchObject({ allowNegative: false });
+    expect(m.voidEntry.mock.calls[1]?.[1]).toMatchObject({ allowNegative: true });
+    expect(clientIdOf(m.voidEntry.mock.calls[0])).toBe(clientIdOf(m.voidEntry.mock.calls[1]));
   });
 });

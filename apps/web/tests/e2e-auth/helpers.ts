@@ -79,6 +79,10 @@ export async function resetData(adminUrl: string, ownerEmail: string): Promise<v
     delete from app.product_events;
     delete from app.idempotency_keys;
     delete from app.invitations;
+    insert into private.split_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+    delete from app.settlements;
+    delete from app.split_shares;
+    delete from app.splits;
     delete from app.entry_lines;
     delete from app.entry_history;
     delete from app.entries;
@@ -99,6 +103,7 @@ export async function resetData(adminUrl: string, ownerEmail: string): Promise<v
     delete from auth."user";
     delete from auth.login_throttle;
     delete from auth.verification;
+    delete from private.split_ctx where xid = pg_catalog.pg_current_xact_id();
     commit;`);
     await admin.query(
       `insert into app.settings (key, value) values ('owner_email', $1)

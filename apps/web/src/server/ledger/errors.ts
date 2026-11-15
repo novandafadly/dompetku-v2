@@ -53,6 +53,18 @@ const RULES = new Set<LedgerErrorCode>([
   'payment_before_opened',
   'debt_account_kantor',
   'debt_principal_locked',
+  // S12: dompet Trading di ruang Bersama ditolak (0134).
+  'pocket_personal_only',
+  // S12: bagi tagihan Bersama (0136); DK404 split_not_found/settlement_not_found = not_found.
+  'split_shared_only',
+  'split_needs_partner',
+  'split_account_invalid',
+  'split_locked',
+  'split_unsettled',
+  'split_member_left',
+  'settlement_received',
+  'settlement_voided',
+  'settlement_not_received',
 ]);
 
 /**

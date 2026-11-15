@@ -128,6 +128,40 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     expect(log).not.toHaveBeenCalled();
   });
 
+  it('S12: DK422 pocket_personal_only (Trading di Bersama) = kode sama, tanpa log', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(toLedgerError(pgError('DK422', 'pocket_personal_only', 'Rp 1.000.000'))).toEqual({
+      code: 'pocket_personal_only',
+    });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('S12: kode patungan DK422 = kode sama tanpa log, DK404 split/settlement_not_found = not_found', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (const code of [
+      'split_shared_only',
+      'split_needs_partner',
+      'split_account_invalid',
+      'split_locked',
+      'split_unsettled',
+      'split_member_left',
+      'settlement_received',
+      'settlement_voided',
+      'settlement_not_received',
+    ]) {
+      const r = toLedgerError(pgError('DK422', code, 'Rp 200.000 Farida'));
+      expect(r).toEqual({ code });
+      expect(JSON.stringify(r)).not.toMatch(/\d|Farida|Rp/);
+    }
+    expect(toLedgerError(pgError('DK404', 'split_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK404', 'settlement_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK400', 'invalid_argument', 'shares'))).toEqual({
+      code: 'invalid',
+      field: 'shares',
+    });
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it('S11: debt_not_found/contact_not_found = not_found; already_voided/not_voided = conflict', () => {
     expect(toLedgerError(pgError('DK404', 'debt_not_found'))).toEqual({ code: 'not_found' });
     expect(toLedgerError(pgError('DK404', 'contact_not_found'))).toEqual({ code: 'not_found' });

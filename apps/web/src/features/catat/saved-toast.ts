@@ -22,6 +22,19 @@ export function savedToast(
   return `${head} dari ${from}${extra.reimbursable === true ? ' · Talangan kantor' : ''}`;
 }
 
+/** Toast setor/tarik modal trading (S12-TR4): ruang tertulis, `other` = dompet lawan. */
+export function modalToast(
+  kind: 'setor' | 'tarik',
+  label: string,
+  amount: number,
+  trading: string,
+  other: string,
+): string {
+  return kind === 'setor'
+    ? `Modal disetor ke ${trading} · ${label} · ${formatRupiah(amount)} dari ${other}`
+    : `Modal ditarik dari ${trading} · ${label} · ${formatRupiah(amount)} ke ${other}`;
+}
+
 export const UNDO_FAILED = 'Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.';
 /** Urungkan sesudah Batalkan (Detail) gagal: entri tetap batal, jadi arahannya memulihkan. */
 export const UNDO_VOID_FAILED = 'Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.';

@@ -2,7 +2,13 @@ import type { IsoDate, Rupiah } from '@dompetku/domain';
 
 /** View-model ledger: bentuk data yang dikonsumsi UI, sama untuk mode prototipe dan nyata. */
 export type Ruang = 'pribadi' | 'bersama';
-export type Pocket = 'operasional' | 'tabungan' | 'kantor';
+/**
+ * `trading` (S12, hanya Pribadi) dan `patungan` (dompet sistem bagi tagihan Bersama, tidak pernah
+ * tampil di daftar atau pemilih dompet: disaring `listAccountsTx`).
+ */
+export type Pocket = 'operasional' | 'tabungan' | 'kantor' | 'trading' | 'patungan';
+/** Kantong yang boleh dipilih pengguna saat menambah dompet (`patungan` hanya dibuat DB). */
+export type UserPocket = Exclude<Pocket, 'patungan'>;
 export type WalletType = 'cash' | 'bank' | 'ewallet';
 
 export interface AccountVM {
@@ -13,6 +19,30 @@ export interface AccountVM {
   openedOn: IsoDate;
   archived: boolean;
   balance: Rupiah;
+}
+
+/** Angka modal trading dari `api.trading_overview` (SQL; UI tidak menjumlah). */
+export interface TradingFiguresVM {
+  balance: Rupiah;
+  capitalIn: Rupiah;
+  capitalOut: Rupiah;
+  /** `max(0, disetor − ditarik)`. */
+  capitalLeft: Rupiah;
+  /** `max(0, ditarik − disetor)`: penarikan di atas modal. */
+  realized: Rupiah;
+  /** `max(0, sisa modal − saldo)`: nominal peringatan `Kurang`. */
+  shortfall: Rupiah;
+  hasDeposit: boolean;
+}
+
+export interface TradingAccountVM extends TradingFiguresVM {
+  id: string;
+  name: string;
+}
+
+export interface TradingOverviewVM {
+  accounts: TradingAccountVM[];
+  total: TradingFiguresVM;
 }
 
 export interface CategoryVM {
@@ -71,6 +101,13 @@ export interface EntryVM {
    * batal; pulihnya dari Utang, bukan dari entri). `voidedWithDebt` = entri ini dibatalkan oleh Hapus
    * utang (ikut pulih bersama utangnya); tanpa penanda berarti dibatalkan sendiri lebih dulu.
    */
+  /**
+   * Bagi tagihan Bersama (S12): `bill` = pengeluaran Bersama atau kaki Pribadi pembayar,
+   * `settle` = kaki Pribadi pelunas, `receive` = kaki Pribadi penerima. Entri ini tidak diubah
+   * lewat jalur generik (`split_locked`): kelola dari halaman Patungan. `payerName` hanya di
+   * pengeluaran Bersama (nama dompet sistem tidak pernah tampil, aturan 3 bingkai S12).
+   */
+  split?: { role: 'bill' | 'settle' | 'receive'; payerName?: string };
   debt?: {
     id: string;
     direction: 'borrowed' | 'lent';
@@ -225,6 +262,18 @@ export type LedgerErrorCode =
   | 'payment_before_opened'
   | 'debt_account_kantor'
   | 'debt_principal_locked'
+  // S12: dompet Trading hanya di Pribadi (0134, B10).
+  | 'pocket_personal_only'
+  // S12: bagi tagihan Bersama / patungan (0136; bingkai S12 "Salinan galat S12").
+  | 'split_shared_only'
+  | 'split_needs_partner'
+  | 'split_account_invalid'
+  | 'split_locked'
+  | 'split_unsettled'
+  | 'split_member_left'
+  | 'settlement_received'
+  | 'settlement_voided'
+  | 'settlement_not_received'
   | 'not_found'
   | 'invalid'
   | 'network'

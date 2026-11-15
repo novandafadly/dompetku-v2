@@ -1,6 +1,6 @@
 'use client';
 
-import { addDays, dayLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
+import { addDays, dayLabel, formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import {
   lazy,
   Suspense,
@@ -22,12 +22,15 @@ import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
 import { CalendarBlankIcon } from '@/components/ui/icons/calendar-blank';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { NotePencilIcon } from '@/components/ui/icons/note-pencil';
+import { UserIcon } from '@/components/ui/icons/user';
 import { WalletIcon } from '@/components/ui/icons/wallet';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
+import { SpaceTag } from '@/components/ui/space-tag';
 import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import type { Ruang } from '@/features/ledger/types';
+import { PATUNGAN_COPY, shareNote } from '@/features/ledger/patungan-copy';
 import { AppKeypad } from './app-keypad';
 import {
   accountArchivedText,
@@ -43,8 +46,8 @@ import {
   saldoKurangText,
 } from './catat-status';
 import { CategoryChips } from './category-chips';
-import { undoOrNotify } from './saved-toast';
-import type { CatatSource, CatatType, SaveOutcome } from './source';
+import { modalToast, undoOrNotify } from './saved-toast';
+import type { CatatPreset, CatatSource, CatatType, SaveOutcome } from './source';
 import { createCatatFlow } from './telemetry';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
@@ -53,6 +56,8 @@ import { CROSS_COPY, DestinationChips, MetaSelect } from './wallet-picker';
 
 // Halaman "Ruang lain…" (S7-C1) dimuat malas saat diketuk pertama kali: tidak ikut JS muat awal.
 const SpaceTargetPage = lazy(() => import('./space-target-page'));
+// Halaman `Pembagian · Bersama` (S12-CT2): dimuat malas saat `Ubah pembagian` diketuk.
+const SplitSharesPage = lazy(() => import('./split-shares-page'));
 
 /** Salinan tetap S7-C2. */
 const TALANGAN_COPY = {
@@ -61,6 +66,13 @@ const TALANGAN_COPY = {
   /** Mode keyboard: satu baris utuh; teks lengkap tetap terbaca lewat `aria-describedby`. */
   hintShort: 'Tidak masuk hitungan pribadi.',
 } as const;
+
+/** Petunjuk pembagian di bawah kategori (S12-CT1): sama rata atau bagian anggota lain. */
+function splitHint(partnerShare: number | undefined, partner: string): string {
+  return partnerShare === undefined
+    ? `Dibagi rata dengan ${partner}`
+    : shareNote(partner, partnerShare);
+}
 
 const NOTE_MAX = 200;
 /** Penghitung catatan muncul dari sini (S7-C1). */
@@ -85,7 +97,18 @@ export interface CatatSheetProps {
   hourWIB?: number;
   /** Cara sheet dibuka (telemetri ketukan): tombol Catat (bawaan) atau pintasan `c`. */
   via?: 'pointer' | 'shortcut';
+  /** Setor/tarik modal trading (S12-TR4): transfer satu ruang dengan arah terkunci. */
+  preset?: CatatPreset;
 }
+
+/** Salinan final S12-TR4. */
+const PRESET_COPY = {
+  setor: {
+    title: 'Setor modal',
+    note: 'Setor modal bukan pengeluaran. Laporan dan anggaran tidak berubah.',
+  },
+  tarik: { title: 'Tarik modal', note: 'Tarik modal bukan pemasukan.' },
+} as const;
 
 /** Hari ini dan 13 hari ke belakang; mencatat ke masa depan tidak ditawarkan. */
 const DATE_CHOICES = 14;
@@ -115,12 +138,14 @@ function CatatSession({
   onAddAccount,
   hourWIB,
   via = 'pointer',
+  preset,
 }: CatatSheetProps) {
   const c = useCatat({
     source,
     today,
     ruang,
     initialAmount,
+    preset,
     ...(hourWIB === undefined ? {} : { hourWIB }),
   });
   const { draft, status } = c;
@@ -182,11 +207,13 @@ function CatatSession({
   const noteId = useId();
   const hintId = useId();
   const typeHintId = useId();
-  const [page, setPage] = useState<'form' | 'kategori' | 'ruang'>('form');
+  const [page, setPage] = useState<'form' | 'kategori' | 'ruang' | 'bagi'>('form');
   const [menuOpen, setMenuOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   // Setelah halaman kategori ditutup: fokus ke chip terpilih (pilih) atau "Kategori lain…" (kembali).
-  const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | null>(null);
+  const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | 'bagi' | null>(null);
+  const bagiRef = useRef<HTMLButtonElement>(null);
+  const splitHintId = useId();
   const crossMoreRef = useRef<HTMLButtonElement>(null);
   const crossSelectedRef = useRef<HTMLButtonElement>(null);
   const sharedNoteId = useId();
@@ -198,7 +225,7 @@ function CatatSession({
   const audience = source.sharedAudience?.();
   const target = other(draft.ruang);
   const toLabel = draft.toRuang === undefined ? undefined : ruangLabel[draft.toRuang];
-  const baseTitle = `${TYPE_TITLE[draft.type]} · ${label}`;
+  const baseTitle = `${preset === undefined ? TYPE_TITLE[draft.type] : PRESET_COPY[preset.kind].title} · ${label}`;
   // Antar ruang: kedua ruang tertulis di judul (S7-C1), bukan hanya lewat warna.
   const title = toLabel === undefined ? baseTitle : `${baseTitle} → ${toLabel}`;
 
@@ -209,6 +236,7 @@ function CatatSession({
     if (where === 'more') moreRef.current?.focus();
     else if (where === 'cross') (crossSelectedRef.current ?? crossMoreRef.current)?.focus();
     else if (where === 'note') noteRef.current?.focus();
+    else if (where === 'bagi') bagiRef.current?.focus();
     else chipsRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
 
@@ -257,9 +285,24 @@ function CatatSession({
     const out: SaveOutcome | null = await run();
     if (out?.ok !== true) return;
     flow.saved();
-    const saved = { entryId: out.entryId, version: out.version, ruang: draft.ruang };
+    const saved = {
+      entryId: out.entryId,
+      version: out.version,
+      ruang: draft.ruang,
+      ...(out.splitId === undefined ? {} : { splitId: out.splitId }),
+    };
+    const nameOf = (id: string | undefined) => c.accounts.find((a) => a.id === id)?.name ?? '';
     toast({
-      message: out.toast,
+      message:
+        preset === undefined || draft.amount === null
+          ? out.toast
+          : modalToast(
+              preset.kind,
+              ruangLabel[draft.ruang],
+              draft.amount,
+              preset.account.name,
+              nameOf(preset.kind === 'setor' ? draft.accountId : draft.counterAccountId),
+            ),
       action: {
         label: 'Urungkan',
         onAction: () => {
@@ -270,7 +313,8 @@ function CatatSession({
     onOpenChange(false);
   }
 
-  const hasAccounts = c.loading || c.accounts.length > 0 || c.selectedAccount !== undefined;
+  const hasAccounts =
+    c.loading || c.accounts.length > 0 || c.selectedAccount !== undefined || c.splitAvailable;
   const crossTarget = c.cross.target;
   const crossLabel = ruangLabel[crossTarget];
   const isTransfer = draft.type === 'transfer';
@@ -325,6 +369,67 @@ function CatatSession({
             refocus.current = 'more';
           }}
         />
+      </Sheet>
+    );
+  }
+
+  if (page === 'bagi' && c.splitPeople !== undefined) {
+    const back = () => {
+      setPage('form');
+      refocus.current = 'bagi';
+    };
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={onSheetOpenChange}
+        title={title}
+        titleHidden
+        tint={draft.ruang}
+        headerStart={
+          <>
+            <IconButton
+              label="Kembali ke Catat"
+              icon={<ArrowLeftIcon size={20} />}
+              onClick={back}
+            />
+            <h3 className="min-w-0 truncate text-subheading font-extrabold">
+              {PATUNGAN_COPY.sharesTitle}
+            </h3>
+          </>
+        }
+        returnFocus={returnFocus}
+        onClickCapture={countTap}
+        fill
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape dari fokus di dalam halaman */}
+        <div
+          data-own-escape=""
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            back();
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <Suspense
+            fallback={
+              <p role="status" className="px-1 py-3 text-label font-semibold text-text-muted">
+                Memuat pembagian…
+              </p>
+            }
+          >
+            <SplitSharesPage
+              amount={draft.amount}
+              partnerName={c.splitPeople.partner.name}
+              partnerShare={draft.split?.partnerShare}
+              onApply={(share) => {
+                c.setPartnerShare(share);
+                back();
+              }}
+            />
+          </Suspense>
+        </div>
       </Sheet>
     );
   }
@@ -410,7 +515,7 @@ function CatatSession({
       : status === 'saldo_kurang'
         ? 'sr-only narrow:not-sr-only'
         : undefined;
-  const saldoShown = status === 'saldo_kurang' && c.selectedAccount !== undefined;
+  const saldoShown = status === 'saldo_kurang' && c.payerAccount !== undefined;
   const describedBy =
     [
       alertShown ? alertId : null,
@@ -444,7 +549,7 @@ function CatatSession({
       </p>
       <div className="flex items-center gap-2">
         {/* Transfer antar ruang sedang disusun: pindah ruang akan membuang pilihannya, jadi disembunyikan. */}
-        {draft.toRuang === undefined ? (
+        {draft.toRuang === undefined && preset === undefined ? (
           <Button
             variant="text"
             size="sm"
@@ -491,11 +596,21 @@ function CatatSession({
     </>
   ) : undefined;
 
-  const opened = c.selectedAccount?.openedOn;
+  const opened = c.payerAccount?.openedOn;
   // Tanggal sebelum dompet dibuka tidak ditawarkan (S6-C5); nilai sekarang tetap ada agar Select jujur.
   const dates = Array.from({ length: DATE_CHOICES }, (_, i) => addDays(today, -i)).filter(
     (d) => opened === undefined || d >= opened || d === draft.date,
   );
+  const splitting = draft.split !== undefined;
+  const personalOptions =
+    c.personal.status === 'ready'
+      ? c.personal.accounts.map((a) => ({ value: a.id, label: a.name }))
+      : [
+          {
+            value: '',
+            label: c.personal.status === 'error' ? 'Gagal dimuat' : PATUNGAN_COPY.loadingWallet,
+          },
+        ];
   const accountOptions = [
     ...c.sourceAccounts,
     ...(c.selectedAccount !== undefined && !c.sourceAccounts.includes(c.selectedAccount)
@@ -507,12 +622,12 @@ function CatatSession({
       ? categoryArchivedText(c.archivedCategory.name)
       : null;
   const fieldError =
-    status !== 'field' || c.selectedAccount === undefined || c.fieldCode === 'category_archived'
+    status !== 'field' || c.payerAccount === undefined || c.fieldCode === 'category_archived'
       ? null
       : c.fieldCode === 'before_opening'
-        ? beforeOpeningText(c.selectedAccount.name, c.selectedAccount.openedOn)
-        : accountArchivedText(c.selectedAccount.name);
-  const account = c.selectedAccount;
+        ? beforeOpeningText(c.payerAccount.name, c.payerAccount.openedOn)
+        : accountArchivedText(c.payerAccount.name);
+  const account = c.payerAccount;
   const saldoText =
     saldoShown && account !== undefined && draft.amount !== null
       ? saldoKurangText(account.name, account.balance, account.balance - draft.amount)
@@ -524,7 +639,12 @@ function CatatSession({
       onOpenChange={onSheetOpenChange}
       title={title}
       titleContent={
-        hasAccounts ? (
+        preset !== undefined ? (
+          <>
+            {PRESET_COPY[preset.kind].title}
+            <SpaceTag space={draft.ruang} />
+          </>
+        ) : hasAccounts ? (
           <TypeMenuButton
             ref={titleRef}
             space={draft.ruang}
@@ -549,24 +669,26 @@ function CatatSession({
         ) : undefined
       }
       headerAction={
-        <>
-          <span id={typeHintId} className="sr-only">
-            Ganti jenis transaksi
-          </span>
-          {menuOpen ? (
-            <TypeMenu
-              value={draft.type}
-              onChange={(t: CatatType) => {
-                c.setType(t);
-              }}
-              onClose={() => {
-                setMenuOpen(false);
-                titleRef.current?.focus();
-              }}
-              ignore={titleRef}
-            />
-          ) : null}
-        </>
+        preset !== undefined ? undefined : (
+          <>
+            <span id={typeHintId} className="sr-only">
+              Ganti jenis transaksi
+            </span>
+            {menuOpen ? (
+              <TypeMenu
+                value={draft.type}
+                onChange={(t: CatatType) => {
+                  c.setType(t);
+                }}
+                onClose={() => {
+                  setMenuOpen(false);
+                  titleRef.current?.focus();
+                }}
+                ignore={titleRef}
+              />
+            ) : null}
+          </>
+        )
       }
       tint={draft.ruang}
       footer={footer}
@@ -595,13 +717,23 @@ function CatatSession({
             onChange={c.setAmount}
             readOnly={saving}
           />
+          {preset === undefined ? null : (
+            <div className="flex flex-col gap-0.5 text-caption font-medium text-text-muted">
+              <p>{PRESET_COPY[preset.kind].note}</p>
+              {preset.kind === 'tarik' &&
+              draft.amount !== null &&
+              draft.amount > preset.capitalLeft ? (
+                <p>{`${formatRupiah(draft.amount - preset.capitalLeft)} di atas sisa modal dicatat sebagai hasil ditarik.`}</p>
+              ) : null}
+            </div>
+          )}
           {isTransfer ? (
             <DestinationChips
               accounts={c.destinations}
               value={draft.counterAccountId}
               onChange={c.setCounterAccount}
               busy={saving}
-              crossEnabled
+              crossEnabled={preset === undefined && c.selectedAccount?.pocket !== 'trading'}
               crossLabel={
                 draft.toRuang === undefined || toLabel === undefined
                   ? undefined
@@ -670,15 +802,67 @@ function CatatSession({
               )}
             </p>
           ) : null}
+          {draft.split === undefined || c.splitPeople === undefined ? null : (
+            <div className="flex items-center gap-2">
+              <p
+                id={splitHintId}
+                className={`flex min-w-0 flex-1 gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`}
+              >
+                <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
+                {compact ? (
+                  <>
+                    <span aria-hidden="true" className="min-w-0 truncate">
+                      {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                    </span>
+                    <span className="sr-only">
+                      {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="min-w-0 text-pretty">
+                    {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                  </span>
+                )}
+              </p>
+              <button
+                ref={bagiRef}
+                type="button"
+                aria-disabled={saving || undefined}
+                onClick={() => {
+                  if (saving) return;
+                  setPage('bagi');
+                }}
+                className={`inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+              >
+                {PATUNGAN_COPY.editShares}
+              </button>
+            </div>
+          )}
+          {splitting && c.personal.status === 'ready' && c.personal.accounts.length === 0 ? (
+            <p className="flex items-center gap-1.5 text-meta font-semibold text-text-soft">
+              <InfoIcon size={14} className="shrink-0" />
+              {PATUNGAN_COPY.noPersonalWallet}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <MetaSelect
-              label={draft.type === 'income' ? 'Ke dompet' : 'Dari dompet'}
+              label={
+                splitting
+                  ? PATUNGAN_COPY.fromPersonal
+                  : draft.type === 'income'
+                    ? 'Ke dompet'
+                    : 'Dari dompet'
+              }
               icon={<WalletIcon size={18} />}
-              value={draft.accountId}
-              onChange={c.setAccount}
-              options={accountOptions.map((a) => ({ value: a.id, label: a.name }))}
+              value={draft.split === undefined ? draft.accountId : draft.split.accountId}
+              onChange={splitting ? c.setSplitAccount : c.setAccount}
+              options={
+                splitting
+                  ? personalOptions
+                  : accountOptions.map((a) => ({ value: a.id, label: a.name }))
+              }
               selectRef={accountRef}
-              tight={c.canReimburse}
+              tight={c.canReimburse || c.splitAvailable}
               busy={saving}
               invalid={c.field === 'account_id'}
               describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
@@ -691,7 +875,7 @@ function CatatSession({
               onChange={c.setDate}
               options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
               selectRef={dateRef}
-              tight={c.canReimburse}
+              tight={c.canReimburse || c.splitAvailable}
               busy={saving}
               invalid={c.field === 'occurred_on'}
               describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
@@ -727,6 +911,28 @@ function CatatSession({
                 } aria-disabled:text-text-muted`}
               >
                 <BriefcaseIcon size={20} />
+              </button>
+            ) : null}
+            {c.splitAvailable ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={splitting}
+                aria-label={PATUNGAN_COPY.toggle}
+                aria-describedby={splitting ? splitHintId : undefined}
+                aria-disabled={saving || undefined}
+                onClick={() => {
+                  if (!saving) c.setSplit(!splitting);
+                }}
+                // Sama dengan Talangan: mati = ubin surface-2; menyala = tint aksen + garis 1 px
+                // (menyala juga lewat aria-checked dan baris petunjuk, bukan warna saja).
+                className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
+                  splitting
+                    ? 'border-accent-text bg-accent-tint text-accent-text'
+                    : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
+                } aria-disabled:text-text-muted`}
+              >
+                <UserIcon size={20} />
               </button>
             ) : null}
           </div>

@@ -264,3 +264,31 @@ describe('pokok dan cicilan utang (S11)', () => {
     });
   });
 });
+
+describe('bagi tagihan Bersama (S12)', () => {
+  const leg = (role: 'bill' | 'settle' | 'receive' | null): EntryVM => ({
+    id: 'e1',
+    version: 1,
+    kind: 'space_transfer',
+    occurredOn: '2026-11-14',
+    createdAt: '2026-11-14T10:00:00+07:00',
+    createdBy: { id: 'n', name: 'Novanda', initial: 'N' },
+    accountId: 'a1',
+    accountName: 'BCA',
+    amount: 200_000,
+    direction: role === 'receive' ? 'in' : 'out',
+    spaceKind: 'personal',
+    ...(role === null ? {} : { split: { role } }),
+  });
+
+  it('kaki Pribadi: judul tetap per peran, label jenis Patungan', () => {
+    expect(entryTitleVM(leg('bill'))).toBe('Bayar untuk Bersama');
+    expect(entryTitleVM(leg('settle'))).toBe('Lunasi patungan');
+    expect(entryTitleVM(leg('receive'))).toBe('Terima patungan');
+    expect(entryKindLabelVM(leg('bill'))).toBe('Patungan');
+  });
+
+  it('transfer antar ruang biasa tetap berjudul arah', () => {
+    expect(entryTitleVM(leg(null))).toBe('Setor ke Bersama');
+  });
+});

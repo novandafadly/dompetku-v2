@@ -122,7 +122,7 @@ async function catatBersama(page: Page, amount: number, description: string) {
   const sheet = await openCatat(page);
   await sheet.getByRole('textbox', { name: 'Nominal' }).fill(String(amount));
   await sheet.getByLabel(/Keterangan/).fill(description);
-  await sheet.getByLabel('Dari dompet').selectOption({ label: KAS });
+  await sheet.getByLabel('Dari dompet', { exact: true }).selectOption({ label: KAS });
   await chipsOf(sheet).first().click();
   await sheet.getByRole('button', { name: 'Simpan', exact: true }).click();
   await expect(

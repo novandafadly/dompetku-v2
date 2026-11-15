@@ -207,6 +207,10 @@ create function tests.wipe() returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
+  -- Patungan (0135): konteks penjaga split_guard, baris patungan sebelum entri (FK).
+  insert into private.split_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+  delete from app.settlements;
+  delete from app.splits;
   -- Tagihan dan anggaran (0117) lebih dulu: FK ke entries, categories, accounts.
   delete from app.bill_occurrences;
   delete from app.bills;
@@ -228,6 +232,7 @@ begin
   delete from app.households;
   delete from auth."user";
   delete from app.settings where key = 'owner_email';
+  delete from private.split_ctx;
 end $$;
 
 -- Rusak data dengan sengaja (tes positif cek kualitas data, 17_dq.sql): jalankan p_sql sebagai

@@ -19,14 +19,14 @@ import type { DebtDetailVM, DebtPaymentVM } from './types';
 function failureText(
   code: LedgerErrorCode | null,
   direction: DebtDetailVM['direction'],
-  /** `delete`: bisa dilanjutkan (`Tetap hapus`); batal satu cicilan tidak punya jalur paksa. */
+  /** Keduanya bisa dilanjutkan sesudah `saldo_negatif`: `Tetap hapus` / `Tetap batalkan` (K5). */
   kind: 'cancel' | 'delete',
 ): string | undefined {
   if (code === null) return undefined;
   if (code === 'saldo_negatif') {
     return kind === 'delete'
       ? 'Saldo dompet tidak cukup, jadi saldonya akan negatif. Ketuk Tetap hapus untuk melanjutkan.'
-      : 'Belum bisa dibatalkan. Saldo dompet tidak cukup untuk membatalkan pembayaran ini.';
+      : 'Saldo dompet tidak cukup, jadi saldonya akan negatif. Ketuk Tetap batalkan untuk melanjutkan.';
   }
   return utangFailedText(code, direction);
 }
@@ -39,6 +39,7 @@ export function CancelPaymentDialog({
   account,
   busy,
   failure,
+  force,
   onConfirm,
 }: {
   open: boolean;
@@ -49,6 +50,8 @@ export function CancelPaymentDialog({
   account: AccountVM | undefined;
   busy: boolean;
   failure: LedgerErrorCode | null;
+  /** Server sudah menolak `saldo_negatif` sekali: tombol `Tetap batalkan` bertahan (kirim allowNegative). */
+  force: boolean;
   onConfirm: () => void;
 }) {
   if (payment === null) return null;
@@ -95,7 +98,7 @@ export function CancelPaymentDialog({
           />
         </div>
       }
-      confirmLabel={C.cancelPayment}
+      confirmLabel={force ? 'Tetap batalkan' : C.cancelPayment}
       cancelLabel={C.back}
       onConfirm={onConfirm}
       holdOpen

@@ -30,12 +30,13 @@ export default async function RuangLayout({
   // saja (dompet + kategori, satu transaksi, di-cache per request bersama page); ruang lain diminta
   // lewat action saat pindah ruang di sheet.
   const ctx = await ruangContext(params);
-  const { accounts, categories } = await ruangShell(ctx);
+  const { accounts, categories, split } = await ruangShell(ctx);
   return (
     <RuangShellReal
       ruang={ctx.ruang}
       accounts={accounts}
       categories={categories}
+      split={split}
       today={todayWIB()}
     >
       {children}

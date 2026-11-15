@@ -15,11 +15,14 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { TextField } from '@/components/ui/text-field';
 import { toast } from '@/components/ui/toast';
 import { newClientId } from '@/features/ledger/client-id';
-import type { LedgerErrorCode, Pocket, Ruang, WalletType } from '@/features/ledger/types';
+import type { LedgerErrorCode, Ruang, UserPocket, WalletType } from '@/features/ledger/types';
 import { POCKET_LABEL, RUANG_NAME, WALLET_TYPE_LABEL } from './context';
 
 const WALLET_TYPES: WalletType[] = ['bank', 'ewallet', 'cash'];
 const FORM_ID = 'tambah-dompet';
+/** Salinan S12-TR1. */
+const TRADING_HINT =
+  'Untuk rekening saham, kripto, atau sejenisnya. Saldonya tidak dihitung di Aman dipakai.';
 /** Sama dengan batas skema server (`createAccountSchema`). */
 export const WALLET_NAME_MAX = 40;
 
@@ -27,7 +30,7 @@ export const WALLET_NAME_MAX = 40;
 export interface AccountSubmit {
   clientId: string;
   name: string;
-  pocket: Pocket;
+  pocket: UserPocket;
   walletType: WalletType;
   /** Saldo hari ini; 0 = tanpa entri Saldo awal. */
   openingBalance: Rupiah;
@@ -52,12 +55,14 @@ const GALAT_TEXT: Record<Galat, string> = {
 
 function Form({
   ruang,
+  allowTrading,
   existingNames,
   onSubmit,
   nameRef,
   onDone,
 }: {
   ruang: Ruang;
+  allowTrading: boolean;
   /** Nama dompet yang sudah ada di ruang ini (dua dompet bernama sama ditolak). */
   existingNames: readonly string[];
   onSubmit: (input: AccountSubmit) => Promise<AccountSubmitResult>;
@@ -65,7 +70,7 @@ function Form({
   onDone: (name: string) => void;
 }) {
   const [name, setName] = useState('');
-  const [pocket, setPocket] = useState<Pocket | null>(null);
+  const [pocket, setPocket] = useState<UserPocket | null>(null);
   const [walletType, setWalletType] = useState<WalletType>('bank');
   const [opening, setOpening] = useState<Rupiah | null>(null);
   const [errors, setErrors] = useState<Errors>({});
@@ -79,9 +84,12 @@ function Form({
   const pocketError = useId();
   const typeLabel = useId();
   const openingHint = useId();
+  const tradingHint = useId();
   const pocketRef = useRef<HTMLDivElement>(null);
-  const pockets: Pocket[] =
-    ruang === 'pribadi' ? ['operasional', 'tabungan', 'kantor'] : ['operasional', 'tabungan'];
+  const pockets: UserPocket[] =
+    ruang === 'pribadi'
+      ? ['operasional', 'tabungan', ...(allowTrading ? (['trading'] as const) : []), 'kantor']
+      : ['operasional', 'tabungan'];
 
   async function submit() {
     if (busy.current) return;
@@ -127,6 +135,11 @@ function Form({
       onDone(trimmed);
       return;
     }
+    if (res.code === 'pocket_personal_only') {
+      setErrors({ pocket: 'Dompet Trading hanya ada di Pribadi.' });
+      pocketRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+      return;
+    }
     if (res.code === 'name_taken') {
       // Nama ganda yang lolos cek klien (dompet lain menambah di waktu sama, atau huruf berbeda
       // yang dilipat server): galat kolom, bukan kotak peringatan.
@@ -169,6 +182,7 @@ function Form({
               if (p) setPocket(p);
             }}
           />
+          {pocket === 'trading' ? <FieldHint id={tradingHint}>{TRADING_HINT}</FieldHint> : null}
           {errors.pocket ? <FieldError id={pocketError}>{errors.pocket}</FieldError> : null}
         </div>
         <div className="flex flex-col gap-1.5">
@@ -232,12 +246,15 @@ export function AddAccountSheet({
   open,
   onOpenChange,
   ruang,
+  allowTrading = false,
   existingNames,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ruang: Ruang;
+  /** Mode nyata di Pribadi: opsi Jenis `Trading` (S12-TR1); prototipe tidak punya. */
+  allowTrading?: boolean;
   existingNames: readonly string[];
   onSubmit: (input: AccountSubmit) => Promise<AccountSubmitResult>;
 }) {
@@ -293,6 +310,7 @@ export function AddAccountSheet({
     >
       <Form
         ruang={ruang}
+        allowTrading={allowTrading}
         existingNames={existingNames}
         onSubmit={guarded}
         nameRef={nameRef}
@@ -328,6 +346,10 @@ export function DemoAddAccountSheet({
       ruang={ruang}
       existingNames={state.accounts.filter((a) => a.ruang === ruang).map((a) => a.name)}
       onSubmit={(input) => {
+        // Prototipe tidak menawarkan Trading (`allowTrading` mati), jadi jenis ini tidak datang.
+        if (input.pocket === 'trading') {
+          return Promise.resolve({ ok: false, code: 'invalid' });
+        }
         const ownerId = ruang === 'pribadi' ? (state.members[0]?.id ?? null) : null;
         store.addAccount(
           {

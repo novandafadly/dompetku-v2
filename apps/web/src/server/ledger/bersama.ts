@@ -187,8 +187,9 @@ const ACTIVITY_SQL = `
                              p_before_version => $5::int) a
    order by a.at desc, a.entry_id desc, a.version desc`;
 
-function toRow(r: z.output<typeof activityRow>): SharedActivityRow {
+function toRow(r: z.output<typeof activityRow>, viaPersonal: boolean): SharedActivityRow {
   return {
+    ...(viaPersonal ? { viaPersonal: true as const } : {}),
     entryId: r.entry_id,
     version: r.version,
     op: r.op,
@@ -237,6 +238,31 @@ async function categoryNamesTx(
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
+/** Putaran isi ulang halaman feed bila baris dompet sistem patungan disembunyikan. */
+const FILL_ROUNDS = 5;
+
+/**
+ * Entri halaman yang menyentuh dompet sistem `patungan` (id → jenis): `space_transfer` = kaki
+ * dompet sistem (disembunyikan), `expense` = pengeluaran tagihan patungan (diberi kalimat sendiri).
+ */
+async function systemWalletEntriesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  rows: Record<string, unknown>[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(rows.map((r) => r.entry_id).filter((x) => typeof x === 'string'))];
+  if (ids.length === 0) return new Map();
+  const { rows: found } = await c.query<{ id: string; kind: string }>(
+    `select e.id, e.kind::text as kind
+       from app.entries e
+       join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
+       join app.accounts a on a.space_id = l.space_id and a.id = l.account_id
+      where e.space_id = $1 and e.id = any($2::uuid[]) and a.pocket = 'patungan'`,
+    [ctx.spaceId, ids],
+  );
+  return new Map(found.map((r) => [r.id, r.kind]));
+}
+
 const UNKNOWN_ACTOR = { name: 'Anggota', initial: '?', role: null } as const;
 
 export interface ActivityPage {
@@ -255,28 +281,47 @@ export async function sharedActivityTx(
   opts: { limit: number; before?: Cursor | null | undefined; roster?: MemberVM[] | undefined },
 ): Promise<ActivityPage> {
   const limit = z.number().int().min(1).max(99).parse(opts.limit);
-  const before = opts.before ?? null;
-  // Satu baris ekstra hanya untuk tahu ada halaman berikutnya.
-  const { rows } = await c.query<Record<string, unknown>>(ACTIVITY_SQL, [
-    ctx.spaceId,
-    limit + 1,
-    before?.at ?? null,
-    before?.entryId ?? null,
-    before?.version ?? null,
-  ]);
-  const page = rows.slice(0, limit);
+  // Kaki dompet sistem patungan (S12) disembunyikan sesudah kueri: halaman yang jadi lebih pendek
+  // diisi dari baris berikutnya (maks. `FILL_ROUNDS` putaran), jadi kursor tetap = baris mentah terakhir.
+  const kept: Record<string, unknown>[] = [];
+  const viaPersonal = new Set<string>();
+  let before = opts.before ?? null;
   let next: Cursor | null = null;
-  const last = page.at(-1);
-  if (rows.length > limit && last !== undefined) {
-    const k = cursorRow.parse(last);
-    next = { at: k.cursor_at, entryId: k.entry_id, version: k.version };
+  for (let round = 0; round < FILL_ROUNDS && kept.length < limit; round += 1) {
+    const need = limit - kept.length;
+    // Satu baris ekstra hanya untuk tahu ada halaman berikutnya.
+    const { rows } = await c.query<Record<string, unknown>>(ACTIVITY_SQL, [
+      ctx.spaceId,
+      need + 1,
+      before?.at ?? null,
+      before?.entryId ?? null,
+      before?.version ?? null,
+    ]);
+    const page = rows.slice(0, need);
+    const system = await systemWalletEntriesTx(c, ctx, page);
+    for (const raw of page) {
+      const kind = system.get(String(raw.entry_id));
+      if (kind === 'space_transfer') continue;
+      if (kind === 'expense') viaPersonal.add(String(raw.entry_id));
+      kept.push(raw);
+    }
+    const last = page.at(-1);
+    next = null;
+    if (rows.length > need && last !== undefined) {
+      const k = cursorRow.parse(last);
+      next = { at: k.cursor_at, entryId: k.entry_id, version: k.version };
+      before = next;
+    } else {
+      break;
+    }
   }
+  const page = kept;
 
   const valid: SharedActivityRow[] = [];
   const issues: string[] = [];
   for (const raw of page) {
     const parsed = activityRow.safeParse(raw);
-    if (parsed.success) valid.push(toRow(parsed.data));
+    if (parsed.success) valid.push(toRow(parsed.data, viaPersonal.has(parsed.data.entry_id)));
     else for (const i of parsed.error.issues) issues.push(issueLabel(i));
   }
   if (issues.length > 0) logDropped(issues);
