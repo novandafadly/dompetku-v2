@@ -17,8 +17,8 @@ describe('ConfirmDialog', () => {
         onConfirm={() => undefined}
       />,
     );
-    const cls = screen.getByRole('alertdialog').className;
-    expect(cls).toContain('max-h-[calc(100dvh-2rem)]');
-    expect(cls).toContain('overflow-y-auto');
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.style.maxHeight).toBe('calc(100dvh - 2rem)');
+    expect(dialog.className).toContain('overflow-y-auto');
   });
 });
