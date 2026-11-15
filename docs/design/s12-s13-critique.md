@@ -47,8 +47,9 @@ Peringkat: Blocker (tidak bisa dipakai/menyesatkan uang), Penting (merusak keter
 | S12S13-C14 | Minor | Catat Bersama, F tanpa dompet Pribadi | `Dibagi rata dengan Novanda` tetap tampil di atas `Belum ada dompet di Pribadi. Tambah dompet di Pribadi dulu.` (Simpan nonaktif); tanpa tautan ke Dompet Pribadi. | Ditunda: sembunyikan baris bagi rata dan beri tautan. |
 | S12S13-C15 | Minor | Detail dompet, nama 60 huruf | Judul dompet empat baris di 320 dan kotak `masih berisi saldo` mengulang nama (sudah tercatat S6, S13 butir ditunda). | Ditunda. |
 | S12S13-C16 | Minor | Riwayat dompet, Patungan, Aktivitas di 320 | Label riwayat `Setor modal dari BCA …` terpotong jadi `Setor modal…` dan subjudul mengulang; baris Aktivitas empat baris (`Novanda · membayar … dari dompet pribadi`). | Ditunda (S8 Aktivitas dan S6 riwayat). |
+| S12S13-C17 | Minor | Sheet Pembagian, dialog tinggi di 320 | Judul `Pembagian · Bersama` terpotong jadi `Pembagian · Bersa…` (tombol kembali + tutup memakan lebar; ruang jadi tidak terbaca utuh). Pada dialog tinggi (C3) fokus awal `Kembali` menggulir isi ke bawah, jadi judul dan ikon di luar layar sampai pengguna menggulir ke atas. | Ditunda: judul bisa dua baris di 320; gulir awal wajar bagi fokus aman. |
 
-Ringkasan: Blocker 0, Penting 4 (C1, C2, C3, C5), Minor 12 (C4, C6 sampai C16). Diperbaiki 4 (C2, C3, C4, C5), ditunda 12 dengan alasan di tabel. Total 16 temuan.
+Ringkasan: Blocker 0, Penting 4 (C1, C2, C3, C5), Minor 13 (C4, C6 sampai C17). Diperbaiki 4 (C2, C3, C4, C5), ditunda 13 dengan alasan di tabel. Total 17 temuan.
 
 ## Delivery Gate (daftar periksa antislop)
 
@@ -72,7 +73,13 @@ Ringkasan: Blocker 0, Penting 4 (C1, C2, C3, C5), Minor 12 (C4, C6 sampai C16). 
 
 ## Verifikasi sesudah perbaikan
 
-Layar yang terkena C2, C3, C5 dipotret ulang dari build sesudah perbaikan (Detail trading, Hapus tagihan 320x640, `/bersama/patungan` F dengan nominal 14 digit, `Menunggu diterima` sisi pelunas, dan sheet Pembagian yang pada putaran pertama gagal terbuka karena penyeleksi spesifikasi, bukan karena produk). Hasil dicatat di bagian ini sesudah putaran ulang.
+Layar terkait dipotret ulang dari build sesudah perbaikan (putaran kedua, 486 PNG lagi, audit yang sama):
+
+- **C5:** `/bersama/patungan` sisi pelunas di 320: `Menunggu Novanda` turun ke baris sendiri rata kanan dan tidak lagi menimpa `Kamu melunasi Rp 156.000`; baris tagihan `Rp 12.345.678.900` menaruh nominal di baris bawah rata kanan, judul dua baris utuh (`Renovasi rumah dan perabot ruang tamu serta dapur…`), meta tiga baris. Terang dan gelap.
+- **C3:** dialog Hapus tagihan di 320x640 sekarang menggulir di dalam batas `100dvh - 2rem`; `Hapus tagihan` dan `Kembali` terlihat dan terjangkau (lihat catatan fokus awal di C17).
+- **C4:** `Menunggu diterima`/`Menunggu Novanda` netral di semua tangkapan.
+- **Sheet Pembagian** (gagal terbuka di putaran pertama karena penyeleksi spesifikasi mencari dialog, padahal halaman Pembagian ada di dalam sheet Catat): `Sama rata`/`Atur nominal`, `Bagian Farida`, `Bagian kamu Rp 250.000`, `Total Rp 400.000`, `Pakai pembagian ini`; terbaca di 320, 390, 1280; temuan hanya C17.
+- **C2:** diverifikasi pada putaran ledger (lihat hasil audit: tidak ada `Rp 0` pada Detail trading dengan setoran).
 
 ## Tidak dipotret
 
