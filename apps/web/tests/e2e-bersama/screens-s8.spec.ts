@@ -554,6 +554,7 @@ async function wipeLedger(): Promise<void> {
     delete from app.entry_history;
     delete from app.entries;
     delete from app.entry_tombstones;
+    delete from app.goals;
     delete from app.accounts;
     delete from app.no_spend_days;
     commit;`);
