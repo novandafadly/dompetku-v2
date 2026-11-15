@@ -80,14 +80,14 @@ const view = (d: UtangData) =>
   render(<UtangPageView ruang="pribadi" query="" data={d} slots={SLOTS} />);
 
 describe('UtangPageView (S11-UT1)', () => {
-  it('segmen Anggaran | Tagihan | Utang di Pribadi dengan Utang aktif', () => {
+  it('segmen Anggaran | Tagihan | Tujuan | Utang di Pribadi dengan Utang aktif', () => {
     view(data([]));
     const nav = screen.getByRole('navigation', { name: 'Bagian Rencana' });
     expect(
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['Anggaran', 'Tagihan', 'Utang']);
+    ).toEqual(['Anggaran', 'Tagihan', 'Tujuan', 'Utang']);
     expect(within(nav).getByRole('link', { name: 'Utang' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -235,10 +235,15 @@ describe('UtangPageView (S11-UT1)', () => {
 });
 
 describe('Rencana Bersama: tanpa jejak utang', () => {
-  it('Segmen di Bersama hanya Anggaran dan Tagihan', () => {
+  it('Segmen di Bersama: Anggaran, Tagihan, Tujuan (tanpa Utang)', () => {
     render(<UtangFailed ruang="bersama" query="" />);
     const nav = screen.getByRole('navigation', { name: 'Bagian Rencana' });
     expect(within(nav).queryByRole('link', { name: 'Utang' })).toBeNull();
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['Anggaran', 'Tagihan', 'Tujuan']);
   });
 });
 

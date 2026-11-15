@@ -67,7 +67,7 @@ describe('GoalCardView: keadaan (bingkai S13-TJ3)', () => {
 
   it('saldo 0: Belum ada yang terkumpul, tanpa Rp 0, Target dan Isi lewat Transfer', () => {
     card(goal({ saved: 0, balance: 0, pct: 0, remaining: 10_000_000 }));
-    const text = screen.getByRole('region').textContent ?? '';
+    const text = screen.getByRole('region').textContent;
     expect(text).toContain('Belum ada yang terkumpul');
     expect(text).toMatch(/Target Rp\s10\.000\.000/);
     expect(text).toContain('Isi lewat Transfer ke Tabungan BCA.');
@@ -80,7 +80,7 @@ describe('GoalCardView: keadaan (bingkai S13-TJ3)', () => {
 
   it('saldo minus: kalimat minus, progres 0%, tanpa Rp negatif', () => {
     card(goal({ saved: 0, balance: -250_000, pct: 0, remaining: 10_250_000 }));
-    const text = screen.getByRole('region').textContent ?? '';
+    const text = screen.getByRole('region').textContent;
     expect(text).toContain('Saldo Tabungan BCA sedang minus, jadi progres dihitung 0%.');
     expect(text).not.toContain('-');
     expect(text).not.toContain('Isi lewat Transfer');
@@ -146,7 +146,7 @@ describe('GoalCardView: keadaan (bingkai S13-TJ3)', () => {
       'href',
       '/pribadi/dompet/a1',
     );
-    expect(document.body.textContent?.toLowerCase()).not.toContain('goal');
+    expect(document.body.textContent.toLowerCase()).not.toContain('goal');
     cleanup();
     card(goal(), 'pribadi', false);
     expect(screen.queryByRole('link')).toBeNull();
