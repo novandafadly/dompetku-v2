@@ -49,6 +49,12 @@ Notifikasi kegagalan **belum terverifikasi**. Menurut dokumentasi GitHub, notifi
 
 Risiko sisa yang diterima: CVE yang belum punya entri OSV, dan kode yang tidak berasal dari lockfile (mis. disalin ke bundel). Bila temuan mingguan muncul: naikkan versi di lockfile lewat PR biasa (rilis = image baru), atau catat pengecualian bertanggal di tabel osv-scanner.
 
+## Egress worker dan harga saham (S14)
+
+- Tidak ada HTTP keluar di CI: `apps/worker/src/test-setup.ts` (setupFiles unit dan int) membuat `fetch` global menolak semua host selain loopback; tes harga memakai `StubPriceSource` dan server stub lokal. Tes `price-source.test.ts` memastikan pagar itu aktif.
+- Pembungkus `httpJson` (`apps/worker/src/price-source.ts`): origin `https:` tetap per adapter, `redirect: 'error'`, timeout 10 s, badan maks 256 KiB, Zod; galat hanya kode `provider_*` (tanpa URL, kunci, isi respons) di log, `job_runs`, dan ping.
+- Egress worker (`worker_egress`, `172.16.29.0/24`) tidak difilter per host, tetapi IMDS, VCN, jaringan privat, CGNAT, dan port host di-DROP `firewall.sh` (`DOMPETKU-WORKER-EGRESS`, uji `firewall-test.sh`). Host penyedia harga (Task 8) dicatat di sini saat adapter ditambah.
+
 ## Image OpenWA (Catat via WhatsApp)
 
 `openwa` di `infra/db-vm/compose.yml` memakai image pihak ketiga `ghcr.io/rmyndharis/openwa:0.27.1@sha256:1a2d0c39…af9068` (indeks multi-arch, varian `linux/arm64` dipakai VM). Image ini tidak dibangun repo ini, jadi tidak tercakup Trivy job `image`/release (hanya `dompetku-web`) maupun osv-scanner (hanya `pnpm-lock.yaml`). Spec §6 dipenuhi dengan pemindaian image tersendiri:
