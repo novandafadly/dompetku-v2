@@ -60,7 +60,7 @@ language sql stable rows 1 set search_path = '' as $$
      where h.space_id = p_space_id and t.voided_at is null and t.occurred_on <= p_on
      group by h.space_id, h.id, h.ticker
   ), sh as (
-    select coalesce(sum(coalesce(p.shares * c.close, p.cost)), 0)::bigint as pasar,
+    select coalesce(sum(case when c.close is null then p.cost else least(p.shares::numeric * c.close, 10000000000000) end), 0)::bigint as pasar,
            (count(*) filter (where c.close is null))::int as tanpa,
            min(c.on_date) as price_as_of
       from pos p
@@ -153,7 +153,11 @@ begin
                                             utang, total, price_as_of, computed_at)
   select r.id, g.d::date, n.kas, n.aset, n.saham_pasar, n.saham_tanpa_harga, n.piutang, n.utang, n.total,
          n.price_as_of, app.now()
-    from (select sp.id, greatest(least(coalesce(d.from_date, v_y), v_y), v_min) as f
+    -- Mulai dari tanda hari kotor atau dari hari sesudah snapshot terakhir ruang itu (malam yang terlewat
+    -- karena worker mati diisi ulang), tidak lebih lama dari 400 hari.
+    from (select sp.id, greatest(least(coalesce(d.from_date, v_y),
+                 coalesce((select max(s2.on_date) + 1 from app.net_worth_snapshots s2 where s2.space_id = sp.id), v_y),
+                 v_y), v_min) as f
             from app.spaces sp left join app.nw_dirty d on d.space_id = sp.id) r
    cross join lateral pg_catalog.generate_series(r.f::timestamp, v_y::timestamp, interval '1 day') g (d)
    cross join lateral app.net_worth_at(r.id, g.d::date) n

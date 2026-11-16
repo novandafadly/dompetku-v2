@@ -12,7 +12,7 @@
 -- 400 hari dengan 6.000 entri dan harga harian dua kode (data demo `full` = 556 entri; ×10 = 5.560).
 -- ID: B16, T11
 begin;
-select plan(99);
+select plan(103);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -340,7 +340,7 @@ select is(pg_temp.dirty(), 'np:2026-03-20', '00:00 WIB: entri bertanggal 20 Mar 
 select tests.clock_at('2027-06-01 10:00+07');
 select tests.owner_exec(null, format($$insert into app.nw_dirty values (%L, '2026-01-01')
   on conflict (space_id) do update set from_date = excluded.from_date$$, :'np'));
-select is(pg_temp.job(), 402, 'tanda 1 Jan 2026 dipotong ke 400 hari (27 Apr 2026..31 Mei 2027) + H−1 dua ruang');
+select is(pg_temp.job(), 1200, 'tanda 1 Jan 2026 dipotong ke 400 hari (27 Apr 2026..31 Mei 2027); ruang lain mengisi malam terlewat, juga 400 hari');
 select is(tests.owner_val(null, format($$select min(on_date)::text from app.net_worth_snapshots where space_id = %L
   and computed_at = app.now()$$, :'np')), '2026-04-27', 'tanggal tertua yang dihitung = hari ini − 400');
 select is(pg_temp.dirty(), '', 'tanda dikosongkan walau lebih tua dari 400 hari');
@@ -375,6 +375,21 @@ select is(tests.owner_val(null, format($$select count(*) from app.net_worth_snap
     cross join lateral app.net_worth_at(s.space_id, s.on_date) n
     where s.space_id = %L and s.on_date in ('2026-04-27', '2026-12-31', '2027-05-31') and s.total = n.total$$, :'np')),
   '3', 'snapshot backfill = fungsi (sampel)');
+
+-- ===== Malam yang terlewat diisi ulang (worker mati beberapa malam) =====
+select tests.clock_at('2027-06-05 10:00+07');
+select is(pg_temp.job(), 12, 'tiga ruang × empat malam terlewat (1..4 Jun 2027) terisi ulang');
+select is(tests.owner_val(null, format($$select count(*) from app.net_worth_snapshots where space_id = %L
+    and on_date between '2027-06-01' and '2027-06-04'$$, :'np')), '4', 'tidak ada lubang di riwayat snapshot');
+
+-- ===== Nilai pasar dibatasi 10^13 per kode (sama dengan stock_overview/asset_overview, 0143) =====
+select pg_temp.call(tests.n(), format($$select api.open_stock_holding(gen_random_uuid(), %L, 'GOTO', 10000000000000, 1,
+  '2027-05-01')$$, :'sah'));
+select pg_temp.call(tests.n(), format($$select api.set_stock_price(gen_random_uuid(), %L, 'GOTO', '2027-06-03', 1000000000)$$,
+  :'np'));
+select is(tests.web_val(tests.n(), format($$select (n.saham_pasar >= 10000000000000)::text from api.net_worth(%L) n$$, :'np')),
+  'true', 'api.net_worth tidak galat overflow: nilai pasar kode dibatasi 10^13');
+select lives_ok($$select pg_temp.job()$$, 'jobs.net_worth_snapshot tidak galat overflow');
 
 select * from finish();
 rollback;
