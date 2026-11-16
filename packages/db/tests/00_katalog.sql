@@ -63,8 +63,9 @@ select set_eq($$
         'create_debt', 'update_debt_info', 'pay_debt', 'void_debt', 'restore_debt',
         'create_split', 'void_split', 'restore_split', 'settle_split', 'void_settlement',
         'receive_settlement', 'void_receipt', 'create_goal', 'update_goal', 'complete_goal', 'archive_goal',
-        'restore_goal', 'revalue_asset'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset S14)');
+        'restore_goal', 'revalue_asset', 'buy_stock', 'sell_stock', 'open_stock_holding', 'void_stock_trade',
+        'restore_stock_trade', 'set_stock_price'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -75,7 +76,7 @@ select set_eq($$
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
         'debt_totals', 'trading_overview', 'shared_balances', 'split_history', 'list_goals', 'goal_for_account',
-        'asset_overview'],
+        'asset_overview', 'preview_sell', 'stock_overview'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12, tujuan S13, aset S14)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -100,8 +101,9 @@ select set_eq($$
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
         'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
-        'private.tg_member_leave_guard', 'private.tg_asset_ledger', 'private.tg_stock_guard'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14');
+        'private.tg_member_leave_guard', 'private.tg_asset_ledger', 'private.tg_stock_guard',
+        'jobs.price_targets', 'jobs.price_ingest'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14 + fungsi job harga');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -395,7 +397,9 @@ select set_eq($$
                                    'restore_debt', 'create_split', 'void_split', 'restore_split',
                                    'settle_split', 'void_settlement', 'receive_settlement',
                                    'void_receipt', 'create_goal', 'update_goal', 'complete_goal',
-                                   'archive_goal', 'restore_goal', 'revalue_asset']) f
+                                   'archive_goal', 'restore_goal', 'revalue_asset', 'buy_stock',
+                                   'sell_stock', 'open_stock_holding', 'void_stock_trade',
+                                   'restore_stock_trade', 'set_stock_price']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -406,7 +410,8 @@ select set_eq($$
                       'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
                       'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
                       'debt_totals', 'trading_overview', 'shared_balances', 'split_history',
-                      'list_goals', 'goal_for_account', 'asset_overview']) f
+                      'list_goals', 'goal_for_account', 'asset_overview', 'preview_sell',
+                      'stock_overview']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -418,7 +423,11 @@ select set_eq($$
                       'lock_contact', 'insert_contact', 'debt_numbers', 'debt_effects',
                       'assert_split_space', 'patungan_account', 'split_payer_account', 'lock_split',
                       'lock_settlement', 'split_entry_ids', 'split_set_void', 'split_pair', 'lock_goal',
-                      'check_goal', 'stock_cost_removed', 'price_verdict']) f
+                      'check_goal', 'stock_cost_removed', 'price_verdict', 'stock_check',
+                      'stock_account', 'stock_cash_account', 'stock_entry', 'stock_assert_after']) f
+     union all
+     -- S14 (0143): api.preview_sell (INVOKER, dipanggil web) memakai validasi dan rumus biaya keluar yang sama.
+     select 'dompetku_web', 'private.' || f from unnest(array['stock_check', 'stock_cost_removed']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -428,7 +437,7 @@ select set_eq($$
      union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
-                      'materialize_bills', 'purge_wa_messages']) f
+                      'materialize_bills', 'purge_wa_messages', 'price_targets', 'price_ingest']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');

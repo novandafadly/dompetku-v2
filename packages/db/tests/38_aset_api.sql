@@ -82,7 +82,8 @@ create function pg_temp.ov(p_uid uuid, p_space uuid) returns text
 language sql as $$
   select tests.web_val(p_uid, format($q$select coalesce(string_agg(t.name || ':' || t.asset_kind || ':' || t.balance || ':'
       || coalesce(t.last_valued_on::text, '-') || ':' || coalesce(t.last_change::text, '-'), ',' order by t.o), '')
-      from api.asset_overview(%L) with ordinality t (account_id, name, asset_kind, balance, last_valued_on, last_change, o)$q$,
+      from api.asset_overview(%L) with ordinality t (account_id, name, asset_kind, balance, last_valued_on, last_change,
+      market_value, missing_price_count, o)$q$,
     p_space))
 $$;
 create function pg_temp.void(p_entry uuid, p_uid uuid default null) returns jsonb
@@ -354,8 +355,9 @@ select is(pg_temp.err(tests.x(), format($$select count(*) from api.asset_overvie
 select is(tests.owner_val(null, $q$select string_agg(p.parameter_name || ':' || p.data_type, ',' order by p.ordinal_position)
     from information_schema.parameters p join information_schema.routines r on r.specific_name = p.specific_name
     where r.routine_schema = 'api' and r.routine_name = 'asset_overview' and p.parameter_mode = 'OUT'$q$),
-  'account_id:uuid,name:text,asset_kind:text,balance:bigint,last_valued_on:date,last_change:bigint',
-  'kolom asset_overview (kontrak UI; market_value saham = Task 5)');
+  'account_id:uuid,name:text,asset_kind:text,balance:bigint,last_valued_on:date,last_change:bigint,market_value:bigint,'
+  || 'missing_price_count:integer',
+  'kolom asset_overview (kontrak UI; market_value dan missing_price_count dompet saham dari 0143)');
 
 -- ===== api.reconcile_balance: dompet aset ditolak (Perbarui nilai) =====
 select pg_temp.cnt() as cnt_before \gset
