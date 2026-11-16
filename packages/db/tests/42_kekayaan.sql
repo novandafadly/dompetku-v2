@@ -363,6 +363,9 @@ select tests.raw_exec(format($$insert into app.stock_prices (space_id, ticker, o
   :'np'));
 select tests.owner_exec(null, format($$insert into app.nw_dirty select s, '2026-01-01'::date from unnest(array[%L, %L, %L]::uuid[]) s
   on conflict (space_id) do update set from_date = excluded.from_date$$, :'np', :'sh', :'fp'));
+-- Statistik segar (di produksi autovacuum/analyze yang melakukannya): tanpa ini perencana menaksir tabel hampir
+-- kosong sesudah suite penuh dan memilih rencana lambat (>60 s) yang tidak mewakili produksi.
+select tests.raw_exec('analyze app.entries, app.entry_lines, app.stock_prices, app.stock_trades, app.accounts');
 select set_config('statement_timeout', '60s', true);
 select clock_timestamp() as t0 \gset
 select is(pg_temp.job(), 1200, 'backfill 400 hari × 3 ruang selesai di bawah statement_timeout 60 s');
