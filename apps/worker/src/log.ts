@@ -16,7 +16,7 @@ export interface LogFields {
   /** Nama variabel env yang tidak valid (bukan nilainya). */
   fields?: string[];
   /** price_refresh dilewati: tanpa penyedia, bursa tutup, atau harga hari ini sudah ada. */
-  reason?: 'no_provider' | 'market_closed' | 'done_today';
+  reason?: 'no_provider' | 'market_closed' | 'done_today' | 'before_close';
   /** Jumlah kode yang dipegang (tanpa kodenya) dan hasil jobs.price_ingest. */
   targets?: number;
   prices?: { ok: number; held: number; rejected: number; skipped: number };

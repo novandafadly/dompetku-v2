@@ -498,6 +498,29 @@ describe('S14: net_worth_snapshot, price_refresh (StubPriceSource), DQ08/18/19',
     expect(pings.some((p) => p.body.includes('BBCA') || p.body.includes('9875'))).toBe(false);
   });
 
+  it('price_refresh: sebelum 16:15 WIB (run terlewat/manual pagi) tidak menyimpan harga berjalan dan tidak mengunci hari itu', async () => {
+    await clearPriceRuns();
+    const src = echo(9875);
+    const before = await prices();
+    const lines: string[] = [];
+    const early = await runJob(workerAt(`${TUE} 09:05+07`), priceJob, hc(), {
+      log: (e, f) => lines.push(JSON.stringify({ e, ...f })),
+      priceSource: src,
+    });
+    expect(early).toEqual({ job: 'price_refresh', status: 'ok', rows: 0 });
+    expect(src.calls).toEqual([]);
+    expect(await prices()).toEqual(before);
+    expect(lines).toContain(
+      JSON.stringify({ e: 'price_skipped', job: 'price_refresh', reason: 'before_close' }),
+    );
+    const later = await runJob(workerAt(`${TUE} 16:30+07`), priceJob, hc(), {
+      log: quiet,
+      priceSource: src,
+    });
+    expect(later).toEqual({ job: 'price_refresh', status: 'ok', rows: 1 });
+    expect(await prices()).toEqual([{ on: TUE, close: '9875', source: 'provider', status: 'ok' }]);
+  });
+
   it('price_refresh: Sabtu dan hari di app.holidays dilewati tanpa memanggil sumber', async () => {
     await admin.query(
       "insert into app.holidays (on_date, name, kind) values ('2026-11-12', 'Uji worker', 'libur')",

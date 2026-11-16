@@ -1,3 +1,5 @@
+import { afterEach } from 'vitest';
+
 /**
  * Pagar jaringan suite tes worker (unit dan int): fetch global hanya boleh ke loopback (stub
  * Healthchecks/penyedia lokal). Panggilan ke host lain ditolak dan dicatat, jadi tes yang tanpa
@@ -15,3 +17,10 @@ globalThis.fetch = (input, init) => {
   }
   return realFetch(input, init);
 };
+
+// Tes yang tanpa sengaja memanggil host luar tidak boleh lolos hijau karena galatnya ditelan (mis. ping
+// Healthchecks): suite gagal bila ada fetch terblokir yang tidak diambil oleh tes pagar itu sendiri.
+afterEach(() => {
+  const unexpected = blockedFetches.splice(0).filter((h) => h !== 'query1.finance.yahoo.com');
+  if (unexpected.length > 0) throw new Error(`fetch_blocked_in_tests: ${unexpected.join(',')}`);
+});

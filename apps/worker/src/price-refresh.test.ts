@@ -9,6 +9,7 @@ import { runJob, type Queryable } from './run-job';
 interface DbState {
   closed?: boolean;
   done?: boolean;
+  early?: boolean;
   targets?: string[];
 }
 
@@ -18,7 +19,14 @@ function fakeDb(st: DbState = {}) {
   const query = vi.fn((sql: string, params?: unknown[]) => {
     if (sql.includes('app.today()::text as on')) {
       return Promise.resolve({
-        rows: [{ on: '2026-11-10', closed: st.closed ?? false, done: st.done ?? false }],
+        rows: [
+          {
+            on: '2026-11-10',
+            closed: st.closed ?? false,
+            done: st.done ?? false,
+            early: st.early ?? false,
+          },
+        ],
       });
     }
     if (sql.includes('jobs.price_targets()')) {
@@ -84,10 +92,11 @@ describe('refreshPrices', () => {
     expect(ingested.map((i) => (i.rows as unknown[]).length)).toEqual([100, 100, 5]);
   });
 
-  it('bursa tutup (akhir pekan / app.holidays) atau harga hari ini sudah ada → tanpa sumber', async () => {
+  it('bursa tutup (akhir pekan / app.holidays), belum 16:15 WIB, atau harga hari ini sudah ada → tanpa sumber', async () => {
     for (const [st, reason] of [
       [{ closed: true }, 'market_closed'],
       [{ done: true }, 'done_today'],
+      [{ early: true }, 'before_close'],
     ] as const) {
       const { pool, ingested } = fakeDb(st);
       const src = echo();
