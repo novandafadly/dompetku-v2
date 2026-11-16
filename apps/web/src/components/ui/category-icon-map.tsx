@@ -7,6 +7,7 @@ import { BowlFoodIcon } from './icons/bowl-food';
 import { BriefcaseIcon } from './icons/briefcase';
 import { CarSimpleIcon } from './icons/car-simple';
 import { CarrotIcon } from './icons/carrot';
+import { ChartLineUpIcon } from './icons/chart-line-up';
 import { CoffeeIcon } from './icons/coffee';
 import { DeviceMobileIcon } from './icons/device-mobile';
 import { FilmSlateIcon } from './icons/film-slate';
@@ -55,6 +56,7 @@ const BY_KIND = {
   space_transfer: ArrowsLeftRightIcon,
   debt_principal: HandCoinsIcon,
   debt_payment: HandCoinsIcon,
+  valuation: ChartLineUpIcon,
 } as const;
 
 export function categoryGlyph(name: string | undefined, kind: string | undefined): Icon {

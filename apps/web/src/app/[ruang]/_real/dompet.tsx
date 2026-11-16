@@ -6,11 +6,23 @@ import { AccountListView } from '@/features/dompet/account-list-view';
 import { ArchivedAccounts } from '@/features/dompet/archived-accounts';
 import { ModalCard } from '@/features/dompet/modal-card';
 import { waitingItems, WaitingReimburseList } from '@/features/dompet/reimburse-list';
-import type { AccountVM, ReimbursableVM, Ruang, TradingOverviewVM } from '@/features/ledger/types';
+import { AssetKindIcon } from '@/features/aset/asset-icon';
+import { ASET_COPY, ASSET_KIND_LABEL } from '@/features/aset/copy';
+import { NetWorthHero } from '@/features/dompet/net-worth-hero';
+import { MoneyText } from '@/components/ui/money-text';
+import type {
+  AccountVM,
+  AssetOverviewVM,
+  NetWorthVM,
+  ReimbursableVM,
+  Ruang,
+  TradingOverviewVM,
+} from '@/features/ledger/types';
 import { GoalLine } from '@/features/tujuan/goal-line';
 import type { GoalLineVM } from '@/features/tujuan/types';
 import { buildAccountHref, buildEntryHref, buildHref } from '@/features/shell/hrefs';
 import { PageHeader } from '@/features/shell/page-header';
+import { AddAssetHostIsland, AddAssetTriggerIsland } from './aset-islands';
 import { AddWalletHostIsland, AddWalletTriggerIsland } from './dompet-islands';
 import { RetryIsland } from './transaksi-islands';
 
@@ -30,6 +42,8 @@ export function DompetReal({
   archived,
   trading,
   goalLines = {},
+  netWorth,
+  assets = [],
 }: {
   ruang: Ruang;
   /** Query yang dibawa tautan (mode nyata: hanya `theme`), '' atau '?a=b'. */
@@ -43,6 +57,10 @@ export function DompetReal({
   trading?: TradingOverviewVM | 'error' | null;
   /** Tujuan aktif per id dompet tabungan (S13-TJ10); menggantikan baris tipe dompet itu. */
   goalLines?: Readonly<Record<string, GoalLineVM>>;
+  /** Kekayaan bersih dari `api.net_worth` (S14-NW1), atau `error` bila gagal dimuat. */
+  netWorth: NetWorthVM | 'error';
+  /** Dompet aset aktif dari `api.asset_overview`; hanya nilai pasar dompet saham yang dipakai di sini. */
+  assets?: readonly AssetOverviewVM[];
 }) {
   const accountHref = (id: string) => buildAccountHref(ruang, id, query);
   // Bersama tidak pernah menampilkan talangan, apa pun yang diterima (page juga tidak memuatnya).
@@ -59,31 +77,81 @@ export function DompetReal({
     ) : (
       <ModalCard variant="overview" figures={trading.total} />
     );
+  const names = [...accounts, ...archived].map((a) => a.name);
+  const overviewOf = (id: string) => assets.find((o) => o.accountId === id);
+  // Baris aset (S14-AS1): ikon jenis, label jenis, dan nilai; saham memakai nilai pasar dari SQL.
+  const assetSub = (a: AccountVM) => {
+    if (a.assetKind === undefined) return undefined;
+    const o = overviewOf(a.id);
+    if (a.assetKind === 'saham' && o?.marketValue !== null && o !== undefined) {
+      if ((o.missingPriceCount ?? 0) > 0)
+        return `${ASSET_KIND_LABEL.saham} · sebagian belum ada harga`;
+      return a.balance === 0 ? ASSET_KIND_LABEL.saham : `${ASSET_KIND_LABEL.saham} · nilai pasar`;
+    }
+    return ASSET_KIND_LABEL[a.assetKind];
+  };
+  const assetValue = (a: AccountVM) => {
+    if (a.assetKind === undefined) return undefined;
+    const o = overviewOf(a.id);
+    if (a.assetKind === 'saham') {
+      if (a.balance === 0) return <Muted>{ASET_COPY.noValueStock}</Muted>;
+      return o?.marketValue == null ? undefined : <MoneyText value={o.marketValue} />;
+    }
+    return a.balance === 0 ? <Muted>{ASET_COPY.noValue}</Muted> : undefined;
+  };
   return (
     <AddWalletHostIsland ruang={ruang} existingNames={accounts.map((a) => a.name)}>
-      <PageHeader title="Dompet" action={<AddWalletTriggerIsland />} />
-      <AccountListView
-        ruang={ruang}
-        accounts={accounts}
-        accountHref={accountHref}
-        renderAdd={(className) => <AddWalletTriggerIsland className={className} />}
-        above={
-          <WaitingReimburseList
-            items={waitingItems(waiting, [...accounts, ...archived], today, (id) =>
-              buildEntryHref(ruang, id, query),
-            )}
-            total={waiting.reduce((sum, r) => sum + r.remaining, 0)}
-          />
-        }
-        below={<ArchivedAccounts accounts={archived} accountHref={accountHref} />}
-        modal={modal}
-        walletSub={(a) => {
-          const line = goalLines[a.id];
-          return line === undefined ? undefined : <GoalLine goal={line} />;
-        }}
-      />
+      <AddAssetHostIsland ruang={ruang} today={today} query={query} existingNames={names}>
+        <PageHeader
+          title="Dompet"
+          action={
+            <div className="flex items-center gap-2">
+              <AddAssetTriggerIsland variant="secondary" />
+              <AddWalletTriggerIsland />
+            </div>
+          }
+        />
+        <AccountListView
+          ruang={ruang}
+          accounts={accounts}
+          accountHref={accountHref}
+          hero={
+            <NetWorthHero
+              ruang={ruang}
+              today={today}
+              netWorth={netWorth}
+              retryHref={buildHref(ruang, 'dompet', query)}
+            />
+          }
+          renderAddAsset={(className) => <AddAssetTriggerIsland className={className} />}
+          walletIcon={(a) =>
+            a.assetKind === undefined ? undefined : <AssetKindIcon kind={a.assetKind} />
+          }
+          walletValue={assetValue}
+          renderAdd={(className) => <AddWalletTriggerIsland className={className} />}
+          above={
+            <WaitingReimburseList
+              items={waitingItems(waiting, [...accounts, ...archived], today, (id) =>
+                buildEntryHref(ruang, id, query),
+              )}
+              total={waiting.reduce((sum, r) => sum + r.remaining, 0)}
+            />
+          }
+          below={<ArchivedAccounts accounts={archived} accountHref={accountHref} />}
+          modal={modal}
+          walletSub={(a) => {
+            if (a.pocket === 'aset') return assetSub(a);
+            const line = goalLines[a.id];
+            return line === undefined ? undefined : <GoalLine goal={line} />;
+          }}
+        />
+      </AddAssetHostIsland>
     </AddWalletHostIsland>
   );
+}
+
+function Muted({ children }: { children: string }) {
+  return <span className="text-label font-medium text-text-muted">{children}</span>;
 }
 
 /** Gagal muat (galat loader ditangkap page): salinan tetap + Coba lagi (`router.refresh`). */

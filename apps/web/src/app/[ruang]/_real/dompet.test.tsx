@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AccountVM, EntryVM, ReimbursableVM } from '@/features/ledger/types';
+import type { AccountVM, EntryVM, ReimbursableVM, NetWorthVM } from '@/features/ledger/types';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
 import { DompetFailed, DompetReal } from './dompet';
 import { DompetDetailFailed, DompetDetailReal } from './dompet-detail';
@@ -9,6 +9,15 @@ import { DompetDetailFailed, DompetDetailReal } from './dompet-detail';
 afterEach(cleanup);
 
 const host = vi.hoisted(() => vi.fn());
+vi.mock('./aset-islands', () => ({
+  AddAssetHostIsland: (props: { children: ReactNode }) => <div>{props.children}</div>,
+  AddAssetTriggerIsland: ({ className }: { className?: string }) => (
+    <button type="button" className={className}>
+      Tambah aset
+    </button>
+  ),
+  RevalueIsland: () => <button type="button">Perbarui nilai</button>,
+}));
 vi.mock('./dompet-islands', () => ({
   AddWalletHostIsland: (props: { children: ReactNode }) => {
     host({ ...props, children: undefined });
@@ -44,6 +53,19 @@ vi.mock('@/features/shell/page-header', () => ({
   ),
 }));
 
+const nw = (total = 1_250_000): NetWorthVM => ({
+  kas: total,
+  aset: 0,
+  sahamPasar: 0,
+  sahamTanpaHarga: 0,
+  piutang: 0,
+  utang: 0,
+  total,
+  priceAsOf: null,
+  monthAgoTotal: null,
+  monthAgoOn: null,
+});
+
 const acc = (over: Partial<AccountVM> & Pick<AccountVM, 'id' | 'name' | 'balance'>): AccountVM => ({
   pocket: 'operasional',
   walletType: 'bank',
@@ -56,6 +78,7 @@ describe('DompetReal', () => {
   it('daftar dari VM; tautan dompet membawa query tema; host menerima nama dompet', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="pribadi"
         query="?theme=light"
         today="2026-11-04"
@@ -85,6 +108,7 @@ describe('DompetReal', () => {
   it('kosong: Belum ada dompet di {Ruang}. + Tambah dompet (satu tombol)', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="bersama"
         query=""
         today="2026-11-04"
@@ -117,6 +141,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
   it('Pribadi: kartu Menunggu reimburse tepat di atas kelompok dompet, tertaut ke Detail talangan', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="pribadi"
         query="?theme=light"
         today="2026-11-04"
@@ -139,6 +164,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
   it('Bersama tidak pernah menampilkan Menunggu reimburse, bahkan bila datanya ikut terkirim', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="bersama"
         query=""
         today="2026-11-04"
@@ -154,6 +180,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
   it('dompet terarsip: kartu Diarsipkan di paling bawah, tertaut ke riwayat', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="pribadi"
         query=""
         today="2026-11-04"
@@ -174,6 +201,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
   it('semua dompet aktif kosong: kartu Menunggu reimburse tetap tampil bersama Diarsipkan', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="pribadi"
         query=""
         today="2026-11-04"
@@ -189,6 +217,7 @@ describe('DompetReal S7: Menunggu reimburse dan Diarsipkan', () => {
   it('semua dompet terarsip: salinan kosong tetap, kartu Diarsipkan tetap ada', () => {
     render(
       <DompetReal
+        netWorth={nw()}
         ruang="pribadi"
         query=""
         today="2026-11-04"

@@ -34,6 +34,8 @@ export function entryTitleVM(e: EntryVM): string {
       return 'Saldo awal';
     case 'adjustment':
       return 'Cocokkan saldo';
+    case 'valuation':
+      return 'Perubahan nilai';
     case 'transfer':
       return e.description ?? 'Pindah dompet';
     case 'reimbursement':
@@ -75,6 +77,8 @@ export function entryKindLabelVM(e: EntryVM): string {
       return 'Saldo awal';
     case 'adjustment':
       return 'Cocokkan saldo';
+    case 'valuation':
+      return 'Perubahan nilai';
     case 'transfer':
       return 'Pindah dompet';
     case 'space_transfer':
@@ -102,6 +106,7 @@ export function signedAmountVM(e: EntryVM): {
     case 'space_transfer':
     case 'debt_principal':
     case 'debt_payment':
+    case 'valuation':
       return { value: e.direction === 'in' ? e.amount : -e.amount, kind: 'neutral' };
     default:
       return { value: e.amount, kind: 'neutral' };
@@ -136,9 +141,11 @@ export function effectOnAccountVM(
         kind: 'neutral',
       };
     // S11: pokok/cicilan utang dan piutang seperti cocokkan saldo, arah dari tanda baris utama.
+    // S14: perubahan nilai aset sama (naik = in, turun = out).
     case 'adjustment':
     case 'debt_principal':
     case 'debt_payment':
+    case 'valuation':
       return { value: e.direction === 'out' ? -e.amount : e.amount, kind: 'neutral' };
     default:
       return { value: e.amount, kind: 'neutral' };

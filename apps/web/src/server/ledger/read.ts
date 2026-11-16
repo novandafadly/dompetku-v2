@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { monthYearLabel, shortDateLabel, type IsoDate, type Rupiah } from '@dompetku/domain';
 import type {
   AccountVM,
+  AssetKind,
   CategoryVM,
   EntryVM,
   HistoryVM,
@@ -91,6 +92,8 @@ const ENTRY_KINDS = new Set<EntryVM['kind']>([
   // S11: pokok utang dan cicilan (satu baris utama; arah dari tandanya).
   'debt_principal',
   'debt_payment',
+  // S14: perubahan nilai aset (satu baris utama; naik = in, turun = out).
+  'valuation',
 ]);
 
 function entryKind(kind: string): EntryVM['kind'] {
@@ -218,7 +221,12 @@ function toEntryVM(row: EntryRow): EntryVM {
   if (kind === 'space_transfer' && row.direction !== null) vm.direction = row.direction;
   // Cocokkan saldo: nominal tetap absolut, arah dari tanda baris utama (naik = in, turun = out).
   // Utang (S11): sama, uang masuk/keluar dompet dari tanda baris utama.
-  if (kind === 'adjustment' || kind === 'debt_principal' || kind === 'debt_payment') {
+  if (
+    kind === 'adjustment' ||
+    kind === 'debt_principal' ||
+    kind === 'debt_payment' ||
+    kind === 'valuation'
+  ) {
     vm.direction = row.main_in ? 'in' : 'out';
   }
   if (row.shared_note !== null) vm.sharedNote = row.shared_note;
@@ -459,6 +467,8 @@ export interface AccountRow {
   opened_on: string;
   archived: boolean;
   balance: number;
+  /** Hanya dompet `aset` (S14). */
+  asset_kind?: AssetKind | null;
 }
 
 /**
@@ -469,9 +479,10 @@ export interface AccountRow {
 export async function listAccountsTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<AccountVM[]> {
   const { rows } = await c.query<AccountRow>(
     `select a.id, a.name, a.pocket::text as pocket, a.wallet_type::text as wallet_type,
-            a.opened_on, a.archived_at is not null as archived, b.balance
+            a.opened_on, a.archived_at is not null as archived, b.balance, d.asset_kind
        from app.accounts a
        join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
+       left join app.asset_details d on d.space_id = a.space_id and d.account_id = a.id
       where a.space_id = $1 and (a.archived_at is null or b.balance <> 0)
         and a.pocket <> 'patungan'
       order by a.sort_order, a.created_at, a.id`,
@@ -489,6 +500,7 @@ export function mapAccountRow(r: AccountRow): AccountVM {
     openedOn: r.opened_on,
     archived: r.archived,
     balance: r.balance,
+    ...(r.asset_kind === undefined || r.asset_kind === null ? {} : { assetKind: r.asset_kind }),
   };
 }
 

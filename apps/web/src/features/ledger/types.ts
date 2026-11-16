@@ -6,9 +6,15 @@ export type Ruang = 'pribadi' | 'bersama';
  * `trading` (S12, hanya Pribadi) dan `patungan` (dompet sistem bagi tagihan Bersama, tidak pernah
  * tampil di daftar atau pemilih dompet: disaring `listAccountsTx`).
  */
-export type Pocket = 'operasional' | 'tabungan' | 'kantor' | 'trading' | 'patungan';
-/** Kantong yang boleh dipilih pengguna saat menambah dompet (`patungan` hanya dibuat DB). */
-export type UserPocket = Exclude<Pocket, 'patungan'>;
+export type Pocket = 'operasional' | 'tabungan' | 'kantor' | 'trading' | 'patungan' | 'aset';
+/**
+ * Kantong yang boleh dipilih pengguna saat menambah dompet (`patungan` hanya dibuat DB; `aset`
+ * punya sheet sendiri, `Tambah aset`, S14).
+ */
+export type UserPocket = Exclude<Pocket, 'patungan' | 'aset'>;
+/** Jenis aset (S14-K4); hanya `saham` berperilaku khusus (dompet trade, UI Task 10). */
+export type AssetKind =
+  'emas' | 'properti' | 'kendaraan' | 'reksa_dana' | 'deposito' | 'saham' | 'lainnya';
 export type WalletType = 'cash' | 'bank' | 'ewallet';
 
 export interface AccountVM {
@@ -19,6 +25,39 @@ export interface AccountVM {
   openedOn: IsoDate;
   archived: boolean;
   balance: Rupiah;
+  /** Hanya dompet `aset` (S14): jenis aset. */
+  assetKind?: AssetKind;
+}
+
+/**
+ * Kekayaan bersih satu ruang dari `api.net_worth` (SQL, K5); UI tidak menjumlah. Komponen 0 tidak
+ * ditampilkan. `sahamTanpaHarga` = jumlah kode saham yang dinilai sebesar biaya beli (belum ada harga).
+ */
+export interface NetWorthVM {
+  kas: Rupiah;
+  aset: Rupiah;
+  sahamPasar: Rupiah;
+  sahamTanpaHarga: number;
+  piutang: Rupiah;
+  utang: Rupiah;
+  total: Rupiah;
+  /** Tanggal harga saham tertua yang dipakai; null bila tanpa saham berharga. */
+  priceAsOf: IsoDate | null;
+  /** Snapshot sekitar 30 hari lalu (tanggalnya `monthAgoOn`); null bila belum ada. */
+  monthAgoTotal: Rupiah | null;
+  monthAgoOn: IsoDate | null;
+}
+
+/** Satu dompet aset dari `api.asset_overview` (SQL). `marketValue`/`missingPriceCount` hanya jenis saham. */
+export interface AssetOverviewVM {
+  accountId: string;
+  name: string;
+  assetKind: AssetKind;
+  balance: Rupiah;
+  lastValuedOn: IsoDate | null;
+  lastChange: Rupiah | null;
+  marketValue: Rupiah | null;
+  missingPriceCount: number | null;
 }
 
 /** Angka modal trading dari `api.trading_overview` (SQL; UI tidak menjumlah). */
@@ -67,7 +106,9 @@ export interface EntryVM {
     | 'reimbursement'
     // S11: pokok utang dan cicilan (hanya Pribadi; arah uang di `direction`).
     | 'debt_principal'
-    | 'debt_payment';
+    | 'debt_payment'
+    // S14: perubahan nilai aset (satu baris utama di dompet aset; arah dari tanda).
+    | 'valuation';
   occurredOn: IsoDate;
   createdAt: string;
   createdBy: { id: string; name: string; initial: string };
@@ -281,6 +322,12 @@ export type LedgerErrorCode =
   | 'goal_not_reached'
   | 'account_has_goal'
   | 'goal_pocket_invalid'
+  // S14: aset non-saham dan dompet saham (0140–0143; bingkai S14 "Salinan galat S14").
+  | 'asset_negative'
+  | 'asset_account_invalid'
+  | 'stock_account_trade_only'
+  | 'before_latest_entry'
+  | 'account_has_holdings'
   | 'not_found'
   | 'invalid'
   | 'network'

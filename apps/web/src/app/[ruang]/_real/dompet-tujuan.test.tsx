@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AccountVM } from '@/features/ledger/types';
+import type { AccountVM, NetWorthVM } from '@/features/ledger/types';
 import { goal } from '@/features/tujuan/__fixtures__/goal';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
 import { DompetReal } from './dompet';
@@ -10,6 +10,15 @@ import { DompetDetailReal } from './dompet-detail';
 afterEach(cleanup);
 
 const hostProps = vi.hoisted(() => vi.fn());
+vi.mock('./aset-islands', () => ({
+  AddAssetHostIsland: (props: { children: ReactNode }) => <div>{props.children}</div>,
+  AddAssetTriggerIsland: ({ className }: { className?: string }) => (
+    <button type="button" className={className}>
+      Tambah aset
+    </button>
+  ),
+  RevalueIsland: () => <button type="button">Perbarui nilai</button>,
+}));
 vi.mock('./dompet-islands', () => ({
   AddWalletHostIsland: (p: { children: ReactNode }) => <div>{p.children}</div>,
   AddWalletTriggerIsland: () => <button type="button">Tambah dompet</button>,
@@ -40,6 +49,19 @@ vi.mock('@/features/shell/page-header', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
+const nw = (total = 1_250_000): NetWorthVM => ({
+  kas: total,
+  aset: 0,
+  sahamPasar: 0,
+  sahamTanpaHarga: 0,
+  piutang: 0,
+  utang: 0,
+  total,
+  priceAsOf: null,
+  monthAgoTotal: null,
+  monthAgoOn: null,
+});
+
 const acc = (over: Partial<AccountVM> & Pick<AccountVM, 'id' | 'name' | 'balance'>): AccountVM => ({
   pocket: 'tabungan',
   walletType: 'bank',
@@ -57,6 +79,7 @@ describe('daftar Dompet: teks tujuan (S13-TJ10)', () => {
   const view = (goalLines: Record<string, { name: string; pct: number; reached: boolean }>) =>
     render(
       <DompetReal
+        netWorth={nw(4_600_000)}
         ruang="pribadi"
         query=""
         today="2026-11-04"

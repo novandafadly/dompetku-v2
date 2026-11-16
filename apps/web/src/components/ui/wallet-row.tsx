@@ -20,6 +20,7 @@ export function WalletRow({
   name,
   type,
   balance,
+  value,
 }: {
   href: Route;
   icon: ReactNode;
@@ -27,6 +28,8 @@ export function WalletRow({
   /** Baris kedua: tipe dompet (teks) atau teks tujuan (mode nyata, S13-TJ10). */
   type: ReactNode;
   balance: Rupiah;
+  /** Pengganti nominal saldo (mode nyata: aset tanpa nilai atau saham bernilai pasar, S14-AS1). */
+  value?: ReactNode;
 }) {
   return (
     <li className={rowDivider}>
@@ -47,7 +50,7 @@ export function WalletRow({
           <span className={rowSub}>{type}</span>
         </span>{' '}
         <span className="max-narrow:col-start-2 max-narrow:row-start-2 max-narrow:justify-self-start">
-          <MoneyText value={balance} />
+          {value ?? <MoneyText value={balance} />}
         </span>
         <CaretRightIcon
           size={16}
