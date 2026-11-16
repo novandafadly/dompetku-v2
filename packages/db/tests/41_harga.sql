@@ -12,7 +12,7 @@
 -- data rusak tidak menulis apa pun), retensi baris held 90 hari di jobs.purge_voided (K11).
 -- ID: T11, B24
 begin;
-select plan(80);
+select plan(82);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -256,6 +256,10 @@ select is(pg_temp.ingest('2026-03-18', '[{"ticker": "bbca", "close": 1000}, {"ti
   '{"ok": 0, "held": 0, "rejected": 16, "skipped": 0}'::jsonb,
   'data rusak (kode tidak sah, harga string/negatif/nol/raksasa/pecahan, kode ganda, bukan objek) ditolak semua [T11]');
 select is(pg_temp.cnt(), :'cnt_before', 'data rusak tidak menulis baris apa pun');
+select is(pg_temp.ingest('2026-03-18', '[{"ticker": "BBCA", "close": 1300}, {"ticker": "BBCA", "close": "9999"}]')::jsonb,
+  '{"ok": 0, "held": 0, "rejected": 2, "skipped": 0}'::jsonb,
+  'kode ganda ditolak semua walau salah satu kemunculan harganya tidak sah');
+select is(pg_temp.cnt(), :'cnt_before', 'kode ganda tidak menulis baris apa pun');
 create function pg_temp.ierr(p_on text, p_rows text) returns text
 language plpgsql as $$
 declare v_s text; v_m text; v_d text;
@@ -283,12 +287,15 @@ select throws_ok($$select tests.api_val(tests.n(), $q$select jobs.price_ingest('
 select is(tests.owner_val(null, 'select count(*) from private.stock_ctx'), '0', 'tanpa konteks trade tersisa');
 
 -- ===== Retensi baris held 90 hari (K11, jobs.purge_voided) =====
-select pg_temp.price(tests.n(), :'np', 'BBCA', '2025-12-01', 900, 'held');
+-- Batas: hari ini 2026-03-20, today - 90 = 2025-12-20 (tetap), today - 91 = 2025-12-19 (dihapus).
+select pg_temp.price(tests.n(), :'np', 'BBCA', '2025-12-19', 900, 'held');
+select pg_temp.price(tests.n(), :'np', 'BBCA', '2025-12-20', 900, 'held');
 select is(tests.owner_val(null, $$select count(*) filter (where status = 'held') || '/' || count(*) filter (where status = 'ok')
-    from app.stock_prices$$), '2/9', 'sebelum purge: dua baris held');
+    from app.stock_prices$$), '3/9', 'sebelum purge: tiga baris held');
 select tests.worker_val(null, 'select jobs.purge_voided()');
-select is(tests.owner_val(null, $$select count(*) filter (where status = 'held') || '/' || count(*) filter (where status = 'ok')
-    from app.stock_prices$$), '1/9', 'held > 90 hari dihapus; held baru dan semua harga ok tetap');
+select is(tests.owner_val(null, $$select string_agg(on_date::text, ',' order by on_date) || '/'
+    || (select count(*) filter (where status = 'ok') from app.stock_prices) from app.stock_prices where status = 'held'$$),
+  '2025-12-20,2026-03-19/9', 'held > 90 hari dihapus (tepat 91 hari), tepat 90 hari dan held baru tetap; harga ok tetap');
 
 select * from finish();
 rollback;

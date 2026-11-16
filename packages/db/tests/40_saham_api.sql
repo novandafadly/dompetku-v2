@@ -11,7 +11,7 @@
 -- Jam dipatok 2026-03-20 WIB (Jumat, cuti bersama; 18-20 Mar bukan hari bursa).
 -- ID: T11, T10, I6, B24
 begin;
-select plan(130);
+select plan(132);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -502,6 +502,38 @@ select is(tests.web_val(tests.n(), format($q$select string_agg(name || ':' || as
     market_value, missing_price_count, o)$q$, :'np')),
   'Emas:emas:1000000:-:-,Sekuritas:saham:3322761:3300000:1,Sekuritas Dua:saham:0:0:0',
   'asset_overview: dompet saham membawa nilai pasar dan jumlah kode tanpa harga (ruling Task 1)');
+-- Kode yang sudah dijual habis tidak membuat label "Ada harga lama" atau "harga tertahan" (price_targets tidak lagi
+-- memperbarui harganya): stale/held_pending hanya untuk lembar > 0.
+savepoint s;
+select pg_temp.asset(tests.n(), :'np', 'Sekuritas Empat', 'saham') as sek4 \gset
+select pg_temp.call(tests.n(), pg_temp.buy_sql(:'sek4', 'ASII', 10, 1000, 0, :'rdn', '2026-03-02'));
+select tests.web_exec(tests.n(), format($$select api.set_stock_price(gen_random_uuid(), %L, 'ASII', '2026-03-02', 1000)$$, :'np'));
+select tests.worker_val(null, $$select jobs.price_ingest('2026-03-03', '[{"ticker": "ASII", "close": 5000}]')$$);
+select pg_temp.call(tests.n(), pg_temp.sell_sql(:'sek4', 'ASII', 10, 1000, 0, 0, :'rdn', '2026-03-03'));
+select pg_temp.call(tests.n(), pg_temp.buy_sql(:'sek4', 'BMRI', 10, 6000, 0, :'rdn', '2026-03-17'));
+select tests.web_exec(tests.n(), format($$select api.set_stock_price(gen_random_uuid(), %L, 'BMRI', '2026-03-17', 6000)$$, :'np'));
+select is(tests.web_val(tests.n(), format($q$select string_agg(coalesce(ticker, 'TOTAL') || ':' || coalesce(shares::text, '-') || ':' || stale || ':'
+    || held_pending, ' ' order by o) from api.stock_overview(%L) with ordinality t (holding_id, ticker, shares, cost_total,
+    avg_cost, close, close_on, stale, held_pending, held_on, market_value, unrealized, realized, last_trade_id,
+    last_trade_side, last_trade_shares, last_trade_price, last_trade_on, missing_price_count, o)$q$, :'sek4')),
+  'BMRI:10:false:false ASII:0:false:false TOTAL:-:false:false',
+  'kode berlembar 0 berharga lama dan held: stale/held_pending false, total ikut false');
+rollback to savepoint s;
+-- Nilai pasar ekstrem (10^13 lembar x 10^6) tidak overflow bigint: dibatasi 10^13 (batas nominal proyek).
+savepoint s;
+select pg_temp.asset(tests.n(), :'np', 'Sekuritas Raksasa', 'saham') as sekx \gset
+select pg_temp.call(tests.n(), pg_temp.open_sql(:'sekx', 'GOTO', 10000000000000, 1, '2026-03-02'));
+select tests.web_exec(tests.n(), format($$select api.set_stock_price(gen_random_uuid(), %L, 'GOTO', '2026-03-17', 1000000,
+  true)$$, :'np'));
+select is(tests.web_val(tests.n(), format($q$select string_agg(coalesce(ticker, 'TOTAL') || ':' || market_value || ':'
+    || unrealized, ' ' order by o) from api.stock_overview(%L) with ordinality t (holding_id, ticker, shares, cost_total,
+    avg_cost, close, close_on, stale, held_pending, held_on, market_value, unrealized, realized, last_trade_id,
+    last_trade_side, last_trade_shares, last_trade_price, last_trade_on, missing_price_count, o)$q$, :'sekx'))
+    || ' ' || tests.web_val(tests.n(), format($q$select market_value from api.asset_overview(%L) where account_id = %L$q$,
+    :'np', :'sekx')),
+  'GOTO:10000000000000:0 TOTAL:10000000000000:0 10000000000000',
+  'nilai pasar ekstrem dibatasi 10^13 di stock_overview dan asset_overview (tanpa bigint out of range)');
+rollback to savepoint s;
 
 -- ===== api.archive_account (K11) =====
 select is(pg_temp.err(tests.n(), format($$select api.archive_account(%L)$$, :'sek')), 'DK422:account_has_holdings:',

@@ -43,8 +43,9 @@
 -- - Job (DEFINER milik owner, EXECUTE hanya dompetku_worker): jobs.price_targets() = kode unik berlembar > 0 di
 --   dompet aktif semua ruang, tanpa ruang/lembar/pemegang; jobs.price_ingest(p_on, p_rows) memvalidasi ulang di
 --   SQL (tanggal 2000-01-01..hari ini, larik <= 100 elemen, objek {ticker ^[A-Z]{4}$ string, close angka bulat
---   1..10^9}, kode ganda ditolak semua), menulis per ruang pemegang lewat price_verdict (ok/held), tidak menimpa
---   harga manual tanggal itu (skipped), dan hanya mengembalikan jumlah {ok, held, rejected, skipped}.
+--   1..10^9}, kode yang muncul > 1 kali ditolak semua kemunculannya apa pun harganya), menulis per ruang pemegang
+--   lewat price_verdict (ok/held), tidak menimpa harga manual tanggal itu (skipped), dan hanya mengembalikan jumlah
+--   {ok, held, rejected, skipped}.
 -- - api.archive_account: dompet dengan lembar > 0 = DK422 account_has_holdings (sebelum tujuan dan saldo).
 -- - jobs.purge_voided (K11): dalam konteks stock_ctx, entri trade batal > 90 hari ikut lintasan entri, lalu trade
 --   batal tanpa entri dihapus; baris harga held bertanggal > 90 hari dihapus.
@@ -580,29 +581,36 @@ begin
      where p.account_id = p_account_id
   ), v as (
     select h.*,
-           case when h.shares > 0 then coalesce(h.shares * h.close, h.cost_total) else 0 end::bigint as mv,
+           case when h.shares > 0 then coalesce(h.px, h.cost_total) else 0 end::bigint as mv,
            case when h.close is not null then
-             (case when h.shares > 0 then h.shares * h.close else 0 end - h.cost_total) end::bigint as unr,
-           -- Lebih dari 3 hari bursa (Senin-Jumat di luar app.holidays) sesudah tanggal harga.
-           case when h.close is not null then
+             (case when h.shares > 0 then h.px else 0 end - h.cost_total) end::bigint as unr,
+           -- Lebih dari 3 hari bursa (Senin-Jumat di luar app.holidays) sesudah tanggal harga. Kode berlembar 0 tidak
+           -- usang dan tidak tertahan: price_targets tidak lagi memperbarui harganya (review 0143 P1).
+           case when h.shares = 0 then false when h.close is not null then
              (select count(*) from pg_catalog.generate_series((h.close_on + 1)::timestamp, app.today()::timestamp,
                                                                interval '1 day') d
                where extract(isodow from d) < 6
                  and not exists (select 1 from app.holidays x where x.on_date = d::date)) > 3 end as stl,
+           (h.shares > 0 and h.held_on is not null) as hp,
            (h.shares > 0 and h.close is null)::int as miss
-      from h
+      -- Nilai pasar dihitung numeric lalu dibatasi 10^13 (batas nominal proyek, check_amount): lembar x harga bisa
+      -- melewati bigint (10^13 lembar x 10^6). Angka sebesar itu tidak realistis; batas menjaga Dompet tetap
+      -- termuat. api.net_worth (Task 6) wajib memakai pola yang sama.
+      -- least() mengabaikan NULL, jadi tanpa harga dijaga eksplisit.
+      from (select h.*, case when h.close is not null then least(h.shares::numeric * h.close, 10000000000000) end as px
+              from h) h
   )
   select x.holding_id, x.ticker, x.shares, x.cost_total, x.avg_cost, x.close, x.close_on, x.stale, x.held_pending,
          x.held_on, x.market_value, x.unrealized, x.realized, x.lt_id, x.lt_side, x.lt_shares, x.lt_price, x.lt_on,
          x.miss
     from (
       select v.holding_id, v.ticker, v.shares, v.cost_total, v.avg_cost, v.close, v.close_on, v.stl as stale,
-             v.held_on is not null as held_pending, v.held_on, v.mv as market_value, v.unr as unrealized, v.realized,
+             v.hp as held_pending, v.held_on, v.mv as market_value, v.unr as unrealized, v.realized,
              v.lt_id, v.lt_side, v.lt_shares, v.lt_price, v.lt_on, v.miss, 0 as grp
         from v
       union all
       select null, null, null, coalesce(sum(v.cost_total), 0)::bigint, null, null, null,
-             coalesce(bool_or(v.stl), false), coalesce(bool_or(v.held_on is not null), false), null,
+             coalesce(bool_or(v.stl), false), coalesce(bool_or(v.hp), false), null,
              coalesce(sum(v.mv), 0)::bigint, sum(v.unr)::bigint, coalesce(sum(v.realized), 0)::bigint,
              null, null, null, null, null, coalesce(sum(v.miss), 0)::int, 1
         from v
@@ -632,9 +640,11 @@ begin
        limit 1
     ) v on true
     -- Dompet saham: Σ nilai pasar posisi terbuka (tanpa harga = biaya perolehan) dan jumlah kode tanpa harga.
+    -- Per kode numeric dibatasi 10^13 seperti api.stock_overview (tanpa bigint out of range).
     left join lateral (
-      select coalesce(sum(case when p.shares > 0 then coalesce(p.shares * pr.close, p.cost_total) else 0 end), 0)::bigint
-               as mv,
+      select coalesce(sum(case when p.shares > 0 then coalesce(
+                 case when pr.close is not null then least(p.shares::numeric * pr.close, 10000000000000) end,
+                 p.cost_total) else 0 end), 0)::bigint as mv,
              count(*) filter (where p.shares > 0 and pr.close is null)::int as miss
         from app.stock_positions p
         left join lateral app.stock_last_close(p.space_id, p.ticker, app.today()) pr on true
@@ -706,12 +716,13 @@ begin
         from jsonb_array_elements(p_rows) x (v)
        where jsonb_typeof(x.v) = 'object'
     ), uniq as (
-      -- Kode ganda dalam satu run ambigu: semua barisnya ditolak.
+      -- Kode ganda dalam satu run ambigu: semua kemunculannya ditolak, apa pun harganya (dihitung sebelum validasi
+      -- harga, review 0143 K3).
       select p.ticker, min(p.close)::bigint as close
         from parsed p
-       where p.ticker is not null and p.close = trunc(p.close) and p.close between 1 and 1000000000
+       where p.ticker is not null
        group by p.ticker
-      having count(*) = 1
+      having count(*) = 1 and bool_and(p.close = trunc(p.close) and p.close between 1 and 1000000000)
     )
     select u.ticker, u.close, s.space_id
       from uniq u
