@@ -26,6 +26,9 @@
 --   nilai, supaya penyesuaian aset selalu x_valuasi); selebihnya = 0103.
 -- - Ubah nilai awal (api.update_entry pada opening_balance dompet aset) dan arsip (api.archive_account,
 --   saldo harus 0) tidak berubah: penjaga 0140 menolak nilai awal yang membuat aset negatif.
+-- Tanggal valuasi tidak boleh sebelum entri hidup terakhir di dompet itu (DK422 before_latest_entry; hasil review
+-- independen P1: saldo per tanggal tidak pernah negatif lewat valuasi mundur). Setoran/tarik bertanggal mundur
+-- lewat transfer tetap mengikuti dompet biasa (hanya saldo sekarang dijaga; ruling).
 -- Urutan kunci revalue_asset: dompet (FOR NO KEY UPDATE) lalu sisipan entri; sama dengan create_transfer,
 -- jadi transfer keluar dan Perbarui nilai pada dompet yang sama diserialkan (99_konkurensi).
 -- Kode galat baru: DK400 asset_kind_invalid; DK422 stock_account_trade_only (dipakai ulang 0142+), sisanya
@@ -145,6 +148,12 @@ begin
   end if;
   if v_on < v_acc.opened_on then
     raise exception using errcode = 'DK422', message = 'before_opening';
+  end if;
+  -- Nilai sekarang vs saldo total: tanggal valuasi tidak boleh mendahului entri hidup lain di dompet ini,
+  -- kalau tidak saldo per tanggal itu bisa negatif dan "nilainya X pada tanggal itu" salah makna.
+  if exists (select 1 from app.entry_lines l join app.entries e on e.id = l.entry_id
+              where l.account_id = v_acc.id and e.voided_at is null and e.occurred_on > v_on) then
+    raise exception using errcode = 'DK422', message = 'before_latest_entry', detail = 'occurred_on';
   end if;
   v_diff := p_value - private.balance(v_acc.id);
   if v_diff <> 0 then

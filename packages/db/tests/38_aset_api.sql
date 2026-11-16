@@ -12,7 +12,7 @@
 -- di 99_konkurensi. Jam dipatok 2026-03-20 WIB.
 -- ID: T11, S5, I6, B23
 begin;
-select plan(107);
+select plan(109);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -253,16 +253,22 @@ select is(tests.owner_val(null, format($q$select e.kind || ':' || e.occurred_on 
   'valuation:2026-03-20:personal:1:true:main=500000@true:1:x_valuasi',
   'satu entri valuation hari ini (WIB): satu line main di dompet aset, riwayat, kelas x_valuasi');
 select is(pg_temp.st(:'emas'), '2500000/1', 'nilai aset = nilai baru');
-select pg_temp.rv(tests.n(), :'emas', 2200000, '2026-03-10') as r_down \gset
+select pg_temp.rv(tests.n(), :'emas', 2200000, '2026-03-20') as r_down \gset
+-- created_at identik dalam satu transaksi tes: dibedakan supaya "valuasi terakhir" tidak bergantung urutan id.
+select tests.owner_exec(null, format($q$update app.entries set created_at = created_at + interval '1 minute' where id = %L$q$,
+  :'r_down'::jsonb ->> 'entry_id'));
 select is((:'r_down'::jsonb ->> 'delta') || ':' || tests.owner_val(null, format($q$select occurred_on from app.entries where id = %L$q$,
-    :'r_down'::jsonb ->> 'entry_id')), '-300000:2026-03-10', 'nilai turun dengan tanggal lampau (p_on)');
+    :'r_down'::jsonb ->> 'entry_id')), '-300000:2026-03-20', 'nilai turun bertanggal p_on (sama dengan entri terakhir boleh)');
+select is(pg_temp.err(tests.n(), pg_temp.rv_sql(:'emas', 2000000, '2026-03-10')), 'DK422:before_latest_entry:occurred_on',
+  'valuasi bertanggal sebelum entri hidup terakhir ditolak (saldo per tanggal tidak negatif)');
+select is(pg_temp.st(:'emas'), '2200000/2', 'penolakan valuasi mundur nol efek');
 select is(pg_temp.st(:'emas'), '2200000/2', 'nilai aset turun');
 select is(pg_temp.rv(tests.n(), :'emas', 2200000), '{"delta": 0, "version": 1, "entry_id": null, "replayed": false, "unchanged": true, "warnings": []}'::jsonb,
   'nilai sama = tidak menulis (sukses, unchanged)');
 select is(pg_temp.st(:'emas'), '2200000/2', 'nilai sama tidak menambah entri');
 savepoint s;
-select is(pg_temp.rv(tests.n(), :'emas', 0, '2026-02-01') ->> 'delta', '-2200000',
-  'nilai 0 boleh (aset tidak bernilai), tanggal = tanggal mulai dompet boleh');
+select is(pg_temp.rv(tests.n(), :'emas', 0, '2026-03-20') ->> 'delta', '-2200000',
+  'nilai 0 boleh (aset tidak bernilai)');
 select is(pg_temp.st(:'emas'), '0/3', 'nilai aset 0');
 select is(pg_temp.rv(tests.n(), :'emas', 10000000000000) ->> 'delta', '10000000000000', 'nilai 10^13 (batas atas) diterima');
 rollback to savepoint s;
@@ -329,15 +335,15 @@ select is(pg_temp.cnt() || ' ' || pg_temp.st(:'emas'), :'cnt_before' || ' 220000
 -- ===== api.asset_overview =====
 select tests.owner_exec(null, format($q$update app.accounts set sort_order = case id when %L then 2 else 1 end
   where id in (%L, %L)$q$, :'emas', :'emas', :'saham'));
-select is(pg_temp.ov(tests.n(), :'np'), 'Ajaib:saham:0:-:-,Emas Antam:emas:2200000:2026-03-20:500000',
+select is(pg_temp.ov(tests.n(), :'np'), 'Ajaib:saham:0:-:-,Emas Antam:emas:2200000:2026-03-20:-300000',
   'ringkasan Pribadi: hanya dompet aset aktif (tanpa terarsip), urut sort_order; valuasi terakhir hidup');
 select is(pg_temp.ov(tests.n(), :'sh') = pg_temp.ov(tests.f(), :'sh'), true, 'kedua anggota melihat ringkasan Bersama yang sama (K2)');
 select is(pg_temp.ov(tests.f(), :'sh') like '%Motor Bersama:kendaraan:14000000:2026-03-20:-1000000%'
     and pg_temp.ov(tests.f(), :'sh') like '%Rumah:properti:900000000:2026-03-20:900000000%', true,
   'ringkasan Bersama memuat aset kedua anggota');
 select pg_temp.void((:'r_up'::jsonb ->> 'entry_id')::uuid);
-select is(pg_temp.ov(tests.n(), :'np'), 'Ajaib:saham:0:-:-,Emas Antam:emas:1700000:2026-03-10:-300000',
-  'valuasi batal tidak dihitung: valuasi hidup terakhir = turun 10 Mar');
+select is(pg_temp.ov(tests.n(), :'np'), 'Ajaib:saham:0:-:-,Emas Antam:emas:1700000:2026-03-20:-300000',
+  'valuasi batal tidak dihitung: valuasi hidup terakhir = turun 20 Mar');
 select pg_temp.restore((:'r_up'::jsonb ->> 'entry_id')::uuid);
 select is(tests.web_val(tests.f(), format($$select count(*) from api.asset_overview(%L)$$, :'fp')), '0',
   'ruang tanpa aset = tanpa baris');
@@ -436,8 +442,8 @@ select tests.web_exec(tests.n(), format($$select api.set_budget(%L, %L, '2026-03
 select pg_temp.i6() as i6_before \gset
 select tests.web_val(tests.n(), format($$select string_agg(report_class || ':' || direction || ':' || amount, ',' order by direction)
   from api.excluded_summary(%L, '2026-03-01', '2026-03-31') where report_class = 'x_valuasi'$$, :'np')) as exc_before \gset
-select pg_temp.rv(tests.n(), :'s5', 800000, '2026-03-18');
-select pg_temp.rv(tests.n(), :'s5', 700000, '2026-03-19');
+select pg_temp.rv(tests.n(), :'s5', 800000, '2026-03-20');
+select pg_temp.rv(tests.n(), :'s5', 700000, '2026-03-20');
 select is(pg_temp.i6(), :'i6_before',
   'revalue_asset naik/turun tidak mengubah kategori, anggaran, Σ pemasukan/pengeluaran, period_summary, aman dipakai, Ekspor [I6]');
 select isnt(tests.web_val(tests.n(), format($$select string_agg(report_class || ':' || direction || ':' || amount, ',' order by direction)
