@@ -8,7 +8,7 @@ import { ModalCard } from '@/features/dompet/modal-card';
 import { waitingItems, WaitingReimburseList } from '@/features/dompet/reimburse-list';
 import { AssetKindIcon } from '@/features/aset/asset-icon';
 import { ASET_COPY, ASSET_KIND_LABEL } from '@/features/aset/copy';
-import { NetWorthHero } from '@/features/dompet/net-worth-hero';
+import { NetWorthHero } from './net-worth-hero';
 import { MoneyText } from '@/components/ui/money-text';
 import type {
   AccountVM,
