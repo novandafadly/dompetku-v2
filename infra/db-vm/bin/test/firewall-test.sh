@@ -83,14 +83,22 @@ HOST="-s $SUBNET -m conntrack --ctstate NEW -m comment --comment dompetku-wa-hos
 # keduanya terisolasi (tanpa alamat host); DROP INPUT dari subnet itu lapis kedua.
 WA_SUBNET=$(awk '/^  wa:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
 WA_WEB_SUBNET=$(awk '/^  wa_web:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
-host_rule() { echo "-s $1 -m conntrack --ctstate NEW -m comment --comment dompetku-wa-host -j DROP"; }
-WANT_CHAIN="-d 169.254.169.254 -p udp --dport 53 -m comment --comment dompetku-wa-dns -j RETURN
--d 169.254.169.254 -p tcp --dport 53 -m comment --comment dompetku-wa-dns -j RETURN
--d 169.254.0.0/16 -m comment --comment dompetku-wa-egress -j DROP
--d 10.0.0.0/8 -m comment --comment dompetku-wa-egress -j DROP
--d 172.16.0.0/12 -m comment --comment dompetku-wa-egress -j DROP
--d 192.168.0.0/16 -m comment --comment dompetku-wa-egress -j DROP
--d 100.64.0.0/10 -m comment --comment dompetku-wa-egress -j DROP"
+host_rule() { echo "-s $1 -m conntrack --ctstate NEW -m comment --comment dompetku-${2:-wa}-host -j DROP"; }
+want_chain() { # want_chain <tag>: DNS resolver VCN RETURN dulu, lalu DROP IMDS/VCN/privat/CGNAT
+  echo "-d 169.254.169.254 -p udp --dport 53 -m comment --comment dompetku-$1-dns -j RETURN
+-d 169.254.169.254 -p tcp --dport 53 -m comment --comment dompetku-$1-dns -j RETURN
+-d 169.254.0.0/16 -m comment --comment dompetku-$1-egress -j DROP
+-d 10.0.0.0/8 -m comment --comment dompetku-$1-egress -j DROP
+-d 172.16.0.0/12 -m comment --comment dompetku-$1-egress -j DROP
+-d 192.168.0.0/16 -m comment --comment dompetku-$1-egress -j DROP
+-d 100.64.0.0/10 -m comment --comment dompetku-$1-egress -j DROP"
+}
+WANT_CHAIN=$(want_chain wa)
+# Worker (S14): network worker_egress, subnet dari compose.yml.
+W_SUBNET=$(awk '/^  worker_egress:/ { f = 1 } f && /subnet:/ { print $NF; exit }' "$COMPOSE")
+W_JUMP="-s $W_SUBNET -m conntrack --ctstate NEW -m comment --comment dompetku-worker-egress -j DOMPETKU-WORKER-EGRESS"
+W_HOST=$(host_rule "$W_SUBNET" worker)
+WANT_W_CHAIN=$(want_chain worker)
 
 [[ $SUBNET == 172.16.27.0/24 ]] || fail "subnet wa_egress di compose.yml '$SUBNET', harapan 172.16.27.0/24"
 grep -Fx "WA_EGRESS=$SUBNET" "$TOOL" >/dev/null || fail "WA_EGRESS di firewall.sh tidak sama dengan compose.yml ($SUBNET)"
@@ -114,18 +122,33 @@ for net in wa wa_web wa_egress; do
 done
 ok 'compose.yml: gateway wa/wa_web terisolasi, wa/wa_web/wa_egress tanpa IPv6'
 
+[[ $W_SUBNET == 172.16.29.0/24 ]] || fail "subnet worker_egress di compose.yml '$W_SUBNET', harapan 172.16.29.0/24"
+grep -Fx "WORKER_EGRESS=$W_SUBNET" "$TOOL" >/dev/null ||
+  fail "WORKER_EGRESS di firewall.sh tidak sama dengan compose.yml ($W_SUBNET)"
+awk '$0 == "  worker_egress:" { f = 1; next } f && /^  [a-z_]+:/ { exit } f' "$COMPOSE" >"$W/net"
+grep -Fx '    enable_ipv6: false' "$W/net" >/dev/null || fail 'network worker_egress tanpa enable_ipv6: false'
+# Subnet worker_egress tidak boleh bertabrakan dengan subnet dipatok lain di compose.yml.
+[[ $(grep -cF -- "- subnet: $W_SUBNET" "$COMPOSE") == 1 ]] || fail "subnet $W_SUBNET dipakai lebih dari satu network"
+ok 'subnet worker_egress firewall.sh = compose.yml, unik, tanpa IPv6'
+
 # --- up dari keadaan bersih.
 reset
 fw up || fail "up: kode $?"
 [[ $(count DOCKER-USER 'dompetku-gw -j DROP') == 2 ]] || fail 'up: aturan gw bukan 2'
 [[ $(chain_rules DOCKER-USER | grep -cFx -- "$JUMP") == 1 ]] || fail 'up: lompatan wa_egress bukan tepat 1'
 [[ $(chain_rules DOCKER-USER | tail -n 1) == '-j RETURN' ]] || fail 'up: aturan DompetKu tidak sebelum RETURN Docker'
-for src in "$SUBNET" "$WA_SUBNET" "$WA_WEB_SUBNET"; do
-  [[ $(chain_rules INPUT | head -n 3 | grep -cFx -- "$(host_rule "$src")") == 1 ]] ||
-    fail "up: DROP INPUT dari $src bukan tepat 1 di tiga aturan pertama (sebelum ACCEPT 10.0.0.0/16)"
+for rule in "$(host_rule "$SUBNET")" "$(host_rule "$WA_SUBNET")" "$(host_rule "$WA_WEB_SUBNET")" "$W_HOST"; do
+  [[ $(chain_rules INPUT | head -n 4 | grep -cFx -- "$rule") == 1 ]] ||
+    fail "up: '$rule' bukan tepat 1 di empat aturan pertama INPUT (sebelum ACCEPT 10.0.0.0/16)"
 done
 [[ $(chain_rules DOMPETKU-WA-EGRESS) == "$WANT_CHAIN" ]] || fail 'up: isi rantai egress (DNS RETURN dulu, lalu DROP) salah'
-ok 'up: gw, lompatan egress sebelum RETURN Docker, DROP INPUT (wa_egress, wa, wa_web) pertama, DNS sebelum DROP'
+ok 'up: gw, lompatan egress sebelum RETURN Docker, DROP INPUT (wa_egress, wa, wa_web, worker_egress) pertama, DNS sebelum DROP'
+
+[[ $(chain_rules DOCKER-USER | grep -cFx -- "$W_JUMP") == 1 ]] || fail 'up: lompatan worker_egress bukan tepat 1'
+[[ $(chain_rules DOMPETKU-WORKER-EGRESS) == "$WANT_W_CHAIN" ]] || fail 'up: isi rantai egress worker salah'
+# Hanya koneksi dari worker_egress yang dilompatkan: postgres lewat worker_db tidak tersentuh.
+grep -F -- '172.16.25.' "$SIM/rules" >/dev/null && fail 'up: aturan menyentuh subnet worker_db'
+ok 'up: worker_egress melompat ke DOMPETKU-WORKER-EGRESS (IMDS, VCN, privat, CGNAT di-DROP; DNS VCN boleh)'
 
 # --- idempoten.
 cp "$SIM/rules" "$W/after1"
@@ -135,9 +158,11 @@ ok 'up dua kali = aturan sama'
 
 # --- rantai basi (aturan tambahan/urutan lama) dibangun ulang.
 echo 'DOMPETKU-WA-EGRESS -j ACCEPT' >>"$SIM/rules"
+echo 'DOMPETKU-WORKER-EGRESS -j ACCEPT' >>"$SIM/rules"
 fw up || fail 'up di atas rantai basi gagal'
 [[ $(chain_rules DOMPETKU-WA-EGRESS) == "$WANT_CHAIN" ]] || fail 'up tidak membangun ulang rantai basi'
-ok 'up membangun ulang isi rantai egress'
+[[ $(chain_rules DOMPETKU-WORKER-EGRESS) == "$WANT_W_CHAIN" ]] || fail 'up tidak membangun ulang rantai worker basi'
+ok 'up membangun ulang isi rantai egress (wa dan worker)'
 
 # --- aturan milik pihak lain tidak tersentuh, down mengembalikan keadaan awal.
 for line in 'INPUT -s 10.0.0.0/16 -j ACCEPT' 'INPUT -j REJECT' 'DOCKER-USER -j RETURN'; do
@@ -146,6 +171,7 @@ done
 fw down || fail "down: kode $?"
 diff -u "$SIM/foreign" "$SIM/rules" >/dev/null || fail 'down tidak mengembalikan aturan ke keadaan awal'
 grep -Fx DOMPETKU-WA-EGRESS "$SIM/chains" >/dev/null && fail 'down: rantai DOMPETKU-WA-EGRESS masih ada'
+grep -Fx DOMPETKU-WORKER-EGRESS "$SIM/chains" >/dev/null && fail 'down: rantai DOMPETKU-WORKER-EGRESS masih ada'
 ok 'down: semua aturan DompetKu dan rantai egress hilang, aturan lain utuh'
 
 fw down || fail 'down kedua gagal'
@@ -158,6 +184,8 @@ fw up
   echo "DOCKER-USER $JUMP"
   echo "INPUT $HOST"
   echo "INPUT $(host_rule "$WA_SUBNET")"
+  echo "DOCKER-USER $W_JUMP"
+  echo "INPUT $W_HOST"
 } >>"$SIM/rules"
 fw down || fail 'down dengan duplikat gagal'
 diff -u "$SIM/foreign" "$SIM/rules" >/dev/null || fail 'down meninggalkan duplikat'

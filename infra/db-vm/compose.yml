@@ -129,7 +129,8 @@ services:
       - path: ./env/worker.env
         required: false
     # worker_db: ke postgres saja (pg_hba: dompetku_worker hanya dari subnet ini). worker_egress:
-    # egress untuk Healthchecks (tidak difilter). Worker tidak berbagi network dengan gw/web: worker
+    # egress untuk Healthchecks dan penyedia harga saham (S14); ke IMDS/privat/host di-DROP
+    # firewall.sh (rantai DOMPETKU-WORKER-EGRESS). Worker tidak berbagi network dengan gw/web: worker
     # yang disusupi tidak bisa memanggil web:3000 langsung (melewati gw, memalsukan X-Forwarded-For).
     networks: [worker_db, worker_egress]
     read_only: true
@@ -265,7 +266,7 @@ services:
     pids_limit: 50
 
 networks:
-  # gw <-> web (web butuh egress untuk Resend dan harga saham).
+  # gw <-> web (web butuh egress untuk Resend; harga saham diambil worker lewat worker_egress).
   app: {}
   # web/migrate <-> postgres, tanpa akses keluar dan tanpa port host. Subnet dipatok untuk pg_hba.
   internal:
@@ -275,7 +276,7 @@ networks:
         - subnet: 172.24.0.0/16
   # worker <-> postgres saja (S7), tanpa akses keluar. Subnet dipatok untuk pg_hba, sengaja di luar
   # pool bawaan Docker (172.17-31.0.0/16, 192.168.0.0/16): network tanpa subnet dipatok (app, egress,
-  # worker_egress, project lain di VM) mengambil dari pool itu dan bisa menabrak subnet dipatok.
+  # project lain di VM) mengambil dari pool itu dan bisa menabrak subnet dipatok.
   worker_db:
     internal: true
     ipam:
@@ -283,9 +284,16 @@ networks:
         - subnet: 172.16.25.0/24
   # Hanya postgres: keluar ke OCI Object Storage untuk WAL-G.
   egress: {}
-  # Hanya worker: egress untuk ping Healthchecks.io (tidak difilter). Terpisah dari app (gw/web) dan
-  # egress (postgres).
-  worker_egress: {}
+  # Hanya worker: egress untuk ping Healthchecks.io dan penyedia harga saham (S14, TCP 443; tidak
+  # difilter per host). Subnet dipatok di luar pool bawaan Docker (alasan sama dengan worker_db)
+  # untuk firewall.sh: koneksi baru dari subnet ini ke IMDS/link-local (kecuali DNS resolver VCN),
+  # VCN, jaringan privat lain, CGNAT, dan ke alamat host sendiri (INPUT) di-DROP. Terpisah dari app
+  # (gw/web) dan egress (postgres). IPv4 saja (aturan hanya iptables), apa pun isi daemon.json.
+  worker_egress:
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.16.29.0/24
   # openwa <-> wa-proxy saja (Catat via WhatsApp), tanpa akses keluar. Subnet dipatok di luar pool
   # bawaan Docker (alasan sama dengan worker_db); .2 wa-proxy dan .3 openwa dipatok di layanan,
   # alokasi dinamis (container lain yang keliru ikut) hanya dari ip_range, tidak pernah .2/.3.
