@@ -41,7 +41,7 @@ select col_is_pk('app', 'stock_prices', array['space_id', 'ticker', 'on_date'], 
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'stock_prices_ok'),
   'CREATE INDEX stock_prices_ok ON app.stock_prices USING btree (space_id, ticker, on_date DESC) WHERE (status = ''ok''::text)',
   'indeks harga ok terakhir per ruang x kode');
-select is((select p.provolatile || ':' || p.prosecdef || ':' || p.proowner::regrole::text from pg_proc p
+select is((select p.provolatile::text || ':' || p.prosecdef || ':' || p.proowner::regrole::text from pg_proc p
            join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'private' and p.proname = 'price_verdict'),
   's:false:dompetku_owner', 'price_verdict STABLE INVOKER milik owner (RLS pemanggil)');
 

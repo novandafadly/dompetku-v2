@@ -94,8 +94,8 @@ select throws_ok(format($$select pg_temp.total(null, %L)$$, :'np'), 'DK401', 'un
   'trading_overview tanpa konteks = DK401');
 select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'api' and p.proname = 'trading_overview'),
-  'TABLE(account_id uuid, name text, balance bigint, capital_in bigint, capital_out bigint, capital_left bigint, realized bigint, shortfall bigint, has_deposit boolean)',
-  'kolom hasil trading_overview (dipakai server Task 5)');
+  'TABLE(account_id uuid, name text, balance bigint, capital_in bigint, capital_out bigint, capital_left bigint, realized bigint, shortfall bigint, has_deposit boolean, stock_cost bigint)',
+  'kolom hasil trading_overview (dipakai server Task 5; S14 0142 + stock_cost di akhir, K7)');
 
 -- ===== Keadaan awal =====
 select is(pg_temp.total(tests.f(), :'fp'), '0/0/0/0/0/0/false', 'tanpa dompet trading: satu baris total nol');
@@ -105,7 +105,7 @@ select is(pg_temp.w(:'tr1'), '0/0/0/0/0/0/false', 'dompet trading baru: belum ad
 select is(tests.web_val(tests.n(), format($$select string_agg(coalesce(name, 'TOTAL'), ',' order by (name is null), name collate "C")
     || ':' || ((array_agg(account_id order by ord))[count(*)] is null)
     from api.trading_overview(%L) with ordinality as t(account_id, name, balance, capital_in, capital_out,
-         capital_left, realized, shortfall, has_deposit, ord)$$, :'np')),
+         capital_left, realized, shortfall, has_deposit, stock_cost, ord)$$, :'np')),
   'Kripto,Saham,TOTAL:true', 'satu baris per dompet trading + total (baris terakhir); non-trading tidak ikut');
 
 -- Pengeluaran berkategori + anggaran sebagai pembanding I6.

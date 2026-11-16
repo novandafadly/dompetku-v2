@@ -230,6 +230,8 @@ begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
   -- Patungan (0135): konteks penjaga split_guard, baris patungan sebelum entri (FK).
   insert into private.split_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+  -- Saham (0142): konteks penjaga stock_guard; entri lebih dulu (FK ke trade), lalu trade, holding, harga.
+  insert into private.stock_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
   delete from app.settlements;
   delete from app.splits;
   -- Tagihan dan anggaran (0117) lebih dulu: FK ke entries, categories, accounts.
@@ -238,6 +240,9 @@ begin
   delete from app.budgets;
   delete from app.goals;
   delete from app.entries;
+  delete from app.stock_trades;
+  delete from app.stock_holdings;
+  delete from app.stock_prices;
   delete from app.debts;
   delete from app.contacts;
   delete from app.entry_tombstones;
@@ -255,6 +260,7 @@ begin
   delete from auth."user";
   delete from app.settings where key = 'owner_email';
   delete from private.split_ctx;
+  delete from private.stock_ctx;
 end $$;
 
 -- Rusak data dengan sengaja (tes positif cek kualitas data, 17_dq.sql): jalankan p_sql sebagai

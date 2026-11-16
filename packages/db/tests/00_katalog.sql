@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(52);
+select plan(55);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -100,8 +100,8 @@ select set_eq($$
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
         'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
-        'private.tg_member_leave_guard', 'private.tg_asset_ledger'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset S14');
+        'private.tg_member_leave_guard', 'private.tg_asset_ledger', 'private.tg_stock_guard'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -320,6 +320,24 @@ select set_eq($$
     ('dompetku_api', 'app.asset_details', 'INSERT'),
     ('dompetku_api', 'app.asset_details', 'UPDATE'),
     ('dompetku_auditor', 'app.asset_details', 'SELECT'),
+    -- S14 (0142): saham dan harga per ruang (pola ruang; api tulis lewat fungsi, tanpa DELETE; UPDATE trade
+    -- hanya kolom batal = hak kolom, tidak muncul di has_table_privilege), view posisi.
+    ('dompetku_web', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_web', 'app.stock_trades', 'SELECT'),
+    ('dompetku_web', 'app.stock_prices', 'SELECT'),
+    ('dompetku_web', 'app.stock_positions', 'SELECT'),
+    ('dompetku_api', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_api', 'app.stock_holdings', 'INSERT'),
+    ('dompetku_api', 'app.stock_trades', 'SELECT'),
+    ('dompetku_api', 'app.stock_trades', 'INSERT'),
+    ('dompetku_api', 'app.stock_prices', 'SELECT'),
+    ('dompetku_api', 'app.stock_prices', 'INSERT'),
+    ('dompetku_api', 'app.stock_prices', 'UPDATE'),
+    ('dompetku_api', 'app.stock_positions', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_trades', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_prices', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_positions', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -400,7 +418,7 @@ select set_eq($$
                       'lock_contact', 'insert_contact', 'debt_numbers', 'debt_effects',
                       'assert_split_space', 'patungan_account', 'split_payer_account', 'lock_split',
                       'lock_settlement', 'split_entry_ids', 'split_set_void', 'split_pair', 'lock_goal',
-                      'check_goal']) f
+                      'check_goal', 'stock_cost_removed', 'price_verdict']) f
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -553,6 +571,20 @@ select is(tests.owner_val(null, $q$select not has_table_privilege('dompetku_web'
           and not has_table_privilege('dompetku_worker', 'private.split_ctx', 'INSERT')
           and not has_schema_privilege('dompetku_web', 'private', 'USAGE')$q$), 'true',
           'konteks patungan hanya untuk dompetku_api');
+-- S14 (0142): penjaga jalur generik dompet saham DEFINER milik owner; konteks trade hanya untuk dompetku_api.
+select set_eq($$
+  select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = g.tgfoid
+  where n.nspname = 'app' and p.proname = 'tg_stock_guard' and p.prosecdef and p.proowner = 'dompetku_owner'::regrole $$,
+  array['entry_lines.stock_guard', 'entries.stock_guard_ins', 'entries.stock_guard_upd', 'entries.stock_guard_del'],
+  'trigger penjaga dompet saham terpasang');
+select is(tests.owner_val(null, $q$select not has_table_privilege('dompetku_web', 'private.stock_ctx', 'INSERT')
+          and not has_table_privilege('dompetku_worker', 'private.stock_ctx', 'INSERT')
+          and has_table_privilege('dompetku_api', 'private.stock_ctx', 'INSERT')$q$), 'true',
+          'konteks trade hanya untuk dompetku_api');
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_stock_trade_kind'),
+  'CREATE UNIQUE INDEX entries_stock_trade_kind ON app.entries USING btree (stock_trade_id, kind) WHERE (stock_trade_id IS NOT NULL)',
+  'satu entri per kind per trade');
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_debt_principal_live'),
   'CREATE UNIQUE INDEX entries_debt_principal_live ON app.entries USING btree (debt_id) WHERE ((kind = ''debt_principal''::app.entry_kind) AND (voided_at IS NULL))',
   'satu pokok hidup per utang');

@@ -229,18 +229,19 @@ select is(tests.balance(:'sek'), 4364141::bigint, 'saldo buku dompet saham = Σ 
 select is(tests.api_val(tests.n(), format($$select private.stock_cost_removed(%L, 100) || '/'
     || private.stock_cost_removed(%L, 300) || '/' || private.stock_cost_removed(%L, 1)$$, :'bbca', :'bbca', :'tlkm')),
   '921380/2764141/3200', 'cost_removed: floor 921.380,33 → 921.380; jual habis = seluruh biaya; 1 lembar TLKM = 3.200');
-select throws_ok(format($$select tests.api_val(tests.n(), 'select private.stock_cost_removed(%s, 301)')$$, quote_literal(:'bbca')),
+select throws_ok(format($$select tests.api_val(tests.n(), $q$select private.stock_cost_removed(%L, 301)$q$)$$, :'bbca'),
   'DK422', 'insufficient_shares', 'jual melebihi lembar ditolak [T11]');
-select throws_ok(format($$select tests.api_val(tests.n(), 'select private.stock_cost_removed(%s, 0)')$$, quote_literal(:'bbca')),
+select throws_ok(format($$select tests.api_val(tests.n(), $q$select private.stock_cost_removed(%L, 0)$q$)$$, :'bbca'),
   'DK400', 'invalid_argument', 'jual 0 lembar ditolak');
-select throws_ok(format($$select tests.api_val(tests.f(), 'select private.stock_cost_removed(%s, 1)')$$, quote_literal(:'bbca')),
+select throws_ok(format($$select tests.api_val(tests.f(), $q$select private.stock_cost_removed(%L, 1)$q$)$$, :'bbca'),
   'DK404', 'holding_not_found', 'holding Pribadi pasangan = DK404 seragam (RLS) [B24]');
 
 select pg_temp.trade(:'bbca', 'sell', 100, 9800, 1470, 980, :'rdn', '2026-03-05') as s1 \gset
 select is(pg_temp.pos(:'bbca'), '200/1842761/9213/56170', 'jual sebagian: biaya keluar floor, untung = hasil bersih − biaya keluar [T11]');
 select is(tests.balance(:'rdn'), (48197300 + 977550)::bigint, 'hasil jual = lembar x harga − biaya − pajak ke dompet tujuan');
 select is(tests.balance(:'sek'), (1842761 + 1600000)::bigint, 'saldo buku dompet saham tetap = Σ biaya posisi terbuka');
-select is(pg_temp.w(:'rdn'), '50000000/0/0/null', 'jual ke dompet trading bukan setor modal (K7) [T10]');
+select is(pg_temp.w(:'rdn'), '50000000/0/825150/null',
+  'jual ke dompet trading bukan setor modal (K7); Kurang per dompet tetap sisa modal − saldo [T10]');
 
 select pg_temp.trade(:'bbca', 'sell', 200, 8500, 1275, 850, :'rdn', '2026-03-06') as s2 \gset
 select is(pg_temp.pos(:'bbca'), '0/0/-/-88716', 'jual habis: lembar 0, biaya 0, rata-rata kosong, terealisasi = Σ untung/rugi [T11]');
@@ -316,7 +317,8 @@ select is(tests.web_val(tests.f(), $$select (select count(*) from app.stock_hold
 select is(tests.web_val(tests.n(), $$select (select count(*) from app.stock_holdings) || '/' || (select count(*) from app.stock_trades)
     || '/' || (select count(*) from app.stock_positions)$$), '2/6/2', 'Novanda tidak membaca milik pasangan [B24]');
 select is(pg_temp.pos(:'bbca', tests.f()), null, 'posisi Novanda tidak terbaca pasangan [B24]');
-select throws_ok(format($$select pg_temp.holding(tests.f(), %L, 'ASII')$$, :'sek'), '42501', null,
+select throws_ok(format($$select tests.api_exec(%L, $q$insert into app.stock_holdings (space_id, account_id, ticker, created_by)
+    values (%L, %L, 'ASII', %L)$q$)$$, tests.f(), :'np', :'sek', tests.f()), '42501', null,
   'pasangan tidak bisa menulis holding di Pribadi Novanda (RLS) [B24]');
 select is(tests.api_exec(tests.f(), format($q$update app.stock_trades set voided_at = now(), voided_by = %L where id = %L$q$,
   tests.f(), :'b1')), 0::bigint, 'pasangan tidak bisa membatalkan trade Novanda (0 baris) [B24]');
@@ -338,7 +340,8 @@ select is(pg_temp.dq('DQ19'), '0', 'DQ19: valuasi untung/rugi jual sah untuk dom
 select is(pg_temp.dq('DQ03'), '0', 'DQ03: entri trade lolos cek bentuk ulang');
 savepoint s;
 select tests.raw_exec(format($$update app.stock_trades set fee = fee + 1 where id = %L$$, :'b1'));
-select is(pg_temp.dq('DQ18'), '2', 'DQ18: biaya trade berubah tanpa entri (saldo buku dompet ≠ Σ biaya, nominal entri beli tidak cocok)');
+select is(pg_temp.dq('DQ18'), '3',
+  'DQ18: biaya trade berubah tanpa entri (saldo buku dompet ≠ Σ biaya, kode berlembar 0 masih berbiaya, nominal entri beli tidak cocok)');
 rollback to savepoint s;
 savepoint s;
 select tests.raw_exec(format($$update app.entries set voided_at = now(), voided_by = %L where id = %L$$, tests.n(), :'b1e'));
