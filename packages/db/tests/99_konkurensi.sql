@@ -28,9 +28,11 @@
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- Aset (0141): dua revalue_asset paralel, transfer keluar paralel valuasi turun (asset_negative), valuasi paralel transfer.
+-- Saham (0143): dua jual paralel melebihi lembar = satu insufficient_shares, batal paralel beli baru (kedua urutan) =
+-- trade_not_latest atau beli menunggu, dua beli paralel dari dompet sumber yang sama = saldo_negatif (kunci dompet).
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(140);
+select plan(151);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -844,6 +846,63 @@ select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '"delta": 3000', 'selisih valuasi dihitung dari saldo sesudah transfer [T11]');
 select tests.peer_exec('b', 'commit');
 select is(tests.balance(:'emas'), 4000::bigint, 'nilai akhir = nilai yang diminta [T11]');
+
+-- ===== Saham (0143): kunci dompet saham menyerialkan semua trade satu dompet =====
+select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Sekuritas Konkuren', 'aset', null, null,
+  0, 'saham') ->> 'account_id'$$, :'np')) as sek \gset
+select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Sumber Saham', 'operasional', 'bank',
+  null, 1000) ->> 'account_id'$$, :'np')) as src \gset
+select tests.peer_val('a', format($$select api.open_stock_holding(gen_random_uuid(), %L, 'BBCA', 100, 1000)$$, :'sek'));
+-- Dua jual paralel 60 dari 100 lembar: yang kedua menunggu, lalu insufficient_shares.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.sell_stock(gen_random_uuid(), %L, 'BBCA', 60, 1000, 0, 0, %L)$$, :'sek', :'src'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.sell_stock(gen_random_uuid(), %L, 'BBCA', 60, 1000, 0, 0, %L)$$, :'sek', :'src'));
+select ok(tests.peer_blocked('b'), 'jual kedua menunggu kunci dompet saham [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*insufficient_shares', 'jual kedua = insufficient_shares sesudah yang pertama commit [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(tests.peer_val('adm', format($$select shares || '/' || cost_total from app.stock_positions where account_id = %L$$, :'sek')),
+  '40/40000', 'lembar tidak pernah negatif: 40 lembar, biaya 40.000 [T11]');
+select tests.peer_val('adm', format($$select id from app.stock_trades t where t.voided_at is null and t.side = 'sell'
+  and t.holding_id = (select id from app.stock_holdings where account_id = %L)$$, :'sek')) as sell1 \gset
+-- Batal jual terakhir paralel beli baru: batal menunggu beli, lalu trade_not_latest.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.buy_stock(gen_random_uuid(), %L, 'BBCA', 1, 100, 0, %L)$$, :'sek', :'src'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.void_stock_trade(gen_random_uuid(), %L)$$, :'sell1'));
+select ok(tests.peer_blocked('b'), 'batal trade menunggu beli paralel pada dompet saham yang sama [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trade_not_latest', 'batal sesudah beli baru commit = trade_not_latest [T11]');
+select tests.peer_exec('b', 'rollback');
+-- Urutan sebaliknya: batal beli terakhir lebih dulu, beli baru menunggu lalu berhasil.
+select tests.peer_val('adm', format($$select id from app.stock_trades t where t.voided_at is null and t.side = 'buy'
+  and t.holding_id = (select id from app.stock_holdings where account_id = %L)$$, :'sek')) as buy1 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.void_stock_trade(gen_random_uuid(), %L)$$, :'buy1'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.buy_stock(gen_random_uuid(), %L, 'BBCA', 2, 100, 0, %L) ->> 'amount'$$, :'sek', :'src'));
+select ok(tests.peer_blocked('b'), 'beli menunggu batal paralel [T11]');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '200', 'beli sesudah batal commit berhasil [T11]');
+select tests.peer_exec('b', 'commit');
+select is(tests.peer_val('adm', format($$select shares || '/' || cost_total from app.stock_positions where account_id = %L$$, :'sek'))
+  || ' ' || tests.peer_val('adm', 'select violations from jobs.dq_reconcile() where check_id = ''DQ18'''),
+  '42/40200 0', 'posisi akhir konsisten, DQ18 nol [T11]');
+-- Dua beli paralel dari dompet sumber yang sama (saldo cukup untuk satu): yang kedua menunggu, lalu saldo_negatif.
+select tests.peer_val('adm', format($$select balance from app.account_balances where account_id = %L$$, :'src')) as src_bal \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.buy_stock(gen_random_uuid(), %L, 'TLKM', 1, %s, 0, %L)$$, :'sek',
+  :'src_bal'::bigint - 100, :'src'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.buy_stock(gen_random_uuid(), %L, 'TLKM', 1, %s, 0, %L)$$, :'sek',
+  :'src_bal'::bigint - 100, :'src'));
+select ok(tests.peer_blocked('b'), 'beli kedua menunggu kunci dompet sumber [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*saldo_negatif', 'beli kedua = saldo_negatif (saldo dibaca sesudah kunci) [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(tests.peer_val('adm', format($$select balance from app.account_balances where account_id = %L$$, :'src')), '100',
+  'dompet sumber tidak pernah minus [T11]');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');
