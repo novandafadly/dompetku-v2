@@ -12,7 +12,7 @@
 -- data rusak tidak menulis apa pun), retensi baris held 90 hari di jobs.purge_voided (K11).
 -- ID: T11, B24
 begin;
-select plan(73);
+select plan(80);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 

@@ -11,7 +11,7 @@
 -- Jam dipatok 2026-03-20 WIB (Jumat, cuti bersama; 18-20 Mar bukan hari bursa).
 -- ID: T11, T10, I6, B24
 begin;
-select plan(132);
+select plan(130);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -189,7 +189,7 @@ select is(tests.owner_val(null, format($q$select t.side || ':' || t.shares || ':
   'buy:200:9000:2700:0:-:2026-03-02:true:true:BBCA:true', 'baris trade beli dan holding baru di dompet saham');
 select is(tests.owner_val(null, format($q$select e.kind || ':' || e.occurred_on || ':' || (e.id = %L) || ':' || e.version || ':'
     || (select string_agg(l.role || '=' || l.amount || '@' || case l.account_id when %L then 'rdn' when %L then 'sek' end, ','
-          order by l.role) from app.entry_lines l where l.entry_id = e.id)
+          order by l.role::text collate "C") from app.entry_lines l where l.entry_id = e.id)
     || ':' || (select count(*) from app.entry_history h where h.entry_id = e.id)
     from app.entries e where e.stock_trade_id = %L$q$, :'r_b1'::jsonb ->> 'entry_id', :'rdn', :'sek', :'b1')),
   'transfer:2026-03-02:true:1:counter=1802700@sek,main=-1802700@rdn:1',
@@ -341,7 +341,7 @@ select is(:'r_s1'::jsonb - 'trade_id' - 'holding_id' - 'entry_id' - 'valuation_e
   '{"proceeds": 977550, "cost_removed": 921380, "realized": 56170, "version": 1, "replayed": false, "warnings": []}'::jsonb,
   'jual: hasil sama dengan pratinjau');
 select is(tests.owner_val(null, format($q$select string_agg(e.kind || ':' || (select string_agg(l.role || '=' || l.amount || '@'
-    || case l.account_id when %L then 'sek' when %L then 'rdn' end, ',' order by l.role) from app.entry_lines l
+    || case l.account_id when %L then 'sek' when %L then 'rdn' end, ',' order by l.role::text collate "C") from app.entry_lines l
     where l.entry_id = e.id) || ':' || (e.id = case e.kind when 'transfer' then %L::uuid else %L::uuid end), '|'
     order by e.kind::text collate "C") from app.entries e where e.stock_trade_id = %L$q$,
     :'sek', :'rdn', :'r_s1'::jsonb ->> 'entry_id', :'r_s1'::jsonb ->> 'valuation_entry_id', :'s1')),
