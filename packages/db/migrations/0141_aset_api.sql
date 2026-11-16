@@ -167,9 +167,10 @@ language plpgsql stable set search_path = '' as $$
 begin
   perform app.assert_member(p_space_id);
   return query
-  select a.id, a.name, d.asset_kind, private.balance(a.id), v.occurred_on, v.amount
+  select a.id, a.name, d.asset_kind, ab.balance, v.occurred_on, v.amount
     from app.accounts a
     join app.asset_details d on d.account_id = a.id
+    join app.account_balances ab on ab.account_id = a.id
     left join lateral (
       select e.occurred_on, l.amount
         from app.entries e

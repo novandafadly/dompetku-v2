@@ -27,9 +27,10 @@
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
+-- Aset (0141): dua revalue_asset paralel, transfer keluar paralel valuasi turun (asset_negative), valuasi paralel transfer.
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(131);
+select plan(140);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -809,6 +810,40 @@ select is(tests.owner_val(null, $$select count(*) from app.goals g join app.acco
     where g.status = 'active' and a.archived_at is not null$$) || ' '
     || tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ17'$$), '0 0',
   'tanpa tujuan aktif di dompet terarsip; DQ17 nol');
+
+-- ===== Aset (0141): Perbarui nilai paralel dan transfer keluar paralel di bawah kunci dompet =====
+select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Emas Konkuren', 'aset', 'cash', null, 1000, 'emas')
+  ->> 'account_id'$$, :'np')) as emas \gset
+-- Dua revalue_asset paralel: yang kedua menunggu kunci dompet, lalu menghitung selisih dari saldo yang baru commit.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.revalue_asset(gen_random_uuid(), %L, 5000)$$, :'emas'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.revalue_asset(gen_random_uuid(), %L, 7000)$$, :'emas'));
+select ok(tests.peer_blocked('b'), 'Perbarui nilai kedua menunggu kunci dompet [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '"delta": 2000', 'selisih dihitung sesudah kunci: 7000 - 5000 [T11]');
+select tests.peer_exec('b', 'commit');
+select is(tests.balance(:'emas'), 7000::bigint, 'dua Perbarui nilai paralel: nilai akhir = yang terakhir, bukan jumlah selisih [T11]');
+-- Valuasi turun paralel transfer keluar: transfer menunggu, lalu asset_negative; saldo aset tidak pernah negatif.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.revalue_asset(gen_random_uuid(), %L, 3000)$$, :'emas'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 6000)$$, :'np', :'emas', :'acc_a'));
+select ok(tests.peer_blocked('b'), 'transfer keluar aset menunggu valuasi turun paralel [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*asset_negative', 'transfer keluar sesudah valuasi turun commit = asset_negative [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(tests.balance(:'emas'), 3000::bigint, 'saldo aset tetap 3000, tidak pernah negatif [T11]');
+-- Transfer keluar lebih dulu, valuasi sesudahnya: selisih dihitung dari saldo sesudah transfer (3000 - 2000 = 1000).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 2000)$$, :'np', :'emas', :'acc_a'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.revalue_asset(gen_random_uuid(), %L, 4000)$$, :'emas'));
+select ok(tests.peer_blocked('b'), 'Perbarui nilai menunggu transfer keluar paralel [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '"delta": 3000', 'selisih valuasi dihitung dari saldo sesudah transfer [T11]');
+select tests.peer_exec('b', 'commit');
+select is(tests.balance(:'emas'), 4000::bigint, 'nilai akhir = nilai yang diminta [T11]');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');

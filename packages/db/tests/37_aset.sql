@@ -339,8 +339,8 @@ select throws_ok(format($$select pg_temp.restore(%L, true)$$, :'t_out'), 'DK422'
   'pulihkan penarikan saat nilai aset sudah turun ditolak, walau p_allow_negative');
 rollback to savepoint s;
 savepoint s;
-select pg_temp.call(tests.n(), format($$select api.reconcile_balance(gen_random_uuid(), %L, 0)$$, :'emas'));
-select is(pg_temp.s5(), '0/9350000/15350000', 'Cocokkan saldo dompet aset ke 0 boleh (x_koreksi, tidak negatif)');
+select pg_temp.call(tests.n(), format($$select api.revalue_asset(gen_random_uuid(), %L, 0)$$, :'emas'));
+select is(pg_temp.s5(), '0/9350000/15350000', 'Perbarui nilai aset ke 0 boleh (x_valuasi, tidak negatif)');
 rollback to savepoint s;
 -- Nilai awal lewat saldo awal (opening_balance) bisa diubah 7 hari, tetapi tidak sampai aset negatif.
 select pg_temp.xfer(tests.n(), :'motor', :'bca', 4000000) as t_motor \gset

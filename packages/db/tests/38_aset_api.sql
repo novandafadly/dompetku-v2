@@ -12,7 +12,7 @@
 -- di 99_konkurensi. Jam dipatok 2026-03-20 WIB.
 -- ID: T11, S5, I6, B23
 begin;
-select plan(104);
+select plan(107);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -133,7 +133,7 @@ select tests.owner_exec(null, $q$create function private.tes_fail_aset() returns
   begin
     if pg_catalog.current_setting('tests.fail_after', true) = tg_table_name
        or (pg_catalog.current_setting('tests.fail_after', true) = 'valuation' and tg_table_name = 'entry_lines'
-           and exists (select 1 from app.entries e where e.id = new.entry_id and e.kind = 'valuation')) then
+           and exists (select 1 from app.entries e where e.id = (pg_catalog.to_jsonb(new) ->> 'entry_id')::uuid and e.kind = 'valuation')) then
       raise exception using errcode = 'P0001', message = 'fail_after';
     end if;
     return null;
@@ -316,7 +316,8 @@ select is(pg_temp.call(tests.n(), pg_temp.rv_sql(:'emas', 2200000, null, 'aaaaaa
   '{"delta": 0, "version": 1, "entry_id": null, "replayed": true, "unchanged": true, "warnings": []}'::jsonb,
   'replay nilai sama tetap unchanged');
 
--- Bukan anggota (DK404 seragam).
+-- Bukan anggota (DK404 seragam). Nilai sama di atas menulis satu kunci idempotensi: baris dasar diulang.
+select pg_temp.cnt() as cnt_before \gset
 select is(pg_temp.err(tests.f(), pg_temp.rv_sql(:'emas', 1)), 'DK404:account_not_found:account_id',
   'Farida tidak bisa memperbarui aset Pribadi Novanda [B23]');
 select is(pg_temp.err(tests.f(), pg_temp.rv_sql(gen_random_uuid(), 1)), 'DK404:account_not_found:account_id',
@@ -334,10 +335,10 @@ select is(pg_temp.ov(tests.n(), :'sh') = pg_temp.ov(tests.f(), :'sh'), true, 'ke
 select is(pg_temp.ov(tests.f(), :'sh') like '%Motor Bersama:kendaraan:14000000:2026-03-20:-1000000%'
     and pg_temp.ov(tests.f(), :'sh') like '%Rumah:properti:900000000:2026-03-20:900000000%', true,
   'ringkasan Bersama memuat aset kedua anggota');
-select pg_temp.void(:'r_up'::jsonb ->> 'entry_id');
+select pg_temp.void((:'r_up'::jsonb ->> 'entry_id')::uuid);
 select is(pg_temp.ov(tests.n(), :'np'), 'Ajaib:saham:0:-:-,Emas Antam:emas:1700000:2026-03-10:-300000',
   'valuasi batal tidak dihitung: valuasi hidup terakhir = turun 10 Mar');
-select pg_temp.restore(:'r_up'::jsonb ->> 'entry_id');
+select pg_temp.restore((:'r_up'::jsonb ->> 'entry_id')::uuid);
 select is(tests.web_val(tests.f(), format($$select count(*) from api.asset_overview(%L)$$, :'fp')), '0',
   'ruang tanpa aset = tanpa baris');
 select is(pg_temp.err(tests.f(), format($$select count(*) from api.asset_overview(%L)$$, :'np')), 'DK404:space_not_found:',
