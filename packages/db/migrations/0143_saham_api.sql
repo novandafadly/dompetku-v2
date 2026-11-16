@@ -25,11 +25,16 @@
 -- - Urutan kunci: dompet (private.lock_accounts, urut id; dompet saham selalu ikut) -> baris trade (FOR NO KEY
 --   UPDATE) -> entri (urut id). Kunci dompet saham menyerialkan semua trade satu dompet: posisi dibaca sesudah
 --   kunci (READ COMMITTED), jadi dua jual paralel tidak melewati lembar dan batal paralel beli baru = satu
---   trade_not_latest (99_konkurensi). Sama dengan jalur generik (entri -> dompet), tanpa siklus.
+--   trade_not_latest (99_konkurensi). Jalur generik mengunci kebalikannya (entri -> dompet), jadi siklus dicegah
+--   dengan menolak entri trade di jalur generik SEBELUM kunci apa pun (review 0143 K1, lihat di bawah).
 -- - Semua tulis entri trade di dalam konteks private.stock_ctx (0142); fungsi menghapus barisnya sebelum selesai.
---   Jalur generik (void/restore/purge_entry/update/move) tetap ditolak tg_stock_guard (DK422
---   stock_account_trade_only). api.trash_list tidak berubah: entri trade batal tampil per entri (baris bertautan
---   stock_trade_id terbaca web), pulihkan lewat restore_stock_trade (UI Task 11).
+--   Jalur generik (api.void_entry/restore_entry/update_entry/move_entry_to_space/purge_entry, diganti utuh dari
+--   badan terakhirnya 0103/0110/0111/0131) menolak entri bertautan stock_trade_id dengan DK422
+--   stock_account_trade_only SEBELUM mengunci entri (pola debt_principal_locked 0131), sehingga void generik paralel
+--   void_stock_trade tidak deadlock (99_konkurensi); tg_stock_guard tetap lapisan kedua. stock_trade_id tidak pernah
+--   berubah sesudah insert (tg_stock_guard), jadi baca tanpa kunci aman. api.trash_list tidak berubah: entri trade
+--   batal tampil per entri (baris bertautan stock_trade_id terbaca web), pulihkan lewat restore_stock_trade (UI
+--   Task 11).
 -- - api.preview_sell (DEFINER milik dompetku_api, STABLE, tanpa tulis; RLS pemanggil tetap berlaku): rumus yang
 --   sama dengan jual (private.stock_check + private.stock_cost_removed), UI tidak menghitung. DEFINER, bukan INVOKER
 --   seperti plan: web tidak punya USAGE skema private (0001) dan rumus biaya keluar ada di private (0142); pola
@@ -812,6 +817,353 @@ begin
   return v_n;
 end $$;
 
+-- ===== Jalur generik (review 0143 K1): entri trade ditolak sebelum kunci =====
+-- Badan terakhir: api.void_entry/restore_entry 0103 (private.set_void_state 0131 tidak berubah), api.update_entry 0110,
+-- api.move_entry_to_space 0111, api.purge_entry 0131; hanya cek stock_trade_id di depan yang baru.
+create or replace function api.void_entry(
+  p_client_id uuid, p_entry_id uuid, p_expected_version int, p_allow_negative boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  -- 0143: entri trade saham hanya lewat API saham, ditolak SEBELUM kunci entri (trade mengunci dompet -> entri).
+  if exists (select 1 from app.entries e where e.id = p_entry_id and e.stock_trade_id is not null) then
+    raise exception using errcode = 'DK422', message = 'stock_account_trade_only', detail = 'account_id';
+  end if;
+  set constraints all deferred;
+  v := private.set_void_state(p_client_id, p_entry_id, p_expected_version, true, p_allow_negative);
+  set constraints all immediate;
+  return v;
+end $$;
+
+create or replace function api.restore_entry(
+  p_client_id uuid, p_entry_id uuid, p_expected_version int, p_allow_negative boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  -- 0143: entri trade saham hanya lewat API saham, ditolak SEBELUM kunci entri (trade mengunci dompet -> entri).
+  if exists (select 1 from app.entries e where e.id = p_entry_id and e.stock_trade_id is not null) then
+    raise exception using errcode = 'DK422', message = 'stock_account_trade_only', detail = 'account_id';
+  end if;
+  set constraints all deferred;
+  v := private.set_void_state(p_client_id, p_entry_id, p_expected_version, false, p_allow_negative);
+  set constraints all immediate;
+  return v;
+end $$;
+
+create or replace function api.update_entry(
+  p_client_id        uuid,
+  p_entry_id         uuid,
+  p_expected_version int,
+  p_account_id       uuid,
+  p_amount           bigint,
+  p_category_id      uuid,                    -- ganti-penuh: tanpa default (§9.1)
+  p_occurred_on      date,                    -- NULL = tanggal lama
+  p_description      text,
+  p_reimbursable     boolean,
+  p_allow_negative   boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid  uuid := private.require_user();
+  v_desc text := private.clean_text(p_description, 'description');
+  v_e    app.entries%rowtype;
+  v_old  app.entry_lines%rowtype;
+  v_acc  app.accounts%rowtype;
+  v_on   date;
+  v_new  bigint;
+  v_done bigint;
+  v_r    jsonb;
+begin
+  set constraints all deferred;
+  v_r := private.idem_begin(v_uid, p_client_id, 'update_entry', private.req_hash(jsonb_build_object(
+           'entry', p_entry_id, 'version', p_expected_version, 'account', p_account_id,
+           'amount', p_amount, 'category', p_category_id, 'on', p_occurred_on, 'desc', v_desc,
+           'reimbursable', coalesce(p_reimbursable, false))));
+  if v_r is not null then
+    return v_r;
+  end if;
+  perform private.check_amount(p_amount, 'amount');
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
+
+  -- 0143: entri trade saham hanya lewat API saham, ditolak SEBELUM kunci entri (trade mengunci dompet -> entri).
+  if exists (select 1 from app.entries e where e.id = p_entry_id and e.stock_trade_id is not null) then
+    raise exception using errcode = 'DK422', message = 'stock_account_trade_only', detail = 'account_id';
+  end if;
+  select * into v_e from app.entries where id = p_entry_id for update;
+  if v_e.id is null then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is not null then
+    raise exception using errcode = 'DK422', message = 'entry_voided';
+  end if;
+  if v_e.kind not in ('income', 'expense', 'opening_balance') then
+    raise exception using errcode = 'DK422', message = 'kind_not_editable';
+  end if;
+  select * into v_old from app.entry_lines where entry_id = v_e.id and role = 'main';
+  perform private.lock_accounts(array[v_old.account_id, p_account_id]);
+  v_acc := private.get_account(p_account_id, 'account_id');
+  if v_acc.space_id <> v_e.space_id then
+    raise exception using errcode = 'DK422', message = 'space_mismatch';
+  end if;
+  -- Dompet terarsip bersaldo 0 dan harus tetap 0 (keputusan pemilik #8).
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'account_archived';
+  end if;
+
+  if v_e.kind = 'opening_balance' then
+    -- Saldo awal: hanya nominal, akun tetap, maksimal 7 hari sejak dompet dibuat (spec §9.1).
+    if p_account_id <> v_old.account_id or app.today() - (
+         select (a.created_at at time zone 'Asia/Jakarta')::date
+         from app.accounts a where a.id = v_old.account_id) > 7 then
+      raise exception using errcode = 'DK422', message = 'opening_locked';
+    end if;
+    v_on := v_e.occurred_on;
+    v_new := p_amount;
+  else
+    v_on := private.check_date(coalesce(p_occurred_on, v_e.occurred_on));
+    if v_on < v_acc.opened_on then
+      raise exception using errcode = 'DK422', message = 'before_opening';
+    end if;
+    if p_category_id is not null and not exists (
+         select 1 from app.categories c
+         where c.id = p_category_id and c.space_id = v_e.space_id
+           and c.type::text = v_e.kind::text) then
+      raise exception using errcode = 'DK404', message = 'category_not_found';
+    end if;
+    if p_category_id is distinct from v_e.category_id and exists (
+         select 1 from app.categories c where c.id = p_category_id and c.archived_at is not null) then
+      raise exception using errcode = 'DK422', message = 'category_archived';
+    end if;
+    if coalesce(p_reimbursable, false) and (v_e.kind <> 'expense' or v_e.space_kind <> 'personal') then
+      raise exception using errcode = 'DK422', message = 'reimbursable_personal_expense_only';
+    end if;
+    -- 0110: talangan dengan reimburse hidup (entri sudah dikunci FOR UPDATE di atas, sehingga
+    -- reimburse dan pulihkan reimburse paralel menunggu). "Tidak diganti" ditolak, dan nominal
+    -- tidak boleh di bawah Σ reimburse hidup.
+    if v_e.kind = 'expense' then
+      select coalesce(sum(l.amount), 0)::bigint into v_done
+        from app.entries r join app.entry_lines l on l.entry_id = r.id and l.role = 'main'
+       where r.space_id = v_e.space_id and r.reimburses_entry_id = v_e.id and r.voided_at is null;
+      if v_done > 0 and not coalesce(p_reimbursable, false) then
+        raise exception using errcode = 'DK422', message = 'reimbursement_exists';
+      end if;
+      if p_amount < v_done then
+        raise exception using errcode = 'DK422', message = 'reimbursement_exceeds';
+      end if;
+    end if;
+    v_new := case v_e.kind when 'income' then p_amount else -p_amount end;
+  end if;
+
+  update app.entries
+     set occurred_on  = v_on,
+         description  = case when kind = 'opening_balance' then null else v_desc end,
+         category_id  = case when kind = 'opening_balance' then null else p_category_id end,
+         reimbursable = case when kind = 'expense' then coalesce(p_reimbursable, false) else false end,
+         version      = version + 1,
+         updated_by   = v_uid,
+         updated_at   = app.now()
+   where id = v_e.id;
+  delete from app.entry_lines where entry_id = v_e.id;
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
+  values (v_e.id, v_e.space_id, 'main', p_account_id, v_new);
+  perform private.write_history(v_e.id, 'update', v_uid);
+
+  if p_account_id = v_old.account_id then
+    perform private.assert_balance(p_account_id, v_new - v_old.amount, p_allow_negative);
+  else
+    perform private.assert_balance(v_old.account_id, -v_old.amount, p_allow_negative);
+    perform private.assert_balance(p_account_id, v_new, p_allow_negative);
+  end if;
+
+  set constraints all immediate;
+  return private.idem_finish(v_uid, p_client_id, jsonb_build_object(
+    'entry_id', v_e.id, 'version', v_e.version + 1, 'warnings', '[]'::jsonb));
+end $$;
+
+create or replace function api.move_entry_to_space(
+  p_client_id        uuid,
+  p_entry_id         uuid,
+  p_expected_version int,
+  p_to_space_id      uuid,
+  p_account_id       uuid,
+  p_category_id      uuid,
+  p_keep_description boolean default false,
+  p_allow_negative   boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid   uuid := private.require_user();
+  v_e     app.entries%rowtype;
+  v_old   app.entry_lines%rowtype;
+  v_acc   app.accounts%rowtype;
+  v_entry uuid;
+  v_r     jsonb;
+begin
+  set constraints all deferred;
+  v_r := private.idem_begin(v_uid, p_client_id, 'move_entry_to_space', private.req_hash(
+           jsonb_build_object('entry', p_entry_id, 'version', p_expected_version,
+                              'to_space', p_to_space_id, 'account', p_account_id,
+                              'category', p_category_id,
+                              'keep_desc', coalesce(p_keep_description, false))));
+  if v_r is not null then
+    return v_r;
+  end if;
+  if p_to_space_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'to_space_id';
+  end if;
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
+
+  -- 0143: entri trade saham hanya lewat API saham, ditolak SEBELUM kunci entri (trade mengunci dompet -> entri).
+  if exists (select 1 from app.entries e where e.id = p_entry_id and e.stock_trade_id is not null) then
+    raise exception using errcode = 'DK422', message = 'stock_account_trade_only', detail = 'account_id';
+  end if;
+  -- Entri dulu, lalu akun (lihat komentar urutan kunci di atas). RLS: bukan anggota = tidak ada.
+  select * into v_e from app.entries where id = p_entry_id for update;
+  if v_e.id is null then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  -- Jenis sebelum pencatat: kaki space_transfer Bersama catatan orang lain = kind_not_movable.
+  if v_e.kind not in ('income', 'expense') then
+    raise exception using errcode = 'DK422', message = 'kind_not_movable';
+  end if;
+  if v_e.created_by <> v_uid then
+    raise exception using errcode = 'DK422', message = 'not_creator';
+  end if;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is not null then
+    raise exception using errcode = 'DK422', message = 'entry_voided';
+  end if;
+  if p_to_space_id = v_e.space_id then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'to_space_id';
+  end if;
+  perform app.assert_member(p_to_space_id);
+  -- Reimburse hidup dibaca sesudah kunci entri: reimburse dan pulihkan reimburse paralel
+  -- mengunci entri ini lebih dulu, jadi yang di-commit sebelumnya terlihat di sini.
+  if exists (select 1 from app.entries r
+             where r.space_id = v_e.space_id and r.reimburses_entry_id = v_e.id
+               and r.voided_at is null) then
+    raise exception using errcode = 'DK422', message = 'reimbursement_exists';
+  end if;
+
+  select * into v_old from app.entry_lines where entry_id = v_e.id and role = 'main';
+  perform private.lock_accounts(array[v_old.account_id, p_account_id]);
+  v_acc := private.get_account(p_account_id, 'account_id');
+  if v_acc.space_id <> p_to_space_id then
+    raise exception using errcode = 'DK422', message = 'space_mismatch';
+  end if;
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.pocket = 'kantor') then
+    raise exception using errcode = 'DK422', message = 'cross_space_kantor';
+  end if;
+  -- Dompet terarsip bersaldo 0 dan harus tetap 0 (keputusan pemilik #8), termasuk dompet asal.
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'account_archived';
+  end if;
+  if v_e.occurred_on < v_acc.opened_on then
+    raise exception using errcode = 'DK422', message = 'before_opening';
+  end if;
+  if p_category_id is not null and not exists (
+       select 1 from app.categories c
+       where c.id = p_category_id and c.space_id = v_acc.space_id
+         and c.type::text = v_e.kind::text) then
+    raise exception using errcode = 'DK404', message = 'category_not_found';
+  end if;
+  -- Pola create_entry 0106: terarsip dibedakan dari tidak ada / ruang lain / jenis salah.
+  if p_category_id is not null and exists (
+       select 1 from app.categories c where c.id = p_category_id and c.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'category_archived';
+  end if;
+
+  insert into app.entries (space_id, space_kind, kind, occurred_on, description, category_id,
+                           reimbursable, created_by, updated_by)
+  values (v_acc.space_id, v_acc.space_kind, v_e.kind, v_e.occurred_on,
+          case when v_acc.space_kind = 'personal' or coalesce(p_keep_description, false)
+               then v_e.description end,
+          p_category_id, v_e.reimbursable and v_acc.space_kind = 'personal', v_uid, v_uid)
+  returning id into v_entry;
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
+  values (v_entry, v_acc.space_id, 'main', v_acc.id, v_old.amount);
+
+  update app.entries
+     set voided_at         = app.now(),
+         voided_by         = v_uid,
+         moved_at          = app.now(),
+         version           = version + 1,
+         updated_by        = v_uid,
+         updated_at        = app.now()
+   where id = v_e.id;
+  perform private.write_history(v_e.id, 'void', v_uid);
+  perform private.write_history(v_entry, 'create', v_uid);
+
+  perform private.assert_balance(v_old.account_id, -v_old.amount, p_allow_negative);
+  perform private.assert_balance(v_acc.id, v_old.amount, p_allow_negative);
+
+  set constraints all immediate;
+  return private.idem_finish(v_uid, p_client_id, jsonb_build_object(
+    'entry_id', v_entry, 'moved_from_entry_id', v_e.id, 'version', 1, 'warnings', '[]'::jsonb));
+end $$;
+
+create or replace function api.purge_entry(p_entry_id uuid, p_expected_version int) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := private.require_user();
+  v_e   app.entries%rowtype;
+  v_ids uuid[];
+  v_n   int;
+begin
+  set constraints all deferred;
+  -- 0143: entri trade saham hanya lewat API saham, ditolak SEBELUM kunci entri (trade mengunci dompet -> entri).
+  if exists (select 1 from app.entries e where e.id = p_entry_id and e.stock_trade_id is not null) then
+    raise exception using errcode = 'DK422', message = 'stock_account_trade_only', detail = 'account_id';
+  end if;
+  select * into v_e from app.entries where id = p_entry_id;
+  if v_e.id is null or (v_e.kind = 'space_transfer' and v_e.created_by <> v_uid) then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  if v_e.kind = 'space_transfer' then
+    select array_agg(id order by id) into v_ids from app.entries where link_id = v_e.link_id;
+  else
+    v_ids := array[v_e.id];
+  end if;
+  perform 1 from app.entries where id = any (v_ids) order by id for update;
+  select * into v_e from app.entries where id = p_entry_id;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is null then
+    raise exception using errcode = 'DK422', message = 'not_voided';
+  end if;
+  if exists (select 1 from app.entries r where r.reimburses_entry_id = any (v_ids)) then
+    raise exception using errcode = 'DK422', message = 'has_dependents';
+  end if;
+  -- 0131: entri yang ikut Hapus utang hanya hilang bersama utangnya (restore_debt butuh entri itu).
+  if v_e.voided_with_debt then
+    raise exception using errcode = 'DK422', message = 'debt_deleted';
+  end if;
+  v_n := private.purge_entries(v_ids, 'entry_purged');
+  set constraints all immediate;
+  return jsonb_build_object('affected', to_jsonb(v_ids), 'purged', v_n);
+end $$;
+
 -- ===== Hak =====
 grant execute on function
   private.stock_check(text, bigint, bigint, bigint, bigint, boolean), private.stock_account(uuid),
@@ -831,6 +1183,331 @@ begin
   if (select s.value from app.settings s where s.key = 'env') = 'prod' then
     raise exception using errcode = 'DK500', message = 'migrate_down_blocked_prod';
   end if;
+end $$;
+
+-- Jalur generik kembali ke badan 0103/0110/0111/0131.
+create or replace function api.void_entry(
+  p_client_id uuid, p_entry_id uuid, p_expected_version int, p_allow_negative boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  set constraints all deferred;
+  v := private.set_void_state(p_client_id, p_entry_id, p_expected_version, true, p_allow_negative);
+  set constraints all immediate;
+  return v;
+end $$;
+
+create or replace function api.restore_entry(
+  p_client_id uuid, p_entry_id uuid, p_expected_version int, p_allow_negative boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  set constraints all deferred;
+  v := private.set_void_state(p_client_id, p_entry_id, p_expected_version, false, p_allow_negative);
+  set constraints all immediate;
+  return v;
+end $$;
+
+create or replace function api.update_entry(
+  p_client_id        uuid,
+  p_entry_id         uuid,
+  p_expected_version int,
+  p_account_id       uuid,
+  p_amount           bigint,
+  p_category_id      uuid,                    -- ganti-penuh: tanpa default (§9.1)
+  p_occurred_on      date,                    -- NULL = tanggal lama
+  p_description      text,
+  p_reimbursable     boolean,
+  p_allow_negative   boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid  uuid := private.require_user();
+  v_desc text := private.clean_text(p_description, 'description');
+  v_e    app.entries%rowtype;
+  v_old  app.entry_lines%rowtype;
+  v_acc  app.accounts%rowtype;
+  v_on   date;
+  v_new  bigint;
+  v_done bigint;
+  v_r    jsonb;
+begin
+  set constraints all deferred;
+  v_r := private.idem_begin(v_uid, p_client_id, 'update_entry', private.req_hash(jsonb_build_object(
+           'entry', p_entry_id, 'version', p_expected_version, 'account', p_account_id,
+           'amount', p_amount, 'category', p_category_id, 'on', p_occurred_on, 'desc', v_desc,
+           'reimbursable', coalesce(p_reimbursable, false))));
+  if v_r is not null then
+    return v_r;
+  end if;
+  perform private.check_amount(p_amount, 'amount');
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
+
+  select * into v_e from app.entries where id = p_entry_id for update;
+  if v_e.id is null then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is not null then
+    raise exception using errcode = 'DK422', message = 'entry_voided';
+  end if;
+  if v_e.kind not in ('income', 'expense', 'opening_balance') then
+    raise exception using errcode = 'DK422', message = 'kind_not_editable';
+  end if;
+  select * into v_old from app.entry_lines where entry_id = v_e.id and role = 'main';
+  perform private.lock_accounts(array[v_old.account_id, p_account_id]);
+  v_acc := private.get_account(p_account_id, 'account_id');
+  if v_acc.space_id <> v_e.space_id then
+    raise exception using errcode = 'DK422', message = 'space_mismatch';
+  end if;
+  -- Dompet terarsip bersaldo 0 dan harus tetap 0 (keputusan pemilik #8).
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'account_archived';
+  end if;
+
+  if v_e.kind = 'opening_balance' then
+    -- Saldo awal: hanya nominal, akun tetap, maksimal 7 hari sejak dompet dibuat (spec §9.1).
+    if p_account_id <> v_old.account_id or app.today() - (
+         select (a.created_at at time zone 'Asia/Jakarta')::date
+         from app.accounts a where a.id = v_old.account_id) > 7 then
+      raise exception using errcode = 'DK422', message = 'opening_locked';
+    end if;
+    v_on := v_e.occurred_on;
+    v_new := p_amount;
+  else
+    v_on := private.check_date(coalesce(p_occurred_on, v_e.occurred_on));
+    if v_on < v_acc.opened_on then
+      raise exception using errcode = 'DK422', message = 'before_opening';
+    end if;
+    if p_category_id is not null and not exists (
+         select 1 from app.categories c
+         where c.id = p_category_id and c.space_id = v_e.space_id
+           and c.type::text = v_e.kind::text) then
+      raise exception using errcode = 'DK404', message = 'category_not_found';
+    end if;
+    if p_category_id is distinct from v_e.category_id and exists (
+         select 1 from app.categories c where c.id = p_category_id and c.archived_at is not null) then
+      raise exception using errcode = 'DK422', message = 'category_archived';
+    end if;
+    if coalesce(p_reimbursable, false) and (v_e.kind <> 'expense' or v_e.space_kind <> 'personal') then
+      raise exception using errcode = 'DK422', message = 'reimbursable_personal_expense_only';
+    end if;
+    -- 0110: talangan dengan reimburse hidup (entri sudah dikunci FOR UPDATE di atas, sehingga
+    -- reimburse dan pulihkan reimburse paralel menunggu). "Tidak diganti" ditolak, dan nominal
+    -- tidak boleh di bawah Σ reimburse hidup.
+    if v_e.kind = 'expense' then
+      select coalesce(sum(l.amount), 0)::bigint into v_done
+        from app.entries r join app.entry_lines l on l.entry_id = r.id and l.role = 'main'
+       where r.space_id = v_e.space_id and r.reimburses_entry_id = v_e.id and r.voided_at is null;
+      if v_done > 0 and not coalesce(p_reimbursable, false) then
+        raise exception using errcode = 'DK422', message = 'reimbursement_exists';
+      end if;
+      if p_amount < v_done then
+        raise exception using errcode = 'DK422', message = 'reimbursement_exceeds';
+      end if;
+    end if;
+    v_new := case v_e.kind when 'income' then p_amount else -p_amount end;
+  end if;
+
+  update app.entries
+     set occurred_on  = v_on,
+         description  = case when kind = 'opening_balance' then null else v_desc end,
+         category_id  = case when kind = 'opening_balance' then null else p_category_id end,
+         reimbursable = case when kind = 'expense' then coalesce(p_reimbursable, false) else false end,
+         version      = version + 1,
+         updated_by   = v_uid,
+         updated_at   = app.now()
+   where id = v_e.id;
+  delete from app.entry_lines where entry_id = v_e.id;
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
+  values (v_e.id, v_e.space_id, 'main', p_account_id, v_new);
+  perform private.write_history(v_e.id, 'update', v_uid);
+
+  if p_account_id = v_old.account_id then
+    perform private.assert_balance(p_account_id, v_new - v_old.amount, p_allow_negative);
+  else
+    perform private.assert_balance(v_old.account_id, -v_old.amount, p_allow_negative);
+    perform private.assert_balance(p_account_id, v_new, p_allow_negative);
+  end if;
+
+  set constraints all immediate;
+  return private.idem_finish(v_uid, p_client_id, jsonb_build_object(
+    'entry_id', v_e.id, 'version', v_e.version + 1, 'warnings', '[]'::jsonb));
+end $$;
+
+create or replace function api.move_entry_to_space(
+  p_client_id        uuid,
+  p_entry_id         uuid,
+  p_expected_version int,
+  p_to_space_id      uuid,
+  p_account_id       uuid,
+  p_category_id      uuid,
+  p_keep_description boolean default false,
+  p_allow_negative   boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid   uuid := private.require_user();
+  v_e     app.entries%rowtype;
+  v_old   app.entry_lines%rowtype;
+  v_acc   app.accounts%rowtype;
+  v_entry uuid;
+  v_r     jsonb;
+begin
+  set constraints all deferred;
+  v_r := private.idem_begin(v_uid, p_client_id, 'move_entry_to_space', private.req_hash(
+           jsonb_build_object('entry', p_entry_id, 'version', p_expected_version,
+                              'to_space', p_to_space_id, 'account', p_account_id,
+                              'category', p_category_id,
+                              'keep_desc', coalesce(p_keep_description, false))));
+  if v_r is not null then
+    return v_r;
+  end if;
+  if p_to_space_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'to_space_id';
+  end if;
+  if p_account_id is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'account_id';
+  end if;
+
+  -- Entri dulu, lalu akun (lihat komentar urutan kunci di atas). RLS: bukan anggota = tidak ada.
+  select * into v_e from app.entries where id = p_entry_id for update;
+  if v_e.id is null then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  -- Jenis sebelum pencatat: kaki space_transfer Bersama catatan orang lain = kind_not_movable.
+  if v_e.kind not in ('income', 'expense') then
+    raise exception using errcode = 'DK422', message = 'kind_not_movable';
+  end if;
+  if v_e.created_by <> v_uid then
+    raise exception using errcode = 'DK422', message = 'not_creator';
+  end if;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is not null then
+    raise exception using errcode = 'DK422', message = 'entry_voided';
+  end if;
+  if p_to_space_id = v_e.space_id then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'to_space_id';
+  end if;
+  perform app.assert_member(p_to_space_id);
+  -- Reimburse hidup dibaca sesudah kunci entri: reimburse dan pulihkan reimburse paralel
+  -- mengunci entri ini lebih dulu, jadi yang di-commit sebelumnya terlihat di sini.
+  if exists (select 1 from app.entries r
+             where r.space_id = v_e.space_id and r.reimburses_entry_id = v_e.id
+               and r.voided_at is null) then
+    raise exception using errcode = 'DK422', message = 'reimbursement_exists';
+  end if;
+
+  select * into v_old from app.entry_lines where entry_id = v_e.id and role = 'main';
+  perform private.lock_accounts(array[v_old.account_id, p_account_id]);
+  v_acc := private.get_account(p_account_id, 'account_id');
+  if v_acc.space_id <> p_to_space_id then
+    raise exception using errcode = 'DK422', message = 'space_mismatch';
+  end if;
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.pocket = 'kantor') then
+    raise exception using errcode = 'DK422', message = 'cross_space_kantor';
+  end if;
+  -- Dompet terarsip bersaldo 0 dan harus tetap 0 (keputusan pemilik #8), termasuk dompet asal.
+  if exists (select 1 from app.accounts a
+             where a.id in (v_old.account_id, p_account_id) and a.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'account_archived';
+  end if;
+  if v_e.occurred_on < v_acc.opened_on then
+    raise exception using errcode = 'DK422', message = 'before_opening';
+  end if;
+  if p_category_id is not null and not exists (
+       select 1 from app.categories c
+       where c.id = p_category_id and c.space_id = v_acc.space_id
+         and c.type::text = v_e.kind::text) then
+    raise exception using errcode = 'DK404', message = 'category_not_found';
+  end if;
+  -- Pola create_entry 0106: terarsip dibedakan dari tidak ada / ruang lain / jenis salah.
+  if p_category_id is not null and exists (
+       select 1 from app.categories c where c.id = p_category_id and c.archived_at is not null) then
+    raise exception using errcode = 'DK422', message = 'category_archived';
+  end if;
+
+  insert into app.entries (space_id, space_kind, kind, occurred_on, description, category_id,
+                           reimbursable, created_by, updated_by)
+  values (v_acc.space_id, v_acc.space_kind, v_e.kind, v_e.occurred_on,
+          case when v_acc.space_kind = 'personal' or coalesce(p_keep_description, false)
+               then v_e.description end,
+          p_category_id, v_e.reimbursable and v_acc.space_kind = 'personal', v_uid, v_uid)
+  returning id into v_entry;
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
+  values (v_entry, v_acc.space_id, 'main', v_acc.id, v_old.amount);
+
+  update app.entries
+     set voided_at         = app.now(),
+         voided_by         = v_uid,
+         moved_at          = app.now(),
+         version           = version + 1,
+         updated_by        = v_uid,
+         updated_at        = app.now()
+   where id = v_e.id;
+  perform private.write_history(v_e.id, 'void', v_uid);
+  perform private.write_history(v_entry, 'create', v_uid);
+
+  perform private.assert_balance(v_old.account_id, -v_old.amount, p_allow_negative);
+  perform private.assert_balance(v_acc.id, v_old.amount, p_allow_negative);
+
+  set constraints all immediate;
+  return private.idem_finish(v_uid, p_client_id, jsonb_build_object(
+    'entry_id', v_entry, 'moved_from_entry_id', v_e.id, 'version', 1, 'warnings', '[]'::jsonb));
+end $$;
+
+create or replace function api.purge_entry(p_entry_id uuid, p_expected_version int) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := private.require_user();
+  v_e   app.entries%rowtype;
+  v_ids uuid[];
+  v_n   int;
+begin
+  set constraints all deferred;
+  select * into v_e from app.entries where id = p_entry_id;
+  if v_e.id is null or (v_e.kind = 'space_transfer' and v_e.created_by <> v_uid) then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  if v_e.kind = 'space_transfer' then
+    select array_agg(id order by id) into v_ids from app.entries where link_id = v_e.link_id;
+  else
+    v_ids := array[v_e.id];
+  end if;
+  perform 1 from app.entries where id = any (v_ids) order by id for update;
+  select * into v_e from app.entries where id = p_entry_id;
+  if p_expected_version is null then
+    raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'expected_version';
+  elsif v_e.version <> p_expected_version then
+    raise exception using errcode = 'DK409', message = 'version_conflict';
+  end if;
+  if v_e.voided_at is null then
+    raise exception using errcode = 'DK422', message = 'not_voided';
+  end if;
+  if exists (select 1 from app.entries r where r.reimburses_entry_id = any (v_ids)) then
+    raise exception using errcode = 'DK422', message = 'has_dependents';
+  end if;
+  -- 0131: entri yang ikut Hapus utang hanya hilang bersama utangnya (restore_debt butuh entri itu).
+  if v_e.voided_with_debt then
+    raise exception using errcode = 'DK422', message = 'debt_deleted';
+  end if;
+  v_n := private.purge_entries(v_ids, 'entry_purged');
+  set constraints all immediate;
+  return jsonb_build_object('affected', to_jsonb(v_ids), 'purged', v_n);
 end $$;
 
 -- jobs.purge_voided kembali ke badan 0136.

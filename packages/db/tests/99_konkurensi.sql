@@ -29,10 +29,12 @@
 -- Berjalan terakhir (99_) dan membersihkan semua data di awal dan akhir (tests.wipe).
 -- Aset (0141): dua revalue_asset paralel, transfer keluar paralel valuasi turun (asset_negative), valuasi paralel transfer.
 -- Saham (0143): dua jual paralel melebihi lembar = satu insufficient_shares, batal paralel beli baru (kedua urutan) =
--- trade_not_latest atau beli menunggu, dua beli paralel dari dompet sumber yang sama = saldo_negatif (kunci dompet).
+-- trade_not_latest atau beli menunggu, dua beli paralel dari dompet sumber yang sama = saldo_negatif (kunci dompet);
+-- jalur generik (void/restore/update/pindah/purge) atas entri trade ditolak stock_account_trade_only tanpa menunggu kunci
+-- entri, sehingga void generik paralel void_stock_trade tidak deadlock; archive_account paralel buy_stock (kedua urutan).
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(151);
+select plan(165);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -903,6 +905,89 @@ select matches(tests.peer_result('b'), '^ERROR: .*saldo_negatif', 'beli kedua = 
 select tests.peer_exec('b', 'rollback');
 select is(tests.peer_val('adm', format($$select balance from app.account_balances where account_id = %L$$, :'src')), '100',
   'dompet sumber tidak pernah minus [T11]');
+-- Jalur generik atas entri trade ditolak SEBELUM kunci entri (trade mengunci dompet -> entri; generik entri -> dompet).
+-- adm memegang entri trade; tiap fungsi generik (lock_timeout 2 detik) harus langsung stock_account_trade_only.
+select tests.peer_val('adm', format($$select e.id from app.entries e join app.stock_trades t on t.id = e.stock_trade_id
+  join app.stock_holdings h on h.id = t.holding_id where h.account_id = %L and h.ticker = 'TLKM' and t.voided_at is null$$,
+  :'sek')) as tlkm_e \gset
+select tests.peer_val('adm', format($$select stock_trade_id from app.entries where id = %L$$, :'tlkm_e')) as tlkm_t \gset
+select tests.peer_val('adm', format($$select e.id from app.entries e join app.stock_trades t on t.id = e.stock_trade_id
+  where t.side = 'opening' and t.holding_id = (select id from app.stock_holdings where account_id = %L and ticker = 'BBCA')$$,
+  :'sek')) as open_e \gset
+select tests.peer_val('adm', format($$select id from app.entries where stock_trade_id = %L$$, :'buy1')) as buy1_e \gset
+create function pg_temp.generik(p_sql text) returns text
+language plpgsql as $$
+declare v text;
+begin
+  perform tests.peer_exec('a', 'begin');
+  perform tests.peer_exec('a', 'set local lock_timeout = ''2s''');
+  perform tests.peer_send('a', p_sql);
+  v := tests.peer_result('a');
+  perform tests.peer_exec('a', 'rollback');
+  return v;
+end $$;
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', format($$select string_agg(id::text, ',') from (select id from app.entries
+  where id in (%L, %L, %L) for update) x$$, :'tlkm_e', :'open_e', :'buy1_e'));
+select matches(pg_temp.generik(format($$select api.void_entry(gen_random_uuid(), %1$L, (select version from app.entries
+  where id = %1$L))$$, :'tlkm_e')), '^ERROR: .*stock_account_trade_only',
+  'batal generik entri trade ditolak tanpa menunggu kunci [T11]');
+select matches(pg_temp.generik(format($$select api.update_entry(gen_random_uuid(), %1$L, (select version from app.entries
+  where id = %1$L), %2$L, 5, null, null, null, false)$$, :'open_e', :'sek')), '^ERROR: .*stock_account_trade_only',
+  'ubah generik saldo awal saham ditolak tanpa menunggu kunci [T11]');
+select matches(pg_temp.generik(format($$select api.move_entry_to_space(gen_random_uuid(), %1$L, (select version from app.entries
+  where id = %1$L), %2$L, %3$L, null)$$, :'tlkm_e', :'sh', :'acc_s')), '^ERROR: .*stock_account_trade_only',
+  'pindah ruang generik entri trade ditolak tanpa menunggu kunci [T11]');
+select matches(pg_temp.generik(format($$select api.restore_entry(gen_random_uuid(), %1$L, (select version from app.entries
+  where id = %1$L))$$, :'buy1_e')), '^ERROR: .*stock_account_trade_only',
+  'pulihkan generik entri trade ditolak tanpa menunggu kunci [T11]');
+select matches(pg_temp.generik(format($$select api.purge_entry(%1$L, (select version from app.entries where id = %1$L))$$,
+  :'buy1_e')), '^ERROR: .*stock_account_trade_only', 'hapus permanen generik entri trade ditolak tanpa menunggu kunci [T11]');
+select tests.peer_exec('adm', 'commit');
+-- Reproduksi review: adm memegang entri E, a = void_entry(E), b = void_stock_trade(trade E). Dulu a menunggu E lalu
+-- dompet sementara b memegang dompet dan menunggu E (40P01, korban bisa batal trade yang sah). Kini a ditolak dulu.
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', format($$select id from app.entries where id = %L for update$$, :'tlkm_e'));
+select tests.peer_exec('a', 'begin');
+select tests.peer_exec('a', 'set local lock_timeout = ''2s''');
+select tests.peer_send('a', format($$select api.void_entry(gen_random_uuid(), %1$L, (select version from app.entries
+  where id = %1$L))$$, :'tlkm_e'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.void_stock_trade(gen_random_uuid(), %L) ->> 'trade_id'$$, :'tlkm_t'));
+select ok(tests.peer_blocked('b'), 'batal trade menunggu kunci entri yang dipegang adm [T11]');
+select matches(tests.peer_result('a'), '^ERROR: .*stock_account_trade_only', 'batal generik paralel ditolak tanpa menunggu [T11]');
+select tests.peer_exec('a', 'rollback');
+select tests.peer_exec('adm', 'commit');
+select is(tests.peer_result('b'), :'tlkm_t', 'batal trade yang sah selesai tanpa deadlock [T11]');
+select tests.peer_exec('b', 'commit');
+select is(tests.peer_val('adm', format($$select (voided_at is not null)::text from app.stock_trades where id = %L$$, :'tlkm_t')),
+  'true', 'trade batal tepat sekali [T11]');
+-- archive_account paralel buy_stock pada dompet saham (kedua urutan; kunci dompet saham).
+select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Sekuritas Arsip A', 'aset', null, null,
+  0, 'saham') ->> 'account_id'$$, :'np')) as sek_a \gset
+select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Sekuritas Arsip B', 'aset', null, null,
+  0, 'saham') ->> 'account_id'$$, :'np')) as sek_b \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.buy_stock(gen_random_uuid(), %L, 'ASII', 1, 10, 0, %L)$$, :'sek_a', :'src'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_account(%L)$$, :'sek_a'));
+select ok(tests.peer_blocked('b'), 'arsip menunggu beli paralel pada dompet saham [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*account_has_holdings', 'arsip sesudah beli commit = account_has_holdings [T11]');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_account(%L)$$, :'sek_b'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.buy_stock(gen_random_uuid(), %L, 'ASII', 1, 10, 0, %L)$$, :'sek_b', :'src'));
+select ok(tests.peer_blocked('b'), 'beli menunggu arsip paralel dompet saham [T11]');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*account_archived', 'beli sesudah arsip commit = account_archived [T11]');
+select tests.peer_exec('b', 'rollback');
+select is(tests.peer_val('adm', format($$select (select archived_at is null from app.accounts where id = %L) || '/'
+  || (select archived_at is not null from app.accounts where id = %L) || '/'
+  || (select count(*) from app.stock_holdings h join app.accounts a on a.id = h.account_id
+       where a.archived_at is not null and h.account_id in (%L, %L))$$, :'sek_a', :'sek_b', :'sek_a', :'sek_b')),
+  'true/true/0', 'tidak pernah lembar di dompet saham terarsip [T11]');
 
 select tests.peer_close('ka');
 select tests.peer_close('kb');

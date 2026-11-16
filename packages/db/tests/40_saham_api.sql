@@ -11,7 +11,7 @@
 -- Jam dipatok 2026-03-20 WIB (Jumat, cuti bersama; 18-20 Mar bukan hari bursa).
 -- ID: T11, T10, I6, B24
 begin;
-select plan(132);
+select plan(137);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -416,6 +416,17 @@ select is(pg_temp.err(tests.n(), format($$select api.restore_entry(gen_random_uu
     where id = %L))$$, :'s1e', :'s1e')), 'DK422:stock_account_trade_only:account_id', 'pulihkan generik entri trade ditolak');
 select is(pg_temp.err(tests.n(), format($$select api.purge_entry(%L, (select version from app.entries where id = %L))$$,
     :'s1e', :'s1e')), 'DK422:stock_account_trade_only:account_id', 'hapus permanen generik entri trade ditolak');
+-- Jalur generik ditolak sebelum kunci entri (urutan kunci trade: dompet -> entri; tanpa menunggu: 99_konkurensi).
+select tests.owner_val(null, format($q$select id from app.entries where stock_trade_id = %L$q$, :'b1')) as b1e,
+       tests.owner_val(null, format($q$select id from app.entries where stock_trade_id = %L$q$, :'o1')) as o1e \gset
+select is(pg_temp.err(tests.n(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'b1e')),
+  'DK422:stock_account_trade_only:account_id', 'batal generik entri trade hidup ditolak');
+select is(pg_temp.err(tests.n(), format($$select api.update_entry(gen_random_uuid(), %L, 1, %L, 1700000, null, null, null,
+    false)$$, :'o1e', :'sek')), 'DK422:stock_account_trade_only:account_id', 'ubah generik saldo awal saham berjalan ditolak');
+select is(pg_temp.err(tests.n(), format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null)$$,
+    :'b1e', :'sh', :'kas')), 'DK422:stock_account_trade_only:account_id', 'pindah ruang generik entri trade ditolak');
+select is(pg_temp.err(tests.f(), format($$select api.void_entry(gen_random_uuid(), %L, 1)$$, :'b1e')),
+  'DK404:entry_not_found:', 'cek trade di jalur generik tidak membocorkan entri ke pasangan (DK404 seragam) [B24]');
 select pg_temp.call(tests.n(), pg_temp.void_sql(:'b2'));
 select is(pg_temp.pos(:'sek', 'BBCA') || ' ' || tests.balance(:'bca'), '200/1802700/9013/0 50345000',
   'beli terakhir yang hidup boleh dibatalkan; dompet sumber kembali');
@@ -466,6 +477,15 @@ savepoint s;
 select pg_temp.call(tests.n(), pg_temp.void_sql(:'s1'));
 select tests.clock_at('2026-06-19 10:00+07');
 select is(pg_temp.err(tests.n(), pg_temp.restore_sql(:'s1')), 'DK422:restore_window_closed:', 'pulihkan sesudah 90 hari ditolak');
+rollback to savepoint s;
+-- Pulihkan jual yang dompet tujuannya sudah diarsip (saldo kembali 0 sesudah batal).
+savepoint s;
+select tests.account(tests.n(), :'np', 'Tujuan Jual', 'operasional', 0, '2026-01-01') as tj \gset
+select pg_temp.call(tests.n(), pg_temp.sell_sql(:'sek', 'UNVR', 100, 2000, 0, 0, :'tj', '2026-03-08')) ->> 'trade_id' as stj \gset
+select pg_temp.call(tests.n(), pg_temp.void_sql(:'stj'));
+select tests.web_val(tests.n(), format($$select api.archive_account(%L)$$, :'tj'));
+select is(pg_temp.err(tests.n(), pg_temp.restore_sql(:'stj')) || ' ' || pg_temp.tent(:'stj'),
+  'DK422:account_archived: transfer:2:2:true', 'pulihkan jual ke dompet tujuan terarsip ditolak, nol efek');
 rollback to savepoint s;
 
 -- ===== api.stock_overview + api.asset_overview (nilai pasar) =====
@@ -561,7 +581,7 @@ select is(pg_temp.dq(), 'DQ01=0,DQ03=0,DQ15=0,DQ18=0,DQ19=0', 'DQ nol sesudah se
 -- ===== jobs.purge_voided: trade batal > 90 hari (K11) =====
 select pg_temp.call(tests.n(), pg_temp.void_sql(:'si'));
 select tests.clock_at('2026-06-20 10:00+07');
-select ok(tests.worker_val(null, 'select jobs.purge_voided()')::int >= 2, 'purge menghapus entri trade batal');
+select is(tests.worker_val(null, 'select jobs.purge_voided()'), '2', 'purge menghapus tepat dua entri trade batal (valuasi + transfer jual)');
 select is(tests.owner_val(null, format($q$select (select count(*) from app.stock_trades where id = %L) || '/'
     || (select count(*) from app.entries where stock_trade_id = %L) || '/' || (select count(*) from app.stock_trades where id = %L)
     || '/' || (select count(*) from private.stock_ctx)$q$, :'si', :'si', :'bi')),
