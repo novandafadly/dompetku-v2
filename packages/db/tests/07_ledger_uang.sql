@@ -132,7 +132,7 @@ select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month
 select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month_summary(%L, '2026-02-01') m$$, :'np')),
   '(0,30000,-30000,0,0,0)', 'month_summary Februari');
 select is(tests.web_val(tests.n(), format($$select row(w.*)::text from api.net_worth(%L) w$$, :'np')),
-  '(1276500,500000,1630000,1776500)', 'net_worth: operasional + tabungan, kantor dikecualikan');
+  '(1776500,0,0,0,0,0,1776500,,,)', 'net_worth (0144): kas = operasional + tabungan, kantor dikecualikan');
 select is(tests.web_val(tests.n(), format($$select row(s.*)::text from api.safe_to_spend(%L) s$$, :'np')),
   '(1276500,0,0,1276500,106375,12,2026-03-31)', 'safe_to_spend: operasional / sisa hari (12)');
 select is(tests.web_val(tests.n(), format($$select row(s.*)::text from api.safe_to_spend(%L, '2026-03-31') s$$, :'np')),
@@ -291,9 +291,10 @@ select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
 select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
     $q$select api.update_entry(gen_random_uuid(), %L, 3, %L, 1, null, null, null, false)$q$, :'e1', :'bca')),
   'DK422', 'account_archived', 'update entri di dompet terarsip ditolak (saldo harus tetap 0)');
-select is(tests.web_val(tests.n(), format($$select (s.operasional = w.operasional)::text
-  from api.safe_to_spend(%L) s, api.net_worth(%L) w$$, :'np', :'np')), 'true',
-  'safe_to_spend dan net_worth memakai himpunan dompet operasional yang sama');
+select is(tests.web_val(tests.n(), format($$select (s.operasional + (select sum(b.balance) from app.account_balances b
+    where b.space_id = %1$L and b.pocket = 'tabungan') = w.kas)::text
+  from api.safe_to_spend(%1$L) s, api.net_worth(%1$L) w$$, :'np')), 'true',
+  'safe_to_spend operasional + saldo tabungan = kas net_worth: himpunan dompet operasional yang sama');
 
 -- ===== Bersama: setoran dan pengambilan dengan fee dari dompet Bersama (Februari) =====
 select tests.web_val(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 70000, 0, '2026-02-15', 'setor feb')$$,

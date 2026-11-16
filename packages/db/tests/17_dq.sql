@@ -11,7 +11,7 @@
 -- status tagihan/pelunasan, entri dompet sistem dirujuk, saldo anggota nol-jumlah).
 -- DQ17 (S13, 0137): tujuan aktif hanya pada dompet tabungan aktif di ruang yang sama.
 -- DQ19 (S14, 0140): dompet aset tidak negatif, tidak dipakai pemasukan/pengeluaran/reimburse/utang/patungan
--- atau tagihan rutin, rincian aset 1:1 dengan dompet aset. DQ18 (S14, 0142): saham, diuji positif di 39_saham (DQ08 menyusul di 0144).
+-- atau tagihan rutin, rincian aset 1:1 dengan dompet aset. DQ18 (S14, 0142): saham, diuji positif di 39_saham. DQ08 (S14, 0144, warn): snapshot H−1, diuji positif di 42_kekayaan.
 -- ID: S7, T18, T11
 begin;
 select plan(77);
@@ -31,7 +31,7 @@ create function pg_temp.expect(variadic p text[] default '{}') returns text
 language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
-  from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ09', 'DQ10', 'DQ11',
+  from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ08', 'DQ09', 'DQ10', 'DQ11',
                     'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17', 'DQ18', 'DQ19']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
@@ -67,8 +67,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error,DQ18:error,DQ19:error',
-  'tepat 18 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ08:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error,DQ18:error,DQ19:error',
+  'tepat 19 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');

@@ -102,8 +102,8 @@ select set_eq($$
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
         'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
         'private.tg_member_leave_guard', 'private.tg_asset_ledger', 'private.tg_stock_guard',
-        'jobs.price_targets', 'jobs.price_ingest'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14 + fungsi job harga');
+        'jobs.price_targets', 'jobs.price_ingest', 'private.tg_nw_dirty', 'jobs.net_worth_snapshot'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14 + fungsi job harga + hari kotor dan snapshot kekayaan');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -340,6 +340,11 @@ select set_eq($$
     ('dompetku_auditor', 'app.stock_trades', 'SELECT'),
     ('dompetku_auditor', 'app.stock_prices', 'SELECT'),
     ('dompetku_auditor', 'app.stock_positions', 'SELECT'),
+    -- S14 (0144): snapshot kekayaan bersih (web baca anggota, tulis hanya job owner); tanda hari kotor tanpa
+    -- hak web/api/worker (trigger DEFINER owner); auditor untuk DQ08.
+    ('dompetku_web', 'app.net_worth_snapshots', 'SELECT'),
+    ('dompetku_auditor', 'app.net_worth_snapshots', 'SELECT'),
+    ('dompetku_auditor', 'app.nw_dirty', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -433,9 +438,15 @@ select set_eq($$
      select 'dompetku_auditor', f from unnest(array['private.bill_due_in_label', 'private.bill_first_on',
                       'app.period_of_label', 'app.effective_payday', 'app.pay_period']) f
      union all
+     -- S14 (0144): kekayaan bersih per tanggal untuk api.net_worth (web) dan DQ08 (auditor).
+     select r, 'app.net_worth_at' from unnest(array['dompetku_web', 'dompetku_auditor']) r
+     union all
+     select 'dompetku_auditor', 'app.stock_last_close'
+     union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
-                      'materialize_bills', 'purge_wa_messages', 'price_targets', 'price_ingest']) f
+                      'materialize_bills', 'purge_wa_messages', 'price_targets', 'price_ingest',
+                      'net_worth_snapshot']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');

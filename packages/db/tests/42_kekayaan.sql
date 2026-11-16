@@ -9,10 +9,10 @@
 -- (entri susulan, ubah, batal, koreksi harga, utang berjalan) diperbaiki job; tanggal WIB di batas 23:59/00:00;
 -- api.net_worth month_ago_total dari snapshot today − 30 (atau sampai 3 hari sebelumnya). DQ08 (warn). Isolasi:
 -- snapshot pasangan tidak terbaca, worker hanya lewat jobs.*. statement_timeout worker 60 s cukup untuk backfill
--- 400 hari dengan ±4.000 entri dan harga harian (lebih dari data demo ×10).
+-- 400 hari dengan 6.000 entri dan harga harian dua kode (data demo `full` = 556 entri; ×10 = 5.560).
 -- ID: B16, T11
 begin;
-select plan(102);
+select plan(99);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -101,12 +101,13 @@ $$;
 select has_table('app', 'net_worth_snapshots', 'tabel app.net_worth_snapshots ada');
 select has_table('app', 'nw_dirty', 'tabel app.nw_dirty ada');
 select is((select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod), ',' order by a.attnum)
-           from pg_attribute a where a.attrelid = 'app.net_worth_snapshots'::regclass and a.attnum > 0
-             and not a.attisdropped),
+           from pg_attribute a join pg_class c on c.oid = a.attrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname = 'net_worth_snapshots' and a.attnum > 0 and not a.attisdropped),
   'space_id:uuid,on_date:date,kas:bigint,aset:bigint,saham_pasar:bigint,saham_tanpa_harga:integer,piutang:bigint,utang:bigint,total:bigint,price_as_of:date,computed_at:timestamp with time zone',
   'kolom snapshot = komponen app.net_worth_at + computed_at');
-select ok((select c.relrowsecurity and c.relforcerowsecurity from pg_class c where c.oid = 'app.net_worth_snapshots'::regclass)
-          and (select c.relrowsecurity and c.relforcerowsecurity from pg_class c where c.oid = 'app.nw_dirty'::regclass),
+select ok((select bool_and(c.relrowsecurity and c.relforcerowsecurity) and count(*) = 2
+           from pg_class c join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname in ('net_worth_snapshots', 'nw_dirty')),
   'RLS ENABLE + FORCE di snapshot dan tanda hari kotor');
 select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'app' and p.proname = 'net_worth_at'),
@@ -184,8 +185,12 @@ select is(pg_temp.nw(:'np', '2026-03-12'), '8549000/2000000/2220000/0/400000/750
   '12 Mar: harga BBCA 10 Mar dipakai, cicilan masuk');
 
 -- ===== Bersama: patungan tidak ikut; isolasi fungsi =====
-select pg_temp.call(tests.n(), format($$select api.create_split(gen_random_uuid(), %L, %L, 300000, null,
-  '2026-03-10', 'Listrik')$$, :'sh', :'kas'));
+-- Farida membayar tagihan Bersama dari Pribadinya (patungan); dompet sistem patungan Bersama berisi bagian Novanda.
+select pg_temp.call(tests.f(), format($$select api.create_split(gen_random_uuid(), %L, %L, 300000, null,
+  '2026-03-10', 'Listrik')$$, :'sh', :'mdr'));
+-- Novanda melunasi bagiannya; dompet sistem menampung pelunasan yang belum diterima Farida.
+select pg_temp.call(tests.n(), format($$select api.settle_split(gen_random_uuid(), %L, %L, 150000, '2026-03-19')$$,
+  :'sh', :'bca'));
 select tests.owner_val(null, $$select id from app.accounts where pocket = 'patungan'$$) as pat \gset
 select ok(tests.balance(:'pat') <> 0, 'dompet sistem patungan berisi (prasyarat)');
 select is(pg_temp.nw(:'sh'), concat_ws('/', tests.balance(:'kas'), 0, 0, 0, 0, 0, tests.balance(:'kas'), '-'),
@@ -210,7 +215,7 @@ select is(pg_temp.nw(:'sh'), concat_ws('/', tests.balance(:'kas'), 200000, 0, 0,
 select is(tests.web_val(tests.n(), format($$select concat_ws('/', w.kas, w.aset, w.saham_pasar, w.saham_tanpa_harga,
     w.piutang, w.utang, w.total, w.price_as_of, coalesce(w.month_ago_total::text, '-'), coalesce(w.month_ago_on::text, '-'))
     from api.net_worth(%L) w$$, :'np')),
-  '8099000/2500000/2220000/0/400000/750000/12469000/2026-03-09/-/-',
+  '7949000/2500000/2220000/0/400000/750000/12319000/2026-03-09/-/-',
   'api.net_worth = app.net_worth_at hari ini; tanpa snapshot month_ago NULL');
 select throws_ok(format($$select tests.web_val(tests.f(), %L)$$, format('select total from api.net_worth(%L)', :'np')),
   'DK404', 'space_not_found', 'api.net_worth Pribadi pasangan = DK404 seragam');
@@ -343,13 +348,13 @@ select is(pg_temp.dirty(), '', 'tanda dikosongkan walau lebih tua dari 400 hari'
 -- ===== statement_timeout worker 60 s: backfill 400 hari dengan data besar =====
 select tests.raw_exec(format($$with e as (
     insert into app.entries (space_id, space_kind, kind, occurred_on, created_by, updated_by)
-    select %1$L, 'personal', 'expense', date '2026-04-27' + (g %% 400), %3$L, %3$L from generate_series(1, 3000) g
+    select %1$L, 'personal', 'expense', date '2026-04-27' + (g %% 400), %3$L, %3$L from generate_series(1, 4500) g
     returning id)
   insert into app.entry_lines (entry_id, space_id, role, account_id, amount) select e.id, %1$L, 'main', %2$L, -1000 from e$$,
   :'np', :'bca', tests.n()));
 select tests.raw_exec(format($$with e as (
     insert into app.entries (space_id, space_kind, kind, occurred_on, created_by, updated_by)
-    select %1$L, 'shared', 'expense', date '2026-04-27' + (g %% 400), %3$L, %3$L from generate_series(1, 1000) g
+    select %1$L, 'shared', 'expense', date '2026-04-27' + (g %% 400), %3$L, %3$L from generate_series(1, 1500) g
     returning id)
   insert into app.entry_lines (entry_id, space_id, role, account_id, amount) select e.id, %1$L, 'main', %2$L, -1000 from e$$,
   :'sh', :'kas', tests.n()));

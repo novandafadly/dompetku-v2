@@ -10,8 +10,7 @@
 -- Fungsi api.* aset (create_account dengan jenis, revalue_asset) = 0141 (Task 3); di sini rincian dan
 -- entri valuasi ditulis langsung sebagai dompetku_api (jalur yang sama dengan fungsi DEFINER).
 -- S5 (repro qa.md R3): transfer tidak bisa diubah (api.update_entry = kind_not_editable), jadi "ubah
--- setoran" = batalkan lalu catat ulang. Kekayaan bersih dihitung di tes sebagai Σ saldo dompet bukan
--- Kantor (api.net_worth baru memuat aset di 0144, Task 6). Jam dipatok 2026-03-20 WIB.
+-- setoran" = batalkan lalu catat ulang. Kekayaan bersih = api.net_worth (0144) total. Jam dipatok 2026-03-20 WIB.
 -- ID: T11, S5, I6, B23
 begin;
 select plan(106);
@@ -82,7 +81,7 @@ language sql as $$
       (select space_id from app.accounts where id = %1$L), %1$L, %2$L, %3$s, null, '2026-03-16', null, %4$L)$q$,
     p_acc, p_kind, p_amount, p_reimb)) ->> 'entry_id')::uuid
 $$;
--- Saldo dompet aset Emas / BCA / kekayaan bersih Pribadi Novanda (Σ saldo dompet bukan Kantor).
+-- Saldo dompet aset Emas / BCA / kekayaan bersih Pribadi Novanda (api.net_worth 0144: kas + aset, tanpa Kantor).
 create function pg_temp.s5() returns text
 language sql as $$
   select tests.web_val(tests.n(), format($q$select
@@ -90,7 +89,7 @@ language sql as $$
         where a.space_id = %1$L and a.name = 'Emas Antam') || '/'
       || (select ab.balance from app.account_balances ab join app.accounts a on a.id = ab.account_id
            where a.space_id = %1$L and a.name = 'BCA') || '/'
-      || (select sum(balance) from app.account_balances where space_id = %1$L and pocket <> 'kantor')$q$,
+      || (select w.total from api.net_worth(%1$L) w)$q$,
     tests.space_id(tests.n(), 'personal')))
 $$;
 -- Σ jumlah Ekspor Maret per kelas (daftar kelas dipisah koma, '*' = semua kelas).
@@ -442,7 +441,7 @@ select throws_ok(format($$select tests.owner_exec(null, $q$do $d$ begin
       set constraints all immediate;
     end $d$ $q$)$$, :'emas', :'belanja_e'),
   'DK422', 'asset_account_invalid', 'mengganti dompet pengeluaran ke dompet aset di luar api ditolak');
-select is(pg_temp.s5(), '650000/13070000/15720000', 'semua penolakan nol efek (BCA hanya bergeser oleh tarik Motor, setor Rumah, talangan, pokok utang)');
+select is(pg_temp.s5(), '650000/13070000/15620000', 'semua penolakan nol efek (BCA hanya bergeser oleh tarik Motor, setor Rumah, talangan, pokok utang; utang 100 rb dikurangkan, K5)');
 
 -- ===== Purge dan reset tidak terhalang =====
 select tests.clock_at('2026-07-01 10:00+07');
@@ -450,7 +449,7 @@ select is(tests.worker_val(null, 'select jobs.purge_voided()')::int > 0, true,
   'purge_voided menghapus setoran/valuasi aset yang batal > 90 hari');
 select is(tests.owner_val(null, format($q$select count(*) from app.entries e join app.entry_lines l on l.entry_id = e.id
     where l.account_id = %L and e.voided_at is not null$q$, :'emas')), '0', 'entri aset batal sudah terpurge');
-select is(pg_temp.s5(), '650000/13070000/15720000', 'purge tidak mengubah nilai aset');
+select is(pg_temp.s5(), '650000/13070000/15620000', 'purge tidak mengubah nilai aset');
 select tests.raw_exec(format($q$insert into auth."user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
   values (%L, 'U', 'x@example.test', true, '2026-06-01 10:00+07', '2026-06-01 10:00+07')$q$, tests.x()));
 select is(tests.worker_val(null, 'select jobs.purge_unfinished_users()'), '1',

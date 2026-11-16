@@ -102,11 +102,11 @@ language sql as $$
       (select space_id from app.accounts where id = %1$L), %1$L, %2$L, %3$s, 0, %4$L::date)$q$,
     p_from, p_to, p_amount, p_on)) ->> 'entry_id')::uuid
 $$;
--- Kekayaan bersih Pribadi Novanda di tes = Σ saldo dompet bukan Kantor (api.net_worth baru di 0144).
+-- Kekayaan bersih Pribadi Novanda = api.net_worth (0144) total.
 create function pg_temp.nw() returns bigint
 language sql as $$
-  select tests.web_val(tests.n(), format($q$select sum(balance) from app.account_balances where space_id = %L
-    and pocket <> 'kantor'$q$, tests.space_id(tests.n(), 'personal')))::bigint
+  select tests.web_val(tests.n(), format($q$select w.total from api.net_worth(%L) w$q$,
+    tests.space_id(tests.n(), 'personal')))::bigint
 $$;
 -- I6 Pribadi Novanda Maret: kategori, anggaran, Σ pemasukan/pengeluaran (report_lines, period_summary), aman
 -- dipakai, Σ pemasukan/pengeluaran Ekspor.
