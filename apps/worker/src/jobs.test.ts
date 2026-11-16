@@ -1,6 +1,6 @@
 import { PgBoss } from 'pg-boss';
 import { describe, expect, it } from 'vitest';
-import { dqVerdict, JOBS } from './jobs';
+import { dqVerdict, jobDef, JOBS } from './jobs';
 
 // previewSchedule memakai parser cron pg-boss sendiri (tanpa koneksi DB).
 const boss = new PgBoss({
@@ -23,6 +23,8 @@ describe('JOBS', () => {
       ['purge_voided', '15 1 * * 1', 'Asia/Jakarta', 'jobs'],
       ['materialize_bills', '5 0 * * *', 'Asia/Jakarta', 'jobs'],
       ['purge_wa_messages', '27 1 * * *', 'Asia/Jakarta', 'jobs'],
+      ['net_worth_snapshot', '10 0 * * *', 'Asia/Jakarta', 'jobs'],
+      ['price_refresh', '30 16,19 * * 1-5', 'Asia/Jakarta', 'jobs'],
     ]);
   });
 
@@ -60,15 +62,43 @@ describe('JOBS', () => {
     ]);
   });
 
+  it('net_worth_snapshot harian 00:10 WIB (K10 S14), sesudah materialize_bills 00:05', () => {
+    expect(jobDef('net_worth_snapshot')).toMatchObject({
+      kind: 'count',
+      sql: 'select jobs.net_worth_snapshot() as n',
+    });
+    expect(next('10 0 * * *', '2026-11-04T17:00:00Z', 2)).toEqual([
+      '2026-11-04T17:10:00.000Z',
+      '2026-11-05T17:10:00.000Z',
+    ]);
+  });
+
+  it('price_refresh 16:30 dan 19:30 WIB Senin–Jumat saja (K9 S14), kind price tanpa SQL', () => {
+    const j = jobDef('price_refresh');
+    expect(j.kind).toBe('price');
+    expect('sql' in j).toBe(false);
+    // Jumat 2026-11-13 WIB: 16:30 dan 19:30, lalu Senin 2026-11-16 (Sabtu/Minggu dilewati).
+    expect(next(j.cron, '2026-11-13T00:00:00Z', 4)).toEqual([
+      '2026-11-13T09:30:00.000Z',
+      '2026-11-13T12:30:00.000Z',
+      '2026-11-16T09:30:00.000Z',
+      '2026-11-16T12:30:00.000Z',
+    ]);
+  });
+
   it('tidak bentrok dengan backup 02:00 WIB dan uji restore Minggu 04:00 WIB', () => {
     for (const j of JOBS) {
+      if (j.name === 'price_refresh') continue; // sore WIB, diuji di atas
       for (const at of next(j.cron, '2026-11-01T00:00:00Z', 14)) {
         // Jam WIB = UTC + 7; semua job selesai sebelum 02:00 (statement_timeout 60 s).
         const d = new Date(at);
         const wib = (d.getUTCHours() + 7) % 24;
-        if (j.name === 'materialize_bills') {
-          // 00:05 WIB: selesai (statement_timeout 60 s) jauh sebelum jendela 01:00–01:30.
-          expect([wib, d.getUTCMinutes()], `${j.name} ${at}`).toEqual([0, 5]);
+        if (j.name === 'materialize_bills' || j.name === 'net_worth_snapshot') {
+          // 00:05/00:10 WIB: selesai (statement_timeout 60 s) jauh sebelum jendela 01:00–01:30.
+          expect([wib, d.getUTCMinutes()], `${j.name} ${at}`).toEqual([
+            0,
+            j.name === 'materialize_bills' ? 5 : 10,
+          ]);
         } else {
           expect(wib, `${j.name} ${at}`).toBe(1);
           expect(d.getUTCMinutes(), `${j.name} ${at}`).toBeLessThanOrEqual(30);

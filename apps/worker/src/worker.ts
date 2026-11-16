@@ -5,6 +5,7 @@ import type { Config } from './config';
 import { JOBS, type JobName } from './jobs';
 import type { LogFn } from './log';
 import { log as defaultLog } from './log';
+import { PROVIDERS, type PriceSource } from './price-source';
 import { closeAbandoned, errorCode, runJob } from './run-job';
 
 export interface WorkerHandle {
@@ -17,6 +18,8 @@ export interface WorkerOptions {
   log?: LogFn;
   /** Poll antrean pg-boss; job harian, jadi 10 s cukup. Tes memakai nilai kecil. */
   pollingIntervalSeconds?: number;
+  /** Menggantikan adapter dari cfg.priceProvider (tes: StubPriceSource, tanpa jaringan). */
+  priceSource?: PriceSource;
 }
 
 /**
@@ -39,6 +42,8 @@ export function triggerJob(boss: PgBoss, name: JobName): Promise<string | null> 
 
 export async function startWorker(cfg: Config, opts: WorkerOptions = {}): Promise<WorkerHandle> {
   const log = opts.log ?? defaultLog;
+  const priceSource =
+    opts.priceSource ?? (cfg.priceProvider ? PROVIDERS.get(cfg.priceProvider)?.() : undefined);
 
   // Pool job terpisah dari pool pg-boss; tanpa SET sesi (timeout dari ALTER ROLE dompetku_worker).
   const pool = new pg.Pool({
@@ -84,7 +89,7 @@ export async function startWorker(cfg: Config, opts: WorkerOptions = {}): Promis
         { pollingIntervalSeconds: opts.pollingIntervalSeconds ?? 10 },
         async () => {
           // runJob tidak melempar; hasilnya tidak disimpan di pgboss.job.output.
-          await runJob(pool, job, alert, { log });
+          await runJob(pool, job, alert, { log, priceSource });
         },
       );
     }

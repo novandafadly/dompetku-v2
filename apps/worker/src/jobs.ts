@@ -3,7 +3,8 @@
  * dengan base backup 02:00 dan uji restore Minggu 04:00 (runbook S2). materialize_bills (S9, K3)
  * jalan 00:05 WIB, sesudah pergantian hari WIB dan sebelum jendela itu, supaya dq_reconcile 01:00
  * melihat kemunculan hari ini. statement_timeout role worker 60 s, jadi tiap job selesai jauh
- * sebelum job berikutnya dan sebelum 02:00.
+ * sebelum job berikutnya dan sebelum 02:00. net_worth_snapshot (S14, K10) 00:10 WIB untuk H−1, sesudah
+ * materialize_bills. price_refresh (S14, K9) 16:30 dan 19:30 WIB Senin–Jumat, di luar jendela malam.
  */
 export type JobName =
   | 'dq_reconcile'
@@ -12,18 +13,24 @@ export type JobName =
   | 'purge_audit'
   | 'purge_voided'
   | 'materialize_bills'
-  | 'purge_wa_messages';
+  | 'purge_wa_messages'
+  | 'net_worth_snapshot'
+  | 'price_refresh';
 
-export interface JobDef {
+interface JobBase {
   name: JobName;
   cron: string;
   tz: 'Asia/Jakarta';
   /** Check Healthchecks: `dq` (dompetku-dq) atau `jobs` (dompetku-jobs). */
   check: 'dq' | 'jobs';
-  /** `count`: fungsi mengembalikan int (baris terhapus/dibuat); `dq`: tabel cek DQ. */
-  kind: 'count' | 'dq';
-  sql: string;
 }
+
+/**
+ * `count`: fungsi mengembalikan int (baris terhapus/dibuat); `dq`: tabel cek DQ; `price`: harga dari
+ * PriceSource lewat jobs.price_targets/price_ingest (price-refresh.ts), tanpa SQL tetap.
+ */
+export type JobDef =
+  (JobBase & { kind: 'count' | 'dq'; sql: string }) | (JobBase & { kind: 'price' });
 
 const TZ = 'Asia/Jakarta';
 
@@ -86,6 +93,24 @@ export const JOBS: readonly JobDef[] = [
     check: 'jobs',
     kind: 'count',
     sql: 'select jobs.purge_wa_messages() as n',
+  },
+  {
+    // S14 (K10): snapshot kekayaan bersih H−1 + hari kotor (maks 400 hari), idempoten.
+    name: 'net_worth_snapshot',
+    cron: '10 0 * * *',
+    tz: TZ,
+    check: 'jobs',
+    kind: 'count',
+    sql: 'select jobs.net_worth_snapshot() as n',
+  },
+  {
+    // S14 (K9): sesudah tutup bursa; 19:30 hanya bila 16:30 belum mendapat harga hari itu, dan hari
+    // di app.holidays dilewati (price-refresh.ts). Tanpa PRICE_PROVIDER: dilewati tanpa job_runs.
+    name: 'price_refresh',
+    cron: '30 16,19 * * 1-5',
+    tz: TZ,
+    check: 'jobs',
+    kind: 'price',
   },
 ];
 

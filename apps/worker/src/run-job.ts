@@ -3,6 +3,8 @@ import type { Alerter } from './alert';
 import { dqVerdict, type JobDef, type JobName } from './jobs';
 import type { LogFn } from './log';
 import { log as defaultLog } from './log';
+import { refreshPrices } from './price-refresh';
+import { ProviderError, type PriceSource } from './price-source';
 
 /** Bagian pg.Pool yang dipakai; memudahkan pool palsu di tes unit. */
 export interface Queryable {
@@ -11,10 +13,13 @@ export interface Queryable {
 
 export type JobResult =
   | { job: JobName; status: 'ok'; rows: number; dq?: 'ok' | 'fail' }
-  | { job: JobName; status: 'failed'; code: string; rows: null };
+  | { job: JobName; status: 'failed'; code: string; rows: null }
+  | { job: JobName; status: 'skipped'; rows: null };
 
 interface RunOptions {
   log?: LogFn;
+  /** Sumber harga untuk job `price`; tanpa sumber (PRICE_PROVIDER kosong) job dilewati. */
+  priceSource?: PriceSource | undefined;
 }
 
 const SQLSTATE = /^[0-9A-Z]{5}$/;
@@ -24,6 +29,7 @@ const SQLSTATE = /^[0-9A-Z]{5}$/;
  * `err.message` hanya dibaca untuk mengenali timeout klien pg, tidak pernah diteruskan.
  */
 export function errorCode(err: unknown): string {
+  if (err instanceof ProviderError) return err.code;
   if (typeof err !== 'object' || err === null) return 'unknown';
   const code = (err as { code?: unknown }).code;
   if (typeof code === 'string' && SQLSTATE.test(code)) return code;
@@ -68,6 +74,12 @@ export async function runJob(
   opts: RunOptions = {},
 ): Promise<JobResult> {
   const log = opts.log ?? defaultLog;
+  const source = opts.priceSource;
+  if (job.kind === 'price' && !source) {
+    // Tanpa penyedia (K1: harga manual) tidak ada yang dijalankan: tanpa job_runs dan tanpa ping.
+    log('job_skipped', { job: job.name, reason: 'no_provider' });
+    return { job: job.name, status: 'skipped', rows: null };
+  }
   await safe(alert.start());
 
   // Sapu baris `running` yang ditinggal worker mati di tengah job. Saat start saja tidak cukup:
@@ -95,16 +107,21 @@ export async function runJob(
   let rows: number;
   let dq: ReturnType<typeof dqVerdict> | undefined;
   try {
-    const res = await pool.query(job.sql);
-    if (job.kind === 'dq') {
-      const parsed = DqRows.safeParse(res.rows);
-      if (!parsed.success) throw new ShapeError();
-      dq = dqVerdict(parsed.data);
-      rows = dq.total;
+    if (job.kind === 'price') {
+      // `source` pasti ada (dicek di atas); galat penyedia → ProviderError → kode provider_*.
+      rows = source ? await refreshPrices(pool, source, log) : 0;
     } else {
-      const parsed = CountRows.safeParse(res.rows);
-      if (!parsed.success) throw new ShapeError();
-      rows = parsed.data[0]?.n ?? 0;
+      const res = await pool.query(job.sql);
+      if (job.kind === 'dq') {
+        const parsed = DqRows.safeParse(res.rows);
+        if (!parsed.success) throw new ShapeError();
+        dq = dqVerdict(parsed.data);
+        rows = dq.total;
+      } else {
+        const parsed = CountRows.safeParse(res.rows);
+        if (!parsed.success) throw new ShapeError();
+        rows = parsed.data[0]?.n ?? 0;
+      }
     }
   } catch (err) {
     return fail(err, runId);

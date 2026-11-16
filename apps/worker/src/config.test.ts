@@ -67,3 +67,26 @@ describe('checkConfig', () => {
     });
   });
 });
+
+describe('PRICE_PROVIDER (S14, K1)', () => {
+  it('kosong atau tidak ada = tanpa penyedia (price_refresh dilewati)', () => {
+    expect(loadConfig({ DATABASE_URL: DB }).priceProvider).toBeUndefined();
+    expect('priceProvider' in loadConfig({ DATABASE_URL: DB, PRICE_PROVIDER: ' ' })).toBe(false);
+  });
+
+  it('nama yang bukan adapter terdaftar ditolak, galat hanya nama variabel', () => {
+    for (const v of ['tidak-ada', 'constructor', 'https://harga.example/rahasia']) {
+      expect(checkConfig({ DATABASE_URL: DB, PRICE_PROVIDER: v })).toEqual({
+        ok: false,
+        fields: ['PRICE_PROVIDER'],
+      });
+    }
+    let msg = '';
+    try {
+      loadConfig({ DATABASE_URL: DB, PRICE_PROVIDER: 'https://harga.example/rahasia' });
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toBe('config_invalid: PRICE_PROVIDER');
+  });
+});
