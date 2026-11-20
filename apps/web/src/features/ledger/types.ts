@@ -72,6 +72,8 @@ export interface TradingFiguresVM {
   /** `max(0, sisa modal − saldo)`: nominal peringatan `Kurang`. */
   shortfall: Rupiah;
   hasDeposit: boolean;
+  /** Hanya baris total (S14 K7): Σ biaya beli saham yang ikut menutup `shortfall`. Per dompet kosong. */
+  stockCost?: Rupiah;
 }
 
 export interface TradingAccountVM extends TradingFiguresVM {
@@ -328,6 +330,10 @@ export type LedgerErrorCode =
   | 'stock_account_trade_only'
   | 'before_latest_entry'
   | 'account_has_holdings'
+  // S14 Task 10: saham (0143; bingkai S14 "Salinan galat S14").
+  | 'insufficient_shares'
+  | 'trade_not_latest'
+  | 'price_spike_unconfirmed'
   | 'not_found'
   | 'invalid'
   | 'network'

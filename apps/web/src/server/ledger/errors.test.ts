@@ -52,12 +52,27 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
       'stock_account_trade_only',
       'before_latest_entry',
       'account_has_holdings',
+      'insufficient_shares',
+      'trade_not_latest',
+      'price_spike_unconfirmed',
     ] as const) {
       expect(toLedgerError({ code: 'DK422', message: rule })).toEqual({ code: rule });
     }
     expect(
       toLedgerError({ code: 'DK400', message: 'asset_kind_invalid', detail: 'asset_kind' }),
     ).toEqual({ code: 'invalid', field: 'asset_kind' });
+    // Saham (0143): kode DK400 jatuh ke kolom (`ticker`, `close`); DK404 seragam = not_found.
+    expect(toLedgerError({ code: 'DK400', message: 'ticker_invalid', detail: 'ticker' })).toEqual({
+      code: 'invalid',
+      field: 'ticker',
+    });
+    expect(toLedgerError({ code: 'DK400', message: 'price_invalid', detail: 'close' })).toEqual({
+      code: 'invalid',
+      field: 'close',
+    });
+    for (const m of ['holding_not_found', 'trade_not_found']) {
+      expect(toLedgerError({ code: 'DK404', message: m })).toEqual({ code: 'not_found' });
+    }
   });
 
   it('DK400 membawa field dari detail', () => {

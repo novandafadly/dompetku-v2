@@ -77,6 +77,11 @@ const RULES = new Set<LedgerErrorCode>([
   'stock_account_trade_only',
   'before_latest_entry',
   'account_has_holdings',
+  // S14 Task 10: saham (0143); DK400 ticker_invalid/price_invalid = invalid (kolom ticker/close),
+  // DK404 holding_not_found/trade_not_found = not_found.
+  'insufficient_shares',
+  'trade_not_latest',
+  'price_spike_unconfirmed',
 ]);
 
 /**
