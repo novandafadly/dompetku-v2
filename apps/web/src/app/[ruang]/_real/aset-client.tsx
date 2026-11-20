@@ -21,10 +21,12 @@ import { undoOrNotify } from '@/features/catat/saved-toast';
 import { ASET_COPY as C } from '@/features/aset/copy';
 import type { AddAssetResult, AddAssetSubmit } from '@/features/aset/add-asset-sheet';
 import type { RevalueSaved, RevalueSource } from '@/features/aset/revalue-sheet';
-import type { Ruang } from '@/features/ledger/types';
-import { buildAccountHref } from '@/features/shell/hrefs';
+import type { CatatSource } from '@/features/catat/source';
+import type { AccountVM, Ruang } from '@/features/ledger/types';
+import { buildAccountHref, RUANG_LABEL } from '@/features/shell/hrefs';
 import { createAssetAction, revalueAssetAction } from '../_actions/aset';
 import { voidEntryAction } from '../_actions/entri';
+import { realCatatSource } from './catat-source-real';
 
 /**
  * Pulau klien Aset nyata (S14; dimuat malas lewat `aset-islands`, satu chunk `aset-client`):
@@ -243,6 +245,88 @@ export function RevalueButton({ ruang, today, asset }: RevalueButtonProps) {
               router.refresh();
             }}
             returnFocus={returnFocus}
+          />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}
+
+const loadCatat = () => import('@/features/catat/catat-sheet');
+const CatatSheet = lazy(() => loadCatat().then((m) => ({ default: m.CatatSheet })));
+const preloadCatat = () => {
+  void loadCatat();
+};
+
+export interface AssetTransferProps {
+  ruang: Ruang;
+  today: IsoDate;
+  account: { id: string; name: string; balance: Rupiah };
+  /** Dompet ruang ini: pilihan sisi lawan (dompet biasa; aset dan Trading disaring sheet). */
+  accounts: AccountVM[];
+}
+
+/**
+ * `Isi dari dompet` / `Cairkan ke dompet` di Detail aset (S14-AS5): sheet Catat yang ada dalam mode
+ * transfer dengan arah dan aset terkunci (`preset`, pola Setor/Tarik modal). Simpan = transfer biasa,
+ * jadi bukan pemasukan/pengeluaran. `Cairkan` tidak ada bila nilai aset 0 (tidak ada yang bisa
+ * dicairkan).
+ */
+export function AssetTransferButtons({ ruang, today, account, accounts }: AssetTransferProps) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<'isi' | 'cairkan'>('isi');
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
+  const mounted = useOpenedOnce(open);
+  // Opsi ruang ini dari props, tanpa kategori; tanpa metrik Catat (bukan alur catat harian).
+  const source = useMemo<CatatSource>(
+    () => ({
+      ...realCatatSource({ ruang, options: { accounts, categories: [] }, ruangLabel: RUANG_LABEL }),
+      track: () => undefined,
+    }),
+    [ruang, accounts],
+  );
+  const openAs = (next: 'isi' | 'cairkan', el: HTMLElement) => {
+    setKind(next);
+    setReturnFocus(el);
+    setOpen(true);
+  };
+  return (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        onPointerEnter={preloadCatat}
+        onFocus={preloadCatat}
+        onClick={(e) => {
+          openAs('isi', e.currentTarget);
+        }}
+      >
+        {C.fill}
+      </Button>
+      {account.balance > 0 ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          onPointerEnter={preloadCatat}
+          onFocus={preloadCatat}
+          onClick={(e) => {
+            openAs('cairkan', e.currentTarget);
+          }}
+        >
+          {C.withdraw}
+        </Button>
+      ) : null}
+      {mounted ? (
+        <Suspense fallback={null}>
+          <CatatSheet
+            open={open}
+            onOpenChange={setOpen}
+            ruang={ruang}
+            source={source}
+            today={today}
+            keypad="os"
+            returnFocus={returnFocus}
+            preset={{ kind, account: { id: account.id, name: account.name }, capitalLeft: 0 }}
           />
         </Suspense>
       ) : null}

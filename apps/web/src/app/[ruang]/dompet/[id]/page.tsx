@@ -3,6 +3,7 @@ import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { buildHref, keptQuery, REAL_KEPT_PARAMS } from '@/features/shell/hrefs';
 import { isPrototype } from '@/server/env';
+import { loadAsetOverview } from '@/server/ledger/aset';
 import { loadDompetRiwayat } from '@/server/ledger/dompet';
 import { loadGoalForAccount } from '@/server/ledger/tujuan';
 import { loadTrading } from '@/server/ledger/trading';
@@ -79,6 +80,18 @@ export default async function Page({
       goal = 'error' as const;
     }
   }
+  // S14: ringkasan aset (tanggal valuasi terakhir, nilai pasar saham) hanya untuk dompet aset aktif;
+  // galatnya mematikan keterangan itu saja (saldo dan riwayat tetap tampil).
+  let asset;
+  if (data.account.pocket === 'aset' && !data.account.archived) {
+    try {
+      asset = (await loadAsetOverview(ctx)).find((a) => a.accountId === id) ?? null;
+    } catch (e) {
+      rethrowOrNotFound(e);
+      console.error('[dompet] ringkasan aset gagal memuat', errorTag(e));
+      asset = 'error' as const;
+    }
+  }
   const moreQuery = new URLSearchParams(query.startsWith('?') ? query.slice(1) : query);
   moreQuery.set('tampil', String(shown + HISTORY_PAGE));
   return (
@@ -96,6 +109,7 @@ export default async function Page({
       accounts={accounts}
       trading={trading ?? null}
       {...(goal === undefined ? {} : { goal })}
+      {...(asset === undefined ? {} : { asset })}
     />
   );
 }

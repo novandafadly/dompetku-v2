@@ -45,7 +45,12 @@ export type FieldCode = 'before_opening' | 'account_archived' | 'category_archiv
 export type GalatKind = 'network' | 'server' | 'not_found';
 /** Galat Catat (S7): `GalatKind` ditambah dua galat transfer antar ruang (S7-C1) tanpa Coba lagi. */
 export type CatatGalatKind =
-  GalatKind | 'cross_space_not_allowed' | 'cross_space_kantor' | 'split_needs_partner';
+  | GalatKind
+  | 'cross_space_not_allowed'
+  | 'cross_space_kantor'
+  | 'split_needs_partner'
+  // S14: aset tidak bisa minus (balapan dengan tab lain; sumber aset dijaga di klien juga).
+  | 'asset_negative';
 
 /** Dompet tujuan di ruang lain (S7-C1): dimuat saat halaman "Ruang lain…" dibuka. */
 export interface CrossTargets {
@@ -71,15 +76,28 @@ function usable(o: CatatOptions | null, hidden: ReadonlySet<string>): AccountVM[
   return (o?.accounts ?? []).filter((a) => !a.archived && !hidden.has(a.id));
 }
 
-/** Dompet biasa: bukan Kantor dan bukan Trading (pemilih setor/tarik modal, S12-TR4). */
-const ordinary = (a: AccountVM) => a.pocket !== 'kantor' && a.pocket !== 'trading';
+/**
+ * Dompet biasa: bukan Kantor, bukan Trading (pemilih setor/tarik modal, S12-TR4), dan bukan aset
+ * (isi/cairkan aset memilih dompet biasa di sisi lawan, S14-AS5).
+ */
+const ordinary = (a: AccountVM) =>
+  a.pocket !== 'kantor' && a.pocket !== 'trading' && a.pocket !== 'aset';
+
+/** Dompet yang bisa jadi sumber/tujuan pencatatan biasa: bukan Trading dan bukan aset (S14). */
+const spendable = (a: AccountVM) => a.pocket !== 'trading' && a.pocket !== 'aset';
+
+/** Dompet saham hanya berubah lewat Beli/Jual saham (S14): tidak pernah di pemilih transfer. */
+const isStock = (a: AccountVM) => a.pocket === 'aset' && a.assetKind === 'saham';
+
+/** Preset yang mengunci dompet halaman sebagai TUJUAN (Setor modal, Isi aset). */
+const intoPreset = (p: CatatPreset | undefined) => p?.kind === 'setor' || p?.kind === 'isi';
 
 /**
  * `defaultAccountId` dari sumber; lalu operasional pertama; lalu dompet pertama. Dompet Trading
  * tidak pernah bawaan (bukan sumber pengeluaran/pemasukan); hanya Trading yang ada = kosong.
  */
 function defaultAccountId(o: CatatOptions): string {
-  const accounts = usable(o, new Set()).filter((a) => a.pocket !== 'trading');
+  const accounts = usable(o, new Set()).filter(spendable);
   if (o.defaultAccountId !== undefined && accounts.some((a) => a.id === o.defaultAccountId)) {
     return o.defaultAccountId;
   }
@@ -93,7 +111,7 @@ function presetDraft(
 ): Pick<CatatDraft, 'accountId' | 'counterAccountId'> {
   const other = usable(o, new Set()).filter(ordinary);
   const pick = (other.find((a) => a.pocket === 'operasional') ?? other[0])?.id;
-  if (preset.kind === 'setor') {
+  if (intoPreset(preset)) {
     return { accountId: pick ?? '', counterAccountId: preset.account.id };
   }
   return {
@@ -256,23 +274,23 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
       : personalAccounts.find((a) => a.id === draft.split?.accountId);
   // Dompet yang saldonya berkurang: dompet Pribadi pembayar bila dibagi, selain itu dompet terpilih.
   const payerAccount = draft.split === undefined ? selectedAccount : splitAccount;
-  // Setor modal: tujuan hanya dompet trading ini; Tarik modal: sumber hanya dompet trading ini.
-  const lockedTo = preset?.kind === 'setor' ? preset.account.id : undefined;
+  // Setor modal/Isi aset: tujuan hanya dompet halaman ini; Tarik modal/Cairkan: sumber hanya dompet itu.
+  const lockedTo = intoPreset(preset) ? preset?.account.id : undefined;
   const destinations =
     preset === undefined
-      ? accounts.filter((a) => a.id !== draft.accountId)
+      ? accounts.filter((a) => a.id !== draft.accountId && !isStock(a))
       : accounts.filter((a) => (lockedTo === undefined ? ordinary(a) : a.id === lockedTo));
   // Dompet Kantor dan Trading tidak pernah ikut antar ruang (S7-C1; modal hanya satu ruang): bukan
   // sumber bila tujuan di ruang lain. Trading juga bukan sumber pengeluaran/pemasukan (S12-TR4).
   const isCross = draft.toRuang !== undefined;
   const sourceAccounts =
     preset !== undefined
-      ? accounts.filter((a) => (preset.kind === 'tarik' ? a.id === preset.account.id : ordinary(a)))
+      ? accounts.filter((a) => (intoPreset(preset) ? ordinary(a) : a.id === preset.account.id))
       : isCross
         ? accounts.filter(ordinary)
         : draft.type === 'transfer'
-          ? accounts
-          : accounts.filter((a) => a.pocket !== 'trading');
+          ? accounts.filter((a) => !isStock(a))
+          : accounts.filter(spendable);
   const crossBlocked = selectedAccount?.pocket === 'kantor';
   const crossAccount = isCross
     ? cross.accounts.find((a) => a.id === draft.counterAccountId)
@@ -299,7 +317,15 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     (draft.type === 'transfer'
       ? draft.counterAccountId !== undefined
       : draft.categoryId !== undefined);
-  const canSave = valid && !saving && galatKind !== 'not_found';
+  // Aset tidak bisa minus (S14-AS5): sumber aset dengan nominal di atas nilainya = tidak bisa disimpan.
+  const assetShort =
+    draft.type === 'transfer' &&
+    selectedAccount?.pocket === 'aset' &&
+    draft.amount !== null &&
+    draft.amount > selectedAccount.balance
+      ? selectedAccount
+      : undefined;
+  const canSave = valid && !saving && galatKind !== 'not_found' && assetShort === undefined;
 
   const toIdle = () => {
     setStatus('idle');
@@ -324,6 +350,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         : {}),
     }));
     if (status === 'saldo_kurang' && enough({ ...draft, amount }, payerAccount)) toIdle();
+    if (galatKind === 'asset_negative') toIdle();
   };
   const setCategory = (categoryId: string) => {
     if (busy.current) return;
@@ -340,7 +367,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
           // Tujuan satu ruang yang sama dengan sumber baru gugur; Kantor memutus antar ruang.
           counter:
             (d.toRuang === undefined && d.counterAccountId === accountId) ||
-            (d.toRuang !== undefined && (next?.pocket === 'kantor' || next?.pocket === 'trading')),
+            (d.toRuang !== undefined &&
+              (next?.pocket === 'kantor' || next?.pocket === 'trading' || next?.pocket === 'aset')),
           reimbursable: next?.pocket === 'kantor',
         },
       ),
@@ -498,10 +526,9 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         { ...d, type },
         { category: true, counter: true, reimbursable: true, split: true },
       );
-      // Trading hanya sumber/tujuan transfer: jenis lain memindahkan dompet ke bawaan.
-      return type !== 'transfer' &&
-        opts !== null &&
-        opts.accounts.find((a) => a.id === d.accountId)?.pocket === 'trading'
+      // Trading dan aset hanya sumber/tujuan transfer: jenis lain memindahkan dompet ke bawaan.
+      const current = opts?.accounts.find((a) => a.id === d.accountId);
+      return type !== 'transfer' && opts !== null && current !== undefined && !spendable(current)
         ? { ...next, accountId: defaultAccountId(opts) }
         : next;
     });
@@ -684,6 +711,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     setSharedNote,
     setReimbursable,
     canSave,
+    assetShort,
     loading,
     status,
     field: fieldCode === null ? null : (FIELD_OF[fieldCode] ?? null),

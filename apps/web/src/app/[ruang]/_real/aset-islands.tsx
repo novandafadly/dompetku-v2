@@ -11,6 +11,7 @@ const load = () => import('./aset-client');
 const HostLazy = lazy(() => load().then((m) => ({ default: m.AddAssetHost })));
 const TriggerLazy = lazy(() => load().then((m) => ({ default: m.AddAssetTrigger })));
 const RevalueLazy = lazy(() => load().then((m) => ({ default: m.RevalueButton })));
+const TransferLazy = lazy(() => load().then((m) => ({ default: m.AssetTransferButtons })));
 
 export function AddAssetHostIsland(props: ComponentProps<typeof HostLazy>) {
   return (
@@ -32,6 +33,14 @@ export function RevalueIsland(props: ComponentProps<typeof RevalueLazy>) {
   return (
     <Suspense fallback={null}>
       <RevalueLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function AssetTransferIsland(props: ComponentProps<typeof TransferLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <TransferLazy {...props} />
     </Suspense>
   );
 }

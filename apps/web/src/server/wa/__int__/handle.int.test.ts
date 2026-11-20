@@ -11,6 +11,7 @@ import {
   spaceIdOf,
   type Persona,
 } from '../../ledger/__int__/harness';
+import { createAsset } from '../../ledger/aset';
 import {
   archiveAccount,
   createAccount,
@@ -933,6 +934,22 @@ describe('handleInbound: pilih dompet @nama (Postgres sungguhan)', () => {
     const handles = ['@bca', '@cimb-niaga', '@kas-kantor'];
     expect(r.sent[0]?.text).toBe(REPLY.walletNone('stockbit', 'personal', handles));
     expect(r.sent[1]?.text).toBe(REPLY.walletNone('trading', 'personal', handles));
+  });
+
+  it('S14: dompet aset bukan dompet pencatatan WA: @emas/@antam tidak ketemu, tidak masuk daftar penanda', async () => {
+    await createAsset(nPribadi, {
+      clientId: randomUUID(),
+      name: 'Emas Antam',
+      assetKind: 'emas',
+      openingBalance: 5_000_000,
+    });
+    const r = rig();
+    await handleInbound(r.deps, msg('10rb kopi @emas'));
+    await handleInbound(r.deps, msg('10rb kopi @antam'));
+    expect(await entries()).toHaveLength(0);
+    const handles = ['@bca', '@cimb-niaga', '@kas-kantor'];
+    expect(r.sent[0]?.text).toBe(REPLY.walletNone('emas', 'personal', handles));
+    expect(r.sent[1]?.text).toBe(REPLY.walletNone('antam', 'personal', handles));
   });
 
   it('"b ... @kantor" ditolak: kantong kantor hanya ada di Pribadi', async () => {

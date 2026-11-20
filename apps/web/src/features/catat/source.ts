@@ -11,14 +11,14 @@ import type { SplitContextVM } from '@/features/ledger/patungan-types';
 export type CatatType = 'expense' | 'income' | 'transfer';
 
 /**
- * Setor/tarik modal trading (S12-TR4): sheet transfer dengan jenis dan arah terkunci. Setor = tujuan
- * dompet trading ini, sumber dompet biasa; Tarik = sebaliknya. Dompet Kantor dan Trading lain tidak
- * ditawarkan; tanpa transfer antar ruang.
+ * Setor/tarik modal trading (S12-TR4) dan isi/cairkan aset (S14-AS5): sheet transfer dengan jenis dan
+ * arah terkunci. Setor/Isi = tujuan dompet ini, sumber dompet biasa; Tarik/Cairkan = sebaliknya.
+ * Dompet Kantor, Trading lain, dan aset tidak ditawarkan di sisi lawan; tanpa transfer antar ruang.
  */
 export interface CatatPreset {
-  kind: 'setor' | 'tarik';
+  kind: 'setor' | 'tarik' | 'isi' | 'cairkan';
   account: { id: string; name: string };
-  /** Sisa modal dompet ini (SQL): pratinjau `di atas sisa modal` saat Tarik. */
+  /** Sisa modal dompet ini (SQL): pratinjau `di atas sisa modal` saat Tarik (0 untuk aset). */
   capitalLeft: Rupiah;
 }
 

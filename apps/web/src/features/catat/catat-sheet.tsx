@@ -21,6 +21,7 @@ import { BriefcaseIcon } from '@/components/ui/icons/briefcase';
 import { ArrowsLeftRightIcon } from '@/components/ui/icons/arrows-left-right';
 import { CalendarBlankIcon } from '@/components/ui/icons/calendar-blank';
 import { InfoIcon } from '@/components/ui/icons/info';
+import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { NotePencilIcon } from '@/components/ui/icons/note-pencil';
 import { UserIcon } from '@/components/ui/icons/user';
 import { WalletIcon } from '@/components/ui/icons/wallet';
@@ -46,7 +47,7 @@ import {
   saldoKurangText,
 } from './catat-status';
 import { CategoryChips } from './category-chips';
-import { modalToast, undoOrNotify } from './saved-toast';
+import { assetMoveToast, modalToast, undoOrNotify } from './saved-toast';
 import type { CatatPreset, CatatSource, CatatType, SaveOutcome } from './source';
 import { createCatatFlow } from './telemetry';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
@@ -101,14 +102,29 @@ export interface CatatSheetProps {
   preset?: CatatPreset;
 }
 
-/** Salinan final S12-TR4. */
+/** Salinan final S12-TR4 (modal trading) dan S14-AS5 (isi/cairkan aset; judul memuat nama aset). */
 const PRESET_COPY = {
   setor: {
     title: 'Setor modal',
     note: 'Setor modal bukan pengeluaran. Laporan dan anggaran tidak berubah.',
   },
   tarik: { title: 'Tarik modal', note: 'Tarik modal bukan pemasukan.' },
+  isi: {
+    title: 'Isi',
+    note: 'Bukan pengeluaran. Laporan dan anggaran tidak berubah.',
+  },
+  cairkan: { title: 'Cairkan', note: 'Bukan pemasukan.' },
 } as const;
+
+/** Judul preset: aset menyebut namanya (`Isi Emas Antam`), modal trading tidak. */
+const presetTitle = (p: NonNullable<CatatSheetProps['preset']>): string =>
+  p.kind === 'isi' || p.kind === 'cairkan'
+    ? `${PRESET_COPY[p.kind].title} ${p.account.name}`
+    : PRESET_COPY[p.kind].title;
+
+/** Aset tampil dengan label jenis di pemilih (`Emas Antam · Aset`, S14-AS5); dompet lain apa adanya. */
+const walletLabel = (a: { name: string; pocket: string }): string =>
+  a.pocket === 'aset' ? `${a.name} · Aset` : a.name;
 
 /** Hari ini dan 13 hari ke belakang; mencatat ke masa depan tidak ditawarkan. */
 const DATE_CHOICES = 14;
@@ -225,7 +241,7 @@ function CatatSession({
   const audience = source.sharedAudience?.();
   const target = other(draft.ruang);
   const toLabel = draft.toRuang === undefined ? undefined : ruangLabel[draft.toRuang];
-  const baseTitle = `${preset === undefined ? TYPE_TITLE[draft.type] : PRESET_COPY[preset.kind].title} · ${label}`;
+  const baseTitle = `${preset === undefined ? TYPE_TITLE[draft.type] : presetTitle(preset)} · ${label}`;
   // Antar ruang: kedua ruang tertulis di judul (S7-C1), bukan hanya lewat warna.
   const title = toLabel === undefined ? baseTitle : `${baseTitle} → ${toLabel}`;
 
@@ -296,13 +312,21 @@ function CatatSession({
       message:
         preset === undefined || draft.amount === null
           ? out.toast
-          : modalToast(
-              preset.kind,
-              ruangLabel[draft.ruang],
-              draft.amount,
-              preset.account.name,
-              nameOf(preset.kind === 'setor' ? draft.accountId : draft.counterAccountId),
-            ),
+          : preset.kind === 'isi' || preset.kind === 'cairkan'
+            ? assetMoveToast(
+                preset.kind,
+                ruangLabel[draft.ruang],
+                draft.amount,
+                preset.account.name,
+                nameOf(preset.kind === 'isi' ? draft.accountId : draft.counterAccountId),
+              )
+            : modalToast(
+                preset.kind,
+                ruangLabel[draft.ruang],
+                draft.amount,
+                preset.account.name,
+                nameOf(preset.kind === 'setor' ? draft.accountId : draft.counterAccountId),
+              ),
       action: {
         label: 'Urungkan',
         onAction: () => {
@@ -641,7 +665,7 @@ function CatatSession({
       titleContent={
         preset !== undefined ? (
           <>
-            {PRESET_COPY[preset.kind].title}
+            <span className="min-w-0 break-words">{presetTitle(preset)}</span>
             <SpaceTag space={draft.ruang} />
           </>
         ) : hasAccounts ? (
@@ -727,13 +751,28 @@ function CatatSession({
               ) : null}
             </div>
           )}
+          {c.assetShort === undefined ? null : (
+            <p
+              role="alert"
+              className="flex items-start gap-1.5 text-meta font-semibold text-danger"
+            >
+              <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
+              <span className="min-w-0 text-pretty">
+                {`Nilai ${c.assetShort.name} tidak cukup. Aset tidak bisa minus.`}
+              </span>
+            </p>
+          )}
           {isTransfer ? (
             <DestinationChips
-              accounts={c.destinations}
+              accounts={c.destinations.map((a) => ({ id: a.id, name: walletLabel(a) }))}
               value={draft.counterAccountId}
               onChange={c.setCounterAccount}
               busy={saving}
-              crossEnabled={preset === undefined && c.selectedAccount?.pocket !== 'trading'}
+              crossEnabled={
+                preset === undefined &&
+                c.selectedAccount?.pocket !== 'trading' &&
+                c.selectedAccount?.pocket !== 'aset'
+              }
               crossLabel={
                 draft.toRuang === undefined || toLabel === undefined
                   ? undefined
@@ -844,8 +883,9 @@ function CatatSession({
               {PATUNGAN_COPY.noPersonalWallet}
             </p>
           ) : null}
-          <div className="flex gap-2">
+          <div className={preset === undefined ? 'flex gap-2' : 'flex gap-2 max-narrow:flex-col'}>
             <MetaSelect
+              stacked={preset !== undefined}
               label={
                 splitting
                   ? PATUNGAN_COPY.fromPersonal
@@ -859,7 +899,7 @@ function CatatSession({
               options={
                 splitting
                   ? personalOptions
-                  : accountOptions.map((a) => ({ value: a.id, label: a.name }))
+                  : accountOptions.map((a) => ({ value: a.id, label: walletLabel(a) }))
               }
               selectRef={accountRef}
               tight={c.canReimburse || c.splitAvailable}
@@ -868,6 +908,7 @@ function CatatSession({
               describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
             />
             <MetaSelect
+              stacked={preset !== undefined}
               label="Tanggal"
               icon={<CalendarBlankIcon size={18} />}
               value={draft.date}
@@ -885,7 +926,9 @@ function CatatSession({
               icon={<NotePencilIcon size={20} />}
               aria-expanded={noteOpen}
               aria-controls={noteId}
-              className="tablet:hidden"
+              className={
+                preset === undefined ? 'tablet:hidden' : 'tablet:hidden max-narrow:self-start'
+              }
               onClick={() => {
                 setNoteOpen((o) => !o);
                 refocus.current = noteOpen ? null : 'note';

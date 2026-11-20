@@ -35,6 +35,19 @@ export function modalToast(
     : `Modal ditarik dari ${trading} · ${label} · ${formatRupiah(amount)} ke ${other}`;
 }
 
+/** Toast Isi/Cairkan aset (S14-AS5): `Nilai aset naik …` tidak dipakai, ini transfer biasa. */
+export function assetMoveToast(
+  kind: 'isi' | 'cairkan',
+  label: string,
+  amount: number,
+  asset: string,
+  other: string,
+): string {
+  return kind === 'isi'
+    ? `${asset} diisi · ${label} · ${formatRupiah(amount)} dari ${other}`
+    : `${asset} dicairkan · ${label} · ${formatRupiah(amount)} ke ${other}`;
+}
+
 export const UNDO_FAILED = 'Belum bisa diurungkan. Buka transaksi itu untuk membatalkannya.';
 /** Urungkan sesudah Batalkan (Detail) gagal: entri tetap batal, jadi arahannya memulihkan. */
 export const UNDO_VOID_FAILED = 'Belum bisa diurungkan. Buka transaksi itu untuk memulihkannya.';

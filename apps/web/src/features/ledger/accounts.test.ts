@@ -13,9 +13,9 @@ const acc = (pocket: Pocket, archived = false): AccountVM => ({
 });
 
 describe('payableAccounts', () => {
-  it('menyaring Kantor, Trading, Patungan, dan dompet terarsip (S12-TR4)', () => {
-    const all = (['operasional', 'tabungan', 'kantor', 'trading', 'patungan'] as const).map((p) =>
-      acc(p),
+  it('menyaring Kantor, Trading, Patungan, aset, dan dompet terarsip (S12-TR4, S14)', () => {
+    const all = (['operasional', 'tabungan', 'kantor', 'trading', 'patungan', 'aset'] as const).map(
+      (p) => acc(p),
     );
     expect(payableAccounts([...all, acc('operasional', true)]).map((a) => a.pocket)).toEqual([
       'operasional',

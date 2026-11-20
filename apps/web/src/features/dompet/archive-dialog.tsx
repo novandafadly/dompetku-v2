@@ -20,6 +20,9 @@ export function archiveFailedText(code: LedgerErrorCode, name: string): string {
       return `${name} masih berisi saldo, jadi belum bisa diarsipkan. Pindahkan isinya dulu.`;
     case 'account_has_goal':
       return `${name} masih punya tujuan aktif, jadi belum bisa diarsipkan. Selesaikan atau arsipkan tujuannya dulu.`;
+    // S14-AS6: balapan (saham dibeli dari tab lain sesudah dialog dibuka).
+    case 'account_has_holdings':
+      return `${name} masih memegang saham. Jual semua saham dulu, lalu arsipkan.`;
     case 'network':
       return 'Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.';
     case 'not_found':
@@ -68,7 +71,11 @@ export function ArchiveWalletDialog({
       holdOpen
       busy={busy}
       // Server sudah menjawab saldo ≠ 0 atau tujuan aktif: mengulang tidak ada gunanya sampai halaman dimuat ulang.
-      confirmDisabled={failure === 'balance_not_zero' || failure === 'account_has_goal'}
+      confirmDisabled={
+        failure === 'balance_not_zero' ||
+        failure === 'account_has_goal' ||
+        failure === 'account_has_holdings'
+      }
       alert={failure === null ? undefined : archiveFailedText(failure, name)}
     />
   );

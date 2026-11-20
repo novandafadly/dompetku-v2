@@ -349,6 +349,8 @@ const TUJUAN_ACTIONS = [
   'archiveGoalAction',
   'restoreGoalAction',
 ];
+// Aset (S14): kedua ruang; gerbang dan pemetaan diuji di `aset.test.ts`.
+const ASET_ACTIONS = ['createAssetAction', 'revalueAssetAction'];
 const WRAPPERS = [
   'createEntry',
   'createTransfer',
@@ -519,9 +521,16 @@ describe('gerbang (Review Focus 5)', () => {
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
     // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
-    // Tujuan (S13): `tujuan.test.ts`.
+    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`.
     expect(seen.sort()).toEqual(
-      [...NAMES, ...PATUNGAN_ACTIONS, ...TUJUAN_ACTIONS, 'createLinkCode', 'unlinkWa'].sort(),
+      [
+        ...NAMES,
+        ...PATUNGAN_ACTIONS,
+        ...TUJUAN_ACTIONS,
+        ...ASET_ACTIONS,
+        'createLinkCode',
+        'unlinkWa',
+      ].sort(),
     );
   });
 

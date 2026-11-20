@@ -23,11 +23,22 @@ import {
   entryKindLabelVM,
   entryTitleVM,
 } from '@/features/ledger/present';
-import type { AccountVM, EntryVM, Ruang, TradingAccountVM } from '@/features/ledger/types';
+import { MoneyText } from '@/components/ui/money-text';
+import { AssetKindIcon } from '@/features/aset/asset-icon';
+import { ASET_COPY as AC, ASSET_KIND_LABEL } from '@/features/aset/copy';
+import type {
+  AccountVM,
+  AssetOverviewVM,
+  EntryVM,
+  Ruang,
+  TradingAccountVM,
+} from '@/features/ledger/types';
+import { shortDateLabel } from '@dompetku/domain';
 import { buildAccountHref, buildEntryHref } from '@/features/shell/hrefs';
 import { buildGoalListHref } from '@/features/tujuan/hrefs';
 import type { GoalVM } from '@/features/tujuan/types';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
+import { AssetTransferIsland, RevalueIsland } from './aset-islands';
 import { ArchiveIsland, ReconcileIsland } from './dompet-actions-islands';
 import { DompetGoalCard } from './dompet-goal';
 import { ModalActionsIsland } from './trading-islands';
@@ -60,17 +71,49 @@ function modalMoveOf(
   byId: ReadonlyMap<string, AccountVM>,
 ): { kind: string; label: string } | null {
   if (e.kind !== 'transfer') return null;
+  // Lawan trading atau dompet saham (K7: beli/jual saham tidak menggeser modal) bukan setor/tarik.
+  const internal = (a: AccountVM | undefined) =>
+    a?.pocket === 'trading' || a?.assetKind === 'saham';
   if (e.counterAccountId === accountId) {
-    return byId.get(e.accountId)?.pocket === 'trading'
+    return internal(byId.get(e.accountId))
       ? null
       : { kind: 'Setor modal', label: `Setor modal dari ${e.accountName}` };
   }
   if (e.accountId === accountId && e.counterAccountId !== undefined) {
-    return byId.get(e.counterAccountId)?.pocket === 'trading'
+    return internal(byId.get(e.counterAccountId))
       ? null
       : { kind: 'Tarik modal', label: `Tarik modal ke ${e.counterAccountName ?? ''}` };
   }
   return null;
+}
+
+/** Transfer ke/dari aset ini = `Isi dari …` / `Cair ke …` (S14-AS3); jenis lain tidak berlabel khusus. */
+function assetMoveOf(e: EntryVM, accountId: string): { kind: string; label: string } | null {
+  if (e.kind === 'valuation') {
+    return { kind: e.direction === 'out' ? 'Turun' : 'Naik', label: AC.valuationLabel };
+  }
+  if (e.kind !== 'transfer') return null;
+  if (e.counterAccountId === accountId) {
+    return { kind: 'Isi', label: `Isi dari ${e.accountName}` };
+  }
+  if (e.accountId === accountId && e.counterAccountId !== undefined) {
+    return { kind: 'Cair', label: `Cair ke ${e.counterAccountName ?? ''}` };
+  }
+  return null;
+}
+
+/** Baris di bawah nama aset: `Emas · diperbarui 14 Nov` atau `Emas · nilai sejak 1 Nov` (S14-AS3). */
+function assetSubtitle(
+  kind: keyof typeof ASSET_KIND_LABEL,
+  overview: AssetOverviewVM | null,
+  openedOn: IsoDate,
+): string {
+  const label = ASSET_KIND_LABEL[kind];
+  if (kind === 'saham') return label;
+  if (overview === null) return label;
+  return overview.lastValuedOn === null
+    ? AC.kindSince(label, shortDateLabel(openedOn))
+    : AC.kindUpdated(label, shortDateLabel(overview.lastValuedOn));
 }
 
 /**
@@ -88,6 +131,7 @@ export function DompetDetailReal({
   accounts = [],
   trading,
   goal,
+  asset,
 }: {
   ruang: Ruang;
   today: IsoDate;
@@ -105,9 +149,14 @@ export function DompetDetailReal({
    * anggota lain, atau `error` bila gagal dimuat. `undefined` = dompet lain (tidak ditampilkan apa pun).
    */
   goal?: { goal: GoalVM | null; partnerName: string | null } | 'error';
+  /** Hanya dompet aset (S14): ringkasannya dari `api.asset_overview`, atau `error` bila gagal dimuat. */
+  asset?: AssetOverviewVM | 'error' | null;
 }) {
   const { account } = data;
   const isTrading = account.pocket === 'trading';
+  const isAsset = account.pocket === 'aset' && account.assetKind !== undefined;
+  const isStock = isAsset && account.assetKind === 'saham';
+  const overview = typeof asset === 'object' && asset !== null ? asset : null;
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const openingEntry = openingEntryOf(data, today);
   const effect = (e: (typeof data.entries)[number]) => effectOnAccountVM(e, account.id);
@@ -119,14 +168,16 @@ export function DompetDetailReal({
       const { value, kind } = effect(e);
       const feeNote = accountFeeNoteVM(e, account.id);
       const modalMove = isTrading ? modalMoveOf(e, account.id, byId) : null;
+      const assetMove = isAsset ? assetMoveOf(e, account.id) : null;
+      const move = modalMove ?? assetMove;
       return {
         id: e.id,
         href: buildEntryHref(ruang, e.id, query),
         iconName: e.categoryName,
         entryKind: e.kind,
         // Setor/tarik modal (S12-TR3): keterangan pengguna tetap menang atas label bawaan.
-        label: modalMove === null ? entryTitleVM(e) : (e.description ?? modalMove.label),
-        meta: `${modalMove === null ? entryKindLabelVM(e) : modalMove.kind} · ${
+        label: move === null ? entryTitleVM(e) : (e.description ?? move.label),
+        meta: `${move === null ? entryKindLabelVM(e) : move.kind} · ${
           e.kind === 'transfer' && e.counterAccountName !== undefined
             ? `${e.accountName} → ${e.counterAccountName}`
             : account.name
@@ -150,8 +201,70 @@ export function DompetDetailReal({
         value: e.amount,
       }))}
       dompetHref={dompetHref}
+      heroIcon={
+        isAsset && account.assetKind !== undefined ? (
+          <AssetKindIcon kind={account.assetKind} size={24} />
+        ) : undefined
+      }
+      subtitle={
+        isAsset && account.assetKind !== undefined
+          ? assetSubtitle(account.assetKind, overview, account.openedOn)
+          : undefined
+      }
+      balanceLabel={
+        isStock
+          ? overview?.marketValue == null
+            ? `Biaya beli ${account.name}`
+            : `Nilai pasar ${account.name}`
+          : isAsset
+            ? AC.valueOf(account.name)
+            : undefined
+      }
+      balanceNode={
+        isAsset && account.balance === 0 ? (
+          <span className="text-body font-semibold text-text-soft">
+            {isStock ? AC.noValueStock : AC.noValue}
+          </span>
+        ) : isStock && overview?.marketValue != null ? (
+          <MoneyText value={overview.marketValue} size="amount-sm" />
+        ) : undefined
+      }
+      openingLabel={isAsset ? AC.openingLabel : undefined}
       actions={
-        account.archived ? null : (
+        account.archived ? null : isAsset ? (
+          isStock ? null : (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <RevalueIsland
+                  ruang={ruang}
+                  today={today}
+                  asset={{
+                    id: account.id,
+                    name: account.name,
+                    balance: account.balance,
+                    lastOn: overview?.lastValuedOn ?? null,
+                  }}
+                />
+                <AssetTransferIsland
+                  ruang={ruang}
+                  today={today}
+                  account={{ id: account.id, name: account.name, balance: account.balance }}
+                  accounts={accounts}
+                />
+              </div>
+              {openingEntry?.editable === true ? (
+                <Link
+                  href={buildEntryHref(ruang, openingEntry.id, query)}
+                  aria-label={`${AC.editOpening} ${account.name}`}
+                  className={`inline-flex min-h-11 items-center self-start rounded-md text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+                >
+                  {AC.editOpening}
+                </Link>
+              ) : null}
+              <p className="text-caption font-medium text-text-muted">{AC.notIncome}</p>
+            </div>
+          )
+        ) : (
           <div className="flex flex-col gap-3">
             {isTrading ? (
               <ModalActionsIsland
@@ -231,6 +344,13 @@ export function DompetDetailReal({
         ) : (
           <ArchiveBlockedCard
             name={account.name}
+            {...(isAsset
+              ? {
+                  text: isStock
+                    ? AC.archiveBlockedStock(account.name)
+                    : AC.archiveBlocked(account.name),
+                }
+              : {})}
             {...(account.balance === 0 && typeof goal === 'object' && goal.goal !== null
               ? { goal: { name: goal.goal.name, href: buildGoalListHref(ruang, query) } }
               : {})}

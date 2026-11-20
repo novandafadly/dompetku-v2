@@ -68,6 +68,7 @@ export const ASET_COPY = {
   editOpening: 'Ubah nilai awal',
   notIncome: 'Perubahan nilai tidak dihitung sebagai pemasukan atau pengeluaran.',
   openingLabel: 'Nilai awal',
+  valuationLabel: 'Perubahan nilai',
 
   // Perbarui nilai (AS4)
   revalueTitle: (name: string, ruang: Ruang) =>
