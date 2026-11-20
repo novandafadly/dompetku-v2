@@ -401,7 +401,7 @@ export function DompetDetailReal({
                 }
               : {})}
             {...(isStock && stockData?.holdings.some((h) => h.shares > 0) === true
-              ? { stock: { href: '#saham' } }
+              ? { stock: { href: '#saham', label: SC.viewStock } }
               : {})}
             {...(account.balance === 0 && typeof goal === 'object' && goal.goal !== null
               ? { goal: { name: goal.goal.name, href: buildGoalListHref(ruang, query) } }

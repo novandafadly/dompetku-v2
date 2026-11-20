@@ -456,6 +456,18 @@ function TradeSession({
               <FieldHint id="saham-tax-hint">{C.taxHint}</FieldHint>
             </div>
           ) : null}
+          {sell ? (
+            <SellPreview preview={preview} loading={previewInput !== null && preview === null} />
+          ) : (
+            <div role="status" aria-live="polite" className="flex flex-col gap-0.5">
+              {estimateOk ? (
+                <>
+                  <p className="num text-body font-bold text-text">{C.total(toRupiah(estimate))}</p>
+                  <p className="text-caption font-medium text-text-muted">{C.totalNote}</p>
+                </>
+              ) : null}
+            </div>
+          )}
           <SelectField
             label={sell ? C.toField : C.fromField}
             value={cashId}
@@ -474,6 +486,20 @@ function TradeSession({
               </option>
             ))}
           </SelectField>
+          {fromTrading ? (
+            <p className="text-caption font-medium text-text-muted">{C.tradingNote(chosen.name)}</p>
+          ) : null}
+          {!sell && (negative || forced) && chosen !== undefined ? (
+            <p
+              role="status"
+              className="flex items-start gap-2 rounded-lg bg-warning-tint p-3 text-label font-semibold text-warning"
+            >
+              <WarningIcon size={18} weight="fill" className="mt-px shrink-0" />
+              <span className="text-pretty">
+                {`Saldo ${chosen.name} tidak cukup. Kalau dibeli, saldonya jadi minus.`}
+              </span>
+            </p>
+          ) : null}
           <DateInput
             label={C.dateField}
             value={date}
@@ -487,34 +513,6 @@ function TradeSession({
             busy={saving}
             inputRef={dateRef}
           />
-          {sell ? (
-            <SellPreview preview={preview} loading={previewInput !== null && preview === null} />
-          ) : (
-            <div role="status" aria-live="polite" className="flex flex-col gap-0.5">
-              {estimateOk ? (
-                <>
-                  <p className="num text-body font-bold text-text">{C.total(toRupiah(estimate))}</p>
-                  <p className="text-caption font-medium text-text-muted">{C.totalNote}</p>
-                </>
-              ) : null}
-              {fromTrading ? (
-                <p className="text-caption font-medium text-text-muted">
-                  {C.tradingNote(chosen.name)}
-                </p>
-              ) : null}
-            </div>
-          )}
-          {!sell && (negative || forced) && chosen !== undefined ? (
-            <p
-              role="status"
-              className="flex items-start gap-2 rounded-lg bg-warning-tint p-3 text-label font-semibold text-warning"
-            >
-              <WarningIcon size={18} weight="fill" className="mt-px shrink-0" />
-              <span className="text-pretty">
-                {`Saldo ${chosen.name} tidak cukup. Kalau dibeli, saldonya jadi minus.`}
-              </span>
-            </p>
-          ) : null}
         </form>
       )}
       {galat === null ? null : (

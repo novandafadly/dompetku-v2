@@ -83,7 +83,9 @@ describe('TradeSheet Beli (S14-SH3)', () => {
     expect(screen.getByText('= 200 lembar')).toBeTruthy();
     await user.type(field('Harga per lembar'), '9150');
     await user.type(field(/Biaya broker/), '1000');
-    const status = screen.getAllByRole('status').find((s) => s.textContent.includes('Total keluar'));
+    const status = screen
+      .getAllByRole('status')
+      .find((s) => s.textContent.includes('Total keluar'));
     expect(status).toHaveTextContent(/Total keluar\s+Rp\s*1\.831\.000/);
     expect(status).toHaveTextContent('Perkiraan. Angka pasti muncul sesudah disimpan.');
     await user.click(saveBuy());
@@ -279,7 +281,9 @@ describe('TradeSheet Jual (S14-SH4)', () => {
     expect(preview).not.toHaveBeenCalled(); // masih menunggu jeda ketikan
     const box = await waitFor(
       () => {
-        const el = screen.getAllByRole('status').find((s) => s.textContent.includes('Hasil bersih'));
+        const el = screen
+          .getAllByRole('status')
+          .find((s) => s.textContent.includes('Hasil bersih'));
         if (!el) throw new Error('pratinjau belum ada');
         return el;
       },

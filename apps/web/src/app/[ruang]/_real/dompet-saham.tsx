@@ -226,12 +226,7 @@ function HoldingRow({
                 <span>{C.priceMeta(h.close, h.closeOn)}</span>
               </>
             ) : null}
-            {state === 'fresh' ? null : (
-              <>
-                {h.avgCost === null && h.close === null ? null : <span aria-hidden="true">·</span>}
-                <PriceMarker h={h} />
-              </>
-            )}
+            {state === 'fresh' ? null : <PriceMarker h={h} />}
           </span>
         </summary>
         <div className="flex flex-col gap-3 pb-4">

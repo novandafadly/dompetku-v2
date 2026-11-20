@@ -1,7 +1,7 @@
 'use client';
 
 import type { IsoDate, Rupiah } from '@dompetku/domain';
-import { useRef, useState, type SyntheticEvent } from 'react';
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { DateInput } from '@/components/ui/date-input';
 import { Alert, SelectField } from '@/components/ui/form-parts';
@@ -67,6 +67,12 @@ function PriceSession({
   const busy = useRef(false);
   const priceRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  const spikeRef = useRef<HTMLDivElement>(null);
+
+  // Kotak lonjakan muncul di bawah lipatan layar kecil: gulir ke sana supaya sakelarnya terlihat.
+  useEffect(() => {
+    if (spike) spikeRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [spike]);
 
   const held = holdings.find((h) => h.ticker === ticker);
 
@@ -211,6 +217,7 @@ function PriceSession({
         <p className="text-caption font-medium text-text-muted">{C.priceScope(ticker)}</p>
         {spike ? (
           <div
+            ref={spikeRef}
             role="alert"
             className="flex flex-col gap-2 rounded-lg bg-warning-tint p-3 text-warning"
           >

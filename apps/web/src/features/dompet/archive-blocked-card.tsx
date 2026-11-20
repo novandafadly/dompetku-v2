@@ -2,7 +2,6 @@ import type { Route } from 'next';
 import Link from 'next/link';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { focusRing } from '@/components/ui/styles';
-import { SAHAM_COPY } from '@/features/saham/copy';
 
 /**
  * Dompet tidak bisa diarsipkan: tombol arsip tidak dirender; kartu ini menjelaskan alasan dan jalan
@@ -18,7 +17,7 @@ export function ArchiveBlockedCard({
   name: string;
   goal?: { name: string; href: Route };
   /** Dompet saham masih berlembar (S14-AS6): tautan ke daftar saham di halaman yang sama. */
-  stock?: { href: string };
+  stock?: { href: string; label: string };
   /** Kalimat pengganti (aset, S14-AS6): masih bernilai / masih memegang saham. */
   text?: string;
 }) {
@@ -36,7 +35,7 @@ export function ArchiveBlockedCard({
           href={stock.href}
           className={`inline-flex min-h-11 items-center rounded-md px-1 text-label font-bold text-accent-text hover-pointer:underline ${focusRing}`}
         >
-          {SAHAM_COPY.viewStock}
+          {stock.label}
         </a>
       )}
       {goal === undefined ? null : (
