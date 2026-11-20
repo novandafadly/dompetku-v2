@@ -141,8 +141,9 @@ describe('TradeSheet Beli (S14-SH3)', () => {
     expect(screen.queryByText(/tidak mengubah modal trading/)).toBeNull();
   });
 
-  it('saldo dompet sumber kurang: peringatan, tombol Tetap simpan pembelian, mengirim allowNegative', async () => {
+  it('saldo dompet sumber kurang: hanya peringatan, kirim pertama allowNegative false, true sesudah server menolak (S6-C3)', async () => {
     const user = userEvent.setup();
+    buy.mockResolvedValueOnce({ ok: false, error: { code: 'saldo_negatif' } });
     mount('buy');
     await screen.findByRole('dialog');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Dari dompet' }), 'bca');
@@ -152,11 +153,19 @@ describe('TradeSheet Beli (S14-SH3)', () => {
     expect(
       screen.getByText(/Saldo BCA tidak cukup. Kalau dibeli, saldonya jadi minus./),
     ).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: 'Tetap simpan pembelian' }));
+    // Prediksi klien tidak mengubah tombol: konfirmasi eksplisit hanya sesudah server menolak.
+    expect(screen.queryByRole('button', { name: 'Tetap simpan pembelian' })).toBeNull();
+    await user.click(saveBuy());
     await waitFor(() => {
       expect(buy).toHaveBeenCalledTimes(1);
     });
-    expect(buy.mock.calls[0]?.[0]).toMatchObject({ allowNegative: true });
+    expect(buy.mock.calls[0]?.[0]).toMatchObject({ allowNegative: false });
+    await user.click(await screen.findByRole('button', { name: 'Tetap simpan pembelian' }));
+    await waitFor(() => {
+      expect(buy).toHaveBeenCalledTimes(2);
+    });
+    const [first, second] = buy.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(second).toEqual({ ...first, allowNegative: true });
   });
 
   it('server menolak saldo_negatif sekali: peringatan muncul, simpan berikutnya allowNegative', async () => {
@@ -373,6 +382,49 @@ describe('TradeSheet Jual (S14-SH4)', () => {
       realized: 56_667,
       cashName: 'BCA',
     });
+  });
+
+  it('hasil bersih <= 0 (biaya + pajak >= nilai jual): pesan khusus, pratinjau tidak dipanggil (K1)', async () => {
+    const user = userEvent.setup();
+    sell.mockResolvedValue({ ok: false, error: { code: 'invalid', field: 'amount' } });
+    mount('sell');
+    await screen.findByRole('dialog');
+    await user.type(field('Jumlah'), '1');
+    await user.type(field('Harga per lembar'), '1');
+    await user.type(field(/Biaya broker/), '5000'); // 5.000 >= 100 x 1
+    expect(screen.getByText('Biaya dan pajak lebih besar dari hasil jual.')).toBeTruthy();
+    expect(screen.queryByText('Total terlalu besar. Periksa jumlah dan harganya.')).toBeNull();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(preview).not.toHaveBeenCalled();
+    await user.click(saveSell());
+    await waitFor(() => {
+      expect(sell).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText('Total terlalu besar. Periksa jumlah dan harganya.')).toBeNull();
+    expect(document.activeElement).toBe(field('Harga per lembar'));
+  });
+
+  it('pratinjau: baris untung/rugi punya dt (dl sah, K5)', async () => {
+    const user = userEvent.setup();
+    mount('sell');
+    await screen.findByRole('dialog');
+    await user.type(field('Jumlah'), '1');
+    await user.type(field('Harga per lembar'), '9800');
+    const box = await waitFor(
+      () => {
+        const el = screen
+          .getAllByRole('status')
+          .find((s) => s.textContent.includes('Hasil bersih'));
+        if (!el) throw new Error('pratinjau belum ada');
+        return el;
+      },
+      { timeout: 3000 },
+    );
+    const dl = box.querySelector('dl');
+    if (dl === null) throw new Error('dl tidak ada');
+    expect(dl.querySelectorAll('dt')).toHaveLength(dl.querySelectorAll('dd').length);
+    expect(dl.querySelector('dd + dd, dt + dt')).toBeNull();
+    expect(dl).toHaveTextContent('Untung atau rugi');
   });
 
   it('insufficient_shares dari server dipetakan ke kolom Jumlah', async () => {

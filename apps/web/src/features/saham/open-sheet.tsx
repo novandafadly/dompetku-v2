@@ -17,6 +17,7 @@ import type { StockScope, StockSource } from './context';
 import { latestOf } from './context';
 import { SharesField, sharesOf, type Unit } from './fields';
 import {
+  FIELD_AMOUNT,
   FIELD_DATE,
   FIELD_DATE_EARLY,
   FIELD_PRICE,
@@ -132,6 +133,7 @@ function OpenSession({ open, onOpenChange, scope, source, onSaved, returnFocus }
     } else if (code === 'invalid') {
       const f = field ?? '';
       if (f.includes('ticker')) setErrors({ ticker: FIELD_TICKER });
+      else if (f.includes('amount')) setErrors({ shares: FIELD_AMOUNT });
       else if (f.includes('shares')) setErrors({ shares: FIELD_SHARES });
       else if (f.includes('price')) setErrors({ price: FIELD_PRICE });
       else if (f === 'on') setErrors({ date: FIELD_DATE });

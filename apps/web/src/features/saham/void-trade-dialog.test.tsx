@@ -107,4 +107,15 @@ describe('VoidTradeDialog (S14-SH7)', () => {
     });
     expect(voidTrade.mock.calls[1]?.[0]).toMatchObject({ allowNegative: true });
   });
+
+  it('not_found: teks Transaksi, bukan Saham (K3); tombol dimatikan', async () => {
+    const user = userEvent.setup();
+    voidTrade.mockResolvedValue({ ok: false, error: { code: 'not_found' } });
+    mount();
+    await screen.findByRole('alertdialog');
+    await user.click(screen.getByRole('button', { name: 'Batalkan transaksi' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Transaksi ini tidak ditemukan. Muat ulang halaman.',
+    );
+  });
 });

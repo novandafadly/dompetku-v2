@@ -94,4 +94,19 @@ describe('OpenSheet (S14-SH6)', () => {
     ).toBeTruthy();
     expect(open.mock.calls[0]?.[0]).toMatchObject({ shares: 300 });
   });
+
+  it('total terlalu besar dari server (invalid/amount) dipetakan ke kolom Jumlah, bukan galat jaringan (K2)', async () => {
+    const user = userEvent.setup();
+    open.mockResolvedValue({ ok: false, error: { code: 'invalid', field: 'amount' } });
+    mount();
+    await screen.findByRole('dialog');
+    await user.type(field('Kode saham'), 'TLKM');
+    await user.type(field('Jumlah'), '250');
+    await user.type(field('Harga rata-rata per lembar'), '3000');
+    await user.click(save());
+    expect(
+      await screen.findByText('Total terlalu besar. Periksa jumlah dan harganya.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Sambungan ke server terputus/)).toBeNull();
+  });
 });

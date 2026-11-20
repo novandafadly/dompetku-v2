@@ -285,6 +285,46 @@ describe('StockSection (S14-SH1/SH2)', () => {
     expect(document.body).toHaveTextContent(/\+Rp\s*16\.000 untung/);
   });
 
+  it('sudah dijual habis: transaksi terakhir tampil dengan Batalkan (P2), supaya penjualan terakhir bisa dibatalkan', () => {
+    render1(
+      ov([
+        holding({
+          ticker: 'GOTO',
+          holdingId: 'g',
+          shares: 0,
+          realized: 16_000,
+          marketValue: 0,
+          lastTradeId: 'g2',
+          trades: [
+            {
+              id: 'g2',
+              side: 'sell',
+              shares: 100,
+              price: 80,
+              occurredOn: '2026-11-14',
+              counterName: 'BCA',
+            },
+            {
+              id: 'g1',
+              side: 'buy',
+              shares: 100,
+              price: 64,
+              occurredOn: '2026-11-10',
+              counterName: 'BCA',
+            },
+          ],
+        }),
+      ]),
+    );
+    const list = screen.getByText('Sudah dijual habis (1)').closest('details');
+    if (list === null) throw new Error('lipatan tidak ada');
+    expect(list).toHaveTextContent(/14 Nov · Jual 1 lot @ Rp\s*80/);
+    expect(list).not.toHaveTextContent(/Beli 1 lot/);
+    expect(
+      within(list).getAllByRole('button', { name: /Batalkan transaksi GOTO terakhir/ }),
+    ).toHaveLength(1);
+  });
+
   it('kosong: ajakan Beli saham + Saham yang sudah dimiliki; tanpa saham tetapi ada riwayat jual = lipatan', () => {
     render1(ov([]));
     expect(screen.getByText('Belum ada saham di Ajaib.')).toBeTruthy();

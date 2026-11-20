@@ -125,6 +125,7 @@ function TradeSession({
   const priceRef = useRef<HTMLInputElement>(null);
   const cashRef = useRef<HTMLSelectElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  const warnRef = useRef<HTMLParagraphElement>(null);
 
   const held: HoldingLite | undefined = holdings.find((h) => h.ticker === ticker);
   const shares = sharesOf(unit, amount);
@@ -139,11 +140,24 @@ function TradeSession({
       : null;
   const estimateOk = estimate !== null && estimate <= MAX_TOTAL;
   const negative = estimateOk && chosen !== undefined && toRupiah(estimate) > chosen.balance;
+  // Hanya untuk memilih pesan: hasil bersih <= 0 (angka pasti tetap dari SQL, pratinjau tidak dipanggil).
+  const netTooSmall =
+    sell &&
+    shares !== null &&
+    price !== null &&
+    price > 0 &&
+    BigInt(fee ?? 0) + BigInt(tax ?? 0) >= BigInt(shares) * BigInt(price);
   const over = sell && shares !== null && held !== undefined && shares > held.shares;
 
   // Pratinjau jual: dipanggil sesudah kode, jumlah, dan harga sah; hasil basi (kunci beda) diabaikan.
   const previewInput =
-    sell && held !== undefined && shares !== null && !over && price !== null && price > 0
+    sell &&
+    held !== undefined &&
+    shares !== null &&
+    !over &&
+    !netTooSmall &&
+    price !== null &&
+    price > 0
       ? { accountId: account.id, ticker, shares, price, fee: fee ?? 0, tax: tax ?? 0 }
       : null;
   const previewKey =
@@ -173,6 +187,14 @@ function TradeSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewKey]);
   const preview = previewKey !== null && pv?.key === previewKey ? pv.value : null;
+
+  // Peringatan saldo muncul di bawah lipatan layar kecil: gulir ke sana supaya terlihat.
+  const warnBalance = !sell && (negative || forced);
+  useEffect(() => {
+    // happy-dom (tes) tidak punya scrollIntoView.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (warnBalance) warnRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [warnBalance]);
 
   function clear(key?: keyof Errors) {
     if (key !== undefined) setErrors((e) => ({ ...e, [key]: undefined }));
@@ -220,7 +242,8 @@ function TradeSession({
         : await source.buy({
             ...base,
             fromAccountId: chosen.id,
-            allowNegative: negative || forced,
+            // Kirim pertama selalu false (S6-C3): minus hanya sesudah server menolak.
+            allowNegative: forced,
           });
     } catch {
       res = { ok: false as const, error: { code: 'network' as LedgerErrorCode } };
@@ -273,6 +296,8 @@ function TradeSession({
         if (f.includes('ticker')) {
           setErrors({ ticker: FIELD_TICKER });
           (sell ? tickerSelectRef : tickerRef).current?.focus();
+        } else if (sell && f.includes('amount') && netTooSmall) {
+          priceRef.current?.focus();
         } else if (f.includes('shares') || f.includes('amount')) {
           setErrors({ shares: f.includes('amount') ? FIELD_AMOUNT : FIELD_SHARES });
           sharesRef.current?.focus();
@@ -298,7 +323,7 @@ function TradeSession({
 
   const titleText = sell ? C.sellTitle : C.buyTitle;
   const noCash = cash.length === 0;
-  const saveLabel = sell ? C.saveSell : negative || forced ? C.saveBuyAnyway : C.saveBuy;
+  const saveLabel = sell ? C.saveSell : forced ? C.saveBuyAnyway : C.saveBuy;
 
   return (
     <Sheet
@@ -459,7 +484,11 @@ function TradeSession({
             ) : null}
           </div>
           {sell ? (
-            <SellPreview preview={preview} loading={previewInput !== null && preview === null} />
+            <SellPreview
+              preview={preview}
+              loading={previewInput !== null && preview === null}
+              netTooSmall={netTooSmall}
+            />
           ) : (
             <div role="status" aria-live="polite" className="flex flex-col gap-0.5">
               {estimateOk ? (
@@ -491,8 +520,9 @@ function TradeSession({
           {fromTrading ? (
             <p className="text-caption font-medium text-text-muted">{C.tradingNote(chosen.name)}</p>
           ) : null}
-          {!sell && (negative || forced) && chosen !== undefined ? (
+          {warnBalance && chosen !== undefined ? (
             <p
+              ref={warnRef}
               role="status"
               className="flex items-start gap-2 rounded-lg bg-warning-tint p-3 text-label font-semibold text-warning"
             >
@@ -545,9 +575,11 @@ function TradeSession({
 function SellPreview({
   preview,
   loading,
+  netTooSmall,
 }: {
   preview: SellPreviewVM | 'failed' | null;
   loading: boolean;
+  netTooSmall: boolean;
 }) {
   return (
     <div
@@ -556,7 +588,9 @@ function SellPreview({
       aria-busy={loading || undefined}
       className="flex min-h-11 flex-col justify-center gap-1 rounded-xl bg-surface-2 p-3"
     >
-      {preview === 'failed' ? (
+      {netTooSmall ? (
+        <p className="text-meta font-semibold text-danger">{C.netNonPositive}</p>
+      ) : preview === 'failed' ? (
         <p className="text-meta font-medium text-text-soft">{C.previewFailed}</p>
       ) : preview !== null ? (
         <dl className="flex flex-col gap-1">
@@ -571,6 +605,7 @@ function SellPreview({
             </dd>
           </div>
           <div className="flex items-baseline justify-end">
+            <dt className="sr-only">{C.gainLabel}</dt>
             <dd className="num text-body font-bold text-text">
               <span aria-hidden="true">{gainText(preview.realized)}</span>
               <span className="sr-only">{gainSpoken(preview.realized)}</span>

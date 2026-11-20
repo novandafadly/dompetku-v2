@@ -103,7 +103,9 @@ export function VoidTradeDialog({
             ? 'Saldo dompet tidak cukup. Kalau tetap dibatalkan, saldonya jadi minus.'
             : failed === 'trade_not_latest'
               ? C.voidNotLatest(ticker)
-              : stockFailedText(failed)
+              : failed === 'not_found'
+                ? C.voidNotFound
+                : stockFailedText(failed)
       }
     />
   );

@@ -195,6 +195,16 @@ describe('saham (S14 Task 10)', () => {
     expect((await bbca())?.lastTradeId).toBe(second.tradeId);
   });
 
+  it('[P2] jual semua: kode berlembar 0 tetap memuat transaksi terakhir; dibatalkan = kode aktif lagi', async () => {
+    await buy({ shares: 200 });
+    const s = await sell({ shares: 200, fee: 0, tax: 0 });
+    const gone = await bbca();
+    expect(gone).toMatchObject({ shares: 0, lastTradeId: s.tradeId });
+    expect(gone?.trades[0]).toMatchObject({ id: s.tradeId, side: 'sell', shares: 200 });
+    await voidStockTrade(nPribadi, { clientId: randomUUID(), tradeId: s.tradeId });
+    expect(await bbca()).toMatchObject({ shares: 200, costTotal: 1_831_000, realized: 0 });
+  });
+
   it('beli idempoten: clientId sama = satu transaksi', async () => {
     const clientId = randomUUID();
     const a = await buy({ clientId });

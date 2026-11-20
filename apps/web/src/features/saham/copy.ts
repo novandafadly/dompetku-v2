@@ -120,6 +120,8 @@ export const SAHAM_COPY = {
   netLabel: 'Hasil bersih',
   costOutLabel: 'Biaya beli yang keluar',
   previewLoading: 'Menghitung…',
+  netNonPositive: 'Biaya dan pajak lebih besar dari hasil jual.',
+  gainLabel: 'Untung atau rugi',
   previewFailed: 'Pratinjau belum bisa dihitung. Angka pasti muncul sesudah disimpan.',
   priceClose: 'Harga penutupan per lembar',
   priceDateField: 'Tanggal harga',
@@ -161,6 +163,7 @@ export const SAHAM_COPY = {
   voidRestorable: 'Bisa dipulihkan dari Sampah.',
   voidNotLatest: (ticker: string) =>
     `Sudah ada transaksi ${ticker} yang lebih baru. Muat ulang halaman.`,
+  voidNotFound: 'Transaksi ini tidak ditemukan. Muat ulang halaman.',
   voidConfirm: 'Batalkan transaksi',
   voidAnyway: 'Tetap batalkan',
   back: 'Kembali',

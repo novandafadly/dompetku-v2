@@ -394,15 +394,32 @@ export function StockSection({
             <CaretDownIcon size={16} weight="bold" aria-hidden="true" className="shrink-0" />
           </summary>
           <ul className="pb-3">
-            {soldOut.map((h) => (
-              <li
-                key={h.holdingId}
-                className="flex min-h-11 items-center justify-between gap-3 border-t border-hairline text-meta font-medium"
-              >
-                <span className="text-body font-bold text-text">{h.ticker}</span>
-                <Gain value={h.realized} className="text-text-soft" />
-              </li>
-            ))}
+            {soldOut.map((h) => {
+              const last = h.trades.find((t) => t.id === h.lastTradeId);
+              return (
+                <li key={h.holdingId} className="border-t border-hairline">
+                  <div className="flex min-h-11 items-center justify-between gap-3 text-meta font-medium">
+                    <span className="text-body font-bold text-text">{h.ticker}</span>
+                    <Gain value={h.realized} className="text-text-soft" />
+                  </div>
+                  {last === undefined ? null : (
+                    <div className="flex min-h-11 items-center justify-between gap-2 text-meta font-medium text-text">
+                      <span className="min-w-0">
+                        <span className="text-text-muted">
+                          {shortDateLabel(last.occurredOn)} ·{' '}
+                        </span>
+                        {C.tradeLine(last.side, last.shares, last.price)}
+                      </span>
+                      <VoidTradeIsland
+                        ticker={h.ticker}
+                        trade={last}
+                        accountName={scope.account.name}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </details>
       )}
