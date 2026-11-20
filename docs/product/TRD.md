@@ -228,20 +228,20 @@ Anti-tujuan: data Pribadi pasangan terlihat lewat jalur apa pun (laporan, ekspor
 
 ### 3.8 Job terjadwal
 
-| Job                                                   | Jadwal (WIB)          | Tempat     | Sumber                                 |
-| ----------------------------------------------------- | --------------------- | ---------- | -------------------------------------- |
-| `recurring_materialize` (`jobs.materialize_bills`)    | 00:05                 | worker     | spec §5.5                              |
-| `net_worth_snapshot` (untuk H−1, plus hari kotor)     | 00:10                 | worker     | spec §9.1 (menggantikan 23:55 di §5.5) |
-| `dq_reconcile`                                        | 01:00                 | worker     | spec §9.1                              |
-| `purge_voided`                                        | mingguan              | worker     | spec §5.5                              |
-| `purge_unfinished_users` (akun tanpa profil > 72 jam) | harian 01:30          | worker     | keputusan pemilik #3; BSD §10          |
-| `purge_idempotency` (kunci > 30 hari)                 | **Belum diputuskan**  | worker     | round2 backend A6                      |
-| `purge_audit` (> 1 tahun)                             | **Belum diputuskan**  | worker     | round1 security R12                    |
-| dump bulanan `pg_dump` terenkripsi                    | tanggal 1, 02:45      | timer host | §3.3                                   |
-| uji restore (`backup_verify`)                         | mingguan              | timer host | spec §9.2                              |
-| `price_refresh`                                       | 16:30 hari bursa (M4) | worker     | spec §5.5                              |
+| Job                                                                           | Jadwal (WIB)                                                | Tempat     | Sumber                                 |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------- | -------------------------------------- |
+| `recurring_materialize` (`jobs.materialize_bills`)                            | 00:05                                                       | worker     | spec §5.5                              |
+| `net_worth_snapshot` (untuk H−1, plus hari kotor; S14, maks 400 hari per run) | 00:10                                                       | worker     | spec §9.1 (menggantikan 23:55 di §5.5) |
+| `dq_reconcile`                                                                | 01:00                                                       | worker     | spec §9.1                              |
+| `purge_voided`                                                                | mingguan                                                    | worker     | spec §5.5                              |
+| `purge_unfinished_users` (akun tanpa profil > 72 jam)                         | harian 01:30                                                | worker     | keputusan pemilik #3; BSD §10          |
+| `purge_idempotency` (kunci > 30 hari)                                         | **Belum diputuskan**                                        | worker     | round2 backend A6                      |
+| `purge_audit` (> 1 tahun)                                                     | **Belum diputuskan**                                        | worker     | round1 security R12                    |
+| dump bulanan `pg_dump` terenkripsi                                            | tanggal 1, 02:45                                            | timer host | §3.3                                   |
+| uji restore (`backup_verify`)                                                 | mingguan                                                    | timer host | spec §9.2                              |
+| `price_refresh` (S14; tanpa `PRICE_PROVIDER` dilewati)                        | 16:30 dan ulangan 19:30 Senin–Jumat, kecuali `app.holidays` | worker     | spec §5.5; plan S14 K9                 |
 
-Semua job idempoten, status di `jobs.job_runs`, gagal = alert (spec §5.5).
+Semua job idempoten, status di `jobs.job_runs`, gagal = alert (spec §5.5). `dq_reconcile` kini 19 baris cek (S14 menambah DQ08 snapshot, DQ18 saham, DQ19 aset). Harga saham hanya lewat server (input manual atau `price_refresh`); browser tidak pernah memanggil penyedia, tidak ada route proxy harga, CSP tetap. Egress worker: subnet `172.16.29.0/24`, IMDS/jaringan privat/CGNAT di-DROP `firewall.sh` (`docs/ops/runbook-s7-worker.md` "Pasang S14"). `price_refresh` dilewati sebelum 16:15 WIB dan bila run hari itu sudah menulis harga.
 
 ## 4. Strategi pengujian
 
