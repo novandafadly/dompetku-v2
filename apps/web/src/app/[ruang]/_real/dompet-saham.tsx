@@ -198,33 +198,33 @@ function HoldingRow({
           aria-label={`${h.ticker}, ${sharesLabel(h.shares)}`}
           className="flex min-h-18 cursor-pointer list-none flex-col justify-center gap-1 py-3 outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden"
         >
-          <span className="flex items-start justify-between gap-3">
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-body font-bold text-text">{h.ticker}</span>
-              <span className="flex flex-wrap gap-x-1 text-meta font-medium text-text-muted">
-                {sharesLabel(h.shares)
-                  .split(' · ')
-                  .map((part, i) => (
-                    <span key={part} className="whitespace-nowrap">
-                      {i === 0 ? part : `· ${part}`}
-                    </span>
-                  ))}
-              </span>
-            </span>
-            <span className="flex flex-col items-end gap-0.5 text-right">
+          <span className="flex items-baseline justify-between gap-3">
+            <span className="text-body font-bold text-text">{h.ticker}</span>
+            <span className="flex min-w-0 items-center gap-2">
               <MoneyText value={h.marketValue} size="list" />
-              {state === 'none' ? (
-                <span className="text-meta font-medium text-text-soft">{C.asCost}</span>
-              ) : h.unrealized === null ? null : (
-                <Gain value={h.unrealized} className="text-meta font-semibold text-text-soft" />
-              )}
+              <CaretDownIcon
+                size={16}
+                weight="bold"
+                aria-hidden="true"
+                className="shrink-0 text-text-soft transition-transform group-open:rotate-180"
+              />
             </span>
-            <CaretDownIcon
-              size={16}
-              weight="bold"
-              aria-hidden="true"
-              className="mt-1 shrink-0 text-text-soft transition-transform group-open:rotate-180"
-            />
+          </span>
+          <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <span className="flex flex-wrap gap-x-1 text-meta font-medium text-text-muted">
+              {sharesLabel(h.shares)
+                .split(' · ')
+                .map((part, i) => (
+                  <span key={part} className="whitespace-nowrap">
+                    {i === 0 ? part : `· ${part}`}
+                  </span>
+                ))}
+            </span>
+            {state === 'none' ? (
+              <span className="text-meta font-medium text-text-soft">{C.asCost}</span>
+            ) : h.unrealized === null ? null : (
+              <Gain value={h.unrealized} className="text-meta font-semibold text-text-soft" />
+            )}
           </span>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-meta font-medium text-text-soft">
             <span>
@@ -272,7 +272,9 @@ function HoldingRow({
             <p className="text-meta font-medium text-text-soft">{C.staleHint}</p>
           ) : null}
           {state === 'held' && h.heldOn !== null ? (
-            <p className="text-meta font-medium text-warning">{C.heldHint(h.heldOn, h.closeOn)}</p>
+            <p className="text-meta font-medium text-text-soft">
+              {C.heldHint(h.heldOn, h.closeOn)}
+            </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <StockButtonIsland
