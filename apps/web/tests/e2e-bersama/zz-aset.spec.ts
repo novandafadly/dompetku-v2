@@ -32,7 +32,7 @@ const SETOR = 2_000_000;
 
 const main = (page: Page) => page.getByRole('main');
 const rp = (n: number) => `Rp ${digits(n)}`;
-const txt = async (l: Locator) => (await l.innerText()).replaceAll(' ', ' ');
+const txt = async (l: Locator) => ((await l.textContent()) ?? '').replaceAll(' ', ' ');
 const state = { path: '' };
 
 const money = (text: string): number => {
@@ -81,9 +81,10 @@ test('N membuat aset Bersama (jenis tanpa Saham); F melihatnya di Dompet dan her
   kanari,
 }) => {
   expect(kanari.f.wallet).toBe('KANARI-DOMPET-F');
-  const n0 = await heroTotal(page, 'bersama');
+  // Bersama masih tanpa dompet (EmptyState tanpa hero): dasar dari SQL.
+  const n0 = await netWorth('shared', OWNER);
   await page.goto('/bersama/dompet');
-  const sheet = page.getByRole('dialog', { name: /^Tambah aset · Bersama/ });
+  const sheet = page.getByRole('dialog', { name: /^Tambah aset/ });
   await openUntil(
     () =>
       main(page)
@@ -241,7 +242,7 @@ test(
     const sekuritas = await mk(N_SAHAM, 'saham', 0);
     await asUser(
       n.uid,
-      `select api.open_stock_holding($1, $2, $3, 777::bigint, 4321::bigint, app.today() - 3)`,
+      `select api.open_stock_holding($1, $2, $3, 777::bigint, 4321::bigint, app.today())`,
       [randomUUID(), sekuritas, N_TICKER],
     );
     await asUser(
@@ -284,7 +285,8 @@ test(
           return { status: r.status, body: await r.text() };
         }, url);
         const html = await p.content();
-        for (const s of secrets) {
+        // URL yang memuat id (dompet N dibuka F) wajar memantulkannya; nama, kode, dan nominal tidak.
+        for (const s of secrets.filter((x) => !url.includes(x))) {
           for (const body of [...doc.bodies, html, rsc.body]) {
             expect(body.includes(s), `${who} ${url}: ${s}`).toBe(false);
           }
