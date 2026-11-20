@@ -456,7 +456,11 @@ function TradeSession({
               </p>
             )}
           </div>
-          <div className="grid grid-cols-1 items-start gap-3 min-[390px]:grid-cols-2">
+          {/* Dua kolom hanya untuk Jual (biaya + pajak); Beli satu isian penuh lebar (S14-C2). */}
+          <div
+            data-testid="saham-fee-row"
+            className={`grid grid-cols-1 items-start gap-3 ${sell ? 'min-[390px]:grid-cols-2' : ''}`}
+          >
             <div className="flex min-w-0 flex-col gap-1.5">
               <MoneyInput
                 label={C.feeField}

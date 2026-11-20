@@ -72,6 +72,8 @@ describe('TradeSheet Beli (S14-SH3)', () => {
       .getAllByRole('option')
       .map((o) => o.textContent);
     expect(options).toEqual(['RDN Ajaib', 'BCA']);
+    // S14-C2: Biaya broker sendirian penuh lebar (tanpa kolom kedua kosong).
+    expect(screen.getByTestId('saham-fee-row').className).not.toContain('grid-cols-2');
   });
 
   it('lot dikali 100 saat dikirim; teks pasti = 200 lembar; perkiraan Total keluar berlabel Perkiraan', async () => {
@@ -277,6 +279,7 @@ describe('TradeSheet Jual (S14-SH4)', () => {
     expect(field('Jumlah')).toHaveValue('300');
     await user.selectOptions(kode, 'TLKM');
     expect(screen.getByText('Dimiliki 250 lembar')).toBeTruthy();
+    expect(screen.getByTestId('saham-fee-row').className).toContain('min-[390px]:grid-cols-2');
   });
 
   it('pratinjau dari server sesudah jeda: hasil bersih, biaya beli keluar, untung dengan kata (netral)', async () => {
