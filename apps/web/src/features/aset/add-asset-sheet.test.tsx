@@ -139,4 +139,38 @@ describe('AddAssetSheet (S14-AS2)', () => {
       await screen.findByText('Dompet atau aset bernama Emas Antam sudah ada di Pribadi.'),
     ).toBeTruthy();
   });
+
+  it('nilai di atas 10^13: teks terlalu besar (bukan minus), fokus ke kolom, server tidak dipanggil', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('dialog');
+    await user.selectOptions(kind(), 'emas');
+    await user.type(name(), 'Emas Antam');
+    const value = screen.getByRole('textbox', { name: /Nilai sekarang/ });
+    await user.type(value, '99999999999999');
+    await user.click(save());
+    expect(
+      await screen.findByText('Nilai terlalu besar. Maksimal Rp 10.000.000.000.000.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Nilai tidak boleh minus.')).toBeNull();
+    expect(document.activeElement).toBe(value);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('Sejak boleh sampai 2000 (min kolom); occurred_on dari server = galat kolom tanggal', async () => {
+    const user = userEvent.setup();
+    onSubmit.mockResolvedValue({ ok: false, code: 'invalid', field: 'occurred_on' });
+    mount();
+    await screen.findByRole('dialog');
+    await user.selectOptions(kind(), 'emas');
+    await user.type(name(), 'Emas Antam');
+    await user.type(screen.getByRole('textbox', { name: /Nilai sekarang/ }), '1000000');
+    const since = screen.getByLabelText('Sejak');
+    expect(since.getAttribute('min')).toBe('2000-01-01');
+    await user.click(save());
+    expect(
+      await screen.findByText('Tanggal harus antara 1 Januari 2000 dan hari ini.'),
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(since);
+  });
 });

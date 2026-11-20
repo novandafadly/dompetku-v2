@@ -130,4 +130,35 @@ describe('RevalueSheet: idem_mismatch', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('bentrok');
     expect(onStale).toHaveBeenCalled();
   });
+
+  it('nilai di atas 10^13: galat di kolom (terlalu besar), fokus ke kolom, server tidak dipanggil', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('dialog');
+    await user.type(input(), '99999999999999');
+    await user.click(save());
+    expect(
+      await screen.findByText('Nilai terlalu besar. Maksimal Rp 10.000.000.000.000.'),
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(input());
+    expect(revalue).not.toHaveBeenCalled();
+  });
+
+  it('invalid dari server: occurred_on = galat Tanggal (bukan teks minus); value = galat kolom nilai', async () => {
+    const user = userEvent.setup();
+    revalue.mockResolvedValueOnce({ ok: false, error: { code: 'invalid', field: 'occurred_on' } });
+    mount();
+    await screen.findByRole('dialog');
+    await user.type(input(), '5300000');
+    await user.click(save());
+    expect(
+      await screen.findByText('Tanggal harus antara 1 Januari 2000 dan hari ini.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Nilai tidak boleh minus.')).toBeNull();
+    expect(screen.getByLabelText('Tanggal').getAttribute('min')).toBe('2000-01-01');
+    revalue.mockResolvedValueOnce({ ok: false, error: { code: 'invalid', field: 'value' } });
+    await user.click(save());
+    expect(await screen.findByText('Nilai tidak boleh minus.')).toBeTruthy();
+    expect(document.activeElement).toBe(input());
+  });
 });

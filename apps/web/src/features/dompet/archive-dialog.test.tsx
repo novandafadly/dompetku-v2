@@ -43,6 +43,14 @@ describe('ArchiveWalletDialog (S7-W3)', () => {
     );
   });
 
+  it('aset (S14): butir Bersama dan galat menyebut aset, bukan dompet', async () => {
+    dialog({ ruang: 'bersama', name: 'Emas', asset: true, failure: 'not_found' });
+    const d = await screen.findByRole('alertdialog', { name: 'Arsipkan Emas?' });
+    expect(d).toHaveTextContent('Aset ini dipakai bersama;');
+    expect(d).toHaveTextContent('Aset ini sudah tidak ada. Muat ulang halaman.');
+    expect(d).not.toHaveTextContent('Dompet ini');
+  });
+
   it('Arsipkan memanggil onConfirm sekali', async () => {
     const user = userEvent.setup();
     const onConfirm = dialog();
