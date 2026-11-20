@@ -55,14 +55,6 @@ async function wallet(
   return a.id;
 }
 
-async function transfer(from: string, to: string, amount: number) {
-  await api(
-    `select api.create_transfer(p_client_id => $1, p_space_id => $2, p_from_account => $3,
-       p_to_account => $4, p_amount => $5::bigint, p_allow_negative => true)`,
-    [randomUUID(), sid, ids[from], ids[to], amount],
-  );
-}
-
 // --- audit ---------------------------------------------------------------------------------
 
 interface Audit {
