@@ -201,7 +201,15 @@ function HoldingRow({
           <span className="flex items-start justify-between gap-3">
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="text-body font-bold text-text">{h.ticker}</span>
-              <span className="text-meta font-medium text-text-muted">{sharesLabel(h.shares)}</span>
+              <span className="flex flex-wrap gap-x-1 text-meta font-medium text-text-muted">
+                {sharesLabel(h.shares)
+                  .split(' · ')
+                  .map((part, i) => (
+                    <span key={part} className="whitespace-nowrap">
+                      {i === 0 ? part : `· ${part}`}
+                    </span>
+                  ))}
+              </span>
             </span>
             <span className="flex flex-col items-end gap-0.5 text-right">
               <MoneyText value={h.marketValue} size="list" />
@@ -219,13 +227,14 @@ function HoldingRow({
             />
           </span>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-meta font-medium text-text-soft">
-            {h.avgCost === null ? null : <span>{C.avg(h.avgCost)}</span>}
-            {h.close !== null && h.closeOn !== null ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{C.priceMeta(h.close, h.closeOn)}</span>
-              </>
-            ) : null}
+            <span>
+              {[
+                h.avgCost === null ? null : C.avg(h.avgCost),
+                h.close !== null && h.closeOn !== null ? C.priceMeta(h.close, h.closeOn) : null,
+              ]
+                .filter((x) => x !== null)
+                .join(' · ')}
+            </span>
             {state === 'fresh' ? null : <PriceMarker h={h} />}
           </span>
         </summary>

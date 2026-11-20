@@ -186,7 +186,7 @@ describe('StockSection (S14-SH1/SH2)', () => {
     render1(ov([holding()]));
     const row = screen.getByTestId('holding-BBCA');
     expect(row).toHaveTextContent('BBCA');
-    expect(row).toHaveTextContent('300 lembar · 3 lot');
+    expect(row).toHaveTextContent(/300 lembar\s?· 3 lot/);
     expect(row).toHaveTextContent(/Rata-rata Rp\s*9\.203/);
     expect(row).toHaveTextContent(/Harga Rp\s*9\.800 · 14 Nov/);
     expect(row).toHaveTextContent(/\+Rp\s*179\.000 untung/);
