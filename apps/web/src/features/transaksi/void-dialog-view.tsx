@@ -44,6 +44,13 @@ export function voidSentenceVM(e: EntryVM): string {
       effect =
         e.direction === 'out' ? `Saldo ${own} bertambah ${amt}.` : `Saldo ${own} berkurang ${amt}.`;
       break;
+    case 'valuation':
+      // S14: perubahan nilai aset dibatalkan = nilainya kembali; bukan pemasukan/pengeluaran.
+      effect =
+        e.direction === 'out'
+          ? `Nilai ${own} naik lagi ${amt}.`
+          : `Nilai ${own} turun lagi ${amt}.`;
+      break;
     case 'reimbursement':
       // S7-D3: membatalkan reimburse membuka lagi sisa talangan.
       effect = `Saldo ${own} berkurang ${amt}. Sisa talangan bertambah lagi.`;
@@ -86,6 +93,8 @@ export function voidedToastVM(ruang: string, e: EntryVM): string {
       return `${head} ke ${e.accountName}`;
     case 'transfer':
       return `${head} dari ${e.accountName} ke ${e.counterAccountName ?? ''}`;
+    case 'valuation':
+      return `${head} pada ${e.accountName}`;
     case 'debt_principal':
     case 'debt_payment':
       return e.direction === 'in' ? `${head} ke ${e.accountName}` : `${head} dari ${e.accountName}`;

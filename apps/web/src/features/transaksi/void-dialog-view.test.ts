@@ -27,6 +27,16 @@ describe('Batalkan reimburse dan antar ruang (S7)', () => {
     expect(voidSentenceVM(base)).toContain('Saldo BCA berkurang');
   });
 
+  it('S14: perubahan nilai aset dibatalkan = nilai naik/turun lagi, bukan saldo', () => {
+    const naik: EntryVM = { ...base, kind: 'valuation', accountName: 'Emas', direction: 'in' };
+    expect(voidSentenceVM(naik)).toContain('Nilai Emas turun lagi');
+    expect(voidSentenceVM({ ...naik, direction: 'out' })).toContain('Nilai Emas naik lagi');
+    expect(voidSentenceVM(naik)).not.toContain('Saldo');
+    expect(voidedToastVM('Pribadi', naik)).toBe(
+      `Dibatalkan di Pribadi · ${formatRupiah(100_000)} pada Emas`,
+    );
+  });
+
   it('antar ruang: salinan S7-D1 kedua sisi, tanpa nama dompet ruang lain', () => {
     const st: EntryVM = { ...base, kind: 'space_transfer', direction: 'out', spaceKind: 'shared' };
     expect(voidSentenceVM(st)).toBe(

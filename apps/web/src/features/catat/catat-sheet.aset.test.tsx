@@ -86,7 +86,7 @@ describe('CatatSheet · isi/cairkan aset (S14-AS5)', () => {
       counterAccountId: 'a1',
       amount: 700_000,
     });
-    expect(toast.mock.calls[0]?.[0].message).toMatch(
+    expect((toast.mock.calls[0]?.[0] as { message: string }).message).toMatch(
       /Emas Antam diisi · Pribadi · Rp.*700\.000 dari BCA/,
     );
   });

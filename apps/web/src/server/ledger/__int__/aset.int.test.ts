@@ -294,7 +294,7 @@ describe('aset non-saham (S14 Task 9)', () => {
     expect(await loadAsetOverview(fPribadi)).toEqual([]);
     // Pengguna Luar tanpa ruang: bukan anggota = tidak ada.
     const lctx = await resolveSpace(h.pools, luar.id, 'pribadi').catch(() => null);
-    expect(lctx === null || lctx.spaceId !== nPribadi.spaceId).toBe(true);
+    expect(lctx?.spaceId).not.toBe(nPribadi.spaceId);
   });
 
   it('B16: setoran Pribadi ke aset Bersama menggeser kekayaan per ruang, jumlah kedua ruang tetap', async () => {

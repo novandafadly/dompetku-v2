@@ -22,11 +22,10 @@ export function ArchiveBlockedCard({
     <div className="flex flex-col items-start gap-1 rounded-xl border border-hairline bg-surface px-4 py-3">
       <p className="flex items-start gap-2 text-label font-semibold text-text">
         <InfoIcon size={18} className="mt-0.5 shrink-0 text-text-soft" />
-        {text !== undefined
-          ? text
-          : goal === undefined
+        {text ??
+          (goal === undefined
             ? `${name} masih berisi saldo. Pindahkan isinya dengan Transfer, lalu arsipkan.`
-            : `${name} masih punya tujuan aktif ${goal.name}. Selesaikan atau arsipkan tujuannya dulu, lalu arsipkan dompet ini.`}
+            : `${name} masih punya tujuan aktif ${goal.name}. Selesaikan atau arsipkan tujuannya dulu, lalu arsipkan dompet ini.`)}
       </p>
       {goal === undefined ? null : (
         <Link
