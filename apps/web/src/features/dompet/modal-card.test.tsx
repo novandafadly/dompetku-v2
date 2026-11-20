@@ -38,6 +38,52 @@ describe('ModalCard (S12-TR2/TR3)', () => {
     expect(warn.className).toContain('warning-tint');
   });
 
+  it('S14 K7: baris Saham (biaya beli) dari stockCost dengan keterangan, dan keterangan Kurang menyebut saham', () => {
+    render(
+      <ModalCard
+        variant="overview"
+        figures={fig({ balance: 2_000_000, stockCost: 1_800_000, shortfall: 1_200_000 })}
+      />,
+    );
+    const card = screen.getByRole('region', { name: 'Modal trading' });
+    expect(card).toHaveTextContent('Saham (biaya beli)');
+    expect(card).toHaveTextContent('1.800.000');
+    expect(card).toHaveTextContent(
+      'Dihitung dengan biaya beli, bukan nilai pasar, supaya modal tidak ikut naik-turun harga.',
+    );
+    const warn = screen.getByRole('status');
+    expect(warn).toHaveTextContent('Kurang Rp 1.200.000');
+    expect(warn).toHaveTextContent(
+      'Saldo trading ditambah biaya beli saham (termasuk saham yang sudah dimiliki) lebih kecil dari sisa modal yang kamu setor.',
+    );
+  });
+
+  it('S14 K7: tanpa saham (stockCost 0/kosong) tidak ada baris Saham dan keterangan Kurang lama', () => {
+    for (const stockCost of [undefined, 0]) {
+      const { unmount } = render(
+        <ModalCard
+          variant="overview"
+          figures={fig({
+            balance: 3_800_000,
+            shortfall: 1_200_000,
+            ...(stockCost === undefined ? {} : { stockCost }),
+          })}
+        />,
+      );
+      const card = screen.getByRole('region', { name: 'Modal trading' });
+      expect(card).not.toHaveTextContent('Saham (biaya beli)');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Saldo trading lebih kecil dari sisa modal yang kamu setor.',
+      );
+      unmount();
+    }
+  });
+
+  it('S14: kartu per dompet tidak memuat baris Saham', () => {
+    render(<ModalCard variant="detail" figures={fig({ stockCost: 1_800_000 })} />);
+    expect(screen.getByRole('region', { name: 'Modal' })).not.toHaveTextContent('Saham');
+  });
+
   it('Kurang tidak tampil di kartu per dompet (detail), hanya dari baris total overview', () => {
     render(
       <ModalCard variant="detail" figures={fig({ balance: 3_800_000, shortfall: 1_200_000 })} />,

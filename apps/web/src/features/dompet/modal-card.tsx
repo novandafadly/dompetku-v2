@@ -18,6 +18,12 @@ const COPY = {
   allWithdrawn: 'Modal sudah ditarik semua.',
   empty: 'Belum ada modal yang disetor. Setor modal dari detail dompet trading.',
   shortfallNote: 'Saldo trading lebih kecil dari sisa modal yang kamu setor.',
+  // S14 K7: biaya beli saham (bukan nilai pasar) ikut menutup sisa modal; hanya di total.
+  stock: 'Saham (biaya beli)',
+  stockNote:
+    'Dihitung dengan biaya beli, bukan nilai pasar, supaya modal tidak ikut naik-turun harga.',
+  shortfallNoteStock:
+    'Saldo trading ditambah biaya beli saham (termasuk saham yang sudah dimiliki) lebih kecil dari sisa modal yang kamu setor.',
 } as const;
 
 function Item({ label, children, note }: { label: string; children: ReactNode; note?: string }) {
@@ -40,7 +46,8 @@ function Item({ label, children, note }: { label: string; children: ReactNode; n
  * dari `api.trading_overview`; modal bukan pemasukan/pengeluaran, jadi netral tanpa hue (juga
  * `Hasil ditarik`), dan `Kurang` hanya peringatan `warning-tint`. Nol tidak ditulis "Rp 0":
  * kalimat (`Modal sudah ditarik semua.`) atau baris tidak dirender. `Kurang` hanya di `overview`
- * (baris total SQL), tidak di kartu per dompet.
+ * (baris total SQL), tidak di kartu per dompet. Saham (S14 K7): `stockCost` (Σ biaya beli, baris total)
+ * ikut dihitung SQL di `Kurang`; di sini hanya ditampilkan sebagai baris `Saham (biaya beli)`.
  */
 export function ModalCard({
   variant,
@@ -88,6 +95,11 @@ export function ModalCard({
                 <MoneyText value={figures.balance} />
               </Item>
             )}
+            {!detail && figures.stockCost !== undefined && figures.stockCost > 0 ? (
+              <Item label={COPY.stock} note={COPY.stockNote}>
+                <MoneyText value={figures.stockCost} />
+              </Item>
+            ) : null}
             {figures.realized > 0 ? (
               <Item label={COPY.realized} note={COPY.realizedNote}>
                 <MoneyText value={figures.realized} />
@@ -104,7 +116,11 @@ export function ModalCard({
               <WarningIcon size={16} weight="fill" className="mt-0.5 shrink-0" />
               <div className="flex min-w-0 flex-col gap-0.5">
                 <p className="text-label font-bold">{`Kurang ${formatRupiah(figures.shortfall)}`}</p>
-                <p className="text-meta font-medium text-pretty">{COPY.shortfallNote}</p>
+                <p className="text-meta font-medium text-pretty">
+                  {figures.stockCost !== undefined && figures.stockCost > 0
+                    ? COPY.shortfallNoteStock
+                    : COPY.shortfallNote}
+                </p>
               </div>
             </div>
           ) : null}

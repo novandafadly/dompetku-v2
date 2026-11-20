@@ -130,6 +130,7 @@ describe('saham (S14 Task 10)', () => {
       ['buy', 100],
       ['buy', 200],
     ]);
+    expect(p?.trades.map((t) => t.counterName)).toEqual(['BCA', 'BCA']); // sumber beli, untuk dialog batal
     expect(await balanceOf(ajaib)).toBe(2_761_000); // saldo buku = Σ biaya posisi
     expect(await balanceOf(bca)).toBe(20_000_000 - 2_761_000);
 
