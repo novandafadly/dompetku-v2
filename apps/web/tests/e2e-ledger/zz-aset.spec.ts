@@ -1,8 +1,17 @@
+import { randomUUID } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations } from '../e2e/axe';
-import { noHorizontalScroll } from '../e2e-auth/helpers';
-import { adminQuery, expect, test } from './fixtures';
-import { addWallet, digits, expectRouteBudget, spaceId, toasts } from './helpers';
+import { asUser, noHorizontalScroll, spaceOf } from '../e2e-auth/helpers';
+import { adminQuery, expect, OWNER, test } from './fixtures';
+import {
+  addWallet,
+  digits,
+  expectRouteBudget,
+  readHero,
+  rupiahOf,
+  spaceId,
+  toasts,
+} from './helpers';
 
 /**
  * S14 Task 12 mode nyata: aset non-saham di Dompet Pribadi (T11 bagian aset, S5, I6). Tambah aset emas
@@ -22,29 +31,10 @@ const OPENING = 5_000_000;
 const rp = (n: number) => `Rp ${digits(n)}`;
 const state = { path: '' };
 
-const money = (text: string): number => {
-  const m = /(−?)Rp\s([\d.]+)/.exec(text);
-  if (!m) throw new Error(`nominal tidak terbaca: ${text}`);
-  const n = Number((m[2] ?? '').replaceAll('.', ''));
-  return m[1] === '−' ? -n : n;
-};
-const txt = async (l: Locator) => (await l.innerText()).replaceAll(' ', ' ');
+const money = rupiahOf;
+const txt = async (l: Locator) => ((await l.textContent()) ?? '').replaceAll(' ', ' ');
 
-/** Total dan komponen hero Kekayaan bersih dari layar Dompet. */
-async function hero(page: Page): Promise<{ total: number; parts: Record<string, number> }> {
-  await page.goto('/pribadi/dompet');
-  const total = money(await txt(page.getByTestId('net-worth')));
-  const parts: Record<string, number> = {};
-  const box = page.getByTestId('net-worth-parts');
-  if ((await box.count()) > 0) {
-    const labels = await box.getByRole('term').allInnerTexts();
-    const values = await box.getByRole('definition').allInnerTexts();
-    labels.forEach((l, i) => {
-      parts[l] = money(values[i] ?? '');
-    });
-  }
-  return { total, parts };
-}
+const hero = (page: Page) => readHero(page, 'pribadi');
 
 /** Kebenaran SQL (superuser): kekayaan bersih Pribadi hari ini dari satu fungsi yang sama dengan hero. */
 async function sqlNetWorth(): Promise<number> {
@@ -134,7 +124,7 @@ async function isi(page: Page, amount: number) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-async function revalue(page: Page, value: number, hint: RegExp) {
+async function revalue(page: Page, value: number, hint: string) {
   await page.goto(state.path);
   const sheet = revalueSheet(page);
   const field = sheet.getByRole('textbox', { name: 'Nilai sekarang' });
@@ -243,7 +233,7 @@ test(
     const still = await reportAndSafe(page);
     const sums = await incomeExpense();
 
-    await revalue(page, level + 400_000, new RegExp(`Naik ${rp(400_000)}`));
+    await revalue(page, level + 400_000, `Naik ${rp(400_000)}`);
     expect(await balanceOf(EMAS)).toBe(level + 400_000);
     expect(await sqlNetWorth()).toBe(nw0 + 400_000);
     await expect(page.getByTestId('wallet-balance')).toContainText(rp(level + 400_000));
@@ -251,7 +241,7 @@ test(
     await expect(up.first()).toContainText('Naik');
     await expect(up.first()).toContainText('+');
 
-    await revalue(page, level - 250_000, new RegExp(`Turun ${rp(650_000)}`));
+    await revalue(page, level - 250_000, `Turun ${rp(650_000)}`);
     expect(await balanceOf(EMAS)).toBe(level - 250_000);
     expect(await sqlNetWorth()).toBe(nw0 - 250_000);
     await expect(
@@ -287,7 +277,7 @@ test(
 test('Urungkan perubahan nilai: nilai kembali, kekayaan bersih kembali', async ({ page }) => {
   const before = await balanceOf(EMAS);
   const nw0 = await sqlNetWorth();
-  await revalue(page, before + 1_000_000, new RegExp(`Naik ${rp(1_000_000)}`));
+  await revalue(page, before + 1_000_000, `Naik ${rp(1_000_000)}`);
   expect(await balanceOf(EMAS)).toBe(before + 1_000_000);
   await toasts(page).getByRole('button', { name: 'Urungkan' }).click();
   await expect.poll(() => balanceOf(EMAS)).toBe(before);
@@ -315,17 +305,25 @@ test(
     await expect(sheet.getByRole('alert')).toContainText(
       `Nilai ${EMAS} tidak cukup. Aset tidak bisa minus.`,
     );
-    // Dipaksa simpan pun (klik tetap diizinkan atau ditolak sheet), DB tidak pernah minus.
-    await sheet
-      .getByRole('button', { name: /^Simpan/ })
-      .click({ trial: false })
-      .catch(() => undefined);
+    // Simpan tertutup selama nilainya kurang; dan DB sendiri menolak walau UI diakali (DK422).
+    await expect(sheet.getByRole('button', { name: /^Simpan/ })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const ids = await adminQuery<{ id: string; name: string }>(
+      'select id::text, name from app.accounts where name = any($1)',
+      [[EMAS, SUMBER]],
+    );
+    const idOf = (n: string) => ids.find((x) => x.name === n)?.id;
+    const { uid, sid } = await spaceOf(OWNER, 'personal');
+    await expect(
+      asUser(
+        uid,
+        'select api.create_transfer($1, $2, $3, $4, $5::bigint, 0::bigint, app.today())',
+        [randomUUID(), sid, idOf(EMAS), idOf(SUMBER), value + 1],
+      ),
+    ).rejects.toThrow(/asset_negative/);
     expect(await balanceOf(EMAS)).toBe(value);
     expect(await balanceOf(SUMBER)).toBe(sumber0);
-    await expect(page.getByRole('dialog')).toHaveCount(1);
-    await page.keyboard.press('Escape');
-
-    // Penolakan di DB: jalur server tidak bisa menembus walau UI diakali.
     const [r] = await adminQuery<{ n: string }>(
       `select count(*)::text as n from app.account_balances b join app.accounts a on a.id = b.account_id
         where a.pocket = 'aset' and b.balance < 0`,

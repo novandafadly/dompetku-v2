@@ -220,3 +220,36 @@ export async function expectRouteBudget(
   expect(routeKb).toBeLessThanOrEqual(BUDGET_KB);
   return routeKb;
 }
+
+/** '−Rp 1.234' → -1234 (spasi biasa atau tak terputus); galat bila tidak ada nominal. */
+export function rupiahOf(text: string): number {
+  const m = /(−?)Rp\s([\d.]+)/.exec(text);
+  if (!m) throw new Error(`nominal tidak terbaca: ${text}`);
+  const n = Number((m[2] ?? '').replaceAll('.', ''));
+  return m[1] === '−' ? -n : n;
+}
+
+/**
+ * Hero Kekayaan bersih (total dan komponen per label) dari layar Dompet ruang itu. Dibaca dari
+ * `textContent` sesudah jaringan tenang: `innerText` bergantung pada CSS yang bisa belum terpasang.
+ */
+export async function readHero(
+  page: Page,
+  ruang: Ruang,
+): Promise<{ total: number; parts: Record<string, number> }> {
+  await page.goto(`/${ruang}/dompet`);
+  const total = rupiahOf((await page.getByTestId('net-worth').textContent()) ?? '');
+  await page.waitForLoadState('networkidle');
+  const rows = await page
+    .getByTestId('net-worth-parts')
+    .locator('> div')
+    .evaluateAll((els) =>
+      els.map((e) => [
+        e.querySelector('dt')?.textContent ?? '',
+        e.querySelector('dd')?.textContent ?? '',
+      ]),
+    );
+  const parts: Record<string, number> = {};
+  for (const [label, value] of rows) parts[label ?? ''] = rupiahOf(value ?? '');
+  return { total, parts };
+}
