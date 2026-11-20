@@ -3,15 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations } from '../e2e/axe';
 import { asUser, noHorizontalScroll, spaceOf } from '../e2e-auth/helpers';
 import { adminQuery, expect, OWNER, test } from './fixtures';
-import {
-  addWallet,
-  digits,
-  expectRouteBudget,
-  readHero,
-  rupiahOf,
-  spaceId,
-  toasts,
-} from './helpers';
+import { addWallet, digits, expectRouteBudget, readHero, spaceId, toasts } from './helpers';
 
 /**
  * S14 Task 12 mode nyata: aset non-saham di Dompet Pribadi (T11 bagian aset, S5, I6). Tambah aset emas
@@ -31,7 +23,6 @@ const OPENING = 5_000_000;
 const rp = (n: number) => `Rp ${digits(n)}`;
 const state = { path: '' };
 
-const money = rupiahOf;
 const txt = async (l: Locator) => ((await l.textContent()) ?? '').replaceAll(' ', ' ');
 
 const hero = (page: Page) => readHero(page, 'pribadi');

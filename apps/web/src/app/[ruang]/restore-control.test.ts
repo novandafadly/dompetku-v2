@@ -29,7 +29,9 @@ describe('pulihkan transaksi saham (S14)', () => {
       'Belum bisa dipulihkan. Urutan transaksi BBCA sudah berubah. Pulihkan transaksi yang lebih lama dulu, atau batalkan yang lebih baru.',
     );
     expect(t).not.toMatch(/Rp|server/);
-    expect(restoreFailedText('before_latest_entry')).toContain('Urutan transaksi saham sudah berubah');
+    expect(restoreFailedText('before_latest_entry')).toContain(
+      'Urutan transaksi saham sudah berubah',
+    );
   });
 });
 
