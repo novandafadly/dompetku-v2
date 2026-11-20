@@ -87,7 +87,7 @@ export const SAHAM_COPY = {
   cancel: 'Batalkan',
   cancelNote: 'Hanya transaksi terakhir yang bisa dibatalkan.',
   tradeLine: (side: 'buy' | 'sell' | 'opening', shares: number, price: Rupiah) =>
-    `${side === 'buy' ? 'Beli' : side === 'sell' ? 'Jual' : 'Saham berjalan'} ${sharesShort(shares)} @ ${formatRupiah(price)}`,
+    `${side === 'buy' ? 'Beli' : side === 'sell' ? 'Jual' : 'Sudah dimiliki'} ${sharesShort(shares)} @ ${formatRupiah(price)}`,
 
   // Sheet (SH3 sampai SH6)
   buyTitle: 'Beli saham · Pribadi',

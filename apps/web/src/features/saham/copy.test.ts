@@ -12,6 +12,11 @@ describe('salinan saham', () => {
     expect(sharesShort(250)).toBe('250 lembar');
   });
 
+  it('baris transaksi: saham yang sudah dimiliki memakai istilah bingkai SH6 (S14-C3)', () => {
+    expect(C.tradeLine('buy', 200, 9150)).toMatch(/^Beli 2 lot @ Rp\s9\.150$/);
+    expect(C.tradeLine('opening', 250, 5000)).toMatch(/^Sudah dimiliki 250 lembar @ Rp\s5\.000$/);
+  });
+
   it('untung/rugi selalu dengan tanda dan kata (minus U+2212), nol = Impas; bacaan layar tanpa simbol', () => {
     expect(gainText(195_000)).toMatch(/^\+Rp\s195\.000 untung$/);
     expect(gainText(-120_000)).toMatch(/^−Rp\s120\.000 rugi$/);
