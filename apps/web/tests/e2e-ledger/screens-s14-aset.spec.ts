@@ -307,3 +307,23 @@ test('sheet: Tambah aset (Pribadi, Bersama), Perbarui nilai, Isi, Cairkan', asyn
     );
   }
 });
+
+test('Transaksi, Laporan, Sampah: baris perubahan nilai (hidup dan batal)', async ({
+  browser,
+  ownerState,
+}) => {
+  await revalue('Emas Antam', 4_900_000);
+  // Valuasi turun dibatalkan supaya Sampah punya baris `Perubahan nilai`.
+  const [v] = await adminQuery<{ id: string; version: number }>(
+    `select e.id::text, e.version from app.entries e join app.entry_lines l on l.entry_id = e.id
+      where e.kind = 'valuation' and l.account_id = $1 and e.voided_at is null
+      order by e.created_at desc limit 1`,
+    [id('Emas Antam')],
+  );
+  if (!v) throw new Error('valuasi');
+  await revalue('Rumah Bekasi', 750_000_000);
+  await api(`select api.void_entry($1, $2, $3)`, [randomUUID(), v.id, v.version]);
+  await shoot(browser, ownerState, 'as-transaksi', '/pribadi/transaksi');
+  await shoot(browser, ownerState, 'as-laporan', '/pribadi/laporan');
+  await shoot(browser, ownerState, 'as-sampah', '/pribadi/sampah');
+});

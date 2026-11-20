@@ -301,6 +301,43 @@ test('Dompet: daftar dengan dompet saham dan kartu Modal trading (Saham, lalu Ku
   await shoot(browser, ownerState, 'ss-dompet-modal-kurang', '/pribadi/dompet');
 });
 
+test('hero: saham + piutang + utang + 30 hari lalu, total minus, galat hero dan saham', async ({
+  browser,
+  ownerState,
+}) => {
+  const debt = (dir: 'lent' | 'borrowed', amount: number, name: string) =>
+    api(
+      `select api.create_debt(p_client_id => $1, p_space_id => $2, p_direction => $3,
+         p_principal => $4::bigint, p_mode => 'berjalan', p_contact_name => $5,
+         p_opened_on => app.today() - 20)`,
+      [randomUUID(), sid, dir, amount, name],
+    );
+  await debt('lent', 3_000_000, 'Budi');
+  await debt('borrowed', 8_000_000, 'Sinta');
+  await adminQuery(
+    `insert into app.net_worth_snapshots (space_id, on_date, kas, aset, saham_pasar, saham_tanpa_harga,
+       piutang, utang, total, price_as_of, computed_at)
+     values ($1, app.today() - 30, 50000000, 0, 0, 0, 0, 0, 50000000, null, now())`,
+    [sid],
+  );
+  await shoot(browser, ownerState, 'nw-saham-utang', '/pribadi/dompet');
+  await debt('borrowed', 900_000_000, 'Bank Pembiayaan Rumah');
+  await shoot(browser, ownerState, 'nw-minus', '/pribadi/dompet');
+  // Galat loader: fungsi diganti nama sebentar (superuser), dipulihkan di finally.
+  try {
+    await adminQuery('alter function api.net_worth(uuid) rename to net_worth_shots_off');
+    await shoot(browser, ownerState, 'nw-galat', '/pribadi/dompet');
+  } finally {
+    await adminQuery('alter function api.net_worth_shots_off(uuid) rename to net_worth');
+  }
+  try {
+    await adminQuery('alter function api.stock_overview(uuid) rename to stock_overview_shots_off');
+    await shoot(browser, ownerState, 'ss-galat', detail());
+  } finally {
+    await adminQuery('alter function api.stock_overview_shots_off(uuid) rename to stock_overview');
+  }
+});
+
 test('nilai besar dan nama panjang di 320: lembar 12.345.600, harga, hasil', async ({
   browser,
   ownerState,
@@ -313,6 +350,22 @@ test('nilai besar dan nama panjang di 320: lembar 12.345.600, harga, hasil', asy
   await shoot(browser, ownerState, 'ss-nilai-besar', `/pribadi/dompet/${big}`, async (p) => {
     await main(p).getByTestId('holding-ADRO').locator('summary').click();
   });
+});
+
+test('Transaksi, Laporan, Sampah: baris beli/jual/untung jual, trade batal', async ({
+  browser,
+  ownerState,
+}) => {
+  const [t] = await adminQuery<{ id: string }>(
+    `select t.id::text from app.stock_trades t join app.stock_holdings h on h.id = t.holding_id
+      where h.ticker = 'ADRO' order by t.seq desc limit 1`,
+  );
+  if (!t) throw new Error('trade ADRO');
+  await api(`select api.void_stock_trade($1, $2)`, [randomUUID(), t.id]);
+  await shoot(browser, ownerState, 'ss-transaksi', '/pribadi/transaksi');
+  await shoot(browser, ownerState, 'ss-laporan', '/pribadi/laporan');
+  await shoot(browser, ownerState, 'ss-sampah', '/pribadi/sampah');
+  await shoot(browser, ownerState, 'ss-detail-trading-akhir', `/pribadi/dompet/${id('RDN Ajaib')}`);
 });
 
 test('budget JS rute Detail dompet saham dan Dompet', async ({ browser, ownerState }) => {
