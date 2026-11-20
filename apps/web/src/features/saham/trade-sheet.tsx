@@ -431,31 +431,33 @@ function TradeSession({
               </p>
             )}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <MoneyInput
-              label={C.feeField}
-              optional
-              value={fee}
-              onChange={(v) => {
-                setFee(v);
-                setForced(false);
-              }}
-              readOnly={saving}
-            />
-            {sell ? null : <FieldHint id="saham-fee-hint">{C.feeHint}</FieldHint>}
-          </div>
-          {sell ? (
-            <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-1 items-start gap-3 min-[390px]:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-1.5">
               <MoneyInput
-                label={C.taxField}
+                label={C.feeField}
                 optional
-                value={tax}
-                onChange={setTax}
+                value={fee}
+                onChange={(v) => {
+                  setFee(v);
+                  setForced(false);
+                }}
                 readOnly={saving}
               />
-              <FieldHint id="saham-tax-hint">{C.taxHint}</FieldHint>
+              {sell ? null : <FieldHint id="saham-fee-hint">{C.feeHint}</FieldHint>}
             </div>
-          ) : null}
+            {sell ? (
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <MoneyInput
+                  label={C.taxField}
+                  optional
+                  value={tax}
+                  onChange={setTax}
+                  readOnly={saving}
+                />
+                <FieldHint id="saham-tax-hint">{C.taxHint}</FieldHint>
+              </div>
+            ) : null}
+          </div>
           {sell ? (
             <SellPreview preview={preview} loading={previewInput !== null && preview === null} />
           ) : (

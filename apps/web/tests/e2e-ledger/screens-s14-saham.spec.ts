@@ -306,7 +306,7 @@ test('nilai besar dan nama panjang di 320: lembar 12.345.600, harga, hasil', asy
   ownerState,
 }) => {
   const bca = id('BCA Utama');
-  const big = await stockWallet('Dompet Saham Dengan Nama Yang Sangat Panjang Sekali Untuk Uji');
+  const big = await stockWallet('Dompet Saham Dengan Nama Yang Sangat Panjang Sekali Uji');
   await api(`select api.reconcile_balance($1, $2, 900000000000::bigint)`, [randomUUID(), bca]);
   await buy(big, 'ADRO', 12_345_600, 2000, bca, 3);
   await price('ADRO', 2300, 1);
