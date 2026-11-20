@@ -15,11 +15,14 @@ import { newClientId } from '@/features/ledger/client-id';
 import type { AssetKind, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { ASET_COPY as C, ASSET_KIND_LABEL, ASSET_KINDS } from './copy';
 import {
+  ASSET_MIN_DATE,
   assetFailedText,
   FIELD_DATE,
+  FIELD_DATE_RANGE,
   FIELD_KIND,
   FIELD_NAME,
   FIELD_VALUE,
+  FIELD_VALUE_MAX,
   nameTaken,
 } from './galat';
 
@@ -115,8 +118,11 @@ function AddAssetSession({
     else if (existingNames.some((n) => n.toLowerCase() === trimmed.toLowerCase())) {
       next.name = nameTaken(trimmed, RUANG_NAME[ruang]);
     }
-    if (!isStock && value !== null && (value < 0 || value > MAX_VALUE)) next.value = FIELD_VALUE;
+    if (!isStock && value !== null && (value < 0 || value > MAX_VALUE)) {
+      next.value = value < 0 ? FIELD_VALUE : FIELD_VALUE_MAX;
+    }
     if (hasValue && since > today) next.date = FIELD_DATE;
+    else if (hasValue && since < ASSET_MIN_DATE) next.date = FIELD_DATE_RANGE;
     setErrors(next);
     setGalat(null);
     if (next.kind !== undefined || kind === '') return kindRef.current?.focus();
@@ -165,8 +171,8 @@ function AddAssetSession({
         } else if (field.includes('opening') || field.includes('value')) {
           setErrors({ value: FIELD_VALUE });
           valueRef.current?.focus();
-        } else if (field === 'on' || field.includes('opened')) {
-          setErrors({ date: FIELD_DATE });
+        } else if (field === 'on' || field === 'occurred_on' || field.includes('opened')) {
+          setErrors({ date: FIELD_DATE_RANGE });
           dateRef.current?.focus();
         } else {
           setGalat({ text: assetFailedText('unknown'), retry: true });
@@ -277,6 +283,7 @@ function AddAssetSession({
               setSince(v);
               clear('date');
             }}
+            min={ASSET_MIN_DATE}
             max={today}
             error={errors.date}
             busy={saving}

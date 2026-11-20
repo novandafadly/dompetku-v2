@@ -22,6 +22,14 @@ describe('restoreFailedText', () => {
   });
 });
 
+describe('pulihkan ke aset (S14)', () => {
+  it('asset_negative: salinan aset, bukan galat server', () => {
+    expect(restoreFailedText('asset_negative')).toBe(
+      'Belum bisa dipulihkan. Nilai asetnya tidak cukup. Aset tidak bisa minus.',
+    );
+  });
+});
+
 describe('pulihkan cicilan utang (S11)', () => {
   it('payment_exceeds dan debt_deleted: salinan sendiri tanpa nominal', () => {
     expect(restoreFailedText('payment_exceeds')).toBe(

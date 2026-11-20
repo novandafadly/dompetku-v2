@@ -72,7 +72,7 @@ interface Failure {
 const NETWORK: Failure = { ok: false, error: { code: 'network' } };
 
 /** Galat batal (keputusan agen, menunggu pemilik): konflik versi memuat ulang Detail. */
-function voidFailedText(code: LedgerErrorCode): string {
+export function voidFailedText(code: LedgerErrorCode, asset = 'aset ini'): string {
   if (code === 'conflict') return 'Transaksi ini baru saja diubah. Periksa lalu batalkan lagi.';
   if (code === 'network') return 'Belum bisa dibatalkan. Periksa koneksi lalu coba lagi.';
   // S11: pokok hanya lewat Hapus utang (tombolnya tidak ditawarkan; ini jaring bila ditolak server).
@@ -80,6 +80,10 @@ function voidFailedText(code: LedgerErrorCode): string {
     return 'Pinjaman awal hanya bisa dibatalkan lewat Hapus utang.';
   }
   if (code === 'debt_deleted') return 'Utang ini sudah dihapus. Pulihkan utangnya dulu.';
+  // S14: mis. membatalkan Isi yang sebagiannya sudah ditarik (aset tidak boleh minus).
+  if (code === 'asset_negative') {
+    return `Belum bisa dibatalkan. Nilai ${asset} tidak cukup. Aset tidak bisa minus.`;
+  }
   return 'Belum bisa dibatalkan. Ada kendala di server.';
 }
 
@@ -150,7 +154,10 @@ export function DetailActions({
     }
     if (!res.ok) {
       if (res.error.code === 'conflict') router.refresh();
-      toast({ message: voidFailedText(res.error.code), tone: 'info' });
+      const asset = accounts.find(
+        (a) => a.pocket === 'aset' && (a.id === entry.accountId || a.id === entry.counterAccountId),
+      )?.name;
+      toast({ message: voidFailedText(res.error.code, asset), tone: 'info' });
       return;
     }
     const version = res.value.version;

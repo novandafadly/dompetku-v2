@@ -106,8 +106,8 @@ export function DompetReal({
           title="Dompet"
           action={
             <div className="flex items-center gap-2">
-              <AddAssetTriggerIsland variant="secondary" />
               <AddWalletTriggerIsland />
+              <AddAssetTriggerIsland variant="secondary" />
             </div>
           }
         />

@@ -113,7 +113,7 @@ export const NW_COPY = {
   priceAsOf: (on: string) => `Harga saham ${on}`,
   missingPrice: 'Sebagian saham belum ada harga, jadi dinilai sebesar biaya beli.',
   subPersonal: 'Kas, aset, saham, dan sisa utang-piutang. Kas Kantor tidak dihitung.',
-  subShared: 'Kas, aset, dan saham bersama.',
+  subShared: 'Kas dan aset bersama.',
   subSharedCash: 'Kas Bersama.',
   loadFailed: 'Kekayaan bersih belum bisa dimuat.',
 } as const;

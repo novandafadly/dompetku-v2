@@ -27,6 +27,7 @@ vi.mock('@/server/auth/next', () => ({
 
 const { saveCatat, catatOptions } = await import('../catat');
 const { createAccountAction, reconcileAction, archiveAccountAction } = await import('../dompet');
+const { createAssetAction } = await import('../aset');
 const { voidEntryAction, restoreEntryAction, moveEntryAction, moveTargetsAction } =
   await import('../entri');
 const { createReimbursementAction, openReimbursablesAction } = await import('../reimburse');
@@ -330,6 +331,45 @@ describe('action S7 terhadap DB', () => {
       const back = await moveTargetsAction('bersama', 'pribadi');
       if (!back.ok) throw new Error(back.error.code);
       expect(back.value.accounts.map((a) => a.id)).toEqual([bca]);
+    });
+  });
+
+  describe('setor Pribadi ke aset Bersama (S14-NW2, B16)', () => {
+    it('tujuan transfer: aset non-saham Bersama ditawarkan dari Pribadi dan bisa disimpan; Pindahkan dan arah Bersama ke Pribadi tanpa aset', async () => {
+      as(ps.n);
+      const bca = await wallet('pribadi', 500_000, 'BCA');
+      const kas = await wallet('bersama', 0, 'Kas Rumah');
+      const emas = await createAssetAction('bersama', {
+        clientId: randomUUID(),
+        name: 'Emas Bersama',
+        assetKind: 'emas',
+      });
+      if (!emas.ok) throw new Error(emas.error.code);
+      const asetPribadi = await createAssetAction('pribadi', {
+        clientId: randomUUID(),
+        name: 'Emas Pribadi',
+        assetKind: 'emas',
+      });
+      if (!asetPribadi.ok) throw new Error(asetPribadi.error.code);
+
+      const ids = async (from: Ruang, to: Ruang, forTransfer?: boolean) => {
+        const r = await moveTargetsAction(from, to, forTransfer);
+        if (!r.ok) throw new Error(r.error.code);
+        return r.value.accounts.map((a) => a.id);
+      };
+      expect(await ids('pribadi', 'bersama', true)).toEqual([kas, emas.value.accountId]);
+      expect(await ids('pribadi', 'bersama')).toEqual([kas]);
+      expect(await ids('bersama', 'pribadi', true)).toEqual([bca]);
+
+      const saved = await saveCatat('pribadi', {
+        kind: 'space_transfer',
+        clientId: randomUUID(),
+        fromAccountId: bca,
+        toRuang: 'bersama',
+        toAccountId: emas.value.accountId,
+        amount: 200_000,
+      });
+      expect(saved).toMatchObject({ ok: true, value: { replayed: false } });
     });
   });
 

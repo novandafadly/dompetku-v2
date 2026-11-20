@@ -1440,6 +1440,24 @@ describe('S7: pindahkan ke ruang lain', () => {
     });
   });
 
+  it('moveTargetsAction forTransfer ke Bersama: aset non-saham ikut, Pindahkan tetap tanpa aset (S14-NW2)', async () => {
+    m.loadRuangShell.mockResolvedValue({
+      accounts: [
+        { id: A, pocket: 'operasional', archived: false },
+        { id: B, pocket: 'aset', assetKind: 'emas', archived: false },
+        { id: C, pocket: 'aset', assetKind: 'saham', archived: false },
+      ],
+      categories: [],
+    });
+    const ids = async (forTransfer?: boolean) => {
+      const r = await entri.moveTargetsAction('pribadi', 'bersama', forTransfer);
+      if (!r.ok) throw new Error(r.error.code);
+      return r.value.accounts.map((a) => a.id);
+    };
+    await expect(ids(true)).resolves.toEqual([A, B]);
+    await expect(ids()).resolves.toEqual([A]);
+  });
+
   it.each([['pribadi'], ['kantor'], [OTHER_SPACE]])(
     'moveTargetsAction tujuan %s dari /pribadi = invalid toRuang',
     async (toRuang) => {

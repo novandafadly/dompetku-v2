@@ -15,3 +15,20 @@ export function payableAccounts(accounts: readonly AccountVM[]): AccountVM[] {
       a.pocket !== 'aset',
   );
 }
+
+/**
+ * Tujuan transfer antar ruang: dompet biasa ({@link payableAccounts}) ditambah aset non-saham bila
+ * ruang tujuan Bersama (S14-NW2: setor Pribadi → aset Bersama, B16). Aset Pribadi tidak pernah
+ * ditawarkan sebagai tujuan, dan dompet saham tidak pernah (hanya berubah lewat Beli/Jual).
+ */
+export function spaceTransferTargets(
+  accounts: readonly AccountVM[],
+  toRuang: 'pribadi' | 'bersama',
+): AccountVM[] {
+  const plain = payableAccounts(accounts);
+  if (toRuang !== 'bersama') return plain;
+  const assets = accounts.filter(
+    (a) => !a.archived && a.pocket === 'aset' && a.assetKind !== 'saham',
+  );
+  return [...plain, ...assets];
+}

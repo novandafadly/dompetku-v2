@@ -382,13 +382,14 @@ export function DompetDetailReal({
       footer={
         account.archived ? (
           <p className="text-meta font-medium text-text-muted">
-            Dompet ini sudah diarsipkan. Riwayatnya tetap bisa dilihat.
+            {isAsset ? 'Aset' : 'Dompet'} ini sudah diarsipkan. Riwayatnya tetap bisa dilihat.
           </p>
         ) : account.balance === 0 && !(typeof goal === 'object' && goal.goal !== null) ? (
           <ArchiveIsland
             ruang={ruang}
             account={{ id: account.id, name: account.name }}
             dompetHref={dompetHref}
+            asset={isAsset}
           />
         ) : (
           <ArchiveBlockedCard

@@ -33,7 +33,12 @@ export function assetFailedText(code: LedgerErrorCode, asset = 'Aset ini'): stri
 export const FIELD_KIND = 'Pilih jenis aset.';
 export const FIELD_NAME = 'Nama aset wajib diisi, paling banyak 60 huruf.';
 export const FIELD_VALUE = 'Nilai tidak boleh minus.';
+/** Batas `private.check_amount` (10^13), pola `rencana/copy.ts` `errAmountMax`. */
+export const FIELD_VALUE_MAX = 'Nilai terlalu besar. Maksimal Rp 10.000.000.000.000.';
 export const FIELD_DATE = 'Tanggal tidak boleh setelah hari ini.';
+/** Batas bawah tanggal DB (`private.check_date`): aset lama boleh dicatat sejak 2000. */
+export const ASSET_MIN_DATE = '2000-01-01';
+export const FIELD_DATE_RANGE = 'Tanggal harus antara 1 Januari 2000 dan hari ini.';
 /** Nama bentrok dengan dompet atau aset lain di ruang itu. */
 export const nameTaken = (name: string, ruangName: string) =>
   `Dompet atau aset bernama ${name} sudah ada di ${ruangName}.`;

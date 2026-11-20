@@ -34,7 +34,9 @@ vi.mock('./dompet-islands', () => ({
 }));
 vi.mock('./dompet-actions-islands', () => ({
   ReconcileIsland: () => <button type="button">Cocokkan saldo</button>,
-  ArchiveIsland: () => <button type="button">Arsipkan dompet</button>,
+  ArchiveIsland: (p: { asset?: boolean }) => (
+    <button type="button">{p.asset === true ? 'Arsipkan aset' : 'Arsipkan dompet'}</button>
+  ),
 }));
 vi.mock('./transaksi-islands', () => ({
   RetryIsland: () => <button type="button">Coba lagi</button>,
@@ -180,7 +182,7 @@ describe('Dompet S14: hero Kekayaan bersih dari SQL', () => {
       ruang: 'bersama',
       netWorth: nw({ aset: 100, total: 1_000_100 }),
     });
-    expect(screen.getByText('Kas, aset, dan saham bersama.')).toBeTruthy();
+    expect(screen.getByText('Kas dan aset bersama.')).toBeTruthy();
     unmount();
     render1({ ruang: 'bersama' });
     expect(screen.getByText('Kas Bersama.')).toBeTruthy();
@@ -389,7 +391,7 @@ describe('Detail aset (S14-AS3)', () => {
       />,
     );
     expect(screen.getByTestId('wallet-balance')).toHaveTextContent('Belum ada nilai');
-    expect(screen.getByRole('button', { name: 'Arsipkan dompet' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Arsipkan aset' })).toBeTruthy();
     unmount();
     render(<DompetDetailReal {...props} />);
     expect(
@@ -397,7 +399,7 @@ describe('Detail aset (S14-AS3)', () => {
         'Emas Antam masih bernilai. Perbarui nilainya ke 0 atau cairkan ke dompet, lalu arsipkan.',
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Arsipkan dompet' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Arsipkan aset' })).toBeNull();
   });
 
   it('dompet saham: tanpa aksi aset generik; kartu arsip menyebut saham; label nilai pasar dari SQL', () => {

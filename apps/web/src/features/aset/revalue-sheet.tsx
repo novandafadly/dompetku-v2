@@ -15,7 +15,14 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { newClientId } from '@/features/ledger/client-id';
 import type { ActionResult, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { ASET_COPY as C } from './copy';
-import { assetFailedText, FIELD_DATE, FIELD_VALUE } from './galat';
+import {
+  ASSET_MIN_DATE,
+  assetFailedText,
+  FIELD_DATE,
+  FIELD_DATE_RANGE,
+  FIELD_VALUE,
+  FIELD_VALUE_MAX,
+} from './galat';
 
 const FORM_ID = 'perbarui-nilai';
 const MAX_VALUE = 10 ** 13;
@@ -81,6 +88,7 @@ function RevalueSession({
   const [on, setOn] = useState<string>(today);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<LedgerErrorCode | null>(null);
+  const [valueError, setValueError] = useState<string | undefined>();
   const [dateError, setDateError] = useState<string | undefined>();
   const clientId = useRef(newClientId());
   const busy = useRef(false);
@@ -94,11 +102,12 @@ function RevalueSession({
     ev?.preventDefault();
     if (busy.current || value === null) return;
     if (value < 0 || value > MAX_VALUE) {
-      setFailure('invalid');
+      setValueError(value < 0 ? FIELD_VALUE : FIELD_VALUE_MAX);
+      inputRef.current?.focus();
       return;
     }
-    if (on > today) {
-      setDateError(FIELD_DATE);
+    if (on > today || on < ASSET_MIN_DATE) {
+      setDateError(on > today ? FIELD_DATE : FIELD_DATE_RANGE);
       dateRef.current?.focus();
       return;
     }
@@ -109,6 +118,7 @@ function RevalueSession({
     busy.current = true;
     setSaving(true);
     setFailure(null);
+    setValueError(undefined);
     setDateError(undefined);
     let res: Awaited<ReturnType<RevalueSource['revalue']>>;
     try {
@@ -131,6 +141,20 @@ function RevalueSession({
         dateRef.current?.focus();
         return;
       }
+      if (res.error.code === 'invalid') {
+        // Galat kolom dari server: `on`/`occurred_on` = tanggal, `value` = nilai, lainnya = umum.
+        const field = res.error.field ?? '';
+        if (field === 'on' || field === 'occurred_on') {
+          setDateError(FIELD_DATE_RANGE);
+          dateRef.current?.focus();
+        } else if (field === 'value') {
+          setValueError(FIELD_VALUE);
+          inputRef.current?.focus();
+        } else {
+          setFailure('unknown');
+        }
+        return;
+      }
       setFailure(res.error.code);
       return;
     }
@@ -138,12 +162,7 @@ function RevalueSession({
     onSaved(res.value);
   }
 
-  const alertText =
-    failure === null
-      ? null
-      : failure === 'invalid'
-        ? FIELD_VALUE
-        : assetFailedText(failure, asset.name);
+  const alertText = failure === null ? null : assetFailedText(failure, asset.name);
 
   return (
     <Sheet
@@ -185,10 +204,16 @@ function RevalueSession({
           onChange={(v) => {
             setValue(v);
             setFailure(null);
+            setValueError(undefined);
           }}
           readOnly={saving}
           describedBy={previewId}
         />
+        {valueError === undefined ? null : (
+          <p role="alert" className="text-meta font-semibold text-danger">
+            {valueError}
+          </p>
+        )}
         <Preview id={previewId} delta={delta} />
         <DateInput
           label={C.dateField}
@@ -197,6 +222,7 @@ function RevalueSession({
             setOn(v);
             setDateError(undefined);
           }}
+          min={ASSET_MIN_DATE}
           max={today}
           error={dateError}
           busy={saving}

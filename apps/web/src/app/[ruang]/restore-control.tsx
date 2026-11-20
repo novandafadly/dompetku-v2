@@ -74,6 +74,10 @@ export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'):
   if (code === 'debt_deleted') {
     return 'Belum bisa dipulihkan. Utangnya sudah dihapus. Pulihkan dari Utang.';
   }
+  // S14: mis. memulihkan Cairkan padahal nilai asetnya sudah berkurang (aset tidak boleh minus).
+  if (code === 'asset_negative') {
+    return 'Belum bisa dipulihkan. Nilai asetnya tidak cukup. Aset tidak bisa minus.';
+  }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }
 
