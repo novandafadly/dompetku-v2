@@ -194,10 +194,8 @@ function HoldingRow({
   return (
     <li className="border-b border-hairline last:border-b-0">
       <details className="group" data-testid={`holding-${h.ticker}`}>
-        <summary
-          aria-label={`${h.ticker}, ${sharesLabel(h.shares)}`}
-          className="flex min-h-18 cursor-pointer list-none flex-col justify-center gap-1 py-3 outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden"
-        >
+        {/* Tanpa aria-label: nama dari isi (kode, nilai, lembar, untung/rugi), bukan label yang menyembunyikannya. */}
+        <summary className="flex min-h-18 cursor-pointer list-none flex-col justify-center gap-1 py-3 outline-none focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
           <span className="flex items-baseline justify-between gap-3">
             <span className="text-body font-bold text-text">{h.ticker}</span>
             <span className="flex min-w-0 items-center gap-2">
