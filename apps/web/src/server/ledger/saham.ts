@@ -149,6 +149,7 @@ const tradeRow = z.object({
   shares: money,
   price: money,
   occurred_on: z.iso.date(),
+  counter_name: z.string().nullable(),
 });
 
 // Riwayat per kode yang dimuat di Detail dompet; yang lebih lama ada di riwayat dompet/Transaksi.
@@ -178,12 +179,22 @@ export async function stockOverviewTx(
     throw new Error('stock_overview tanpa baris total');
   }
   const { rows: tradeRows } = await c.query<Record<string, unknown>>(
-    `select x.id, x.holding_id, x.side, x.shares, x.price, x.occurred_on::text as occurred_on
+    `select x.id, x.holding_id, x.side, x.shares, x.price, x.occurred_on::text as occurred_on,
+            cp.name as counter_name
        from (select t.id, t.holding_id, t.side, t.shares, t.price, t.occurred_on, t.seq,
                     row_number() over (partition by t.holding_id order by t.seq desc) as rn
                from app.stock_trades t
                join app.stock_holdings h on h.space_id = t.space_id and h.id = t.holding_id
               where h.account_id = $1 and t.space_id = $2 and t.voided_at is null) x
+       -- Dompet lawan transfer trade (sumber beli / tujuan jual); saham berjalan tidak punya.
+       left join lateral (
+         select a.name
+           from app.entries e
+           join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id
+           join app.accounts a on a.id = l.account_id
+          where e.space_id = $2 and e.stock_trade_id = x.id and e.kind = 'transfer' and l.account_id <> $1
+          limit 1
+       ) cp on true
       where x.rn <= $3
       order by x.holding_id, x.seq desc`,
     [acc, ctx.spaceId, TRADES_PER_HOLDING],
@@ -198,6 +209,7 @@ export async function stockOverviewTx(
       shares: t.shares,
       price: t.price,
       occurredOn: t.occurred_on,
+      counterName: t.counter_name,
     });
     byHolding.set(t.holding_id, list);
   }

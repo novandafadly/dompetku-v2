@@ -11,6 +11,8 @@ export interface StockTradeVM {
   shares: number;
   price: Rupiah;
   occurredOn: IsoDate;
+  /** Dompet lawan (sumber beli / tujuan jual); null untuk saham berjalan. */
+  counterName: string | null;
 }
 
 /** Satu kode saham di satu dompet saham. `shares = 0` = sudah dijual habis (hanya hasil terealisasi). */
