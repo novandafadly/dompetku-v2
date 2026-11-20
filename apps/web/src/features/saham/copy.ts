@@ -117,8 +117,8 @@ export const SAHAM_COPY = {
   saveSell: 'Simpan penjualan',
   owned: (shares: number) => `Dimiliki ${sharesLabel(shares)}`,
   sellAll: 'Jual semua',
-  net: (value: Rupiah) => `Hasil bersih ${formatRupiah(value)}`,
-  costOut: (value: Rupiah) => `Biaya beli yang keluar ${formatRupiah(value)}`,
+  netLabel: 'Hasil bersih',
+  costOutLabel: 'Biaya beli yang keluar',
   previewLoading: 'Menghitung…',
   previewFailed: 'Pratinjau belum bisa dihitung. Angka pasti muncul sesudah disimpan.',
   priceClose: 'Harga penutupan per lembar',
@@ -159,6 +159,8 @@ export const SAHAM_COPY = {
   voidOpen: (ticker: string, shares: number, on: IsoDate, account: string) =>
     `${ticker} ${groupLot(shares)} lembar yang dimasukkan pada ${shortDateLabel(on)} dihapus dari ${account}.`,
   voidRestorable: 'Bisa dipulihkan dari Sampah.',
+  voidNotLatest: (ticker: string) =>
+    `Sudah ada transaksi ${ticker} yang lebih baru. Muat ulang halaman.`,
   voidConfirm: 'Batalkan transaksi',
   voidAnyway: 'Tetap batalkan',
   back: 'Kembali',

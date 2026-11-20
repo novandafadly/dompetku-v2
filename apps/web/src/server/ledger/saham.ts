@@ -5,7 +5,6 @@ import type {
   SellPreviewVM,
   StockHoldingVM,
   StockOverviewVM,
-  StockSide,
   StockTotalVM,
   StockTradeVM,
 } from '@/features/saham/types';
@@ -175,7 +174,7 @@ export async function stockOverviewTx(
   );
   const parsed = rows.map((r) => overviewRow.parse(r));
   const totalRow = parsed.at(-1);
-  if (totalRow === undefined || totalRow.holding_id !== null) {
+  if (totalRow?.holding_id !== null) {
     throw new Error('stock_overview tanpa baris total');
   }
   const { rows: tradeRows } = await c.query<Record<string, unknown>>(
@@ -205,7 +204,7 @@ export async function stockOverviewTx(
     const list = byHolding.get(t.holding_id) ?? [];
     list.push({
       id: t.id,
-      side: t.side as StockSide,
+      side: t.side,
       shares: t.shares,
       price: t.price,
       occurredOn: t.occurred_on,

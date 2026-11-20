@@ -23,9 +23,10 @@ import {
   entryKindLabelVM,
   entryTitleVM,
 } from '@/features/ledger/present';
-import { MoneyText } from '@/components/ui/money-text';
 import { AssetKindIcon } from '@/features/aset/asset-icon';
 import { ASET_COPY as AC, ASSET_KIND_LABEL } from '@/features/aset/copy';
+import { SAHAM_COPY as SC } from '@/features/saham/copy';
+import type { StockOverviewVM } from '@/features/saham/types';
 import type {
   AccountVM,
   AssetOverviewVM,
@@ -39,6 +40,13 @@ import { buildGoalListHref } from '@/features/tujuan/hrefs';
 import type { GoalVM } from '@/features/tujuan/types';
 import type { DompetRiwayat } from '@/server/ledger/dompet';
 import { AssetTransferIsland, RevalueIsland } from './aset-islands';
+import {
+  StockActions,
+  StockBalance,
+  StockLoadFailed,
+  StockSection,
+  stockScope,
+} from './dompet-saham';
 import { ArchiveIsland, ReconcileIsland } from './dompet-actions-islands';
 import { DompetGoalCard } from './dompet-goal';
 import { ModalActionsIsland } from './trading-islands';
@@ -87,17 +95,33 @@ function modalMoveOf(
   return null;
 }
 
-/** Transfer ke/dari aset ini = `Isi dari …` / `Cair ke …` (S14-AS3); jenis lain tidak berlabel khusus. */
-function assetMoveOf(e: EntryVM, accountId: string): { kind: string; label: string } | null {
+/**
+ * Transfer ke/dari aset ini = `Isi dari …` / `Cair ke …` (S14-AS3). Dompet saham: transfer adalah
+ * beli/jual (kodenya ada di daftar Saham) dan kaki valuasi adalah untung/rugi jual.
+ */
+function assetMoveOf(
+  e: EntryVM,
+  accountId: string,
+  stock: boolean,
+): { kind: string; label: string } | null {
   if (e.kind === 'valuation') {
+    if (stock) {
+      return e.direction === 'out'
+        ? { kind: 'Rugi', label: 'Rugi jual saham' }
+        : { kind: 'Untung', label: 'Untung jual saham' };
+    }
     return { kind: e.direction === 'out' ? 'Turun' : 'Naik', label: AC.valuationLabel };
   }
   if (e.kind !== 'transfer') return null;
   if (e.counterAccountId === accountId) {
-    return { kind: 'Isi', label: `Isi dari ${e.accountName}` };
+    return stock
+      ? { kind: 'Beli', label: `Beli saham dari ${e.accountName}` }
+      : { kind: 'Isi', label: `Isi dari ${e.accountName}` };
   }
   if (e.accountId === accountId && e.counterAccountId !== undefined) {
-    return { kind: 'Cair', label: `Cair ke ${e.counterAccountName ?? ''}` };
+    return stock
+      ? { kind: 'Jual', label: `Jual saham ke ${e.counterAccountName ?? ''}` }
+      : { kind: 'Cair', label: `Cair ke ${e.counterAccountName ?? ''}` };
   }
   return null;
 }
@@ -132,6 +156,7 @@ export function DompetDetailReal({
   trading,
   goal,
   asset,
+  stock,
 }: {
   ruang: Ruang;
   today: IsoDate;
@@ -151,12 +176,25 @@ export function DompetDetailReal({
   goal?: { goal: GoalVM | null; partnerName: string | null } | 'error';
   /** Hanya dompet aset (S14): ringkasannya dari `api.asset_overview`, atau `error` bila gagal dimuat. */
   asset?: AssetOverviewVM | 'error' | null;
+  /** Hanya dompet saham aktif (S14-SH1): posisi per kode dari `api.stock_overview`, atau `error`. */
+  stock?: StockOverviewVM | 'error';
 }) {
   const { account } = data;
   const isTrading = account.pocket === 'trading';
   const isAsset = account.pocket === 'aset' && account.assetKind !== undefined;
   const isStock = isAsset && account.assetKind === 'saham';
   const overview = typeof asset === 'object' && asset !== null ? asset : null;
+  const stockData = typeof stock === 'object' ? stock : null;
+  const scope =
+    isStock && stockData !== null
+      ? stockScope({
+          ruang,
+          today,
+          account: { id: account.id, name: account.name, openedOn: account.openedOn },
+          accounts,
+          overview: stockData,
+        })
+      : null;
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const openingEntry = openingEntryOf(data, today);
   const effect = (e: (typeof data.entries)[number]) => effectOnAccountVM(e, account.id);
@@ -168,7 +206,7 @@ export function DompetDetailReal({
       const { value, kind } = effect(e);
       const feeNote = accountFeeNoteVM(e, account.id);
       const modalMove = isTrading ? modalMoveOf(e, account.id, byId) : null;
-      const assetMove = isAsset ? assetMoveOf(e, account.id) : null;
+      const assetMove = isAsset ? assetMoveOf(e, account.id, isStock) : null;
       const move = modalMove ?? assetMove;
       return {
         id: e.id,
@@ -214,26 +252,30 @@ export function DompetDetailReal({
       }
       balanceLabel={
         isStock
-          ? overview?.marketValue == null
-            ? `Biaya beli ${account.name}`
-            : `Nilai pasar ${account.name}`
+          ? stockData === null
+            ? SC.costOf(account.name)
+            : SC.marketOf(account.name)
           : isAsset
             ? AC.valueOf(account.name)
             : undefined
       }
       balanceNode={
-        isAsset && account.balance === 0 ? (
+        isStock && stockData !== null ? (
+          <StockBalance overview={stockData} />
+        ) : isAsset && account.balance === 0 ? (
           <span className="text-body font-semibold text-text-soft">
             {isStock ? AC.noValueStock : AC.noValue}
           </span>
-        ) : isStock && overview?.marketValue != null ? (
-          <MoneyText value={overview.marketValue} size="amount-sm" />
         ) : undefined
       }
       openingLabel={isAsset ? AC.openingLabel : undefined}
       actions={
         account.archived ? null : isAsset ? (
-          isStock ? null : (
+          isStock ? (
+            scope === null ? null : (
+              <StockActions scope={scope} />
+            )
+          ) : (
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <RevalueIsland
@@ -302,7 +344,13 @@ export function DompetDetailReal({
         )
       }
       afterHero={
-        goal !== undefined ? (
+        isStock ? (
+          stock === 'error' ? (
+            <StockLoadFailed retryHref={buildAccountHref(ruang, account.id, query)} />
+          ) : scope === null || stockData === null ? null : (
+            <StockSection scope={scope} overview={stockData} />
+          )
+        ) : goal !== undefined ? (
           goal === 'error' ? (
             <section aria-label="Tujuan" className={`px-4 pt-3 ${card}`}>
               <CardError
@@ -351,6 +399,9 @@ export function DompetDetailReal({
                     ? AC.archiveBlockedStock(account.name)
                     : AC.archiveBlocked(account.name),
                 }
+              : {})}
+            {...(isStock && stockData?.holdings.some((h) => h.shares > 0) === true
+              ? { stock: { href: '#saham' } }
               : {})}
             {...(account.balance === 0 && typeof goal === 'object' && goal.goal !== null
               ? { goal: { name: goal.goal.name, href: buildGoalListHref(ruang, query) } }

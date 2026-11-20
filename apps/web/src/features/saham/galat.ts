@@ -38,3 +38,5 @@ export const FIELD_PRICE = 'Harga harus angka bulat lebih dari nol dan masuk aka
 export const FIELD_AMOUNT = 'Total terlalu besar. Periksa jumlah dan harganya.';
 export const FIELD_DATE = 'Tanggal tidak boleh setelah hari ini.';
 export const FIELD_CASH = 'Pilih dompet.';
+export const FIELD_DATE_EARLY =
+  'Tanggalnya lebih awal dari transaksi atau dompet yang sudah ada. Pilih tanggal yang sama atau lebih baru.';

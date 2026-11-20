@@ -76,9 +76,11 @@ export function SharesField({
           inputMode="numeric"
           autoComplete="off"
           aria-labelledby={labelId}
-          aria-describedby={[equals === null ? null : eqId, error === undefined ? null : errId]
-            .filter((x) => x !== null)
-            .join(' ')}
+          aria-describedby={
+            [equals === null ? null : eqId, error === undefined ? null : errId]
+              .filter((x) => x !== null)
+              .join(' ') || undefined
+          }
           aria-invalid={error !== undefined || undefined}
           aria-disabled={readOnly === true || undefined}
           onChange={(e) => {

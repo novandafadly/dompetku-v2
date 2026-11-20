@@ -24,6 +24,10 @@ vi.mock('./aset-islands', () => ({
     <div data-testid="transfer" data-balance={account.balance} />
   ),
 }));
+vi.mock('./saham-islands', () => ({
+  StockButtonIsland: ({ label }: { label: string }) => <button type="button">{label}</button>,
+  VoidTradeIsland: () => <button type="button">Batalkan</button>,
+}));
 vi.mock('./dompet-islands', () => ({
   AddWalletHostIsland: (props: { children: ReactNode }) => <div>{props.children}</div>,
   AddWalletTriggerIsland: () => <button type="button">Tambah dompet</button>,
@@ -408,6 +412,36 @@ describe('Detail aset (S14-AS3)', () => {
           name: 'Ajaib',
           marketValue: 6_000_000,
           missingPriceCount: 0,
+        }}
+        stock={{
+          holdings: [
+            {
+              holdingId: 'h1',
+              ticker: 'BBCA',
+              shares: 600,
+              costTotal: 5_000_000,
+              avgCost: 8333,
+              close: 10_000,
+              closeOn: '2026-11-14',
+              stale: false,
+              heldPending: false,
+              heldOn: null,
+              marketValue: 6_000_000,
+              unrealized: 1_000_000,
+              realized: 0,
+              lastTradeId: null,
+              trades: [],
+            },
+          ],
+          total: {
+            costTotal: 5_000_000,
+            marketValue: 6_000_000,
+            unrealized: 1_000_000,
+            realized: 0,
+            stale: false,
+            heldPending: false,
+            missingPriceCount: 0,
+          },
         }}
       />,
     );
