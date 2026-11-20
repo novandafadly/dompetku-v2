@@ -71,6 +71,8 @@ function PriceSession({
 
   // Kotak lonjakan muncul di bawah lipatan layar kecil: gulir ke sana supaya sakelarnya terlihat.
   useEffect(() => {
+    // happy-dom (tes) tidak punya scrollIntoView.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (spike) spikeRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [spike]);
 
