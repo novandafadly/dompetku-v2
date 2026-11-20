@@ -2,7 +2,15 @@ import type { Locator, Page } from '@playwright/test';
 import { expectNoSeriousViolations } from '../e2e/axe';
 import { asUser, noHorizontalScroll, spaceOf } from '../e2e-auth/helpers';
 import { adminQuery, expect, OWNER, test } from './fixtures';
-import { addWallet, digits, expectRouteBudget, spaceId, toasts } from './helpers';
+import {
+  addWallet,
+  digits,
+  expectRouteBudget,
+  readHero,
+  rupiahOf,
+  spaceId,
+  toasts,
+} from './helpers';
 
 /**
  * S14 Task 12 mode nyata: saham di Dompet Pribadi (T11 bagian saham, I6, K7). Dompet trading dengan
@@ -26,28 +34,10 @@ const rp = (n: number) => `Rp ${digits(n)}`;
 const rpRe = (n: number) => new RegExp(`Rp\\s${digits(n).replaceAll('.', '\\.')}`);
 const state = { rdn: '', sek: '' };
 
-const money = (text: string): number => {
-  const m = /(−?)Rp\s([\d.]+)/.exec(text);
-  if (!m) throw new Error(`nominal tidak terbaca: ${text}`);
-  const n = Number((m[2] ?? '').replaceAll('.', ''));
-  return m[1] === '−' ? -n : n;
-};
-const txt = async (l: Locator) => (await l.innerText()).replaceAll(' ', ' ');
+const money = rupiahOf;
+const txt = async (l: Locator) => ((await l.textContent()) ?? '').replaceAll(' ', ' ');
 
-async function hero(page: Page): Promise<{ total: number; parts: Record<string, number> }> {
-  await page.goto('/pribadi/dompet');
-  const total = money(await txt(page.getByTestId('net-worth')));
-  const parts: Record<string, number> = {};
-  const box = page.getByTestId('net-worth-parts');
-  if ((await box.count()) > 0) {
-    const labels = await box.getByRole('term').allInnerTexts();
-    const values = await box.getByRole('definition').allInnerTexts();
-    labels.forEach((l, i) => {
-      parts[l] = money(values[i] ?? '');
-    });
-  }
-  return { total, parts };
-}
+const hero = (page: Page) => readHero(page, 'pribadi');
 
 async function sqlNetWorth(): Promise<number> {
   const [r] = await adminQuery<{ total: string }>(
@@ -119,6 +109,7 @@ async function beli(
   o: { ticker: string; lot: number; price: number; fee?: number; from: string; more?: boolean },
 ) {
   await page.goto(detail());
+  if (o.more === true) await openHolding(page, o.ticker);
   const sheet = dlg(page);
   await openUntil(
     () =>
@@ -288,7 +279,7 @@ test(
         .first(),
     ).toBeVisible();
     const row = await openHolding(page, 'BBCA');
-    await expect(row).toContainText('300 lembar · 3 lot');
+    await expect(row).toContainText(/300 lembar\s*·\s*3 lot/);
     await expect(row).toContainText('Rata-rata Rp 9.203');
     await expect(row).toContainText('Belum ada harga');
     await expect(row).toContainText('sebesar biaya beli');
@@ -322,7 +313,7 @@ test(
     expect(await sqlNetWorth()).toBe(nw0 + (MARKET - COST));
     await page.goto(detail());
     await expect(main(page).getByText(rp(MARKET)).first()).toBeVisible();
-    await expect(main(page).getByText(/Belum terealisasi \+Rp 179\.000 untung/)).toBeVisible();
+    await expect(main(page).getByText(/Belum terealisasi \+Rp\s179\.000 untung/)).toBeVisible();
     const row = await openHolding(page, 'BBCA');
     await expect(row).toContainText('Harga Rp 9.800');
     const h = await hero(page);
@@ -344,7 +335,7 @@ test(
     await page.keyboard.press('Escape');
     expect(await sqlNetWorth()).toBe(nw0 + (MARKET - COST));
 
-    // Dikonfirmasi: harga dipakai (300 x 20.000), lalu kembali ke 9.800 dengan konfirmasi.
+    // Dikonfirmasi: harga dipakai (300 x 20.000), lalu kembali ke 9.800 (tidak lagi melonjak dari harga kemarin) tanpa konfirmasi.
     await isiHarga(page, 'BBCA', 20_000, { confirm: true });
     await expect(
       toasts(page)
@@ -352,7 +343,7 @@ test(
         .last(),
     ).toBeVisible();
     await expect.poll(() => sqlNetWorth()).toBe(nw0 + (300 * 20_000 - COST));
-    await isiHarga(page, 'BBCA', 9800, { confirm: true });
+    await isiHarga(page, 'BBCA', 9800);
     await expect.poll(() => sqlNetWorth()).toBe(nw0 + (MARKET - COST));
   },
 );
@@ -384,11 +375,11 @@ test(
     await page.goto(detail());
     await expect(
       main(page)
-        .getByText(/Sudah terealisasi \+Rp 66\.667 untung/)
+        .getByText(/Sudah terealisasi \+Rp\s66\.667 untung/)
         .first(),
     ).toBeVisible();
     const row = await openHolding(page, 'BBCA');
-    await expect(row).toContainText('200 lembar · 2 lot');
+    await expect(row).toContainText(/200 lembar\s*·\s*2 lot/);
     await expect(row.getByText('Jual 1 lot @ Rp 9.900')).toBeVisible();
     await page.goto('/pribadi/laporan');
     expect(await txt(page.getByTestId('laporan-ringkasan'))).toBe(laporan0);
@@ -410,7 +401,9 @@ test(
     expect(await incomeExpense()).toEqual(sums);
     await expect.poll(() => sqlNetWorth()).toBe(nw0);
     await page.goto(detail());
-    await expect((await openHolding(page, 'BBCA')).getByText('300 lembar · 3 lot')).toBeVisible();
+    await expect(
+      (await openHolding(page, 'BBCA')).getByText(/300 lembar\s*·\s*3 lot/),
+    ).toBeVisible();
     await expect(main(page).getByText(/Sudah terealisasi/)).toHaveCount(0);
   },
 );
@@ -429,7 +422,7 @@ test(
     await page.goto(detail());
     await expect(
       main(page)
-        .getByText(/Sudah terealisasi −Rp 20\.333 rugi/)
+        .getByText(/Sudah terealisasi −Rp\s20\.333 rugi/)
         .first(),
     ).toBeVisible();
 
