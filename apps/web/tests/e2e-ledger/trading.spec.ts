@@ -94,7 +94,7 @@ test('Dompet: kelompok Trading, kartu Modal kosong, kekayaan bersih ikut trading
   await expect(card).toContainText('Belum ada modal yang disetor.');
   await expect(card).not.toContainText('Rp');
   await expect(
-    main(page).getByText('Operasional, tabungan, dan trading. Kas Kantor tidak dihitung.'),
+    main(page).getByText('Kas, aset, saham, dan sisa utang-piutang. Kas Kantor tidak dihitung.'),
   ).toBeVisible();
   await group.getByRole('link', { name: new RegExp(`^${TRADING}`) }).click();
   await expect(page).toHaveURL(/\/pribadi\/dompet\/[0-9a-f-]{36}$/);

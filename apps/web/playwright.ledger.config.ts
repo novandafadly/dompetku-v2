@@ -35,7 +35,9 @@ const DATA_SPECS = [
   /[\\/]utang\.spec\.ts$/,
   /[\\/]utang2\.spec\.ts$/,
   /[\\/]vitals\.spec\.ts$/,
+  /[\\/]zz-aset\.spec\.ts$/,
   /[\\/]zz-dompet-tujuan\.spec\.ts$/,
+  /[\\/]zz-saham\.spec\.ts$/,
 ];
 
 export default defineConfig({
