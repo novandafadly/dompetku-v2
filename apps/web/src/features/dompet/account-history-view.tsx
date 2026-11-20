@@ -24,6 +24,8 @@ export interface HistoryRow {
   status?: ReactNode;
   value: Rupiah;
   kind: MoneyKind;
+  /** Nilai positif netral bertanda `+` (perubahan nilai aset, S14). */
+  signed?: boolean;
 }
 
 /** Satu hari: label relatif, jumlah efek hari itu pada dompet ini, baris terbaru di atas. */
@@ -149,6 +151,7 @@ export function AccountHistoryView({
               status={r.status}
               value={r.value}
               kind={r.kind}
+              signed={r.signed === true}
             />
           ))}
         </GroupList>

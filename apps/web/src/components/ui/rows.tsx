@@ -18,6 +18,7 @@ export function TxRow({
   status,
   value,
   kind,
+  signed = false,
 }: {
   href: Route;
   icon: ReactNode;
@@ -27,10 +28,13 @@ export function TxRow({
   status?: ReactNode;
   value: Rupiah;
   kind: MoneyKind;
+  /** Nilai positif netral tetap bertanda `+` (perubahan nilai aset, S14). */
+  signed?: boolean;
 }) {
   // Nominal sangat panjang (> 13 karakter, ambang yang sama dengan MoneyText) di bawah 360 px:
   // turun ke baris kedua kolom teks agar keterangan tidak terperas jadi "Bel…" (grid; DOM tetap).
-  const long = formatRupiah(value, kind === 'income' ? { sign: 'always' } : {}).length > 13;
+  const long =
+    formatRupiah(value, kind === 'income' || signed ? { sign: 'always' } : {}).length > 13;
   return (
     <li className={rowDivider}>
       <Link
@@ -52,7 +56,7 @@ export function TxRow({
         </span>
         {/* Spasi di DOM agar teks baris terbaca utuh oleh pembaca layar. */}{' '}
         <span className={long ? 'max-narrow:col-start-2 max-narrow:justify-self-start' : ''}>
-          <MoneyText value={value} kind={kind} />
+          <MoneyText value={value} kind={kind} signed={signed} />
         </span>
       </Link>
     </li>

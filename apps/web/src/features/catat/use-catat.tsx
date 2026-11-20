@@ -647,7 +647,8 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         out.code === 'network' ||
           out.code === 'not_found' ||
           out.code === 'cross_space_not_allowed' ||
-          out.code === 'cross_space_kantor'
+          out.code === 'cross_space_kantor' ||
+          out.code === 'asset_negative'
           ? out.code
           : out.code === 'split_needs_partner' || out.code === 'split_shared_only'
             ? 'split_needs_partner'

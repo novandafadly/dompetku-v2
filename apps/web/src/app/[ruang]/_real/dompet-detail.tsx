@@ -187,6 +187,7 @@ export function DompetDetailReal({
           : { status: <span className="text-meta font-semibold text-text-muted">{feeNote}</span> }),
         value,
         kind,
+        ...(e.kind === 'valuation' ? { signed: true } : {}),
       };
     }),
   }));

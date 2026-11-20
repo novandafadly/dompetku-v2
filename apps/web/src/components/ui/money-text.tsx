@@ -30,18 +30,21 @@ export function MoneyText({
   kind = 'neutral',
   size = 'list',
   compact = false,
+  signed = false,
   className = '',
 }: {
   value: Rupiah;
   kind?: MoneyKind;
   size?: keyof typeof sizes;
   compact?: boolean;
+  /** Tanda `+` untuk nilai positif walau netral (perubahan nilai aset, S14). */
+  signed?: boolean;
   className?: string;
 }) {
   // Pemasukan selalu bertanda "+" (handoff: aturan global format uang).
   const text = compact
     ? formatRupiahCompact(value)
-    : formatRupiah(value, kind === 'income' ? { sign: 'always' } : {});
+    : formatRupiah(value, kind === 'income' || signed ? { sign: 'always' } : {});
   // Jenis (pemasukan/pengeluaran) sudah membawa arah; tanda minus hanya diucapkan untuk netral.
   const spoken = spokenRupiah(kind === 'neutral' ? value : Math.abs(value), kind);
 
