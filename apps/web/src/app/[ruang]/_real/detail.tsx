@@ -278,7 +278,7 @@ export function DetailReal({
   const live = voidedAt === undefined;
   // Saldo awal lewat 7 hari (S7-W2): tanpa Ubah, dengan keterangan dan arahan Cocokkan saldo.
   const openedOn =
-    entry.kind === 'opening_balance'
+    entry.kind === 'opening_balance' && entry.trade === undefined
       ? accounts.find((a) => a.id === entry.accountId)?.openedOn
       : undefined;
   const openingLocked = live && openedOn !== undefined && !editable;

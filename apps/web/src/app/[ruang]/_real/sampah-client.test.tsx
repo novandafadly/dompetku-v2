@@ -90,7 +90,7 @@ describe('TrashListReal: transaksi saham (S14-AS7)', () => {
     render1();
     fireEvent.click(screen.getAllByRole('button', { name: /^Pulihkan/ })[0] ?? document.body);
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Sudah ada transaksi BBCA yang lebih baru');
+    expect(alert).toHaveTextContent('Urutan transaksi BBCA sudah berubah');
     expect(alert.textContent).not.toMatch(/Rp|server/);
   });
 });

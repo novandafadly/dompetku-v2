@@ -198,7 +198,7 @@ Label plan `usang` ditulis di layar sebagai **`Harga lama`** (kata "usang" kaku 
 
 ### S14-SH9 · Modal trading sesudah S14 (K7) + S12S13-C9
 
-- **Riwayat Detail dompet trading:** transfer antara dompet trading dan dompet saham **bukan** `Setor modal`/`Tarik modal`; labelnya `Beli {kode} · {dompet saham}` / `Jual {kode} · {dompet saham}` (dari tautan trade, Kendala 7). `modalMoveOf` mengecualikan lawan ber-`asset_kind = 'saham'`.
+- **Riwayat Detail dompet trading:** transfer antara dompet trading dan dompet saham **bukan** `Setor modal`/`Tarik modal`; labelnya `Beli {kode} · {n} lembar` / `Jual {kode} · {n} lembar` (selaras AS7; ruling review Task 11) (dari tautan trade, Kendala 7). `modalMoveOf` mengecualikan lawan ber-`asset_kind = 'saham'`.
 - **Kartu `Modal trading` (Dompet):** `shortfall` total baru dari SQL (Σ sisa modal − Σ saldo trading − Σ biaya beli saham). Bila ada dompet saham Pribadi, satu baris tambahan di `dl`: `Saham (biaya beli)` 15/700 dan sub 12/500 `text-muted` `Dihitung dengan biaya beli, bukan nilai pasar, supaya modal tidak ikut naik-turun harga.` Peringatan `Kurang` tetap hanya di total.
 - **S12S13-C9:** kartu `Modal` per dompet (Detail dompet trading) tetap **tanpa** `Kurang`; bingkai TR3 di `s12-bingkai.md` diselaraskan oleh Task 10 (satu paragraf catatan, plan Task 10 butir 2; Task 1 tidak menyentuh berkas itu).
 

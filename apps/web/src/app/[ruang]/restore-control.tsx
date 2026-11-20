@@ -82,10 +82,11 @@ export function restoreFailedText(
   if (code === 'asset_negative') {
     return 'Belum bisa dipulihkan. Nilai asetnya tidak cukup. Aset tidak bisa minus.';
   }
-  // S14: transaksi saham hanya pulih bila tidak ada transaksi hidup yang lebih baru untuk kode yang sama
-  // (urutan lembar dan biaya rata-rata dijaga DB); `before_latest_entry` = tanggalnya lebih lama dari itu.
+  // S14: transaksi saham hanya pulih bila urutannya utuh (urutan lembar dan biaya rata-rata dijaga DB):
+  // ada transaksi hidup yang lebih baru, atau transaksi di bawahnya (mis. beli sebelum jual) masih batal;
+  // `before_latest_entry` = tanggalnya lebih lama dari transaksi hidup terakhir.
   if (code === 'trade_not_latest' || code === 'before_latest_entry') {
-    return `Belum bisa dipulihkan. Sudah ada transaksi ${kode ?? 'saham'} yang lebih baru. Batalkan yang lebih baru dulu, atau muat ulang halaman.`;
+    return `Belum bisa dipulihkan. Urutan transaksi ${kode ?? 'saham'} sudah berubah. Pulihkan transaksi yang lebih lama dulu, atau batalkan yang lebih baru.`;
   }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }

@@ -785,6 +785,24 @@ describe('Detail transaksi saham dan perubahan nilai (S14-AS7)', () => {
     ).toBe(false);
   });
 
+  it('saham berjalan lewat 7 hari: tanpa arahan Cocokkan saldo (ditolak di dompet saham)', () => {
+    const e = tradeEntry({
+      kind: 'opening_balance',
+      accountId: 'sek-1',
+      trade: { ...trade, side: 'opening' },
+    });
+    render(
+      <DetailReal
+        {...props}
+        today="2026-11-20"
+        me="u-n"
+        data={data(e, true, { accounts: [{ ...ACCOUNT, id: 'sek-1', openedOn: '2026-10-28' }] })}
+        labels={tradeLabels(e)}
+      />,
+    );
+    expect(screen.queryByText(/Saldo awal terkunci/)).toBeNull();
+  });
+
   it('hidup: judul Beli {kode}, tanpa aksi generik, catatan dan tautan ke dompet saham', () => {
     const e = tradeEntry();
     render(<DetailReal {...props} me="u-n" data={data(e)} labels={tradeLabels(e)} />);

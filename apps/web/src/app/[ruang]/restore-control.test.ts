@@ -26,10 +26,10 @@ describe('pulihkan transaksi saham (S14)', () => {
   it('trade_not_latest: menyebut kode, tanpa nominal, bukan galat server', () => {
     const t = restoreFailedText('trade_not_latest', 'Bersama', 'BBCA');
     expect(t).toBe(
-      'Belum bisa dipulihkan. Sudah ada transaksi BBCA yang lebih baru. Batalkan yang lebih baru dulu, atau muat ulang halaman.',
+      'Belum bisa dipulihkan. Urutan transaksi BBCA sudah berubah. Pulihkan transaksi yang lebih lama dulu, atau batalkan yang lebih baru.',
     );
     expect(t).not.toMatch(/Rp|server/);
-    expect(restoreFailedText('before_latest_entry')).toContain('transaksi saham yang lebih baru');
+    expect(restoreFailedText('before_latest_entry')).toContain('Urutan transaksi saham sudah berubah');
   });
 });
 
