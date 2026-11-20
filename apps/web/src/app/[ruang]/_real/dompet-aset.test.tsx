@@ -248,6 +248,8 @@ describe('Dompet S14: kelompok Aset', () => {
     render1({ accounts: [bca, saham], assets: [ov({ missingPriceCount: 1 })] });
     row = screen.getByRole('link', { name: /Ajaib/ });
     expect(row).toHaveTextContent('Saham · sebagian belum ada harga');
+    // S14-C1: kalimat harga membungkus, tidak terpotong elipsis.
+    expect(screen.getByTestId('stock-row-sub')).toHaveClass('whitespace-normal');
     cleanup();
     render1({ accounts: [bca, { ...saham, balance: 0 }], assets: [ov({ marketValue: 0 })] });
     expect(screen.getByRole('link', { name: /Ajaib/ })).toHaveTextContent('Belum ada saham');

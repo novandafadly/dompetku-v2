@@ -84,8 +84,13 @@ export function DompetReal({
     if (a.assetKind === undefined) return undefined;
     const o = overviewOf(a.id);
     if (a.assetKind === 'saham' && o?.marketValue !== null && o !== undefined) {
+      // Kalimat jujur harga tidak boleh terpotong elipsis (`rowSub` truncate): boleh membungkus.
       if ((o.missingPriceCount ?? 0) > 0)
-        return `${ASSET_KIND_LABEL.saham} · sebagian belum ada harga`;
+        return (
+          <span data-testid="stock-row-sub" className="whitespace-normal">
+            {`${ASSET_KIND_LABEL.saham} · sebagian belum ada harga`}
+          </span>
+        );
       return a.balance === 0 ? ASSET_KIND_LABEL.saham : `${ASSET_KIND_LABEL.saham} · nilai pasar`;
     }
     return ASSET_KIND_LABEL[a.assetKind];
