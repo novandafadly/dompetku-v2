@@ -1,4 +1,4 @@
-import { formatRupiah, type Rupiah } from '@dompetku/domain';
+import { formatRibuan, formatRupiah, type Rupiah } from '@dompetku/domain';
 import type { EntryVM } from './types';
 
 /**
@@ -27,15 +27,31 @@ const SPLIT_LEG_TITLE = {
   receive: 'Terima patungan',
 } as const;
 
+/** Lembar dengan titik ribuan (`1.200 lembar`); format tampilan, bukan hitungan uang. */
+const lembar = (n: number): string => `${formatRibuan(n)} lembar`;
+
+/**
+ * Judul entri bagian trade saham (S14-AS7): beli/jual = kaki transfer (`Beli BBCA · 200 lembar`),
+ * untung/rugi jual = kaki valuasi (kata, bukan warna), saham berjalan = `BBCA · 200 lembar`.
+ */
+function tradeTitle(e: EntryVM, t: NonNullable<EntryVM['trade']>): string {
+  if (e.kind === 'valuation') {
+    return `${e.direction === 'out' ? 'Rugi' : 'Untung'} jual ${t.ticker}`;
+  }
+  if (t.side === 'opening') return `${t.ticker} · ${lembar(t.shares)}`;
+  return `${t.side === 'buy' ? 'Beli' : 'Jual'} ${t.ticker} · ${lembar(t.shares)}`;
+}
+
 /** Judul entri di daftar: deskripsi, lalu catatan bersama, lalu nama kategori. */
 export function entryTitleVM(e: EntryVM): string {
+  if (e.trade !== undefined) return tradeTitle(e, e.trade);
   switch (e.kind) {
     case 'opening_balance':
       return 'Saldo awal';
     case 'adjustment':
       return 'Cocokkan saldo';
     case 'valuation':
-      return 'Perubahan nilai';
+      return `Perubahan nilai · ${e.accountName}`;
     case 'transfer':
       return e.description ?? 'Pindah dompet';
     case 'reimbursement':
@@ -72,6 +88,13 @@ export function entryTitleVM(e: EntryVM): string {
 
 /** Label jenis/kategori untuk baris. */
 export function entryKindLabelVM(e: EntryVM): string {
+  if (e.trade !== undefined) {
+    return e.trade.side === 'opening'
+      ? 'Saham yang sudah dimiliki'
+      : e.trade.side === 'buy'
+        ? 'Beli saham'
+        : 'Jual saham';
+  }
   switch (e.kind) {
     case 'opening_balance':
       return 'Saldo awal';
@@ -91,6 +114,18 @@ export function entryKindLabelVM(e: EntryVM): string {
     default:
       return e.categoryName ?? 'Tanpa kategori';
   }
+}
+
+/**
+ * Awalan meta baris daftar: seperti `entryKindLabelVM`, kecuali perubahan nilai aset memakai arahnya
+ * (`Naik`/`Turun`) supaya meta tidak mengulang judul `Perubahan nilai · {aset}` (S14-AS7).
+ */
+export function entryMetaKindVM(e: EntryVM): string {
+  return e.kind === 'valuation' && e.trade === undefined
+    ? e.direction === 'out'
+      ? 'Turun'
+      : 'Naik'
+    : entryKindLabelVM(e);
 }
 
 /** Nominal bertanda dari sudut pandang ruang entri. */

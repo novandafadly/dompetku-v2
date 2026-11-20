@@ -22,6 +22,17 @@ describe('restoreFailedText', () => {
   });
 });
 
+describe('pulihkan transaksi saham (S14)', () => {
+  it('trade_not_latest: menyebut kode, tanpa nominal, bukan galat server', () => {
+    const t = restoreFailedText('trade_not_latest', 'Bersama', 'BBCA');
+    expect(t).toBe(
+      'Belum bisa dipulihkan. Sudah ada transaksi BBCA yang lebih baru. Batalkan yang lebih baru dulu, atau muat ulang halaman.',
+    );
+    expect(t).not.toMatch(/Rp|server/);
+    expect(restoreFailedText('before_latest_entry')).toContain('transaksi saham yang lebih baru');
+  });
+});
+
 describe('pulihkan ke aset (S14)', () => {
   it('asset_negative: salinan aset, bukan galat server', () => {
     expect(restoreFailedText('asset_negative')).toBe(

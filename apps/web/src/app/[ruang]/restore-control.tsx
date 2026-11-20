@@ -54,7 +54,11 @@ export function restoredBalance(entry: EntryVM, account: RestoreAccount): number
 type RestoreState = 'idle' | 'busy' | 'saldo' | 'closed' | 'galat';
 
 /** Galat pulihkan selain saldo, lewat 90 hari, dan konflik (salinan S6, gaya galat Batalkan). */
-export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'): string {
+export function restoreFailedText(
+  code: LedgerErrorCode,
+  tujuan = 'ruang lain',
+  kode?: string,
+): string {
   if (code === 'entry_moved') {
     return `Transaksi ini sudah dipindahkan ke ${tujuan} dan tidak bisa dipulihkan dari sini.`;
   }
@@ -77,6 +81,11 @@ export function restoreFailedText(code: LedgerErrorCode, tujuan = 'ruang lain'):
   // S14: mis. memulihkan Cairkan padahal nilai asetnya sudah berkurang (aset tidak boleh minus).
   if (code === 'asset_negative') {
     return 'Belum bisa dipulihkan. Nilai asetnya tidak cukup. Aset tidak bisa minus.';
+  }
+  // S14: transaksi saham hanya pulih bila tidak ada transaksi hidup yang lebih baru untuk kode yang sama
+  // (urutan lembar dan biaya rata-rata dijaga DB); `before_latest_entry` = tanggalnya lebih lama dari itu.
+  if (code === 'trade_not_latest' || code === 'before_latest_entry') {
+    return `Belum bisa dipulihkan. Sudah ada transaksi ${kode ?? 'saham'} yang lebih baru. Batalkan yang lebih baru dulu, atau muat ulang halaman.`;
   }
   return 'Belum bisa dipulihkan. Ada kendala di server.';
 }
@@ -184,7 +193,11 @@ export function RestoreControl({
       >
         <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
         <span className="min-w-0 text-pretty">
-          {restoreFailedText(galat, RUANG_LABEL[ruang === 'pribadi' ? 'bersama' : 'pribadi'])}
+          {restoreFailedText(
+            galat,
+            RUANG_LABEL[ruang === 'pribadi' ? 'bersama' : 'pribadi'],
+            entry.trade?.ticker,
+          )}
         </span>
       </p>
     ) : null;

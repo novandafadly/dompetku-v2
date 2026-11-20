@@ -475,3 +475,88 @@ describe('Detail aset (S14-AS3)', () => {
     expect(screen.queryByTestId('revalue')).toBeNull();
   });
 });
+
+describe('Riwayat dompet dari trade saham (S14-AS7, Kendala 7)', () => {
+  const sek = acc({
+    id: 'sk1',
+    name: 'Ajaib',
+    pocket: 'aset',
+    walletType: 'cash',
+    assetKind: 'saham',
+    balance: 915_000,
+  });
+  const rdn = acc({ id: 'rd1', name: 'RDN Ajaib', pocket: 'trading', balance: 2_000_000 });
+  const trade = (id: string, side: 'buy' | 'sell' | 'opening', shares: number) => ({
+    id,
+    ticker: 'BBCA',
+    side,
+    shares,
+    accountId: 'sk1',
+    accountName: 'Ajaib',
+  });
+  const data: DompetRiwayat = {
+    account: sek,
+    entries: [
+      // jual 100 lembar: kaki valuasi (untung) + kaki transfer (hasil ke RDN)
+      entry('j-v', {
+        kind: 'valuation',
+        accountId: 'sk1',
+        accountName: 'Ajaib',
+        amount: 65_000,
+        direction: 'in',
+        occurredOn: '2026-11-12',
+        trade: trade('t2', 'sell', 100),
+      }),
+      entry('j-t', {
+        accountId: 'sk1',
+        accountName: 'Ajaib',
+        counterAccountId: 'rd1',
+        counterAccountName: 'RDN Ajaib',
+        amount: 980_000,
+        occurredOn: '2026-11-12',
+        trade: trade('t2', 'sell', 100),
+      }),
+      // beli 200 lembar dari RDN
+      entry('b-t', {
+        accountId: 'rd1',
+        accountName: 'RDN Ajaib',
+        counterAccountId: 'sk1',
+        counterAccountName: 'Ajaib',
+        amount: 1_830_000,
+        occurredOn: '2026-11-10',
+        trade: trade('t1', 'buy', 200),
+      }),
+    ],
+    opening: [],
+    hasMore: false,
+  };
+  const props = {
+    ruang: 'pribadi' as const,
+    today: '2026-11-12',
+    query: '',
+    dompetHref: '/pribadi/dompet' as never,
+    moreHref: null,
+    data,
+    accounts: [rdn, sek],
+  };
+
+  it('dompet saham: Beli/Jual {kode} · {n} lembar dan Untung jual {kode}, bukan Transfer atau Isi/Cair', () => {
+    render(<DompetDetailReal {...props} />);
+    expect(screen.getByRole('link', { name: /Beli BBCA · 200 lembar/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Jual BBCA · 100 lembar/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Untung jual BBCA/ })).toBeTruthy();
+    expect(screen.queryByText(/Pindah dompet|Isi dari|Cair ke|Setor modal|Tarik modal/)).toBeNull();
+  });
+
+  it('dompet trading: beli saham dari RDN = Beli {kode}, bukan Transfer atau Tarik modal', () => {
+    render(
+      <DompetDetailReal
+        {...props}
+        data={{ ...data, account: rdn, entries: data.entries.filter((e) => e.id !== 'j-v') }}
+        trading={null}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Beli BBCA · 200 lembar/ })).toBeTruthy();
+    expect(screen.queryByText(/Tarik modal|Setor modal|Pindah dompet/)).toBeNull();
+  });
+});

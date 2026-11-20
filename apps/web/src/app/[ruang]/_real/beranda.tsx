@@ -22,7 +22,7 @@ import { RecentEntriesView, type RecentRow } from '@/features/beranda/recent-ent
 import { AmanCardView } from '@/features/beranda/aman-card-view';
 import { SafeToSpendEmptyView } from '@/features/beranda/safe-to-spend-view';
 import {
-  entryKindLabelVM,
+  entryMetaKindVM,
   entryTitleVM,
   feeNoteVM,
   signedAmountVM,
@@ -153,7 +153,7 @@ export function BerandaReal({
       iconName: e.categoryName,
       entryKind: e.kind,
       label: entryTitleVM(e),
-      meta: `${entryKindLabelVM(e)} · ${e.accountName} · ${dayLabel(e.occurredOn, today)}`,
+      meta: `${entryMetaKindVM(e)} · ${e.accountName} · ${dayLabel(e.occurredOn, today)}`,
       ...(note === undefined ? {} : { note }),
       value,
       kind,

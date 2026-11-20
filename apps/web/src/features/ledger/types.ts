@@ -151,6 +151,20 @@ export interface EntryVM {
    * pengeluaran Bersama (nama dompet sistem tidak pernah tampil, aturan 3 bingkai S12).
    */
   split?: { role: 'bill' | 'settle' | 'receive'; payerName?: string };
+  /**
+   * Bagian dari transaksi saham (S14, `app.entries.stock_trade_id`): kaki transfer (beli/jual), kaki
+   * valuasi (untung/rugi jual), atau saham berjalan. Entri ini tidak diubah/dibatalkan lewat jalur
+   * generik (`stock_account_trade_only`): kelola dari Detail dompet saham. `accountId`/`accountName`
+   * = dompet saham pemegang kodenya.
+   */
+  trade?: {
+    id: string;
+    ticker: string;
+    side: 'buy' | 'sell' | 'opening';
+    shares: number;
+    accountId: string;
+    accountName: string;
+  };
   debt?: {
     id: string;
     direction: 'borrowed' | 'lent';

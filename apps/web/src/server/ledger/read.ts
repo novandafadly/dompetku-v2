@@ -138,6 +138,13 @@ interface EntryRow {
   // S12: dompet sistem patungan (pengeluaran Bersama) dan kaki Pribadi yang berpasangan dengannya.
   account_pocket: string;
   split_leg: 'bill' | 'settle' | 'receive' | null;
+  // S14: trade saham yang menaungi entri ini (kosong untuk entri biasa).
+  trade_id: string | null;
+  trade_ticker: string | null;
+  trade_side: 'buy' | 'sell' | 'opening' | null;
+  trade_shares: number | null;
+  trade_account_id: string | null;
+  trade_account_name: string | null;
 }
 
 /**
@@ -171,7 +178,9 @@ const ENTRY_COLUMNS = `
       join app.entry_lines pl on pl.space_id = p.space_id and pl.entry_id = p.id and pl.role = 'main'
       join app.accounts pa on pa.space_id = pl.space_id and pa.id = pl.account_id
      where p.link_id = e.link_id and p.space_id <> e.space_id and pa.pocket = 'patungan') end
-    as split_leg`;
+    as split_leg,
+  st.id as trade_id, sh.ticker as trade_ticker, st.side as trade_side, st.shares as trade_shares,
+  sa.id as trade_account_id, sa.name as trade_account_name`;
 
 /**
  * Kaki dompet sistem `patungan` di Bersama (masuk tagihan/pelunasan, keluar terima) tidak pernah
@@ -189,6 +198,9 @@ const ENTRY_JOINS = `
   left join app.categories cat on cat.space_id = e.space_id and cat.id = e.category_id
   left join app.debts dbt on dbt.space_id = e.space_id and dbt.id = e.debt_id
   left join app.contacts dct on dct.space_id = dbt.space_id and dct.id = dbt.contact_id
+  left join app.stock_trades st on st.space_id = e.space_id and st.id = e.stock_trade_id
+  left join app.stock_holdings sh on sh.space_id = st.space_id and sh.id = st.holding_id
+  left join app.accounts sa on sa.space_id = sh.space_id and sa.id = sh.account_id
   left join app.space_roster($1) r on r.user_id = e.created_by`;
 
 const ENTRY_ORDER = 'order by e.occurred_on desc, e.created_at desc, e.id desc';
@@ -242,6 +254,23 @@ function toEntryVM(row: EntryRow): EntryVM {
     vm.accountName = `Dibayar dari dompet pribadi ${by.name}`;
   } else if (row.split_leg !== null) {
     vm.split = { role: row.split_leg };
+  }
+  if (
+    row.trade_id !== null &&
+    row.trade_ticker !== null &&
+    row.trade_side !== null &&
+    row.trade_shares !== null &&
+    row.trade_account_id !== null &&
+    row.trade_account_name !== null
+  ) {
+    vm.trade = {
+      id: row.trade_id,
+      ticker: row.trade_ticker,
+      side: row.trade_side,
+      shares: row.trade_shares,
+      accountId: row.trade_account_id,
+      accountName: row.trade_account_name,
+    };
   }
   if (row.debt_id !== null && row.debt_direction !== null && row.debt_contact_name !== null) {
     vm.debt = {
@@ -451,7 +480,11 @@ export async function trashListTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<Tra
       order by t.n`,
     [ctx.spaceId],
   );
-  return rows.map((row) => ({ entry: toEntryVM(row), purgeAfter: row.purge_after }));
+  // S14: satu baris per transaksi saham (dipulihkan lewat restore_stock_trade sebagai satu paket):
+  // kaki valuasi untung/rugi jual tidak tampil sendiri.
+  return rows
+    .filter((row) => !(row.trade_id !== null && row.kind === 'valuation'))
+    .map((row) => ({ entry: toEntryVM(row), purgeAfter: row.purge_after }));
 }
 
 export async function trashList(ctx: LedgerCtx): Promise<TrashVM[]> {

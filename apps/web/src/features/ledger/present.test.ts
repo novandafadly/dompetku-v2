@@ -6,6 +6,7 @@ import {
   accountFeeNoteVM,
   effectOnAccountVM,
   entryKindLabelVM,
+  entryMetaKindVM,
   entryTitleVM,
   feeNoteVM,
   signedAmountVM,
@@ -290,5 +291,74 @@ describe('bagi tagihan Bersama (S12)', () => {
 
   it('transfer antar ruang biasa tetap berjudul arah', () => {
     expect(entryTitleVM(leg(null))).toBe('Setor ke Bersama');
+  });
+});
+
+describe('transaksi saham dan perubahan nilai aset (S14-AS7)', () => {
+  const base = (over: Partial<EntryVM>): EntryVM => ({
+    id: 's-1',
+    version: 1,
+    kind: 'transfer',
+    occurredOn: '2026-11-10',
+    createdAt: '2026-11-10T10:00:00+07:00',
+    createdBy: { id: 'm1', name: 'Novanda', initial: 'N' },
+    accountId: 'bca',
+    accountName: 'BCA',
+    amount: 1_830_000,
+    ...over,
+  });
+  const trade = (
+    side: 'buy' | 'sell' | 'opening',
+    shares = 200,
+  ): NonNullable<EntryVM['trade']> => ({
+    id: 't-1',
+    ticker: 'BBCA',
+    side,
+    shares,
+    accountId: 'sek',
+    accountName: 'Sekuritas',
+  });
+
+  it('beli dan jual: judul kode + lembar, jenis Beli saham / Jual saham', () => {
+    const beli = base({ trade: trade('buy', 1200) });
+    expect(entryTitleVM(beli)).toBe('Beli BBCA · 1.200 lembar');
+    expect(entryKindLabelVM(beli)).toBe('Beli saham');
+    const jual = base({ trade: trade('sell', 100), accountId: 'sek', accountName: 'Sekuritas' });
+    expect(entryTitleVM(jual)).toBe('Jual BBCA · 100 lembar');
+    expect(entryKindLabelVM(jual)).toBe('Jual saham');
+  });
+
+  it('kaki valuasi jual: Untung/Rugi jual {kode} (kata, bukan warna), nominal netral bertanda', () => {
+    const untung = base({
+      kind: 'valuation',
+      direction: 'in',
+      amount: 65_000,
+      trade: trade('sell'),
+    });
+    expect(entryTitleVM(untung)).toBe('Untung jual BBCA');
+    expect(signedAmountVM(untung)).toEqual({ value: 65_000, kind: 'neutral' });
+    const rugi = base({
+      kind: 'valuation',
+      direction: 'out',
+      amount: 57_500,
+      trade: trade('sell'),
+    });
+    expect(entryTitleVM(rugi)).toBe('Rugi jual BBCA');
+    expect(signedAmountVM(rugi)).toEqual({ value: -57_500, kind: 'neutral' });
+  });
+
+  it('saham berjalan: kode + lembar, jenis Saham yang sudah dimiliki', () => {
+    const o = base({ kind: 'opening_balance', trade: trade('opening', 300) });
+    expect(entryTitleVM(o)).toBe('BBCA · 300 lembar');
+    expect(entryKindLabelVM(o)).toBe('Saham yang sudah dimiliki');
+  });
+
+  it('perubahan nilai aset: judul menyebut aset, meta memakai arah (tidak mengulang judul)', () => {
+    const naik = base({ kind: 'valuation', direction: 'in', accountName: 'Emas', amount: 500_000 });
+    expect(entryTitleVM(naik)).toBe('Perubahan nilai · Emas');
+    expect(entryKindLabelVM(naik)).toBe('Perubahan nilai');
+    expect(entryMetaKindVM(naik)).toBe('Naik');
+    expect(entryMetaKindVM({ ...naik, direction: 'out' })).toBe('Turun');
+    expect(entryMetaKindVM(base({ trade: trade('buy') }))).toBe('Beli saham');
   });
 });

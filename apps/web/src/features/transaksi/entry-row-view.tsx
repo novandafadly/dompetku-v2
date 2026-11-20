@@ -3,7 +3,7 @@ import { CategoryIcon } from '@/components/ui/category-icon';
 import { ClockIcon } from '@/components/ui/icons/clock';
 import { TxRow } from '@/components/ui/rows';
 import {
-  entryKindLabelVM,
+  entryMetaKindVM,
   entryTitleVM,
   feeNoteVM,
   signedAmountVM,
@@ -34,7 +34,7 @@ export function EntryRowView({
       href={href}
       icon={<CategoryIcon name={entry.categoryName} kind={entry.kind} size={20} />}
       label={entryTitleVM(entry)}
-      meta={`${entryKindLabelVM(entry)} · ${wallet}`}
+      meta={`${entryMetaKindVM(entry)} · ${wallet}`}
       status={
         reimburse ? (
           <span className="flex items-center gap-1 text-meta font-semibold text-warning">

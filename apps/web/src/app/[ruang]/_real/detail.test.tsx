@@ -745,3 +745,87 @@ describe('Detail pokok dan cicilan utang (S11)', () => {
     expect(screen.getByRole('link', { name: 'Buka Utang' })).toBeTruthy();
   });
 });
+
+describe('Detail transaksi saham dan perubahan nilai (S14-AS7)', () => {
+  const trade: NonNullable<EntryVM['trade']> = {
+    id: 't-1',
+    ticker: 'BBCA',
+    side: 'buy',
+    shares: 200,
+    accountId: 'sek-1',
+    accountName: 'Sekuritas',
+  };
+  const tradeEntry = (over: Partial<EntryVM> = {}): EntryVM =>
+    entry({
+      kind: 'transfer',
+      amount: 1_830_000,
+      counterAccountId: 'sek-1',
+      counterAccountName: 'Sekuritas',
+      trade,
+      ...over,
+    });
+  const tradeLabels = (e: EntryVM) => ({
+    title: entryTitleVM(e),
+    category: entryKindLabelVM(e),
+    amount: signedAmountVM(e),
+  });
+
+  it('abilities: entri trade tanpa Ubah, Batalkan, Pindahkan (stock_account_trade_only)', () => {
+    expect(
+      detailAbilities(tradeEntry(), { accounts: [ACCOUNT], spaceCount: 2 }, TODAY, 'u-n'),
+    ).toEqual({
+      editable: false,
+      voidable: false,
+      movable: false,
+      reimbursable: null,
+    });
+    const opening = tradeEntry({ kind: 'opening_balance', accountId: 'sek-1' });
+    expect(
+      detailAbilities(opening, { accounts: [{ ...ACCOUNT, id: 'sek-1' }] }, TODAY, 'u-n').editable,
+    ).toBe(false);
+  });
+
+  it('hidup: judul Beli {kode}, tanpa aksi generik, catatan dan tautan ke dompet saham', () => {
+    const e = tradeEntry();
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={tradeLabels(e)} />);
+    expect(screen.getByRole('heading', { name: 'Beli BBCA · 200 lembar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ubah' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Batalkan transaksi' })).toBeNull();
+    expect(
+      screen.getByText('Transaksi saham tidak diubah di sini. Batalkan dari halaman Sekuritas.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Buka Sekuritas' }).getAttribute('href')).toBe(
+      '/pribadi/dompet/sek-1',
+    );
+  });
+
+  it('dibatalkan: tanpa Pulihkan generik, arahan ke Sampah', () => {
+    const e = tradeEntry({ voidedAt: '2026-11-02T09:00:00+07:00' });
+    render(<DetailReal {...props} me="u-n" data={data(e)} labels={tradeLabels(e)} />);
+    expect(screen.queryByRole('button', { name: 'Pulihkan' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Buka Sampah' }).getAttribute('href')).toBe(
+      '/pribadi/sampah',
+    );
+  });
+
+  it('perubahan nilai aset biasa: boleh Batalkan, tanpa Ubah dan tanpa tautan saham', () => {
+    const e = entry({
+      kind: 'valuation',
+      direction: 'in',
+      accountId: 'emas-1',
+      accountName: 'Emas',
+    });
+    render(
+      <DetailReal
+        {...props}
+        me="u-n"
+        data={data(e, false, { accounts: [{ ...ACCOUNT, id: 'emas-1', name: 'Emas' }] })}
+        labels={tradeLabels(e)}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Perubahan nilai · Emas' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Batalkan transaksi' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ubah' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^Buka / })).toBeNull();
+  });
+});

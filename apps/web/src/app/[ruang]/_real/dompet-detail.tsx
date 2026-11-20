@@ -78,7 +78,8 @@ function modalMoveOf(
   accountId: string,
   byId: ReadonlyMap<string, AccountVM>,
 ): { kind: string; label: string } | null {
-  if (e.kind !== 'transfer') return null;
+  // Beli/jual saham dilabeli dari trade-nya (`entryTitleVM`: `Beli {kode} · {n} lembar`), bukan setor/tarik.
+  if (e.kind !== 'transfer' || e.trade !== undefined) return null;
   // Lawan trading atau dompet saham (K7: beli/jual saham tidak menggeser modal) bukan setor/tarik.
   const internal = (a: AccountVM | undefined) =>
     a?.pocket === 'trading' || a?.assetKind === 'saham';
@@ -96,32 +97,18 @@ function modalMoveOf(
 }
 
 /**
- * Transfer ke/dari aset ini = `Isi dari …` / `Cair ke …` (S14-AS3). Dompet saham: transfer adalah
- * beli/jual (kodenya ada di daftar Saham) dan kaki valuasi adalah untung/rugi jual.
+ * Transfer ke/dari aset ini = `Isi dari …` / `Cair ke …` (S14-AS3). Entri trade saham (satu-satunya
+ * yang menyentuh dompet saham, dijaga DB) dilabeli `entryTitleVM` dari trade-nya, bukan di sini.
  */
-function assetMoveOf(
-  e: EntryVM,
-  accountId: string,
-  stock: boolean,
-): { kind: string; label: string } | null {
+function assetMoveOf(e: EntryVM, accountId: string): { kind: string; label: string } | null {
+  if (e.trade !== undefined) return null;
   if (e.kind === 'valuation') {
-    if (stock) {
-      return e.direction === 'out'
-        ? { kind: 'Rugi', label: 'Rugi jual saham' }
-        : { kind: 'Untung', label: 'Untung jual saham' };
-    }
     return { kind: e.direction === 'out' ? 'Turun' : 'Naik', label: AC.valuationLabel };
   }
   if (e.kind !== 'transfer') return null;
-  if (e.counterAccountId === accountId) {
-    return stock
-      ? { kind: 'Beli', label: `Beli saham dari ${e.accountName}` }
-      : { kind: 'Isi', label: `Isi dari ${e.accountName}` };
-  }
+  if (e.counterAccountId === accountId) return { kind: 'Isi', label: `Isi dari ${e.accountName}` };
   if (e.accountId === accountId && e.counterAccountId !== undefined) {
-    return stock
-      ? { kind: 'Jual', label: `Jual saham ke ${e.counterAccountName ?? ''}` }
-      : { kind: 'Cair', label: `Cair ke ${e.counterAccountName ?? ''}` };
+    return { kind: 'Cair', label: `Cair ke ${e.counterAccountName ?? ''}` };
   }
   return null;
 }
@@ -206,7 +193,7 @@ export function DompetDetailReal({
       const { value, kind } = effect(e);
       const feeNote = accountFeeNoteVM(e, account.id);
       const modalMove = isTrading ? modalMoveOf(e, account.id, byId) : null;
-      const assetMove = isAsset ? assetMoveOf(e, account.id, isStock) : null;
+      const assetMove = isAsset ? assetMoveOf(e, account.id) : null;
       const move = modalMove ?? assetMove;
       return {
         id: e.id,
