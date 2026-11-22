@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadAsetOverview, createAsset, revalueAsset } from '../aset';
+import { loadAktivitas } from '../bersama';
 import { toLedgerError } from '../errors';
 import { loadKekayaan } from '../kekayaan';
 import { listAccounts, listCategories, listEntries } from '../read';
@@ -295,6 +296,17 @@ describe('aset non-saham (S14 Task 9)', () => {
     // Pengguna Luar tanpa ruang: bukan anggota = tidak ada.
     const lctx = await resolveSpace(h.pools, luar.id, 'pribadi').catch(() => null);
     expect(lctx?.spaceId).not.toBe(nPribadi.spaceId);
+  });
+
+  it('feed Aktivitas Bersama melewati Perbarui nilai (valuation) tanpa galat feed_rows_invalid', async () => {
+    const shared = await emas(bersama, { name: 'Mobil Keluarga', assetKind: 'kendaraan' });
+    await revalueAsset(bersama, {
+      clientId: randomUUID(),
+      accountId: shared.accountId,
+      value: 1_200_000,
+    });
+    const page = await loadAktivitas({ ...bersama, kind: 'shared' }, {});
+    expect(page.items).toEqual([]);
   });
 
   it('B16: setoran Pribadi ke aset Bersama menggeser kekayaan per ruang, jumlah kedua ruang tetap', async () => {

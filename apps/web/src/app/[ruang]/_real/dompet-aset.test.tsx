@@ -6,7 +6,11 @@ import type { DompetRiwayat } from '@/server/ledger/dompet';
 import { DompetReal } from './dompet';
 import { DompetDetailReal } from './dompet-detail';
 
-afterEach(cleanup);
+// Impor dinamis CategoryIcon harus selesai sebelum lingkungan ditutup (cache dingin CI: EnvironmentTeardownError).
+afterEach(async () => {
+  cleanup();
+  await vi.dynamicImportSettled();
+});
 
 vi.mock('./aset-islands', () => ({
   AddAssetHostIsland: (props: { children: ReactNode }) => <div>{props.children}</div>,
