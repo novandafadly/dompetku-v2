@@ -38,7 +38,7 @@ export function EntryListView({
             className="flex items-baseline justify-between gap-3 px-1 text-meta font-bold text-text-soft"
           >
             <span>{g.label}</span>
-            <MoneyText value={g.total} size="inherit" />
+            {g.hideTotal === true ? null : <MoneyText value={g.total} size="inherit" />}
           </h3>
           <ul aria-label={`Transaksi ${g.label}`} className={`px-4 ${card}`}>
             {g.entries.map((e) => (

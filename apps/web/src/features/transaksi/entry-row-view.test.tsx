@@ -16,6 +16,7 @@ import { TxRow } from '@/components/ui/rows';
 import { groupByDayVM } from '@/features/ledger/group-by-day';
 import { entryToVM } from './demo-vm';
 import { EntryRow } from './entry-row';
+import { EntryListView } from './entry-list-view';
 import { EntryRowView } from './entry-row-view';
 
 /**
@@ -236,5 +237,64 @@ describe('baris utang (S11)', () => {
       '2026-10-17',
     );
     expect(groups[0]?.total).toBe(-10_000);
+  });
+});
+
+describe('kepala hari tanpa pemasukan/pengeluaran (S14-C4)', () => {
+  const base = {
+    version: 1,
+    createdBy: { id: 'u', name: 'N', initial: 'N' },
+    accountId: 'a',
+    accountName: 'Kas',
+  } as const;
+  const render = (entries: Parameters<typeof groupByDayVM>[0]) =>
+    renderToStaticMarkup(
+      <EntryListView
+        groups={groupByDayVM(entries, '2026-10-18')}
+        idBase="h"
+        hrefFor={(id) => `/pribadi/transaksi/${id}` as Route}
+      />,
+    );
+
+  it('hari hanya transfer/saldo awal/valuasi: tanpa Rp 0', () => {
+    const out = render([
+      {
+        ...base,
+        id: 't1',
+        kind: 'adjustment',
+        amount: 5_000,
+        direction: 'in',
+        occurredOn: '2026-10-17',
+        createdAt: '2026-10-17T09:00:00+07:00',
+      },
+    ]);
+    const head = /<h3[^>]*>.*?<\/h3>/.exec(out)?.[0] ?? '';
+    expect(head).toContain('Kemarin');
+    expect(head).not.toContain('Rp');
+  });
+
+  it('hari dengan pengeluaran tetap menulis total', () => {
+    const out = render([
+      {
+        ...base,
+        id: 'e1',
+        kind: 'expense',
+        amount: 10_000,
+        occurredOn: '2026-10-17',
+        createdAt: '2026-10-17T09:00:00+07:00',
+      },
+    ]);
+    expect(/<h3[^>]*>.*?<\/h3>/.exec(out)?.[0]).toContain('10.000');
+  });
+
+  it('prototipe: kelompok tanpa hideTotal tetap menulis total (0 apa adanya)', () => {
+    const out = renderToStaticMarkup(
+      <EntryListView
+        groups={[{ date: '2026-10-17', label: 'Kemarin', total: 0, entries: [] }]}
+        idBase="h"
+        hrefFor={() => '/x' as Route}
+      />,
+    );
+    expect(/<h3[^>]*>.*?<\/h3>/.exec(out)?.[0]).toContain('Rp');
   });
 });
