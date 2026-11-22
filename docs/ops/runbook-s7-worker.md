@@ -22,7 +22,7 @@ Bila `worker.env` ada tetapi ditolak `--check-config` (mis. `DATABASE_URL` koson
 
 Urutan langkah di bawah boleh sebelum atau sesudah PR S7 di-merge. Deployer di VM adalah salinan manual: sampai langkah 2 dikerjakan, deployer lama hanya mengganti web dan worker tidak pernah berjalan.
 
-Job (semua WIB, `apps/worker/src/jobs.ts`): `materialize_bills` 00:05 (S9: kemunculan tagihan sampai akhir periode gajian berikutnya); `dq_reconcile` 01:00 (check `dompetku-dq`, 12 cek sejak S10: DQ13 satu kewajiban, DQ14 pohon anggaran); `purge_voided` Senin 01:15, `purge_idempotency` 01:20, `purge_unfinished_users` 01:25, `purge_audit` 01:30, `purge_wa_messages` 01:27 (S10: pesan WhatsApp > 14 hari) (`materialize_bills` dan kelima job purge **berbagi** check `dompetku-jobs`). Isi ping hanya nama job, SQLSTATE, id cek DQ, severity, dan jumlah pelanggaran.
+Job (semua WIB, `apps/worker/src/jobs.ts`): `materialize_bills` 00:05 (S9: kemunculan tagihan sampai akhir periode gajian berikutnya); `dq_reconcile` 01:00 (check `dompetku-dq`, 12 cek sejak S10: DQ13 satu kewajiban, DQ14 pohon anggaran); `purge_voided` Senin 01:15, `purge_idempotency` 01:20, `purge_unfinished_users` 01:25, `purge_audit` 01:30, `purge_wa_messages` 01:27 (S10: pesan WhatsApp > 14 hari); `net_worth_snapshot` 00:10 (S14: snapshot kekayaan bersih H−1 + hari kotor); `price_refresh` 16:30 dan 19:30 Senin–Jumat (S14: hanya bila `PRICE_PROVIDER` diisi, selain itu dilewati tanpa `job_runs`) (`materialize_bills`, kelima job purge, dan kedua job S14 **berbagi** check `dompetku-jobs`). Isi ping hanya nama job, SQLSTATE atau kode `provider_*`, id cek DQ, severity, dan jumlah pelanggaran.
 
 Semua perintah manual yang memanggil `docker compose` untuk worker dibungkus `flock /run/lock/dompetku-deploy.lock` (kunci yang sama dengan deployer), supaya tidak bertabrakan dengan deploy yang sedang berjalan; perintah menunggu sampai deploy selesai.
 
@@ -262,3 +262,52 @@ Tag `dompetku-postgres:17.11-1-s6` dihapus (`docker rmi`) hanya sesudah S7 dinya
 ## Pasang job S10 (`purge_wa_messages`)
 
 Migrasi `0128` menambah `jobs.purge_wa_messages()`; sesudah merge, deploy memasang migrasi dan image worker baru, lalu job terdaftar sendiri (01:27 WIB, check `dompetku-jobs`; tidak ada rahasia atau check baru). Verifikasi sehari sesudahnya: `select started_at, status, rows from jobs.job_runs where job = 'purge_wa_messages' order by started_at desc limit 3;` berstatus `ok`. Worker kini **keluar** (container restart) pada `unhandledRejection`, bukan hanya mencatat log `unhandled_rejection`: bila log itu berulang tanpa henti, periksa `docker logs` worker.
+
+## Pasang S14 (`net_worth_snapshot`, `price_refresh`, egress worker difilter)
+
+Migrasi `0144` menambah `jobs.net_worth_snapshot()` dan `0143` `jobs.price_targets()`/`jobs.price_ingest()`; deploy rilis S14 memasang migrasi dan image worker baru, lalu kedua job terdaftar sendiri (check `dompetku-jobs`, tanpa check baru). `price_refresh` dilewati (log `job_skipped` `no_provider`, tanpa `job_runs` dan tanpa ping) selama `PRICE_PROVIDER` kosong atau tidak ada di `worker.env`: harga saham diisi manual di web (K1). Adapter penyedia dan kuncinya (bila ada) = Task 8, runbook terpisah.
+
+Yang berubah di VM (langkah manual, boleh sebelum atau sesudah merge):
+
+- `compose.yml`: network `worker_egress` memakai subnet dipatok `172.16.29.0/24` tanpa IPv6 (sebelumnya dari pool bawaan Docker).
+- `firewall.sh`: rantai `DOMPETKU-WORKER-EGRESS` (koneksi baru dari `172.16.29.0/24` ke `169.254.0.0/16` kecuali DNS `169.254.169.254:53`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` di-`DROP`) dan `DROP` `INPUT` dari subnet itu ke host. Internet (Healthchecks, penyedia harga, TCP 443) tetap boleh. Koneksi worker ke postgres lewat `worker_db` tidak tersentuh.
+
+**Penting:** compose menolak network yang sudah ada dengan subnet lain ("needs to be recreated"). Bila `compose.yml` baru terpasang tanpa membuat ulang `dompetku_worker_egress`, deploy berikutnya gagal mengganti worker dan me-rollback web dan worker (kode 3). Karena itu pasang `compose.yml` dan buat ulang network dalam satu kunci deploy, di luar jam job (hindari 00:00–01:35 dan 16:25–19:35 WIB).
+
+Salin `infra/db-vm/compose.yml`, `infra/db-vm/bin/firewall.sh`, dan `infra/db-vm/deploy/worker.env.example` ke `/tmp/dompetku-s14/` (dari `main` sesudah merge), lalu:
+
+```bash
+sudo cp /opt/dompetku/compose.yml /opt/dompetku/compose.yml.pre-s14
+sudo cp /opt/dompetku/bin/firewall.sh /opt/dompetku/bin/firewall.sh.pre-s14
+cd /tmp/dompetku-s14
+sudo install -m 755 firewall.sh /opt/dompetku/bin/firewall.sh
+sudo /opt/dompetku/bin/firewall.sh up            # idempoten; jangan systemctl restart (membuka port gw sesaat)
+sudo iptables -S DOMPETKU-WORKER-EGRESS          # 2 RETURN DNS lalu 5 DROP
+sudo install -m 644 worker.env.example /opt/dompetku/deploy/worker.env.example
+sudo flock /run/lock/dompetku-deploy.lock bash -c 'set -eu
+  cd /opt/dompetku
+  install -m 644 /tmp/dompetku-s14/compose.yml compose.yml
+  docker compose --profile web rm -sf worker
+  docker network rm dompetku_worker_egress
+  docker compose --profile web up -d --no-deps worker'
+```
+
+`docker network rm` gagal bila ada container lain di network itu: berhenti dan tanyakan ke sesi Claude (`compose.yml` sudah baru; kembalikan `compose.yml.pre-s14` dan `up -d --no-deps worker` bila worker harus jalan lagi sebelum itu).
+
+Verifikasi (image distroless tanpa shell; `node` di dalam worker):
+
+```bash
+cd /opt/dompetku
+sudo docker network inspect -f '{{ range .IPAM.Config }}{{ .Subnet }}{{ end }} ipv6={{ .EnableIPv6 }}' dompetku_worker_egress   # 172.16.29.0/24 ipv6=false
+wk() { sudo docker compose --profile web exec -T worker /nodejs/bin/node -e "$1"; }
+wk "fetch('http://169.254.169.254/opc/v2/instance/',{signal:AbortSignal.timeout(5000)}).then(r=>console.log('TERBUKA',r.status),e=>console.log('gagal',e.name))"   # gagal TimeoutError
+wk "fetch('http://10.0.0.149/',{signal:AbortSignal.timeout(5000)}).then(r=>console.log('TERBUKA',r.status),e=>console.log('gagal',e.name))"                       # gagal TimeoutError
+wk "const s=require('net').connect(22,'172.16.29.1');s.setTimeout(5000,()=>{console.log('gagal timeout');s.destroy()});s.on('connect',()=>{console.log('TERBUKA');s.destroy()}).on('error',e=>console.log('gagal',e.code))"   # gagal (port host lewat gateway tertutup)
+wk "fetch('https://hc-ping.com/',{signal:AbortSignal.timeout(10000)}).then(r=>console.log(r.status),e=>console.log('gagal',e.name))"                              # 200 (internet dan DNS jalan)
+sudo iptables -L DOMPETKU-WORKER-EGRESS -v -n    # penghitung baris DROP 169.254/10.0 naik
+sudo docker compose --profile web logs --tail 20 worker   # worker_started, tanpa *_failed
+```
+
+Sehari sesudah deploy: `select job, started_at, status, rows from jobs.job_runs where job = 'net_worth_snapshot' order by started_at desc limit 3;` berstatus `ok` (run pertama mengisi backfill sampai 400 hari ke belakang), dan `dompetku-dq` tanpa `DQ08` (juga DQ18, DQ19). `price_refresh` tidak muncul di `job_runs` selama `PRICE_PROVIDER` kosong.
+
+Rollback: kembalikan `firewall.sh.pre-s14` (lalu `firewall.sh down` dan `up`, di luar jam pakai karena port gw terbuka sesaat; atau biarkan rantai worker, aturan untuk subnet yang tidak dipakai tidak berpengaruh) dan `compose.yml.pre-s14` dengan blok `flock` yang sama (network dibuat ulang lagi).

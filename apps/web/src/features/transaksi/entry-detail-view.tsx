@@ -19,6 +19,8 @@ const KIND_NAME: Record<EntryVM['kind'], string> = {
   // S11: arah (diterima/diberikan, utang/piutang) datang dari pemanggil lewat `kindName`.
   debt_principal: 'Pinjaman',
   debt_payment: 'Pembayaran utang',
+  // S14: perubahan nilai aset (bukan pemasukan/pengeluaran).
+  valuation: 'Perubahan nilai',
 };
 
 /** Dompet entri: transfer satu ruang = "BCA → Tunai". */

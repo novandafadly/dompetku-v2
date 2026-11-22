@@ -302,6 +302,9 @@ export async function sharedActivityTx(
     for (const raw of page) {
       const kind = system.get(String(raw.entry_id));
       if (kind === 'space_transfer') continue;
+      // S14: Perbarui nilai aset Bersama bukan aktivitas keuangan anggota; tanpa ini Zod menolak barisnya
+      // dan halaman yang seluruhnya valuasi menjadi galat.
+      if (raw.kind === 'valuation') continue;
       if (kind === 'expense') viaPersonal.add(String(raw.entry_id));
       kept.push(raw);
     }

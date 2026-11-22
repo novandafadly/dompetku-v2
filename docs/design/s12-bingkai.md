@@ -115,7 +115,7 @@ Aturan S6 sampai S11 berlaku (ruang tertulis di judul sheet dan toast; status = 
 
 ### S12-TR3 · Detail dompet trading
 
-- Sama dengan Detail dompet (`dompet-detail.tsx`), ditambah **kartu `Modal`** per dompet di bawah kartu saldo: `Sisa modal`, `Disetor`, `Ditarik`, `Hasil ditarik` (bila > 0), peringatan `Kurang` per dompet (aturan sama dengan TR2).
+- Sama dengan Detail dompet (`dompet-detail.tsx`), ditambah **kartu `Modal`** per dompet di bawah kartu saldo: `Sisa modal`, `Disetor`, `Ditarik`, `Hasil ditarik` (bila > 0). **Tanpa peringatan `Kurang` per dompet** (keputusan S2, ditegaskan S12S13-C9 dan ruling S14 Task 10: dompet trading lain, dan sejak S14 saham, bisa menutup selisihnya, jadi `Kurang` hanya bermakna sebagai total; implementasi `ModalCard` varian `detail` memang tidak menampilkannya, aturan TR2 hanya berlaku untuk kartu `Modal trading` di Dompet).
 - **Aksi (urut):** `Setor modal` (primer 48), `Tarik modal` (sekunder 44, tidak ada bila saldo dompet 0 dan sisa modal 0), `Cocokkan saldo` (sekunder 44, aksi yang ada). Kalimat di bawah aksi 12/500 `text-muted`: `Untung atau rugi dicatat lewat Cocokkan saldo, bukan pemasukan.`
 - **Riwayat:** baris transfer modal diberi label `Setor modal dari {dompet}` / `Tarik modal ke {dompet}` (bukan `Transfer`), penyesuaian `Cocokkan saldo` seperti biasa.
 

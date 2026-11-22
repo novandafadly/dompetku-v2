@@ -71,6 +71,17 @@ const RULES = new Set<LedgerErrorCode>([
   'goal_not_reached',
   'account_has_goal',
   'goal_pocket_invalid',
+  // S14: aset non-saham dan dompet saham (0140–0143); DK400 asset_kind_invalid = invalid (field asset_kind).
+  'asset_negative',
+  'asset_account_invalid',
+  'stock_account_trade_only',
+  'before_latest_entry',
+  'account_has_holdings',
+  // S14 Task 10: saham (0143); DK400 ticker_invalid/price_invalid = invalid (kolom ticker/close),
+  // DK404 holding_not_found/trade_not_found = not_found.
+  'insufficient_shares',
+  'trade_not_latest',
+  'price_spike_unconfirmed',
 ]);
 
 /**

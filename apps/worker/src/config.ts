@@ -1,12 +1,16 @@
 import { z } from 'zod';
+import { PROVIDERS } from './price-source';
 
 /**
  * Env worker (`/opt/dompetku/env/worker.env`, diisi pemilik). URL Healthchecks opsional (hanya
- * `https:`): kosong = ping dilewati dengan log `alert_skipped`.
+ * `https:`): kosong = ping dilewati dengan log `alert_skipped`. PRICE_PROVIDER opsional (S14, K1):
+ * kosong = price_refresh dilewati (harga manual); nilai harus nama adapter terdaftar. Tanpa
+ * variabel kunci API: adapter yang direncanakan (Yahoo, Task 8) tidak memakai kunci.
  */
 export interface Config {
   databaseUrl: string;
   hc: { dq?: string; jobs?: string };
+  priceProvider?: string;
 }
 
 const blankToUndefined = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
@@ -27,6 +31,13 @@ const EnvSchema = z.object({
     .refine((s) => URL.canParse(s) && /^postgres(ql)?:$/.test(new URL(s).protocol)),
   HC_DQ_URL: httpsUrl,
   HC_JOBS_URL: httpsUrl,
+  PRICE_PROVIDER: z.preprocess(
+    blankToUndefined,
+    z
+      .string()
+      .refine((s) => PROVIDERS.has(s))
+      .optional(),
+  ),
 });
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -36,6 +47,7 @@ function parse(env: Env) {
     DATABASE_URL: env.DATABASE_URL,
     HC_DQ_URL: env.HC_DQ_URL,
     HC_JOBS_URL: env.HC_JOBS_URL,
+    PRICE_PROVIDER: env.PRICE_PROVIDER,
   });
 }
 
@@ -55,5 +67,7 @@ export function loadConfig(env: Env): Config {
   const hc: Config['hc'] = {};
   if (r.data.HC_DQ_URL) hc.dq = r.data.HC_DQ_URL;
   if (r.data.HC_JOBS_URL) hc.jobs = r.data.HC_JOBS_URL;
-  return { databaseUrl: r.data.DATABASE_URL, hc };
+  const cfg: Config = { databaseUrl: r.data.DATABASE_URL, hc };
+  if (r.data.PRICE_PROVIDER) cfg.priceProvider = r.data.PRICE_PROVIDER;
+  return cfg;
 }

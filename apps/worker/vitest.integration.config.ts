@@ -9,6 +9,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/__int__/**/*.int.test.ts'],
+    // Tanpa jaringan keluar: fetch global hanya ke loopback (src/test-setup.ts).
+    setupFiles: ['src/test-setup.ts'],
     fileParallelism: false,
     testTimeout: 60_000,
     hookTimeout: 60_000,

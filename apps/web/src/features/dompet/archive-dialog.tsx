@@ -14,16 +14,19 @@ export const archiveWalletDescription = (name: string, ruang: Ruang): string =>
   `${name} tidak ditawarkan lagi di Catat ${RUANG_NAME[ruang]}. Riwayat transaksinya tetap ada.`;
 
 /** Galat di dalam dialog; tanpa nominal. */
-export function archiveFailedText(code: LedgerErrorCode, name: string): string {
+export function archiveFailedText(code: LedgerErrorCode, name: string, asset = false): string {
   switch (code) {
     case 'balance_not_zero':
       return `${name} masih berisi saldo, jadi belum bisa diarsipkan. Pindahkan isinya dulu.`;
     case 'account_has_goal':
       return `${name} masih punya tujuan aktif, jadi belum bisa diarsipkan. Selesaikan atau arsipkan tujuannya dulu.`;
+    // S14-AS6: balapan (saham dibeli dari tab lain sesudah dialog dibuka).
+    case 'account_has_holdings':
+      return `${name} masih memegang saham. Jual semua saham dulu, lalu arsipkan.`;
     case 'network':
       return 'Belum bisa diarsipkan. Periksa koneksi lalu coba lagi.';
     case 'not_found':
-      return 'Dompet ini sudah tidak ada. Muat ulang halaman.';
+      return `${asset ? 'Aset' : 'Dompet'} ini sudah tidak ada. Muat ulang halaman.`;
     default:
       return 'Belum bisa diarsipkan. Ada kendala di server.';
   }
@@ -34,6 +37,7 @@ export function ArchiveWalletDialog({
   onOpenChange,
   name,
   ruang,
+  asset = false,
   busy,
   failure,
   onConfirm,
@@ -42,6 +46,8 @@ export function ArchiveWalletDialog({
   onOpenChange: (open: boolean) => void;
   name: string;
   ruang: Ruang;
+  /** Detail aset (S14): teks menyebut aset. */
+  asset?: boolean;
   busy: boolean;
   failure: LedgerErrorCode | null;
   onConfirm: () => void;
@@ -57,7 +63,8 @@ export function ArchiveWalletDialog({
           <p>{archiveWalletDescription(name, ruang)}</p>
           {ruang === 'bersama' ? (
             <p className="mt-2">
-              Dompet ini dipakai bersama; anggota lain juga tidak melihatnya di Catat lagi.
+              {asset ? 'Aset' : 'Dompet'} ini dipakai bersama; anggota lain juga tidak melihatnya di
+              Catat lagi.
             </p>
           ) : null}
         </>
@@ -68,8 +75,12 @@ export function ArchiveWalletDialog({
       holdOpen
       busy={busy}
       // Server sudah menjawab saldo ≠ 0 atau tujuan aktif: mengulang tidak ada gunanya sampai halaman dimuat ulang.
-      confirmDisabled={failure === 'balance_not_zero' || failure === 'account_has_goal'}
-      alert={failure === null ? undefined : archiveFailedText(failure, name)}
+      confirmDisabled={
+        failure === 'balance_not_zero' ||
+        failure === 'account_has_goal' ||
+        failure === 'account_has_holdings'
+      }
+      alert={failure === null ? undefined : archiveFailedText(failure, name, asset)}
     />
   );
 }

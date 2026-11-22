@@ -27,8 +27,10 @@ export function galatText(
     | 'not_found'
     | 'cross_space_not_allowed'
     | 'cross_space_kantor'
-    | 'split_needs_partner',
+    | 'split_needs_partner'
+    | 'asset_negative',
 ): string {
+  if (kind === 'asset_negative') return 'Nilai aset tidak cukup. Aset tidak bisa minus.';
   if (kind === 'split_needs_partner') return 'Patungan butuh dua anggota di Bersama.';
   if (kind === 'cross_space_not_allowed') {
     return 'Dompet ini tidak bisa dipakai untuk transfer antar ruang. Pilih dompet tujuan lain.';

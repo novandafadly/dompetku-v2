@@ -22,6 +22,7 @@ export function MetaSelect({
   selectRef,
   busy = false,
   tight = false,
+  stacked = false,
 }: {
   label: string;
   icon: ReactNode;
@@ -40,44 +41,58 @@ export function MetaSelect({
    * tidak terpotong di 360 px (dua kolom ±108 px).
    */
   tight?: boolean;
+  /**
+   * Sheet Transfer berprasetel di bawah 360 px (S14, S12S13-C7): pemilih ditumpuk satu kolom dengan
+   * label tampak (12/600) di atasnya; di lebar lain label tetap hanya untuk pembaca layar.
+   */
+  stacked?: boolean;
 }) {
   const id = useId();
   return (
-    <div className="relative min-w-0 flex-1">
-      <label htmlFor={id} className="sr-only">
+    <div className="min-w-0 flex-1">
+      <label
+        htmlFor={id}
+        className={
+          stacked
+            ? 'sr-only max-narrow:not-sr-only max-narrow:mb-1 max-narrow:block max-narrow:text-caption max-narrow:font-semibold max-narrow:text-text-soft'
+            : 'sr-only'
+        }
+      >
         {label}
       </label>
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-y-0 flex items-center text-text-soft ${tight ? 'left-3 max-tablet:left-2.5' : 'left-3'}`}
-      >
-        {icon}
-      </span>
-      <select
-        id={id}
-        ref={selectRef}
-        data-date={dataDate}
-        aria-invalid={invalid || undefined}
-        aria-disabled={busy || undefined}
-        aria-describedby={describedBy}
-        value={value}
-        onChange={(e) => {
-          if (!busy) onChange(e.target.value);
-        }}
-        className={`h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent text-label font-semibold text-text hover-pointer:bg-hover aria-invalid:border-2 aria-invalid:border-danger aria-disabled:border-hairline aria-disabled:text-text-muted ${tight ? 'pr-8 pl-9.5 max-tablet:pr-6.5 max-tablet:pl-8.5' : 'pr-8 pl-9.5'}`}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-surface text-text">
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-y-0 flex items-center text-text-muted ${tight ? 'right-3 max-tablet:right-2' : 'right-3'}`}
-      >
-        <CaretDownIcon size={14} weight="bold" />
-      </span>
+      <div className="relative">
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 flex items-center text-text-soft ${tight ? 'left-3 max-tablet:left-2.5' : 'left-3'}`}
+        >
+          {icon}
+        </span>
+        <select
+          id={id}
+          ref={selectRef}
+          data-date={dataDate}
+          aria-invalid={invalid || undefined}
+          aria-disabled={busy || undefined}
+          aria-describedby={describedBy}
+          value={value}
+          onChange={(e) => {
+            if (!busy) onChange(e.target.value);
+          }}
+          className={`h-11 w-full min-w-0 appearance-none truncate rounded-lg border border-border bg-transparent text-label font-semibold text-text hover-pointer:bg-hover aria-invalid:border-2 aria-invalid:border-danger aria-disabled:border-hairline aria-disabled:text-text-muted ${tight ? 'pr-8 pl-9.5 max-tablet:pr-6.5 max-tablet:pl-8.5' : 'pr-8 pl-9.5'}`}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value} className="bg-surface text-text">
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-y-0 flex items-center text-text-muted ${tight ? 'right-3 max-tablet:right-2' : 'right-3'}`}
+        >
+          <CaretDownIcon size={14} weight="bold" />
+        </span>
+      </div>
     </div>
   );
 }

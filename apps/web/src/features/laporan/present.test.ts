@@ -184,3 +184,22 @@ describe('excludedLines patungan (S12)', () => {
     for (const l of lines) expect(l.name).not.toBe('Lainnya');
   });
 });
+
+describe('excludedLines aset (S14)', () => {
+  it('x_valuasi: Perubahan nilai aset naik/turun, bukan Lainnya', () => {
+    const lines = excludedLines(
+      [
+        { reportClass: 'x_valuasi', direction: 'in', amount: 300_000, entryCount: 1 },
+        { reportClass: 'x_valuasi', direction: 'out', amount: 100_000, entryCount: 1 },
+      ],
+      'pribadi',
+    );
+    expect(lines.map((l) => [l.key, l.name, l.amount])).toEqual([
+      ['x_valuasi:in', 'Perubahan nilai aset · naik', 300_000],
+      ['x_valuasi:out', 'Perubahan nilai aset · turun', 100_000],
+    ]);
+    expect(lines[0]?.note).toBe(
+      'Nilai aset dan untung/rugi saham; bukan pemasukan atau pengeluaran.',
+    );
+  });
+});

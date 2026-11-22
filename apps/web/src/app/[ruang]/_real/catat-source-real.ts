@@ -161,7 +161,7 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
       if (got === undefined) {
         // Ruang sumber = kebalikan tujuan (hanya dua ruang): action memuat dompet ruang tujuan.
         const from: Ruang = toRuang === 'pribadi' ? 'bersama' : 'pribadi';
-        got = moveTargetsAction(from, toRuang).then((res) => {
+        got = moveTargetsAction(from, toRuang, true).then((res) => {
           if (!res.ok) throw new Error(res.error.code);
           return res.value.accounts;
         });

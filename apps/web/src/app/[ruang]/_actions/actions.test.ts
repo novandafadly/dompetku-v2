@@ -349,6 +349,18 @@ const TUJUAN_ACTIONS = [
   'archiveGoalAction',
   'restoreGoalAction',
 ];
+// Aset (S14): kedua ruang; gerbang dan pemetaan diuji di `aset.test.ts`.
+const ASET_ACTIONS = ['createAssetAction', 'revalueAssetAction'];
+// Saham (S14 Task 10): hanya Pribadi di DB; gerbang dan pemetaan diuji di `saham.test.ts`.
+const SAHAM_ACTIONS = [
+  'buyStockAction',
+  'sellStockAction',
+  'openStockHoldingAction',
+  'previewSellAction',
+  'setStockPriceAction',
+  'voidStockTradeAction',
+  'restoreStockTradeAction',
+];
 const WRAPPERS = [
   'createEntry',
   'createTransfer',
@@ -519,9 +531,17 @@ describe('gerbang (Review Focus 5)', () => {
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
     // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
-    // Tujuan (S13): `tujuan.test.ts`.
+    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`.
     expect(seen.sort()).toEqual(
-      [...NAMES, ...PATUNGAN_ACTIONS, ...TUJUAN_ACTIONS, 'createLinkCode', 'unlinkWa'].sort(),
+      [
+        ...NAMES,
+        ...PATUNGAN_ACTIONS,
+        ...TUJUAN_ACTIONS,
+        ...ASET_ACTIONS,
+        ...SAHAM_ACTIONS,
+        'createLinkCode',
+        'unlinkWa',
+      ].sort(),
     );
   });
 
@@ -1418,6 +1438,24 @@ describe('S7: pindahkan ke ruang lain', () => {
       userId: USER_ID,
       spaceId: OTHER_SPACE,
     });
+  });
+
+  it('moveTargetsAction forTransfer ke Bersama: aset non-saham ikut, Pindahkan tetap tanpa aset (S14-NW2)', async () => {
+    m.loadRuangShell.mockResolvedValue({
+      accounts: [
+        { id: A, pocket: 'operasional', archived: false },
+        { id: B, pocket: 'aset', assetKind: 'emas', archived: false },
+        { id: C, pocket: 'aset', assetKind: 'saham', archived: false },
+      ],
+      categories: [],
+    });
+    const ids = async (forTransfer?: boolean) => {
+      const r = await entri.moveTargetsAction('pribadi', 'bersama', forTransfer);
+      if (!r.ok) throw new Error(r.error.code);
+      return r.value.accounts.map((a) => a.id);
+    };
+    await expect(ids(true)).resolves.toEqual([A, B]);
+    await expect(ids()).resolves.toEqual([A]);
   });
 
   it.each([['pribadi'], ['kantor'], [OTHER_SPACE]])(

@@ -132,7 +132,7 @@ select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month
 select is(tests.web_val(tests.n(), format($$select row(m.*)::text from api.month_summary(%L, '2026-02-01') m$$, :'np')),
   '(0,30000,-30000,0,0,0)', 'month_summary Februari');
 select is(tests.web_val(tests.n(), format($$select row(w.*)::text from api.net_worth(%L) w$$, :'np')),
-  '(1276500,500000,1630000,1776500)', 'net_worth: operasional + tabungan, kantor dikecualikan');
+  '(1776500,0,0,0,0,0,1776500,,,)', 'net_worth (0144): kas = operasional + tabungan, kantor dikecualikan');
 select is(tests.web_val(tests.n(), format($$select row(s.*)::text from api.safe_to_spend(%L) s$$, :'np')),
   '(1276500,0,0,1276500,106375,12,2026-03-31)', 'safe_to_spend: operasional / sisa hari (12)');
 select is(tests.web_val(tests.n(), format($$select row(s.*)::text from api.safe_to_spend(%L, '2026-03-31') s$$, :'np')),
@@ -291,9 +291,10 @@ select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
 select throws_ok(format($$select tests.web_val(tests.n(), %L)$$, format(
     $q$select api.update_entry(gen_random_uuid(), %L, 3, %L, 1, null, null, null, false)$q$, :'e1', :'bca')),
   'DK422', 'account_archived', 'update entri di dompet terarsip ditolak (saldo harus tetap 0)');
-select is(tests.web_val(tests.n(), format($$select (s.operasional = w.operasional)::text
-  from api.safe_to_spend(%L) s, api.net_worth(%L) w$$, :'np', :'np')), 'true',
-  'safe_to_spend dan net_worth memakai himpunan dompet operasional yang sama');
+select is(tests.web_val(tests.n(), format($$select (s.operasional + (select sum(b.balance) from app.account_balances b
+    where b.space_id = %1$L and b.pocket = 'tabungan') = w.kas)::text
+  from api.safe_to_spend(%1$L) s, api.net_worth(%1$L) w$$, :'np')), 'true',
+  'safe_to_spend operasional + saldo tabungan = kas net_worth: himpunan dompet operasional yang sama');
 
 -- ===== Bersama: setoran dan pengambilan dengan fee dari dompet Bersama (Februari) =====
 select tests.web_val(tests.n(), format($$select api.create_transfer(gen_random_uuid(), %L, %L, %L, 70000, 0, '2026-02-15', 'setor feb')$$,
@@ -353,15 +354,17 @@ select throws_ok(format($$select tests.owner_exec(null, %L)$$, format($q$do $d$
 -- S11 (0130): kind utang hanya line main, Pribadi, bukan Kantor, tanpa direction/reimbursable.
 -- S12 (0134): trading hanya Pribadi (CHECK accounts_trading_personal); patungan belum dipakai entri
 -- sampai 0135 (dompet sistem Bersama, kelas x_patungan), jadi dikeluarkan di sini.
--- Kelas sisa spec §9.1 (x_valuasi) milik M4.
-\set valid_combo 'select app.report_class(k, r, p, s, d, x) as c from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r, unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s, (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d), unnest(array[true, false]) x where (k not in (''debt_principal'', ''debt_payment'') or (r = ''main'' and s = ''personal'' and p <> ''kantor'')) and (k = ''space_transfer'') = (d is not null) and (not x or (k = ''expense'' and s = ''personal'')) and (k <> ''reimbursement'' or s = ''personal'') and (p <> ''kantor'' or s = ''personal'') and (r <> ''counter'' or k = ''transfer'') and (r <> ''fee'' or k = ''transfer'' or (k = ''space_transfer'' and d = ''out'')) and (k <> ''space_transfer'' or p <> ''kantor'') and (p <> ''trading'' or s = ''personal'') and p <> ''patungan'''
+-- S14 (0140): kind valuation hanya line main di dompet aset (assert_entry_shape); dompet aset hanya
+-- transfer, space_transfer, opening_balance, adjustment, valuation (private.tg_asset_ledger): +18 kombinasi,
+-- kelas ke-15 x_valuasi (spec §9.1).
+\set valid_combo 'select app.report_class(k, r, p, s, d, x) as c from unnest(enum_range(null::app.entry_kind)) k, unnest(enum_range(null::app.line_role)) r, unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s, (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d), unnest(array[true, false]) x where (k not in (''debt_principal'', ''debt_payment'') or (r = ''main'' and s = ''personal'' and p <> ''kantor'')) and (k = ''space_transfer'') = (d is not null) and (not x or (k = ''expense'' and s = ''personal'')) and (k <> ''reimbursement'' or s = ''personal'') and (p <> ''kantor'' or s = ''personal'') and (r <> ''counter'' or k = ''transfer'') and (r <> ''fee'' or k = ''transfer'' or (k = ''space_transfer'' and d = ''out'')) and (k <> ''space_transfer'' or p <> ''kantor'') and (p <> ''trading'' or s = ''personal'') and p <> ''patungan'' and (k <> ''valuation'' or (r = ''main'' and p = ''aset'')) and (p <> ''aset'' or k in (''transfer'', ''space_transfer'', ''opening_balance'', ''adjustment'', ''valuation''))'
 select is(tests.owner_val(null, format($$select count(*) filter (where c is null) || '/' || count(*) || ' '
     || count(distinct c) from (%s) t$$, :'valid_combo')),
-  '0/71 14', 'report_class tidak NULL untuk 71 kombinasi yang lolos cek bentuk (S12: +14 trading Pribadi); tepat 14 kelas [BSD §13 #9]');
+  '0/89 15', 'report_class tidak NULL untuk 89 kombinasi yang lolos cek bentuk (S12: +14 trading Pribadi; S14: +18 aset); tepat 15 kelas [BSD §13 #9]');
 select is(tests.owner_val(null, format($$select string_agg(distinct c collate "C", ',' order by c collate "C") from (%s) t$$, :'valid_combo')),
   'expense,expense_fee,income,x_ambil_bersama,x_diambil_anggota,x_kantor,x_koreksi,x_pelunasan_utang,'
-  || 'x_pokok_utang,x_reimburse,x_setor_bersama,x_setoran_anggota,x_talangan,x_transfer',
-  '14 kelas BSD §8.1 + S11 tercapai dari kombinasi yang sah (tidak ada kelas mati, tidak ada kelas baru)');
+  || 'x_pokok_utang,x_reimburse,x_setor_bersama,x_setoran_anggota,x_talangan,x_transfer,x_valuasi',
+  '15 kelas BSD §8.1 + S11 + S14 tercapai dari kombinasi yang sah (tidak ada kelas mati, tidak ada kelas baru)');
 
 select * from finish();
 rollback;

@@ -14,7 +14,13 @@ import { SpaceTag } from '@/components/ui/space-tag';
 import { card, focusRing, rowDivider } from '@/components/ui/styles';
 import { openingEditable, openingLockedOn } from '@/features/ledger/opening';
 import type { EntryVM, Ruang, TalanganVM } from '@/features/ledger/types';
-import { buildEntryHref, buildHref, RUANG_LABEL } from '@/features/shell/hrefs';
+import {
+  buildAccountHref,
+  buildEntryHref,
+  buildHref,
+  buildSectionHref,
+  RUANG_LABEL,
+} from '@/features/shell/hrefs';
 import { buildPatunganHref } from '@/features/shell/patungan-hrefs';
 import { buildDebtHref, buildDebtListHref } from '@/features/shell/utang-hrefs';
 import { debtHeading } from '@/features/utang/copy';
@@ -44,6 +50,8 @@ export interface DetailAbilities {
  * - Pindahkan (S7-D2): pemasukan/pengeluaran hidup oleh pencatat (R10), bukan talangan, bukan
  *   dompet Kantor (R17), dan pengguna anggota ≥ 2 ruang.
  * - Catat reimburse / Tidak diganti (S7-D3): talangan hidup yang masih punya sisa.
+ * - Transaksi saham (S14, entri bertautan trade): tanpa Ubah, Batalkan, dan Pindahkan
+ *   (`stock_account_trade_only`); dikelola dari Detail dompet saham.
  * - Pokok/cicilan utang (S11): tanpa Ubah (`kind_not_editable`) dan tanpa Pindahkan
  *   (`kind_not_movable`). Cicilan boleh Batalkan (jalur `void_entry` biasa); pokok tidak
  *   (`debt_principal_locked`: hanya lewat Hapus utang di halaman utang).
@@ -64,6 +72,7 @@ export function detailAbilities(
   // S12: bagian dari patungan (pengeluaran Bersama atau kaki Pribadi): `split_locked` di semua jalur
   // generik; ubah atau hapus dari halaman Patungan.
   if (entry.split !== undefined) return none;
+  if (entry.trade !== undefined) return none;
   if (entry.kind === 'opening_balance') {
     const opened = data.accounts.find((a) => a.id === entry.accountId)?.openedOn;
     const editable = opened !== undefined && openingEditable(opened, today);
@@ -217,6 +226,19 @@ export function DetailReal({
         <p className="text-meta font-medium text-text-muted">
           {`Hanya ${entry.createdBy.name} yang bisa memulihkan.`}
         </p>
+      ) : entry.trade !== undefined ? (
+        // Dipulihkan sebagai satu paket dari Sampah (restore_stock_trade); generik = stock_account_trade_only.
+        <>
+          <p className="min-w-0 basis-full text-meta font-medium text-text-muted">
+            Transaksi saham dipulihkan dari Sampah.
+          </p>
+          <Link
+            href={buildSectionHref(ruang, 'sampah', '')}
+            className={buttonClass('secondary', 'sm', 'self-start')}
+          >
+            Buka Sampah
+          </Link>
+        </>
       ) : debt?.deleted === true ? (
         // Ikut batal karena Hapus utang: pulihnya satu paket dari Utang (restore_entry = debt_deleted).
         // Dibatalkan sendiri sebelum utang dihapus: tidak ikut kembali; pulihkan utangnya dulu, lalu
@@ -256,7 +278,7 @@ export function DetailReal({
   const live = voidedAt === undefined;
   // Saldo awal lewat 7 hari (S7-W2): tanpa Ubah, dengan keterangan dan arahan Cocokkan saldo.
   const openedOn =
-    entry.kind === 'opening_balance'
+    entry.kind === 'opening_balance' && entry.trade === undefined
       ? accounts.find((a) => a.id === entry.accountId)?.openedOn
       : undefined;
   const openingLocked = live && openedOn !== undefined && !editable;
@@ -277,6 +299,11 @@ export function DetailReal({
       {entry.split !== undefined ? (
         <ActionNote>Ini bagian dari patungan. Ubah atau hapus dari halaman Patungan.</ActionNote>
       ) : null}
+      {entry.trade !== undefined ? (
+        <ActionNote>
+          {`Transaksi saham tidak diubah di sini. Batalkan dari halaman ${entry.trade.accountName}.`}
+        </ActionNote>
+      ) : null}
       {entry.kind === 'debt_principal' ? (
         <ActionNote>
           Pokok utang tidak dibatalkan sendiri. Hapus utangnya dari halaman utang.
@@ -293,7 +320,7 @@ export function DetailReal({
       entry={entry}
       title={labels.title}
       category={labels.category}
-      {...(isDebt ? { kindName: labels.category } : {})}
+      {...(isDebt || entry.trade !== undefined ? { kindName: labels.category } : {})}
       amount={labels.amount}
       ruang={ruang}
       by={by}
@@ -327,6 +354,14 @@ export function DetailReal({
               className={buttonClass('secondary', 'md', 'self-start')}
             >
               Lihat utang
+            </Link>
+          ) : null}
+          {entry.trade !== undefined ? (
+            <Link
+              href={buildAccountHref(ruang, entry.trade.accountId, '')}
+              className={buttonClass('secondary', 'md', 'self-start')}
+            >
+              {`Buka ${entry.trade.accountName}`}
             </Link>
           ) : null}
           {entry.split !== undefined ? (

@@ -25,9 +25,10 @@ export interface DompetDaftar {
 async function archivedTx(c: pg.PoolClient, ctx: LedgerCtx, accountId?: string) {
   const { rows } = await c.query<AccountRow>(
     `select a.id, a.name, a.pocket::text as pocket, a.wallet_type::text as wallet_type,
-            a.opened_on, a.archived_at is not null as archived, b.balance
+            a.opened_on, a.archived_at is not null as archived, b.balance, d.asset_kind
        from app.accounts a
        join app.account_balances b on b.space_id = a.space_id and b.account_id = a.id
+       left join app.asset_details d on d.space_id = a.space_id and d.account_id = a.id
       where a.space_id = $1 and a.archived_at is not null and a.pocket <> 'patungan'
         and ($2::uuid is null or a.id = $2::uuid)
       order by a.archived_at desc, a.id`,

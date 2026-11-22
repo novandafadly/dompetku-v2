@@ -29,6 +29,8 @@ const overviewRow = z.object({
   realized: money,
   shortfall: money,
   has_deposit: z.boolean(),
+  // S14 K7: Σ biaya perolehan saham; hanya baris total (per dompet NULL).
+  stock_cost: money.nullable(),
 });
 
 function figures(r: z.output<typeof overviewRow>): TradingFiguresVM {
@@ -40,6 +42,7 @@ function figures(r: z.output<typeof overviewRow>): TradingFiguresVM {
     realized: r.realized,
     shortfall: r.shortfall,
     hasDeposit: r.has_deposit,
+    ...(r.stock_cost === null ? {} : { stockCost: r.stock_cost }),
   };
 }
 
@@ -50,7 +53,7 @@ export async function tradingOverviewTx(
 ): Promise<TradingOverviewVM> {
   const { rows } = await c.query<Record<string, unknown>>(
     `select account_id, name, balance, capital_in, capital_out, capital_left, realized, shortfall,
-            has_deposit
+            has_deposit, stock_cost
        from api.trading_overview(p_space_id => $1)`,
     [ctx.spaceId],
   );

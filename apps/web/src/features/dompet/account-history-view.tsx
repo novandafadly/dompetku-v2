@@ -24,6 +24,8 @@ export interface HistoryRow {
   status?: ReactNode;
   value: Rupiah;
   kind: MoneyKind;
+  /** Nilai positif netral bertanda `+` (perubahan nilai aset, S14). */
+  signed?: boolean;
 }
 
 /** Satu hari: label relatif, jumlah efek hari itu pada dompet ini, baris terbaru di atas. */
@@ -75,6 +77,11 @@ export function AccountHistoryView({
   actions,
   afterHero,
   footer,
+  heroIcon,
+  subtitle,
+  balanceLabel = 'Saldo',
+  balanceNode,
+  openingLabel = 'Saldo awal',
 }: {
   account: { name: string; pocket: Pocket; walletType: WalletType; balance: Rupiah };
   groups: HistoryGroup[];
@@ -88,6 +95,13 @@ export function AccountHistoryView({
   afterHero?: ReactNode;
   /** Di paling bawah halaman (mode nyata: arsip dompet, S7-W3). */
   footer?: ReactNode;
+  /** Mode nyata, aset (S14-AS3): pengganti ikon tipe dompet, baris `Kantong · Tipe`, label dan nominal saldo. */
+  heroIcon?: ReactNode;
+  subtitle?: ReactNode;
+  balanceLabel?: string | undefined;
+  balanceNode?: ReactNode;
+  /** Mode nyata, aset: label entri pembuka (`Nilai awal`). */
+  openingLabel?: string | undefined;
 }) {
   const baseId = useId();
   return (
@@ -96,20 +110,24 @@ export function AccountHistoryView({
       <section className={`flex flex-col gap-3 p-4 ${heroCard}`}>
         <div className="flex items-center gap-3">
           <span aria-hidden="true" className={`size-12 ${tile}`}>
-            <WalletTypeIcon type={account.walletType} size={24} />
+            {heroIcon ?? <WalletTypeIcon type={account.walletType} size={24} />}
           </span>
           <div className="flex min-w-0 flex-col gap-0.5">
             <h1 className="text-headline font-extrabold break-words text-text">{account.name}</h1>
             <p className="text-label font-medium text-text-muted">
-              {POCKET_LABEL[account.pocket]} · {WALLET_TYPE_LABEL[account.walletType]}
-              {account.pocket === 'kantor' ? ' · Tidak masuk hitungan pribadi' : ''}
+              {subtitle ?? (
+                <>
+                  {POCKET_LABEL[account.pocket]} · {WALLET_TYPE_LABEL[account.walletType]}
+                  {account.pocket === 'kantor' ? ' · Tidak masuk hitungan pribadi' : ''}
+                </>
+              )}
             </p>
           </div>
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-label font-medium text-text-soft">Saldo</p>
+          <p className="text-label font-medium text-text-soft">{balanceLabel}</p>
           <p data-testid="wallet-balance">
-            <MoneyText value={account.balance} size="amount-sm" />
+            {balanceNode ?? <MoneyText value={account.balance} size="amount-sm" />}
           </p>
         </div>
         {actions}
@@ -133,6 +151,7 @@ export function AccountHistoryView({
               status={r.status}
               value={r.value}
               kind={r.kind}
+              signed={r.signed === true}
             />
           ))}
         </GroupList>
@@ -145,7 +164,7 @@ export function AccountHistoryView({
               key={r.id}
               href={r.href}
               icon={<FlagIcon size={20} />}
-              label="Saldo awal"
+              label={openingLabel}
               value={r.value}
               kind="neutral"
             />

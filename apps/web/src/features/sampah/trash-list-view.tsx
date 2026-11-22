@@ -8,7 +8,7 @@ import { TrashIcon } from '@/components/ui/icons/trash';
 import { MoneyText } from '@/components/ui/money-text';
 import { EmptyState } from '@/components/ui/state';
 import { card, rowDivider, tile } from '@/components/ui/styles';
-import { entryKindLabelVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
+import { entryMetaKindVM, entryTitleVM, signedAmountVM } from '@/features/ledger/present';
 import type { EntryVM, TrashVM } from '@/features/ledger/types';
 import { SAMPAH_TITLE_ID, TRASH_COPY } from './trash-states';
 import { SAMPAH_HARI } from '@/features/ledger/sampah-window';
@@ -62,7 +62,7 @@ function TrashRow({
           <span className="flex min-w-0 flex-1 flex-col gap-0.75">
             <span className="block truncate text-body/tight font-semibold text-text">{label}</span>
             <span className="block text-meta font-medium break-words text-text-muted">
-              {`${entryKindLabelVM(entry)} · ${walletOf(entry)}${voided}`}
+              {`${entryMetaKindVM(entry)} · ${walletOf(entry)}${voided}`}
             </span>
             <span className="flex items-start gap-1 text-meta font-medium text-text-muted">
               <ClockIcon size={14} className="mt-0.5 shrink-0" />

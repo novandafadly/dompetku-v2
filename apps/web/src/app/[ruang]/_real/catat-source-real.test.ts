@@ -448,7 +448,7 @@ describe('realCatatSource', () => {
       const s = source();
       expect(m.moveTargetsAction).not.toHaveBeenCalled();
       await expect(s.spaceTransferTargets('bersama')).resolves.toEqual([acc(RUMAH, 'Kas Rumah')]);
-      expect(m.moveTargetsAction).toHaveBeenCalledWith('pribadi', 'bersama');
+      expect(m.moveTargetsAction).toHaveBeenCalledWith('pribadi', 'bersama', true);
       await s.spaceTransferTargets('bersama');
       expect(m.moveTargetsAction).toHaveBeenCalledTimes(1);
     });
@@ -466,7 +466,7 @@ describe('realCatatSource', () => {
         value: { accounts: [acc(BCA, 'BCA')], categories: [] },
       });
       await expect(s.spaceTransferTargets('pribadi')).resolves.toHaveLength(1);
-      expect(m.moveTargetsAction).toHaveBeenLastCalledWith('bersama', 'pribadi');
+      expect(m.moveTargetsAction).toHaveBeenLastCalledWith('bersama', 'pribadi', true);
       expect(m.moveTargetsAction).toHaveBeenCalledTimes(2);
     });
 

@@ -160,6 +160,12 @@ function excludedName(
         name: `Patungan · ${dir === 'in' ? 'masuk' : 'keluar'}`,
         note: 'Uang patungan yang lewat Bersama; bukan pemasukan atau pengeluaran.',
       };
+    // S14: perubahan nilai aset (naik = masuk, turun = keluar); bukan pemasukan/pengeluaran.
+    case 'x_valuasi':
+      return {
+        name: `Perubahan nilai aset · ${dir === 'in' ? 'naik' : 'turun'}`,
+        note: 'Nilai aset dan untung/rugi saham; bukan pemasukan atau pengeluaran.',
+      };
     case 'x_koreksi':
       return { name: `Saldo awal dan koreksi · ${dir === 'in' ? 'naik' : 'turun'}`, note: KOREKSI };
     default:

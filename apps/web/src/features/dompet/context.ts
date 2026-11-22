@@ -16,6 +16,8 @@ export const POCKET_LABEL = {
   tabungan: 'Tabungan',
   kantor: 'Kantor',
   trading: 'Trading',
+  // S14: aset non-kas (emas, properti, saham, ...); jenisnya di `ASSET_KIND_LABEL`.
+  aset: 'Aset',
   // Dompet sistem Bersama: tidak pernah tampil; label hanya agar tipe lengkap.
   patungan: 'Patungan',
 } as const;

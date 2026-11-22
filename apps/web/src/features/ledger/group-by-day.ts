@@ -7,6 +7,8 @@ export interface DayGroupVM {
   label: string;
   /** Σ pemasukan − Σ pengeluaran hari itu; jenis lain tidak dihitung. */
   total: Rupiah;
+  /** Mode nyata: hari tanpa pemasukan/pengeluaran (hanya transfer, trade, valuasi, saldo awal) tidak menulis total. */
+  hideTotal?: boolean;
   entries: EntryVM[];
 }
 
@@ -34,10 +36,13 @@ export function groupByDayVM(entries: readonly EntryVM[], today: IsoDate): DayGr
     .map((date) => {
       const items = (byDate.get(date) ?? []).sort(newestFirst);
       let total = 0;
+      let hasFlow = false;
       for (const e of items) {
         if (e.kind === 'income') total += e.amount;
         else if (e.kind === 'expense') total -= e.amount;
+        else continue;
+        hasFlow = true;
       }
-      return { date, label: dayLabel(date, today), total, entries: items };
+      return { date, label: dayLabel(date, today), total, hideTotal: !hasFlow, entries: items };
     });
 }

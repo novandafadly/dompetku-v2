@@ -20,6 +20,7 @@ const POCKET: Record<Pocket, string> = {
   kantor: 'Kantor',
   trading: 'Trading',
   patungan: 'Patungan',
+  aset: 'Aset',
 };
 
 export default function SpaceTargetPage({

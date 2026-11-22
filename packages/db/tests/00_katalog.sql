@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(51);
+select plan(55);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -63,8 +63,9 @@ select set_eq($$
         'create_debt', 'update_debt_info', 'pay_debt', 'void_debt', 'restore_debt',
         'create_split', 'void_split', 'restore_split', 'settle_split', 'void_settlement',
         'receive_settlement', 'void_receipt', 'create_goal', 'update_goal', 'complete_goal', 'archive_goal',
-        'restore_goal'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13)');
+        'restore_goal', 'revalue_asset', 'buy_stock', 'sell_stock', 'open_stock_holding', 'void_stock_trade',
+        'restore_stock_trade', 'set_stock_price', 'preview_sell'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -74,8 +75,9 @@ select set_eq($$
         'member_contributions', 'pay_period', 'bill_list', 'bills_due', 'budget_progress',
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
-        'debt_totals', 'trading_overview', 'shared_balances', 'split_history', 'list_goals', 'goal_for_account'],
-  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12, tujuan S13)');
+        'debt_totals', 'trading_overview', 'shared_balances', 'split_history', 'list_goals', 'goal_for_account',
+        'asset_overview', 'stock_overview'],
+  'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12, tujuan S13, aset S14)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and not p.prosecdef and p.proowner <> 'dompetku_owner'::regrole $$,
@@ -99,8 +101,9 @@ select set_eq($$
         'private.tg_entry_shape', 'private.tg_category_depth', 'private.tg_obligation_xor',
         'private.materialize_bill', 'jobs.materialize_bills', 'private.wa_audit',
         'private.tg_budget_tree', 'private.tg_budget_cascade', 'private.tg_split_guard',
-        'private.tg_member_leave_guard'],
-  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12');
+        'private.tg_member_leave_guard', 'private.tg_asset_ledger', 'private.tg_stock_guard',
+        'jobs.price_targets', 'jobs.price_ingest', 'private.tg_nw_dirty', 'jobs.net_worth_snapshot'],
+  'DEFINER milik dompetku_owner = daftar tertutup S4 + S5 + S9 (trigger kewajiban, materialisasi tagihan) + audit WA + trigger pohon anggaran S10 + penjaga patungan S12 + penjaga ledger aset dan saham S14 + fungsi job harga + hari kotor dan snapshot kekayaan');
 -- S6: kategori awal ruang = DEFINER milik dompetku_api (NOBYPASSRLS, tunduk member_write).
 select set_eq($$
   select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -313,6 +316,35 @@ select set_eq($$
     ('dompetku_api', 'app.goal_progress', 'SELECT'),
     ('dompetku_auditor', 'app.goals', 'SELECT'),
     ('dompetku_auditor', 'app.goal_progress', 'SELECT'),
+    -- S14 (0140): rincian aset (pola ruang; api tulis lewat fungsi, tanpa DELETE).
+    ('dompetku_web', 'app.asset_details', 'SELECT'),
+    ('dompetku_api', 'app.asset_details', 'SELECT'),
+    ('dompetku_api', 'app.asset_details', 'INSERT'),
+    ('dompetku_api', 'app.asset_details', 'UPDATE'),
+    ('dompetku_auditor', 'app.asset_details', 'SELECT'),
+    -- S14 (0142): saham dan harga per ruang (pola ruang; api tulis lewat fungsi, tanpa DELETE; UPDATE trade
+    -- hanya kolom batal = hak kolom, tidak muncul di has_table_privilege), view posisi.
+    ('dompetku_web', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_web', 'app.stock_trades', 'SELECT'),
+    ('dompetku_web', 'app.stock_prices', 'SELECT'),
+    ('dompetku_web', 'app.stock_positions', 'SELECT'),
+    ('dompetku_api', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_api', 'app.stock_holdings', 'INSERT'),
+    ('dompetku_api', 'app.stock_trades', 'SELECT'),
+    ('dompetku_api', 'app.stock_trades', 'INSERT'),
+    ('dompetku_api', 'app.stock_prices', 'SELECT'),
+    ('dompetku_api', 'app.stock_prices', 'INSERT'),
+    ('dompetku_api', 'app.stock_prices', 'UPDATE'),
+    ('dompetku_api', 'app.stock_positions', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_holdings', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_trades', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_prices', 'SELECT'),
+    ('dompetku_auditor', 'app.stock_positions', 'SELECT'),
+    -- S14 (0144): snapshot kekayaan bersih (web baca anggota, tulis hanya job owner); tanda hari kotor tanpa
+    -- hak web/api/worker (trigger DEFINER owner); auditor untuk DQ08.
+    ('dompetku_web', 'app.net_worth_snapshots', 'SELECT'),
+    ('dompetku_auditor', 'app.net_worth_snapshots', 'SELECT'),
+    ('dompetku_auditor', 'app.nw_dirty', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -349,7 +381,7 @@ select set_eq($$
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['app.effective_payday', 'app.pay_period',
-                                   'app.period_of_label']) f
+                                   'app.period_of_label', 'app.stock_last_close']) f
      union all
      select r, 'api.' || f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['bootstrap_owner', 'create_invitation', 'revoke_invitation',
@@ -370,7 +402,9 @@ select set_eq($$
                                    'restore_debt', 'create_split', 'void_split', 'restore_split',
                                    'settle_split', 'void_settlement', 'receive_settlement',
                                    'void_receipt', 'create_goal', 'update_goal', 'complete_goal',
-                                   'archive_goal', 'restore_goal']) f
+                                   'archive_goal', 'restore_goal', 'revalue_asset', 'buy_stock',
+                                   'sell_stock', 'open_stock_holding', 'void_stock_trade',
+                                   'restore_stock_trade', 'set_stock_price', 'preview_sell']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -381,7 +415,7 @@ select set_eq($$
                       'wa_last_cancellable', 'wa_claim_message', 'wa_finish_message',
                       'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
                       'debt_totals', 'trading_overview', 'shared_balances', 'split_history',
-                      'list_goals', 'goal_for_account']) f
+                      'list_goals', 'goal_for_account', 'asset_overview', 'stock_overview']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
@@ -393,7 +427,10 @@ select set_eq($$
                       'lock_contact', 'insert_contact', 'debt_numbers', 'debt_effects',
                       'assert_split_space', 'patungan_account', 'split_payer_account', 'lock_split',
                       'lock_settlement', 'split_entry_ids', 'split_set_void', 'split_pair', 'lock_goal',
-                      'check_goal']) f
+                      'check_goal', 'stock_cost_removed', 'price_verdict', 'stock_check',
+                      'stock_account', 'stock_cash_account', 'stock_entry', 'stock_assert_after',
+                      'stock_holding', 'lock_stock_trade']) f
+
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f
      union all
@@ -401,9 +438,15 @@ select set_eq($$
      select 'dompetku_auditor', f from unnest(array['private.bill_due_in_label', 'private.bill_first_on',
                       'app.period_of_label', 'app.effective_payday', 'app.pay_period']) f
      union all
+     -- S14 (0144): kekayaan bersih per tanggal untuk api.net_worth (web) dan DQ08 (auditor).
+     select r, 'app.net_worth_at' from unnest(array['dompetku_web', 'dompetku_auditor']) r
+     union all
+     select 'dompetku_auditor', 'app.stock_last_close'
+     union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
-                      'materialize_bills', 'purge_wa_messages']) f
+                      'materialize_bills', 'purge_wa_messages', 'price_targets', 'price_ingest',
+                      'net_worth_snapshot']) f
      union all
      select r, 'audit.log' from unnest(array['dompetku_web', 'dompetku_worker']) r $$,
   'matriks EXECUTE fungsi');
@@ -496,8 +539,19 @@ select set_eq($$
   select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'app' and g.tgconstraint <> 0 and g.tgdeferrable and g.tginitdeferred $$,
-  array['entries.entries_shape', 'entry_lines.entry_lines_shape'],
-  'cek bentuk entri = constraint trigger deferred');
+  array['entries.entries_shape', 'entry_lines.entry_lines_shape',
+        'entries.entries_asset_guard', 'entry_lines.entry_lines_asset_guard'],
+  'cek bentuk entri dan penjaga ledger aset (S14) = constraint trigger deferred');
+-- S14 (0140): penjaga ledger aset DEFINER milik owner (saldo dari semua line dompet), penjaga rincian dan
+-- tagihan rutin INVOKER milik owner (dompet ruang lain tidak terlihat = DK404 tanpa oracle).
+select set_eq($$
+  select c.relname || '.' || g.tgname || ':' || p.prosecdef from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = g.tgfoid
+  where n.nspname = 'app' and p.proname in ('tg_asset_guard', 'tg_asset_ledger')
+    and p.proowner = 'dompetku_owner'::regrole $$,
+  array['asset_details.asset_guard:false', 'bills.asset_guard:false', 'entries.entries_asset_guard:true',
+        'entry_lines.entry_lines_asset_guard:true'],
+  'trigger penjaga aset terpasang (rincian dan tagihan INVOKER, ledger DEFINER)');
 select has_trigger('app', 'categories', 'category_depth', 'penjaga kedalaman kategori');
 -- S9: satu kewajiban (tagihan ATAU anggaran wajib) dijaga trigger di kedua tabel.
 select set_eq($$
@@ -535,6 +589,20 @@ select is(tests.owner_val(null, $q$select not has_table_privilege('dompetku_web'
           and not has_table_privilege('dompetku_worker', 'private.split_ctx', 'INSERT')
           and not has_schema_privilege('dompetku_web', 'private', 'USAGE')$q$), 'true',
           'konteks patungan hanya untuk dompetku_api');
+-- S14 (0142): penjaga jalur generik dompet saham DEFINER milik owner; konteks trade hanya untuk dompetku_api.
+select set_eq($$
+  select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid
+  join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = g.tgfoid
+  where n.nspname = 'app' and p.proname = 'tg_stock_guard' and p.prosecdef and p.proowner = 'dompetku_owner'::regrole $$,
+  array['entry_lines.stock_guard', 'entries.stock_guard_ins', 'entries.stock_guard_upd', 'entries.stock_guard_del'],
+  'trigger penjaga dompet saham terpasang');
+select is(tests.owner_val(null, $q$select not has_table_privilege('dompetku_web', 'private.stock_ctx', 'INSERT')
+          and not has_table_privilege('dompetku_worker', 'private.stock_ctx', 'INSERT')
+          and has_table_privilege('dompetku_api', 'private.stock_ctx', 'INSERT')$q$), 'true',
+          'konteks trade hanya untuk dompetku_api');
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_stock_trade_kind'),
+  'CREATE UNIQUE INDEX entries_stock_trade_kind ON app.entries USING btree (stock_trade_id, kind) WHERE (stock_trade_id IS NOT NULL)',
+  'satu entri per kind per trade');
 select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'entries_debt_principal_live'),
   'CREATE UNIQUE INDEX entries_debt_principal_live ON app.entries USING btree (debt_id) WHERE ((kind = ''debt_principal''::app.entry_kind) AND (voided_at IS NULL))',
   'satu pokok hidup per utang');
@@ -542,8 +610,8 @@ select is((select indexdef from pg_indexes where schemaname = 'app' and indexnam
 -- S11 (0129): urutan label entry_kind; nilai baru ditambah di akhir (ALTER TYPE ADD VALUE).
 select enum_has_labels('app', 'entry_kind',
   array['income', 'expense', 'transfer', 'space_transfer', 'opening_balance', 'adjustment',
-        'reimbursement', 'debt_principal', 'debt_payment'],
-  'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment)');
+        'reimbursement', 'debt_principal', 'debt_payment', 'valuation'],
+  'label entry_kind lengkap dan berurutan (S11: debt_principal, debt_payment; S14: valuation)');
 
 -- #9 app.report_class tidak NULL untuk setiap kombinasi enum (termasuk yang ditolak cek bentuk).
 select is(tests.owner_val(null, $$
@@ -552,11 +620,11 @@ select is(tests.owner_val(null, $$
        unnest(enum_range(null::app.pocket)) p, unnest(enum_range(null::app.space_kind)) s,
        (select unnest(enum_range(null::app.entry_direction)) union all select null) dd (d),
        unnest(array[true, false]) x $$),
-  '0/1620', 'report_class tidak NULL untuk semua kombinasi (9 x 3 x 5 x 2 x 3 x 2)');
+  '0/2160', 'report_class tidak NULL untuk semua kombinasi (10 x 3 x 6 x 2 x 3 x 2; S14: valuation, aset)');
 
 -- S12 (0133): urutan label pocket; trading dan patungan ditambah di akhir.
-select enum_has_labels('app', 'pocket', array['operasional', 'tabungan', 'kantor', 'trading', 'patungan'],
-  'label pocket lengkap dan berurutan (S12: trading, patungan)');
+select enum_has_labels('app', 'pocket', array['operasional', 'tabungan', 'kantor', 'trading', 'patungan', 'aset'],
+  'label pocket lengkap dan berurutan (S12: trading, patungan; S14: aset)');
 
 -- Review S4 (butir parkir): event sistem = event yang ditulis langsung ke audit.events oleh fungsi
 -- DEFINER/owner (atau lewat private.purge_entries), ditambah deploy dan db_manual_access dari skrip

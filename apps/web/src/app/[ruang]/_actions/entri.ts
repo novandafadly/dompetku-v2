@@ -8,7 +8,7 @@ import type {
   EntryVM,
   HistoryVM,
 } from '@/features/ledger/types';
-import { payableAccounts } from '@/features/ledger/accounts';
+import { payableAccounts, spaceTransferTargets } from '@/features/ledger/accounts';
 import { getEntry, loadRuangShell } from '@/server/ledger/read';
 import {
   moveEntryToSpace,
@@ -129,17 +129,21 @@ export interface MoveTargets {
  * Pilihan sheet Pindahkan (dan tujuan transfer antar ruang): dompet aktif bukan Kantor (Kantor
  * tidak pernah ikut antar ruang: `cross_space_kantor`) dan bukan Trading (S12) dan kategori aktif ruang tujuan, dalam satu
  * transaksi baca. Data ruang tujuan milik pemanggil sendiri (anggota; Pribadi = miliknya).
+ * `forTransfer` (sheet Transfer antar ruang): ke Bersama, aset non-saham ikut ditawarkan (S14-NW2).
  */
 export async function moveTargetsAction(
   ruang: unknown,
   toRuang: unknown,
+  forTransfer?: unknown,
 ): Promise<ActionResult<MoveTargets>> {
   return query('moveTargetsAction', actionContext(ruang), async (ctx) => {
-    const v = parseInput(moveTargetsInput, { toRuang });
+    const v = parseInput(moveTargetsInput, { toRuang, forTransfer });
     const spaceId = await targetSpace(ctx, v.toRuang);
     const shell = await loadRuangShell({ pools: ctx.pools, userId: ctx.userId, spaceId });
     return {
-      accounts: payableAccounts(shell.accounts),
+      accounts: v.forTransfer
+        ? spaceTransferTargets(shell.accounts, v.toRuang)
+        : payableAccounts(shell.accounts),
       categories: shell.categories,
     };
   });

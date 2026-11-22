@@ -190,9 +190,10 @@ export function useEditEntry({
 
   const ownAccount = accounts.find((a) => a.id === base.accountId);
   const accountOptions = accounts.filter(
-    // Trading bukan sumber/tujuan pengeluaran dan pemasukan (S12-TR4), kecuali dompet entri ini.
+    // Trading dan aset bukan sumber/tujuan pengeluaran dan pemasukan (S12-TR4, S14), kecuali dompet
+    // entri ini.
     (a) =>
-      (!a.archived && !hiddenAccounts.has(a.id) && a.pocket !== 'trading') ||
+      (!a.archived && !hiddenAccounts.has(a.id) && a.pocket !== 'trading' && a.pocket !== 'aset') ||
       a.id === draft.accountId,
   );
   const selectedAccount =

@@ -72,12 +72,16 @@ export async function wipe(admin: pg.Pool): Promise<void> {
     delete from app.idempotency_keys;
     delete from app.invitations;
     insert into private.split_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+    insert into private.stock_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
     delete from app.settlements;
     delete from app.split_shares;
     delete from app.splits;
     delete from app.entry_lines;
     delete from app.entry_history;
     delete from app.entries;
+    delete from app.stock_trades;
+    delete from app.stock_holdings;
+    delete from app.stock_prices;
     delete from app.entry_tombstones;
     delete from app.debts;
     delete from app.contacts;
@@ -99,6 +103,7 @@ export async function wipe(admin: pg.Pool): Promise<void> {
     insert into app.settings (key, value) values ('owner_email', '${OWNER}')
       on conflict (key) do update set value = excluded.value;
     delete from private.split_ctx where xid = pg_catalog.pg_current_xact_id();
+    delete from private.stock_ctx where xid = pg_catalog.pg_current_xact_id();
     commit;`);
 }
 

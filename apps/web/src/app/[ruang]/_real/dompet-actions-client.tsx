@@ -141,9 +141,11 @@ export interface ArchiveButtonProps {
   account: { id: string; name: string };
   /** Daftar Dompet ruang ini (tujuan sesudah arsip). */
   dompetHref: Route;
+  /** Detail aset (S14): teks tombol dan dialog menyebut aset, bukan dompet. */
+  asset?: boolean;
 }
 
-export function ArchiveButton({ ruang, account, dompetHref }: ArchiveButtonProps) {
+export function ArchiveButton({ ruang, account, dompetHref, asset = false }: ArchiveButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -187,7 +189,7 @@ export function ArchiveButton({ ruang, account, dompetHref }: ArchiveButtonProps
         }}
         className="inline-flex min-h-11 w-full items-center justify-center rounded-lg px-3 text-label font-bold text-danger hover-pointer:bg-danger-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       >
-        Arsipkan dompet
+        {asset ? 'Arsipkan aset' : 'Arsipkan dompet'}
       </button>
       {mounted ? (
         <Suspense fallback={null}>
@@ -196,6 +198,7 @@ export function ArchiveButton({ ruang, account, dompetHref }: ArchiveButtonProps
             onOpenChange={setOpen}
             name={account.name}
             ruang={ruang}
+            asset={asset}
             busy={busy}
             failure={failure}
             onConfirm={() => {

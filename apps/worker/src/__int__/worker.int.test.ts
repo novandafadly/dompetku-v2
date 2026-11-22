@@ -5,6 +5,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { healthchecks } from '../alert';
 import { jobDef, JOBS } from '../jobs';
+import { ProviderError, StubPriceSource } from '../price-source';
 import { closeAbandoned, runJob } from '../run-job';
 import { startWorker, triggerJob, type WorkerHandle } from '../worker';
 
@@ -313,6 +314,288 @@ describe('materialize_bills (S9, K3)', () => {
       { path: '/jobs/fail', body: 'job=materialize_bills code=42501' },
     ]);
     expect(pings.some((p) => p.body.includes('485'))).toBe(false);
+  });
+});
+
+describe('S14: net_worth_snapshot, price_refresh (StubPriceSource), DQ08/18/19', () => {
+  const uid = '0b0b0b0b-0000-4000-8000-000000000014';
+  const email = 'worker-int-s14@example.test';
+  // Selasa 2026-11-10 17:00 WIB (sesudah tutup bursa). Jam hanya bisa diganti di env dev/test.
+  const TUE = '2026-11-10';
+  let ownerEmail: string | null = null;
+  let env = 'prod';
+  let personal = '';
+  const pools: pg.Pool[] = [];
+  const hc = () => healthchecks(`${hcBase}/jobs`, { log: quiet });
+  const priceJob = jobDef('price_refresh');
+
+  /** Pool worker dengan jam app.now() dipatok (sesi; hanya berlaku di env test). */
+  function workerAt(at: string): pg.Pool {
+    const p = new pg.Pool({
+      connectionString: WORKER_URL,
+      max: 1,
+      options: `-c app.now_override=${at.replace(' ', 'T')}`,
+    });
+    pools.push(p);
+    return p;
+  }
+  const echo = (close: number) =>
+    new StubPriceSource((t) => t.map((ticker) => ({ ticker, close })));
+
+  async function prices() {
+    const { rows } = await admin.query<{
+      on: string;
+      close: string;
+      source: string;
+      status: string;
+    }>(
+      `select on_date::text as on, close::text, source, status from app.stock_prices
+        where space_id = $1 order by on_date`,
+      [personal],
+    );
+    return rows;
+  }
+  async function clearPriceRuns() {
+    await admin.query("delete from jobs.job_runs where job = 'price_refresh'");
+  }
+
+  beforeAll(async () => {
+    const { rows: prev } = await admin.query<{ key: string; value: string }>(
+      "select key, value from app.settings where key in ('owner_email', 'env')",
+    );
+    ownerEmail = prev.find((r) => r.key === 'owner_email')?.value ?? null;
+    env = prev.find((r) => r.key === 'env')?.value ?? 'prod';
+    const c = await admin.connect();
+    try {
+      await c.query('begin');
+      await c.query("update app.settings set value = 'test' where key = 'env'");
+      await c.query(
+        `insert into app.settings (key, value) values ('owner_email', $1)
+         on conflict (key) do update set value = excluded.value`,
+        [email],
+      );
+      await c.query(
+        'insert into auth."user" (id, name, email, "emailVerified") values ($1, \'Tes\', $2, true)',
+        [uid, email],
+      );
+      await c.query(
+        "insert into auth.recovery_codes (user_id, code_hash) values ($1, '$argon2id$v=19$tes')",
+        [uid],
+      );
+      await c.query("select set_config('app.user_id', $1, true)", [uid]);
+      await c.query("select api.bootstrap_owner('Tes')");
+      const { rows } = await c.query<{ id: string }>(
+        "select id from app.spaces where kind = 'personal'",
+      );
+      personal = rows[0]?.id ?? '';
+      // Dompet saham + saham berjalan 100 lembar (biaya 9000) sejak 2 Nov lewat jalan produksi.
+      const { rows: acc } = await c.query<{ id: string }>(
+        `select (api.create_account(gen_random_uuid(), $1, 'Saham', 'aset', null, '2026-11-01', 0,
+                 'saham') ->> 'account_id') as id`,
+        [personal],
+      );
+      await c.query(
+        `select api.open_stock_holding(p_client_id => gen_random_uuid(), p_account_id => $1,
+                p_ticker => 'BBCA', p_shares => 100, p_price => 9000, p_on => '2026-11-02')`,
+        [acc[0]?.id],
+      );
+      await c.query('commit');
+    } catch (err) {
+      await c.query('rollback');
+      throw err;
+    } finally {
+      c.release();
+    }
+  });
+
+  afterAll(async () => {
+    await Promise.all(pools.map((p) => p.end()));
+    await clearPriceRuns();
+    await admin.query(`
+      begin;
+      select set_config('dompetku.purge', 'on', true);
+      insert into private.stock_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+      delete from app.idempotency_keys;
+      delete from app.entry_lines;
+      delete from app.entry_history;
+      delete from app.entries;
+      delete from app.stock_trades;
+      delete from app.stock_holdings;
+      delete from app.stock_prices;
+      delete from app.asset_details;
+      delete from app.net_worth_snapshots;
+      delete from app.nw_dirty;
+      delete from app.accounts;
+      delete from app.categories;
+      delete from app.space_members;
+      delete from app.profiles;
+      delete from app.spaces;
+      delete from app.households;
+      delete from audit.events;
+      delete from auth."user";
+      delete from app.holidays where name = 'Uji worker';
+      delete from private.stock_ctx where xid = pg_catalog.pg_current_xact_id();
+      commit;`);
+    await admin.query("update app.settings set value = $1 where key = 'env'", [env]);
+    if (ownerEmail === null) {
+      await admin.query("delete from app.settings where key = 'owner_email'");
+    } else {
+      await admin.query("update app.settings set value = $1 where key = 'owner_email'", [
+        ownerEmail,
+      ]);
+    }
+  });
+
+  it('net_worth_snapshot: backfill sejak entri tertua sampai H−1, run kedua idempoten', async () => {
+    const job = jobDef('net_worth_snapshot');
+    const count = async () =>
+      (
+        await admin.query<{ n: number; first: string }>(
+          `select count(*)::int as n, min(on_date)::text as first from app.net_worth_snapshots
+            where space_id = $1`,
+          [personal],
+        )
+      ).rows[0];
+    const first = await runJob(pool, job, hc(), { log: quiet });
+    expect(first).toMatchObject({ job: 'net_worth_snapshot', status: 'ok' });
+    const after = await count();
+    expect(after?.first).toBe('2026-11-02');
+    expect(after?.n).toBeGreaterThan(1);
+    const { rows: sp } = await admin.query<{ n: number }>(
+      'select count(*)::int as n from app.spaces',
+    );
+    // Run kedua: tanpa hari kotor, hanya H−1 per ruang dihitung ulang; isi tabel tetap.
+    const second = await runJob(pool, job, hc(), { log: quiet });
+    expect(second).toEqual({ job: 'net_worth_snapshot', status: 'ok', rows: sp[0]?.n });
+    expect(await count()).toEqual(after);
+    expect(pings.map((p) => `${p.path} ${p.body}`)).toEqual([
+      '/jobs/start ',
+      '/jobs job=net_worth_snapshot',
+      '/jobs/start ',
+      '/jobs job=net_worth_snapshot',
+    ]);
+  });
+
+  it('price_refresh: harga hari itu masuk per ruang pemegang; run 19:30 tidak memanggil sumber lagi', async () => {
+    await clearPriceRuns();
+    const w = workerAt(`${TUE} 17:00+07`);
+    const src = echo(9875);
+    const first = await runJob(w, priceJob, hc(), { log: quiet, priceSource: src });
+    expect(first).toEqual({ job: 'price_refresh', status: 'ok', rows: 1 });
+    expect(src.calls).toEqual([{ tickers: ['BBCA'], on: TUE }]);
+    expect(await prices()).toEqual([{ on: TUE, close: '9875', source: 'provider', status: 'ok' }]);
+
+    const lines: string[] = [];
+    const second = await runJob(workerAt(`${TUE} 19:30+07`), priceJob, hc(), {
+      log: (e, f) => lines.push(JSON.stringify({ e, ...f })),
+      priceSource: src,
+    });
+    expect(second).toEqual({ job: 'price_refresh', status: 'ok', rows: 0 });
+    expect(src.calls).toHaveLength(1);
+    expect(lines).toContain(
+      JSON.stringify({ e: 'price_skipped', job: 'price_refresh', reason: 'done_today' }),
+    );
+    expect(pings.some((p) => p.body.includes('BBCA') || p.body.includes('9875'))).toBe(false);
+  });
+
+  it('price_refresh: sebelum 16:15 WIB (run terlewat/manual pagi) tidak menyimpan harga berjalan dan tidak mengunci hari itu', async () => {
+    await clearPriceRuns();
+    const src = echo(9875);
+    const before = await prices();
+    const lines: string[] = [];
+    const early = await runJob(workerAt(`${TUE} 09:05+07`), priceJob, hc(), {
+      log: (e, f) => lines.push(JSON.stringify({ e, ...f })),
+      priceSource: src,
+    });
+    expect(early).toEqual({ job: 'price_refresh', status: 'ok', rows: 0 });
+    expect(src.calls).toEqual([]);
+    expect(await prices()).toEqual(before);
+    expect(lines).toContain(
+      JSON.stringify({ e: 'price_skipped', job: 'price_refresh', reason: 'before_close' }),
+    );
+    const later = await runJob(workerAt(`${TUE} 16:30+07`), priceJob, hc(), {
+      log: quiet,
+      priceSource: src,
+    });
+    expect(later).toEqual({ job: 'price_refresh', status: 'ok', rows: 1 });
+    expect(await prices()).toEqual([{ on: TUE, close: '9875', source: 'provider', status: 'ok' }]);
+  });
+
+  it('price_refresh: Sabtu dan hari di app.holidays dilewati tanpa memanggil sumber', async () => {
+    await admin.query(
+      "insert into app.holidays (on_date, name, kind) values ('2026-11-12', 'Uji worker', 'libur')",
+    );
+    for (const at of ['2026-11-14 17:00+07', '2026-11-12 17:00+07']) {
+      await clearPriceRuns();
+      const src = echo(9900);
+      const lines: string[] = [];
+      const res = await runJob(workerAt(at), priceJob, hc(), {
+        log: (e, f) => lines.push(JSON.stringify({ e, ...f })),
+        priceSource: src,
+      });
+      expect(res, at).toEqual({ job: 'price_refresh', status: 'ok', rows: 0 });
+      expect(src.calls, at).toEqual([]);
+      expect(lines, at).toContain(
+        JSON.stringify({ e: 'price_skipped', job: 'price_refresh', reason: 'market_closed' }),
+      );
+    }
+    await admin.query("delete from app.holidays where name = 'Uji worker'");
+  });
+
+  it('price_refresh: galat penyedia → failed provider_*, harga lama tetap; lonjakan → held', async () => {
+    await clearPriceRuns();
+    const before = await lastRunId();
+    const w = workerAt('2026-11-11 17:00+07');
+    const broken = new StubPriceSource(() => {
+      throw new ProviderError('provider_timeout');
+    });
+    const res = await runJob(w, priceJob, hc(), { log: quiet, priceSource: broken });
+    expect(res).toEqual({
+      job: 'price_refresh',
+      status: 'failed',
+      code: 'provider_timeout',
+      rows: null,
+    });
+    expect(await runsSince(before, 'price_refresh')).toEqual([
+      { status: 'failed', error_code: 'provider_timeout', rows: null },
+    ]);
+    expect(pings.at(-1)).toEqual({
+      path: '/jobs/fail',
+      body: 'job=price_refresh code=provider_timeout',
+    });
+    expect(await prices()).toEqual([{ on: TUE, close: '9875', source: 'provider', status: 'ok' }]);
+
+    // Run 19:30 sesudah gagal tetap mencoba; +100 % dari harga ok terakhir = held (K8).
+    const spike = await runJob(workerAt('2026-11-11 19:30+07'), priceJob, hc(), {
+      log: quiet,
+      priceSource: echo(19750),
+    });
+    expect(spike).toEqual({ job: 'price_refresh', status: 'ok', rows: 1 });
+    expect((await prices()).at(-1)).toEqual({
+      on: '2026-11-11',
+      close: '19750',
+      source: 'provider',
+      status: 'held',
+    });
+  });
+
+  it('snapshot H−1 memakai harga ok terakhir (held tidak dipakai); dq_reconcile tanpa DQ08/18/19', async () => {
+    // Hari kotor dari koreksi harga/entri susulan diuji pgTAP 42_kekayaan; harga penyedia selalu
+    // bertanggal hari ini (bukan hari kotor), jadi masuk snapshot H−1 keesokan harinya.
+    await runJob(pool, jobDef('net_worth_snapshot'), hc(), { log: quiet });
+    const { rows } = await admin.query<{ on: string; saham: string }>(
+      `select on_date::text as on, saham_pasar::text as saham from app.net_worth_snapshots
+        where space_id = $1 and on_date in ('2026-11-09', app.today() - 1) order by on_date`,
+      [personal],
+    );
+    // 9 Nov sebelum harga pertama = biaya perolehan; H−1 = 100 × 9875 (bukan held 19750).
+    expect(rows.map((r) => r.saham)).toEqual(['900000', '987500']);
+    pings.length = 0;
+    const dq = await runJob(pool, dqJob, healthchecks(`${hcBase}/dq`, { log: quiet }), {
+      log: quiet,
+    });
+    expect(dq).toMatchObject({ status: 'ok', dq: 'ok' });
+    expect(pings.at(-1)?.body ?? '').not.toMatch(/DQ08|DQ18|DQ19/);
   });
 });
 

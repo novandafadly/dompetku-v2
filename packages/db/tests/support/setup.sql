@@ -130,13 +130,34 @@ begin
 end $$;
 
 -- Dompet baru lewat api.create_account (role web, user p_uid); kembalikan id dompet.
+-- Pocket 'aset' (0141 mewajibkan jenis) dibuat mentah tanpa rincian aset sebagai dompetku_api: untuk tes yang
+-- menulis app.asset_details sendiri (37_aset) atau menguji DQ19; tes API aset memakai api.create_account langsung.
 create function tests.account(p_uid uuid, p_space uuid, p_name text, p_pocket text,
                               p_opening bigint default 0, p_opened_on date default null)
-returns uuid language sql as $$
-  select tests.web_val(p_uid, format(
-    $q$select api.create_account(gen_random_uuid(), %L, %L, %L, 'bank', %L::date, %s) ->> 'account_id'$q$,
-    p_space, p_name, p_pocket, p_opened_on, p_opening))::uuid
-$$;
+returns uuid language plpgsql as $$
+declare v_acc uuid;
+begin
+  if p_pocket <> 'aset' then
+    return tests.web_val(p_uid, format(
+      $q$select api.create_account(gen_random_uuid(), %L, %L, %L, 'bank', %L::date, %s) ->> 'account_id'$q$,
+      p_space, p_name, p_pocket, p_opened_on, p_opening))::uuid;
+  end if;
+  v_acc := tests.api_val(p_uid, format($q$insert into app.accounts (space_id, space_kind, name, pocket, wallet_type,
+      opened_on, created_by) select %1$L, s.kind, %2$L, 'aset', 'cash', coalesce(%3$L::date, app.today()), %4$L
+      from app.spaces s where s.id = %1$L returning id$q$, p_space, p_name, p_opened_on, p_uid))::uuid;
+  if p_opening > 0 then
+    perform tests.api_exec(p_uid, format($q$do $d$ declare e uuid := gen_random_uuid(); begin
+        set constraints all deferred;
+        insert into app.entries (id, space_id, space_kind, kind, occurred_on, created_by, updated_by)
+          select e, a.space_id, a.space_kind, 'opening_balance', a.opened_on, %2$L, %2$L from app.accounts a where a.id = %1$L;
+        insert into app.entry_lines (entry_id, space_id, role, account_id, amount)
+          select e, a.space_id, 'main', a.id, %3$s from app.accounts a where a.id = %1$L;
+        perform private.write_history(e, 'create', %2$L);
+        set constraints all immediate;
+      end $d$ $q$, v_acc, p_uid, p_opening));
+  end if;
+  return v_acc;
+end $$;
 
 -- Saldo dompet (dibaca owner, langsung dari lines, tanpa view).
 create function tests.balance(p_account uuid) returns bigint
@@ -209,6 +230,8 @@ begin
   perform pg_catalog.set_config('dompetku.purge', 'on', true);
   -- Patungan (0135): konteks penjaga split_guard, baris patungan sebelum entri (FK).
   insert into private.split_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
+  -- Saham (0142): konteks penjaga stock_guard; entri lebih dulu (FK ke trade), lalu trade, holding, harga.
+  insert into private.stock_ctx values (pg_catalog.pg_current_xact_id()) on conflict do nothing;
   delete from app.settlements;
   delete from app.splits;
   -- Tagihan dan anggaran (0117) lebih dulu: FK ke entries, categories, accounts.
@@ -217,6 +240,9 @@ begin
   delete from app.budgets;
   delete from app.goals;
   delete from app.entries;
+  delete from app.stock_trades;
+  delete from app.stock_holdings;
+  delete from app.stock_prices;
   delete from app.debts;
   delete from app.contacts;
   delete from app.entry_tombstones;
@@ -234,6 +260,7 @@ begin
   delete from auth."user";
   delete from app.settings where key = 'owner_email';
   delete from private.split_ctx;
+  delete from private.stock_ctx;
 end $$;
 
 -- Rusak data dengan sengaja (tes positif cek kualitas data, 17_dq.sql): jalankan p_sql sebagai

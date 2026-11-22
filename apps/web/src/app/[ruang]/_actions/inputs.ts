@@ -76,4 +76,4 @@ export const moveEntryInput = z.strictObject({
 });
 export type MoveEntryInput = z.input<typeof moveEntryInput>;
 
-export const moveTargetsInput = z.object({ toRuang });
+export const moveTargetsInput = z.object({ toRuang, forTransfer: z.boolean().optional() });
