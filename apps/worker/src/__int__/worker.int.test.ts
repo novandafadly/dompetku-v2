@@ -419,6 +419,7 @@ describe('S14: net_worth_snapshot, price_refresh (StubPriceSource), DQ08/18/19',
       delete from app.entry_lines;
       delete from app.entry_history;
       delete from app.entries;
+      delete from app.trips;
       delete from app.stock_trades;
       delete from app.stock_holdings;
       delete from app.stock_prices;
