@@ -162,7 +162,7 @@ services:
     # memasangnya bersama wa-proxy sesudah web sehat, tidak pernah menggagalkan atau me-rollback web
     # karena openwa, dan melewatinya selama env/openwa.env belum ada (required: false agar compose
     # untuk web dan migrate tetap jalan).
-    image: ghcr.io/rmyndharis/openwa:0.27.1@sha256:1a2d0c393a7c8a629b0b18cdb5125d9be59192480c02d56a022c249a66af9068
+    image: ghcr.io/rmyndharis/openwa:0.29.1@sha256:5d4e2d71d3802e6cd66ac92ff3543f2eb391d20e7db711e8641c5127644a817a
     profiles: [web]
     restart: unless-stopped
     env_file:
