@@ -1,6 +1,6 @@
 -- Tes katalog (BSD §13 #1 sampai #9), otomatis mencakup objek baru di skema aplikasi.
 begin;
-select plan(55);
+select plan(57);
 
 -- #1 RLS ENABLE + FORCE di semua tabel app/audit kecuali app.settings.
 select is_empty($$
@@ -345,6 +345,12 @@ select set_eq($$
     ('dompetku_web', 'app.net_worth_snapshots', 'SELECT'),
     ('dompetku_auditor', 'app.net_worth_snapshots', 'SELECT'),
     ('dompetku_auditor', 'app.nw_dirty', 'SELECT'),
+    -- S15 (0146): trip (pola ruang; api tulis lewat fungsi, tanpa DELETE).
+    ('dompetku_web', 'app.trips', 'SELECT'),
+    ('dompetku_api', 'app.trips', 'SELECT'),
+    ('dompetku_api', 'app.trips', 'INSERT'),
+    ('dompetku_api', 'app.trips', 'UPDATE'),
+    ('dompetku_auditor', 'app.trips', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -519,6 +525,11 @@ select is((select indexdef from pg_indexes where schemaname = 'app' and indexnam
   'CREATE UNIQUE INDEX goals_one_active_per_account ON app.goals USING btree (account_id) WHERE (status = ''active''::text)',
   'satu tujuan aktif per dompet');
 
+-- S15 (0146): nama trip aktif unik per ruang; api 0147 memetakan 23505 dari indeks ini ke name_taken.
+select is((select indexdef from pg_indexes where schemaname = 'app' and indexname = 'trips_name_unique'),
+  'CREATE UNIQUE INDEX trips_name_unique ON app.trips USING btree (space_id, lower(btrim(name))) WHERE (archived_at IS NULL)',
+  'indeks unik nama trip aktif per ruang');
+
 -- #8 Penanda lingkungan.
 select is(tests.owner_val(null, $$select value from app.settings where key = 'env'$$), 'prod', 'app.settings env = prod');
 
@@ -575,6 +586,12 @@ select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
            join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
            where n.nspname = 'app' and c.relname = 'goals' and g.tgname = 'goal_guard'),
           'trigger goal_guard di app.goals memakai private.tg_goal_guard INVOKER milik owner');
+-- S15 (0146): penjaga trip INVOKER (ruang trip tetap).
+select ok((select not p.prosecdef and p.proowner = 'dompetku_owner'::regrole
+           from pg_trigger g join pg_proc p on p.oid = g.tgfoid
+           join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'app' and c.relname = 'trips' and g.tgname = 'trip_guard'),
+          'trigger trip_guard di app.trips memakai private.tg_trip_guard INVOKER milik owner');
 -- S12 (0135): penjaga patungan DEFINER milik owner di entri, baris, dompet, tagihan rutin, dan anggota.
 select set_eq($$
   select c.relname || '.' || g.tgname from pg_trigger g join pg_class c on c.oid = g.tgrelid

@@ -240,6 +240,7 @@ begin
   delete from app.budgets;
   delete from app.goals;
   delete from app.entries;
+  delete from app.trips;
   delete from app.stock_trades;
   delete from app.stock_holdings;
   delete from app.stock_prices;
