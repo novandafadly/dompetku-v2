@@ -44,7 +44,7 @@ const ctx = { pools: {} as Pools, userId: U, spaceId: S };
 /** Hitungan ruang (`assertInSpace`) lalu hasil `api.*`. */
 function reply(r: unknown, inSpace = true) {
   m.query.mockImplementation((sql: string, params: unknown[]) => {
-    if (/select count\(\*\)::int as n/.test(sql)) {
+    if (sql.includes('select count(*)::int as n')) {
       const ids = params[0] as string[];
       return Promise.resolve({ rows: [{ n: inSpace ? new Set(ids).size : 0 }] });
     }
@@ -52,12 +52,12 @@ function reply(r: unknown, inSpace = true) {
   });
 }
 const apiCall = () => {
-  const c = m.query.mock.calls.find(([sql]) => /select api\./.test(sql as string));
+  const c = m.query.mock.calls.find(([sql]) => (sql as string).includes('select api.'));
   if (!c) throw new Error('api.* tidak dipanggil');
   return { sql: c[0] as string, params: c[1] as unknown[] };
 };
 const checks = () =>
-  m.query.mock.calls.filter(([sql]) => /select count\(\*\)::int as n/.test(sql as string));
+  m.query.mock.calls.filter(([sql]) => (sql as string).includes('select count(*)::int as n'));
 
 beforeEach(() => {
   m.query.mockReset();
@@ -106,11 +106,23 @@ describe('createTripSchema', () => {
 });
 
 describe('updateTripSchema: ganti-penuh', () => {
-  const full = { tripId: A, name: 'Bali', startsOn: '2026-12-12', endsOn: '2026-12-19', budget: null };
+  const full = {
+    tripId: A,
+    name: 'Bali',
+    startsOn: '2026-12-12',
+    endsOn: '2026-12-19',
+    budget: null,
+  };
   it('budget wajib dikirim (null = hapus anggaran), tanpa default', () => {
     expect(updateTripSchema.safeParse(full).success).toBe(true);
-    const { budget: _b, ...tanpa } = full;
-    expect(updateTripSchema.safeParse(tanpa).success).toBe(false);
+    expect(
+      updateTripSchema.safeParse({
+        tripId: A,
+        name: 'Bali',
+        startsOn: '2026-12-12',
+        endsOn: '2026-12-19',
+      }).success,
+    ).toBe(false);
   });
   it('rentang rusak ditolak di endsOn', () => {
     const r = updateTripSchema.safeParse({ ...full, endsOn: '2026-12-01' });
@@ -204,7 +216,13 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
 
   it('createEntry tanpa trip: p_trip_id null, tanpa pemeriksaan trip', async () => {
     reply(entryOk);
-    await createEntry(ctx, { clientId: A, accountId: C, kind: 'expense', amount: 5_000, categoryId: D });
+    await createEntry(ctx, {
+      clientId: A,
+      accountId: C,
+      kind: 'expense',
+      amount: 5_000,
+      categoryId: D,
+    });
     expect(apiCall().params[10]).toBeNull();
     expect(checks()).toHaveLength(1);
   });
@@ -245,7 +263,7 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
         tripId: B,
       }),
     ).rejects.toBeInstanceOf(NotInSpaceError);
-    expect(m.query.mock.calls.some(([s]) => /select api\./.test(s as string))).toBe(false);
+    expect(m.query.mock.calls.some(([s]) => (s as string).includes('select api.'))).toBe(false);
   });
 
   it('createSplit: p_trip_id => $10, trip diperiksa di ruang Bersama', async () => {
@@ -280,7 +298,14 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
       replayed: true,
     });
     const { sql, params } = apiCall();
-    for (const p of ['p_client_id', 'p_space_id', 'p_name', 'p_starts_on', 'p_ends_on', 'p_budget_amount']) {
+    for (const p of [
+      'p_client_id',
+      'p_space_id',
+      'p_name',
+      'p_starts_on',
+      'p_ends_on',
+      'p_budget_amount',
+    ]) {
       expect(sql).toContain(`${p} =>`);
     }
     expect(params).toEqual([A, S, 'Bali', '2026-12-12', '2026-12-19', 7_000_000]);
@@ -299,7 +324,13 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
 
   it('updateTrip: trip diperiksa di ruang konteks; budget null dikirim', async () => {
     reply({ trip_id: B, status: 'active' });
-    await updateTrip(ctx, { tripId: B, name: 'Bali', startsOn: '2026-12-12', endsOn: '2026-12-19', budget: null });
+    await updateTrip(ctx, {
+      tripId: B,
+      name: 'Bali',
+      startsOn: '2026-12-12',
+      endsOn: '2026-12-19',
+      budget: null,
+    });
     const { sql, params } = apiCall();
     expect(sql).toContain('p_trip_id => $1');
     expect(sql).toContain('p_budget_amount => $5::bigint');
@@ -310,7 +341,13 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
   it('updateTrip untuk trip ruang lain = NotInSpaceError, tanpa menyentuh api', async () => {
     reply({ trip_id: B, status: 'active' }, false);
     await expect(
-      updateTrip(ctx, { tripId: B, name: 'Bali', startsOn: '2026-12-12', endsOn: '2026-12-19', budget: null }),
+      updateTrip(ctx, {
+        tripId: B,
+        name: 'Bali',
+        startsOn: '2026-12-12',
+        endsOn: '2026-12-19',
+        budget: null,
+      }),
     ).rejects.toBeInstanceOf(NotInSpaceError);
     expect(m.query).toHaveBeenCalledTimes(1);
   });
@@ -328,7 +365,9 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
 
   it('setEntriesTrip: trip dan SEMUA entri diperiksa di ruang konteks; hasil changed', async () => {
     reply({ changed: 2, replayed: false });
-    await expect(setEntriesTrip(ctx, { clientId: A, tripId: B, entryIds: [C, D] })).resolves.toEqual({
+    await expect(
+      setEntriesTrip(ctx, { clientId: A, tripId: B, entryIds: [C, D] }),
+    ).resolves.toEqual({
       changed: 2,
       replayed: false,
     });
@@ -352,6 +391,6 @@ describe('parameter bernama dan pemeriksaan ruang', () => {
     await expect(
       setEntriesTrip(ctx, { clientId: A, tripId: null, entryIds: [C, D, B] }),
     ).rejects.toBeInstanceOf(NotInSpaceError);
-    expect(m.query.mock.calls.some(([s]) => /select api\./.test(s as string))).toBe(false);
+    expect(m.query.mock.calls.some(([s]) => (s as string).includes('select api.'))).toBe(false);
   });
 });

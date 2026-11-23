@@ -2,7 +2,7 @@
 
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
-import type { TripChoiceVM } from '@/features/trip/types';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import { splitContextTx } from '@/server/ledger/patungan';
 import { withLedger } from '@/server/ledger/retry';
 import { recordProductEvent } from '@/server/ledger/events';
@@ -106,7 +106,8 @@ export async function catatOptions(ruang: unknown): Promise<ActionResult<CatatOp
       listCategories(ledger(ctx)),
       listTripChoices(ledger(ctx)),
     ]);
-    const base: CatatOptions = trips.length === 0 ? { accounts, categories } : { accounts, categories, trips };
+    const base: CatatOptions =
+      trips.length === 0 ? { accounts, categories } : { accounts, categories, trips };
     // S12-CT1: hanya Bersama dua anggota (toggle `Dibayar dari dompet pribadi`).
     if (ctx.kind !== 'shared') return base;
     const split = await withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>

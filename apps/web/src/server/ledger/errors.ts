@@ -174,7 +174,11 @@ export function toLedgerError(e: unknown): LedgerError | null {
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         // Hapus/pulihkan utang tanpa versi (S11): keadaan sudah berubah di tab lain = muat ulang.
         // S15: entri dibatalkan di tab lain sebelum ditandai/diubah (set_entries_trip, update_entry).
-        if (d.message === 'already_voided' || d.message === 'not_voided' || d.message === 'entry_voided') {
+        if (
+          d.message === 'already_voided' ||
+          d.message === 'not_voided' ||
+          d.message === 'entry_voided'
+        ) {
           return { code: 'conflict' };
         }
         break;

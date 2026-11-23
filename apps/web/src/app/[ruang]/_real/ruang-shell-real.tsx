@@ -2,7 +2,7 @@ import type { IsoDate } from '@dompetku/domain';
 import type { ReactNode } from 'react';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
-import type { TripChoiceVM } from '@/features/trip/types';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import { RuangShell } from '../ruang-shell';
 // Action entri didaftarkan untuk setiap page `[ruang]`: toast "Urungkan" hidup lebih lama daripada
 // page yang membuatnya (Batalkan di Detail → toast di daftar Transaksi → `restoreEntryAction`).

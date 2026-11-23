@@ -21,7 +21,7 @@ import {
   TRIP_CHOICE_MAX,
   TRIP_CHOICE_WINDOW_DAYS,
   type TripChoiceVM,
-} from '@/features/trip/types';
+} from '@/features/ledger/trip-types';
 import { splitContextTx } from './patungan';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';

@@ -1,5 +1,5 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
-import type { EntryVM } from '@/features/ledger/types';
+import type { EntryVM } from './types';
 
 /**
  * View-model Trip (S15, bingkai `docs/design/s15-bingkai.md`). Dirangkai di server
@@ -70,7 +70,7 @@ export interface TripBreakdownVM {
   category: TripBreakdownRowVM[];
   /** Hanya hari berpengeluaran (`key` = tanggal ISO); jumlah turun. */
   day: TripBreakdownRowVM[];
-  /** Pencatat (`key` = id pengguna); kosong untuk ruang bukan Bersama dua anggota tidak dijamin: UI memutuskan. */
+  /** Pencatat (`key` = id pengguna); UI hanya menampilkannya bila `memberCount` ≥ 2. */
   member: TripBreakdownRowVM[];
 }
 

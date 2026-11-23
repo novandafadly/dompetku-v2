@@ -352,6 +352,14 @@ const TUJUAN_ACTIONS = [
   'archiveGoalAction',
   'restoreGoalAction',
 ];
+// Trip (S15): kedua ruang; gerbang dan pemetaan diuji di `trip.test.ts`.
+const TRIP_ACTIONS = [
+  'createTripAction',
+  'updateTripAction',
+  'archiveTripAction',
+  'restoreTripAction',
+  'setEntriesTripAction',
+];
 // Aset (S14): kedua ruang; gerbang dan pemetaan diuji di `aset.test.ts`.
 const ASET_ACTIONS = ['createAssetAction', 'revalueAssetAction'];
 // Saham (S14 Task 10): hanya Pribadi di DB; gerbang dan pemetaan diuji di `saham.test.ts`.
@@ -536,7 +544,7 @@ describe('gerbang (Review Focus 5)', () => {
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
     // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
-    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`.
+    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`. Trip (S15): `trip.test.ts`.
     expect(seen.sort()).toEqual(
       [
         ...NAMES,
@@ -544,6 +552,7 @@ describe('gerbang (Review Focus 5)', () => {
         ...TUJUAN_ACTIONS,
         ...ASET_ACTIONS,
         ...SAHAM_ACTIONS,
+        ...TRIP_ACTIONS,
         'createLinkCode',
         'unlinkWa',
       ].sort(),

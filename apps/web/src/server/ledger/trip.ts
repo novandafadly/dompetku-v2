@@ -1,16 +1,17 @@
 import 'server-only';
 import type pg from 'pg';
 import { z } from 'zod';
-import type {
-  TripBreakdownRowVM,
-  TripBreakdownVM,
-  TripCandidateVM,
-  TripDetailData,
-  TripOverviewVM,
-  TripPhase,
-  TripVM,
-} from '@/features/trip/types';
-import { TRIP_BATCH_MAX, TRIP_ENTRIES_MAX } from '@/features/trip/types';
+import {
+  TRIP_BATCH_MAX,
+  TRIP_ENTRIES_MAX,
+  type TripBreakdownRowVM,
+  type TripBreakdownVM,
+  type TripCandidateVM,
+  type TripDetailData,
+  type TripOverviewVM,
+  type TripPhase,
+  type TripVM,
+} from '@/features/ledger/trip-types';
 import { rosterTx } from './bersama';
 import { tripEntriesTx } from './read';
 import { withLedger } from './retry';
@@ -372,7 +373,13 @@ async function setArchived(
   op: keyof typeof STATUS_SQL,
 ): Promise<{ tripId: string; archived: boolean }> {
   const v = tripIdSchema.parse(i);
-  const r = await callApi(ctx, tripInSpace(v.tripId, ctx.spaceId), STATUS_SQL[op], [v.tripId], statusResult);
+  const r = await callApi(
+    ctx,
+    tripInSpace(v.tripId, ctx.spaceId),
+    STATUS_SQL[op],
+    [v.tripId],
+    statusResult,
+  );
   return { tripId: r.trip_id, archived: r.status === 'archived' };
 }
 

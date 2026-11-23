@@ -1,7 +1,7 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
-import type { TripChoiceVM } from '@/features/trip/types';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 
 /**
  * Sumber data sheet Catat. Prototipe memakai `demoCatatSource` (store demo, sinkron dibungkus
