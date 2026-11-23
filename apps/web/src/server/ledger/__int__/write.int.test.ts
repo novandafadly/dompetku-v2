@@ -4,7 +4,9 @@ import { ZodError } from 'zod';
 import { withUser } from '../../db';
 import { toLedgerError } from '../errors';
 import { recordProductEvent } from '../events';
+import { getEntry } from '../read';
 import { createReimbursement, openReimbursables } from '../reimburse';
+import { archiveTrip, createTrip, setEntriesTrip } from '../trip';
 import {
   archiveAccount,
   archiveCategory,
@@ -234,6 +236,7 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
         occurredOn: null,
         description: 'tab pertama',
         reimbursable: false,
+        tripId: null,
       };
 
       // Tab pertama menyimpan v1 → v2.
@@ -399,6 +402,7 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
             occurredOn: null,
             description: null,
             reimbursable: false,
+            tripId: null,
           }),
         ),
       ).toEqual({ code: 'not_found' });
@@ -1064,6 +1068,7 @@ describe('wrapper S7 (N, F bergabung, Luar)', () => {
             occurredOn: null,
             description: 'hotel dinas',
             reimbursable: false,
+            tripId: null,
           }),
         ),
       ).toEqual({ code: 'reimbursement_exists' });
@@ -1387,5 +1392,215 @@ describe('wrapper S7 (N, F bergabung, Luar)', () => {
       );
       expect(rows[0]?.parent_id).toBeNull();
     });
+  });
+});
+
+describe('trip di jalur tulis entri (S15 Task 6)', () => {
+  let ps: Personas;
+  let nPribadi: LedgerCtx;
+  let nBersama: LedgerCtx;
+  let bca: string;
+  let kantor: string;
+  let cat: string;
+  let range: { startsOn: string; endsOn: string };
+
+  beforeEach(async () => {
+    await resetLedger(h);
+    ps = await seedPersonas(h, { farida: 'bergabung' });
+    nPribadi = {
+      pools: h.pools,
+      userId: ps.n.id,
+      spaceId: await spaceIdOf(h, ps.n.id, 'personal'),
+    };
+    nBersama = { pools: h.pools, userId: ps.n.id, spaceId: await spaceIdOf(h, ps.n.id, 'shared') };
+    bca = await wallet(nPribadi, 5_000_000, 'BCA');
+    kantor = await wallet(nPribadi, 5_000_000, 'Kantor', 'kantor');
+    cat = await categoryOf(nPribadi.spaceId, 'expense');
+    const { rows } = await h.admin.query<{ s: string; e: string }>(
+      'select (app.today() - 1)::text as s, (app.today() + 5)::text as e',
+    );
+    range = { startsOn: rows[0]?.s ?? '', endsOn: rows[0]?.e ?? '' };
+  });
+
+  const newTrip = async (name = 'Bali') =>
+    (await createTrip(nPribadi, { clientId: randomUUID(), name, ...range })).tripId;
+  const expense = (over: Record<string, unknown> = {}) =>
+    createEntry(nPribadi, {
+      clientId: randomUUID(),
+      accountId: bca,
+      kind: 'expense',
+      amount: 10_000,
+      categoryId: cat,
+      ...over,
+    });
+  const edit = (entryId: string, version: number, tripId: string | null, over = {}) =>
+    updateEntry(nPribadi, {
+      clientId: randomUUID(),
+      entryId,
+      expectedVersion: version,
+      accountId: bca,
+      amount: 10_000,
+      categoryId: cat,
+      occurredOn: null,
+      description: null,
+      reimbursable: false,
+      tripId,
+      ...over,
+    });
+  const tripOf = async (entryId: string) =>
+    (
+      await h.admin.query<{ trip_id: string | null; version: number }>(
+        'select trip_id, version from app.entries where id = $1',
+        [entryId],
+      )
+    ).rows[0];
+
+  it('createEntry menandai trip; entri membawa tripId dan tripName; tanpa trip = tanpa kolom', async () => {
+    const tripId = await newTrip();
+    const a = await expense({ tripId });
+    const b = await expense();
+    const va = await getEntry(nPribadi, a.entryId);
+    expect(va?.entry).toMatchObject({ tripId, tripName: 'Bali' });
+    expect(va?.entry.tripArchived).toBeUndefined();
+    const vb = await getEntry(nPribadi, b.entryId);
+    expect(vb?.entry.tripId).toBeUndefined();
+    expect(vb?.entry.tripName).toBeUndefined();
+    expect((await tripOf(b.entryId))?.trip_id).toBeNull();
+  });
+
+  it('idempotensi: clientId sama + trip sama = replay; trip beda = idem_mismatch', async () => {
+    const t1 = await newTrip('Bali');
+    const t2 = await newTrip('Lombok');
+    const clientId = randomUUID();
+    const a = await expense({ clientId, tripId: t1 });
+    await expect(expense({ clientId, tripId: t1 })).resolves.toMatchObject({
+      entryId: a.entryId,
+      replayed: true,
+    });
+    expect(await ledgerCode(expense({ clientId, tripId: t2 }))).toEqual({ code: 'idem_mismatch' });
+  });
+
+  it('updateEntry ganti-penuh: tripId sama mempertahankan, null melepas, lain mengganti', async () => {
+    const t1 = await newTrip('Bali');
+    const t2 = await newTrip('Lombok');
+    const { entryId } = await expense({ tripId: t1 });
+    await edit(entryId, 1, t1, { amount: 11_000 });
+    expect((await tripOf(entryId))?.trip_id).toBe(t1);
+    await edit(entryId, 2, t2);
+    expect((await tripOf(entryId))?.trip_id).toBe(t2);
+    await edit(entryId, 3, null);
+    expect(await tripOf(entryId)).toEqual({ trip_id: null, version: 4 });
+  });
+
+  it('updateEntry tanpa tripId ditolak Zod sebelum DB: tanda tidak terlepas diam-diam', async () => {
+    const tripId = await newTrip();
+    const { entryId } = await expense({ tripId });
+    const body = {
+      clientId: randomUUID(),
+      entryId,
+      expectedVersion: 1,
+      accountId: bca,
+      amount: 12_000,
+      categoryId: cat,
+      occurredOn: null,
+      description: null,
+      reimbursable: false,
+    };
+    const err = await failure(
+      updateEntry(nPribadi, body as unknown as Parameters<typeof updateEntry>[1]),
+    );
+    expect(err).toBeInstanceOf(ZodError);
+    expect(await tripOf(entryId)).toEqual({ trip_id: tripId, version: 1 });
+  });
+
+  it('ubah jadi talangan atau pindah ke dompet Kantor sambil bertrip = trip_entry_invalid', async () => {
+    const tripId = await newTrip();
+    const { entryId } = await expense({ tripId });
+    expect(await ledgerCode(edit(entryId, 1, tripId, { reimbursable: true }))).toEqual({
+      code: 'trip_entry_invalid',
+    });
+    expect(await ledgerCode(edit(entryId, 1, tripId, { accountId: kantor }))).toEqual({
+      code: 'trip_entry_invalid',
+    });
+    // Melepas trip sekaligus mengubahnya jadi talangan: boleh (urutan yang dipakai UI Ubah).
+    await edit(entryId, 1, null, { reimbursable: true });
+    expect(await tripOf(entryId)).toEqual({ trip_id: null, version: 2 });
+  });
+
+  it('trip terarsip: tanda lama bertahan dan bisa diubah; memilihnya baru ditolak; melepas boleh', async () => {
+    const tripId = await newTrip();
+    const { entryId } = await expense({ tripId });
+    const lain = await expense();
+    await archiveTrip(nPribadi, { tripId });
+    expect((await getEntry(nPribadi, entryId))?.entry.tripArchived).toBe(true);
+    await edit(entryId, 1, tripId, { amount: 12_000 });
+    expect(await ledgerCode(edit(lain.entryId, 1, tripId))).toEqual({ code: 'trip_archived' });
+    expect(await ledgerCode(expense({ tripId }))).toEqual({ code: 'trip_archived' });
+    await edit(entryId, 2, null);
+    expect((await tripOf(entryId))?.trip_id).toBeNull();
+  });
+
+  it('setEntriesTrip atomik: satu entri tak layak menggagalkan semuanya (tanpa efek, versi tetap)', async () => {
+    const tripId = await newTrip();
+    const ok = await expense();
+    const { rows } = await h.admin.query<{ id: string }>(
+      `select id from app.categories where space_id = $1 and type = 'income' and parent_id is null
+        and archived_at is null limit 1`,
+      [nPribadi.spaceId],
+    );
+    const inc = await createEntry(nPribadi, {
+      clientId: randomUUID(),
+      accountId: bca,
+      kind: 'income',
+      amount: 5_000,
+      categoryId: rows[0]?.id ?? '',
+    });
+    expect(
+      await ledgerCode(
+        setEntriesTrip(nPribadi, {
+          clientId: randomUUID(),
+          tripId,
+          entryIds: [ok.entryId, inc.entryId],
+        }),
+      ),
+    ).toEqual({ code: 'trip_entry_invalid' });
+    expect(await tripOf(ok.entryId)).toEqual({ trip_id: null, version: 1 });
+    // Semua layak: versi naik tepat satu per entri yang berubah; entri yang sudah sesuai tidak naik.
+    await setEntriesTrip(nPribadi, { clientId: randomUUID(), tripId, entryIds: [ok.entryId] });
+    expect(await tripOf(ok.entryId)).toEqual({ trip_id: tripId, version: 2 });
+    await expect(
+      setEntriesTrip(nPribadi, { clientId: randomUUID(), tripId, entryIds: [ok.entryId] }),
+    ).resolves.toMatchObject({ changed: 0 });
+    expect((await tripOf(ok.entryId))?.version).toBe(2);
+  });
+
+  it('setEntriesTrip pada entri batal = conflict (entry_voided); batas Zod: 0 id ditolak', async () => {
+    const tripId = await newTrip();
+    const e = await expense();
+    await voidEntry(nPribadi, { clientId: randomUUID(), entryId: e.entryId, expectedVersion: 1 });
+    expect(
+      await ledgerCode(
+        setEntriesTrip(nPribadi, { clientId: randomUUID(), tripId, entryIds: [e.entryId] }),
+      ),
+    ).toEqual({ code: 'conflict' });
+    expect(
+      await failure(setEntriesTrip(nPribadi, { clientId: randomUUID(), tripId, entryIds: [] })),
+    ).toBeInstanceOf(ZodError);
+  });
+
+  it('pindah ke ruang lain tidak membawa trip (K15): entri baru tanpa trip, asal batal tetap bertag', async () => {
+    const tripId = await newTrip();
+    const kas = await wallet(nBersama, 500_000, 'Kas Rumah');
+    const { entryId } = await expense({ tripId, amount: 80_000 });
+    const moved = await moveEntryToSpace(nPribadi, {
+      clientId: randomUUID(),
+      entryId,
+      expectedVersion: 1,
+      toSpaceId: nBersama.spaceId,
+      accountId: kas,
+      categoryId: await categoryOf(nBersama.spaceId, 'expense'),
+    });
+    expect((await tripOf(moved.entryId))?.trip_id).toBeNull();
+    expect((await tripOf(entryId))?.trip_id).toBe(tripId);
   });
 });

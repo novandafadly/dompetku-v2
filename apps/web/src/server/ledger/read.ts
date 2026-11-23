@@ -17,6 +17,11 @@ import type {
   WalletType,
 } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
+import {
+  TRIP_CHOICE_MAX,
+  TRIP_CHOICE_WINDOW_DAYS,
+  type TripChoiceVM,
+} from '@/features/ledger/trip-types';
 import { splitContextTx } from './patungan';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
@@ -145,6 +150,10 @@ interface EntryRow {
   trade_shares: number | null;
   trade_account_id: string | null;
   trade_account_name: string | null;
+  // S15: trip entri (kosong bila tidak bertrip); `trip_archived` hanya berarti bila `trip_id` terisi.
+  trip_id: string | null;
+  trip_name: string | null;
+  trip_archived: boolean | null;
 }
 
 /**
@@ -180,7 +189,8 @@ const ENTRY_COLUMNS = `
      where p.link_id = e.link_id and p.space_id <> e.space_id and pa.pocket = 'patungan') end
     as split_leg,
   st.id as trade_id, sh.ticker as trade_ticker, st.side as trade_side, st.shares as trade_shares,
-  sa.id as trade_account_id, sa.name as trade_account_name`;
+  sa.id as trade_account_id, sa.name as trade_account_name,
+  e.trip_id, trp.name as trip_name, trp.archived_at is not null as trip_archived`;
 
 /**
  * Kaki dompet sistem `patungan` di Bersama (masuk tagihan/pelunasan, keluar terima) tidak pernah
@@ -201,6 +211,7 @@ const ENTRY_JOINS = `
   left join app.stock_trades st on st.space_id = e.space_id and st.id = e.stock_trade_id
   left join app.stock_holdings sh on sh.space_id = st.space_id and sh.id = st.holding_id
   left join app.accounts sa on sa.space_id = sh.space_id and sa.id = sh.account_id
+  left join app.trips trp on trp.space_id = e.space_id and trp.id = e.trip_id
   left join app.space_roster($1) r on r.user_id = e.created_by`;
 
 const ENTRY_ORDER = 'order by e.occurred_on desc, e.created_at desc, e.id desc';
@@ -272,6 +283,11 @@ function toEntryVM(row: EntryRow): EntryVM {
       accountName: row.trade_account_name,
     };
   }
+  if (row.trip_id !== null && row.trip_name !== null) {
+    vm.tripId = row.trip_id;
+    vm.tripName = row.trip_name;
+    if (row.trip_archived === true) vm.tripArchived = true;
+  }
   if (row.debt_id !== null && row.debt_direction !== null && row.debt_contact_name !== null) {
     vm.debt = {
       id: row.debt_id,
@@ -324,6 +340,31 @@ export async function listEntries(
   month.parse(i.month);
   if (i.accountId !== undefined) uuid.parse(i.accountId);
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listEntriesTx(c, ctx, i));
+}
+
+/**
+ * Pengeluaran hidup satu trip (Detail trip, S15-TR8), terbaru di atas, dibatasi `n` (`truncated` bila
+ * masih ada yang lebih lama; rincian dan total tetap dari SQL atas SEMUA pengeluaran trip). Trip
+ * wajib di `ctx.spaceId` (join `space_id` entri). Entri patungan tampil (terkunci di UI).
+ */
+export async function tripEntriesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+  tripId: string,
+  n: number,
+): Promise<{ entries: EntryVM[]; truncated: boolean }> {
+  const t = uuid.parse(tripId);
+  const l = z.number().int().min(1).max(1000).parse(n);
+  const rows = await queryEntries(
+    c,
+    `select ${ENTRY_COLUMNS}
+       from app.entries e ${ENTRY_JOINS}
+      where e.space_id = $1 and e.trip_id = $2 and e.voided_at is null and ${HIDE_SYSTEM_LEG}
+      ${ENTRY_ORDER}
+      limit $3`,
+    [ctx.spaceId, t, l + 1],
+  );
+  return { entries: rows.slice(0, l), truncated: rows.length > l };
 }
 
 /** Batas atas jumlah entri riwayat satu dompet per halaman (`?tampil=`). */
@@ -582,10 +623,34 @@ export async function listCategories(
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => listCategoriesTx(c, ctx, opts));
 }
 
+/**
+ * Pilihan trip di Catat (S15-TR14): trip AKTIF ruang ini saja yang berakhir paling lama
+ * `TRIP_CHOICE_WINDOW_DAYS` hari lalu atau akan datang, maks `TRIP_CHOICE_MAX`, mulai terbaru dulu.
+ * Selalu dibatasi `space_id` ruang yang dimaksud: nama trip ruang lain tidak pernah ikut.
+ */
+export async function tripChoicesTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<TripChoiceVM[]> {
+  const { rows } = await c.query<{ id: string; name: string; starts_on: string; ends_on: string }>(
+    `select t.id, t.name, t.starts_on, t.ends_on
+       from app.trips t
+      where t.space_id = $1 and t.archived_at is null
+        and t.ends_on >= app.today() - $2::int
+      order by t.starts_on desc, t.name collate "C", t.id
+      limit $3`,
+    [ctx.spaceId, TRIP_CHOICE_WINDOW_DAYS, TRIP_CHOICE_MAX],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, startsOn: r.starts_on, endsOn: r.ends_on }));
+}
+
+export async function listTripChoices(ctx: LedgerCtx): Promise<TripChoiceVM[]> {
+  return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => tripChoicesTx(c, ctx));
+}
+
 /** Opsi Catat layout `[ruang]`: dompet + kategori aktif ruang ini dalam SATU transaksi. */
 export interface RuangShellData {
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Trip aktif ruang ini untuk pemilih Catat (S15); tidak ada bila tidak ada trip yang bisa dipilih. */
+  trips?: TripChoiceVM[];
   /** Bersama dua anggota (S12-CT1): penonton dan anggota lain untuk toggle patungan; selain itu tidak ada. */
   split?: SplitContextVM;
 }
@@ -595,7 +660,13 @@ export async function loadRuangShell(ctx: LedgerCtx): Promise<RuangShellData> {
     const accounts = await listAccountsTx(c, ctx);
     const categories = await listCategoriesTx(c, ctx);
     const split = await splitContextTx(c, ctx);
-    return split === null ? { accounts, categories } : { accounts, categories, split };
+    const trips = await tripChoicesTx(c, ctx);
+    return {
+      accounts,
+      categories,
+      ...(split === null ? {} : { split }),
+      ...(trips.length === 0 ? {} : { trips }),
+    };
   });
 }
 

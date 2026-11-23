@@ -2,10 +2,16 @@
 
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import { splitContextTx } from '@/server/ledger/patungan';
 import { withLedger } from '@/server/ledger/retry';
 import { recordProductEvent } from '@/server/ledger/events';
-import { listAccounts, listCategories, suggestCategories } from '@/server/ledger/read';
+import {
+  listAccounts,
+  listCategories,
+  listTripChoices,
+  suggestCategories,
+} from '@/server/ledger/read';
 import { createEntry, createSpaceTransfer, createTransfer } from '@/server/ledger/write';
 import {
   ActionInputError,
@@ -85,21 +91,29 @@ export interface CatatOptions {
   accounts: AccountVM[];
   categories: CategoryVM[];
   split?: SplitContextVM;
+  /** Trip aktif ruang ini untuk pemilih (S15); tidak ada bila tidak ada yang bisa dipilih. */
+  trips?: TripChoiceVM[];
 }
 
-/** Dompet dan kategori aktif ruang tujuan saat pindah ruang di sheet (data ruang itu saja). */
+/**
+ * Dompet, kategori, dan trip aktif ruang tujuan saat pindah ruang di sheet (data ruang itu saja;
+ * trip Pribadi tidak pernah ikut ke Bersama dan sebaliknya: `listTripChoices` dibatasi ruang konteks).
+ */
 export async function catatOptions(ruang: unknown): Promise<ActionResult<CatatOptions>> {
   return query('catatOptions', actionContext(ruang), async (ctx) => {
-    const [accounts, categories] = await Promise.all([
+    const [accounts, categories, trips] = await Promise.all([
       listAccounts(ledger(ctx)),
       listCategories(ledger(ctx)),
+      listTripChoices(ledger(ctx)),
     ]);
+    const base: CatatOptions =
+      trips.length === 0 ? { accounts, categories } : { accounts, categories, trips };
     // S12-CT1: hanya Bersama dua anggota (toggle `Dibayar dari dompet pribadi`).
-    if (ctx.kind !== 'shared') return { accounts, categories };
+    if (ctx.kind !== 'shared') return base;
     const split = await withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) =>
       splitContextTx(c, ledger(ctx)),
     );
-    return split === null ? { accounts, categories } : { accounts, categories, split };
+    return split === null ? base : { ...base, split };
   });
 }
 

@@ -1,6 +1,7 @@
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 
 /**
  * Sumber data sheet Catat. Prototipe memakai `demoCatatSource` (store demo, sinkron dibungkus
@@ -65,6 +66,11 @@ export interface CatatOptions {
    * pribadi` tersedia; prototipe dan ruang lain tidak punya.
    */
   split?: SplitContextVM;
+  /**
+   * Trip aktif ruang ini untuk pemilih (S15-TR14); tidak ada = tidak ada trip yang bisa dipilih.
+   * Prototipe tidak punya.
+   */
+  trips?: TripChoiceVM[];
 }
 
 export type SaveOutcome =

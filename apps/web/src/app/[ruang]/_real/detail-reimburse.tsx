@@ -52,6 +52,8 @@ export function realReimburseSource(ruang: Ruang): ReimburseSource {
           occurredOn: null,
           description: entry.description ?? null,
           reimbursable: false,
+          // Talangan tidak pernah bertrip (DB: entries_trip_check); ganti-penuh tetap mengirimnya.
+          tripId: entry.tripId ?? null,
         });
       } catch {
         return { ok: false, error: { code: 'network' } };

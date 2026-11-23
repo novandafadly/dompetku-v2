@@ -65,6 +65,8 @@ export const createEntrySchema = z.object({
   /** Talangan kantor: hanya pengeluaran Pribadi (DB: `reimbursable_personal_expense_only`). */
   reimbursable: z.boolean().optional(),
   allowNegative: z.boolean().optional(),
+  /** Trip (S15): hanya pengeluaran biasa (DB: `trip_entry_invalid`); tanpa = tidak bertrip. */
+  tripId: id.nullable().optional(),
 });
 
 /** Biaya transfer (admin bank), 0 = tanpa biaya; batas sama dengan `p_fee` di DB. */
@@ -98,6 +100,11 @@ export const updateEntrySchema = z.object({
   description: description.nullable(),
   reimbursable: z.boolean(),
   allowNegative: z.boolean().optional(),
+  /**
+   * Trip (S15). Ganti-penuh: WAJIB dikirim, tanpa default (`null` = lepas). Pemanggil yang lupa
+   * mengirimnya ditolak Zod, bukan melepas tanda diam-diam.
+   */
+  tripId: id.nullable(),
 });
 
 /** Transfer antar ruang (S7): ruang tujuan eksplisit dan berbeda dari ruang konteks. */
@@ -196,7 +203,7 @@ const categoryResult = z.object({ category_id: z.uuid() });
 const archiveResult = z.object({ category_id: z.uuid(), affected: z.number().int().min(0) });
 
 // ===== Pembantu =====
-type Table = 'accounts' | 'entries' | 'categories';
+type Table = 'accounts' | 'entries' | 'categories' | 'trips';
 
 /** SQL tetap per tabel (tanpa interpolasi nama dari input). */
 const IN_SPACE_SQL: Record<Table, string> = {
@@ -206,6 +213,7 @@ const IN_SPACE_SQL: Record<Table, string> = {
     'select count(*)::int as n from app.entries where id = any($1::uuid[]) and space_id = $2',
   categories:
     'select count(*)::int as n from app.categories where id = any($1::uuid[]) and space_id = $2',
+  trips: 'select count(*)::int as n from app.trips where id = any($1::uuid[]) and space_id = $2',
 };
 
 /**
@@ -253,6 +261,8 @@ export interface CreateEntryInput {
   description?: string | undefined;
   reimbursable?: boolean | undefined;
   allowNegative?: boolean | undefined;
+  /** Trip ruang ini (S15); tidak ada/`null` = tanpa trip. */
+  tripId?: string | null | undefined;
 }
 
 export async function createEntry(
@@ -262,11 +272,15 @@ export async function createEntry(
   const v = createEntrySchema.parse(i);
   const r = await callApi(
     ctx,
-    (c) => assertInSpace(c, 'accounts', [v.accountId], ctx.spaceId),
+    async (c) => {
+      await assertInSpace(c, 'accounts', [v.accountId], ctx.spaceId);
+      if (v.tripId != null) await assertInSpace(c, 'trips', [v.tripId], ctx.spaceId);
+    },
     `select api.create_entry(
        p_client_id => $1, p_space_id => $2, p_account_id => $3, p_kind => $4::app.entry_kind,
        p_amount => $5::bigint, p_category_id => $6, p_occurred_on => $7::date,
-       p_description => $8, p_reimbursable => $9, p_allow_negative => $10) as r`,
+       p_description => $8, p_reimbursable => $9, p_allow_negative => $10,
+       p_trip_id => $11::uuid) as r`,
     [
       v.clientId,
       ctx.spaceId,
@@ -278,6 +292,7 @@ export async function createEntry(
       v.description ?? null,
       v.reimbursable ?? false,
       v.allowNegative ?? false,
+      v.tripId ?? null,
     ],
     entryResult,
   );
@@ -402,6 +417,8 @@ export interface UpdateEntryInput {
   description: string | null;
   reimbursable: boolean;
   allowNegative?: boolean | undefined;
+  /** Ganti-penuh (S15): trip sekarang atau `null` untuk melepas; wajib dikirim. */
+  tripId: string | null;
 }
 
 /** Ganti-penuh (BSD §9.1): semua field dikirim; `occurredOn` null = tanggal lama. */
@@ -415,11 +432,13 @@ export async function updateEntry(
     async (c) => {
       await assertInSpace(c, 'entries', [v.entryId], ctx.spaceId);
       await assertInSpace(c, 'accounts', [v.accountId], ctx.spaceId);
+      if (v.tripId !== null) await assertInSpace(c, 'trips', [v.tripId], ctx.spaceId);
     },
     `select api.update_entry(
        p_client_id => $1, p_entry_id => $2, p_expected_version => $3::int, p_account_id => $4,
        p_amount => $5::bigint, p_category_id => $6, p_occurred_on => $7::date,
-       p_description => $8, p_reimbursable => $9, p_allow_negative => $10) as r`,
+       p_description => $8, p_reimbursable => $9, p_allow_negative => $10,
+       p_trip_id => $11::uuid) as r`,
     [
       v.clientId,
       v.entryId,
@@ -431,6 +450,7 @@ export async function updateEntry(
       v.description,
       v.reimbursable,
       v.allowNegative ?? false,
+      v.tripId,
     ],
     entryResult,
   );

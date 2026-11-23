@@ -37,6 +37,7 @@ const exportRow = z.object({
   amount: z.number().int(),
   note: z.string().nullable(),
   recorded_by: z.string().nullable(),
+  trip: z.string().nullable(),
 });
 
 export async function exportLaporanCsv(
@@ -51,7 +52,7 @@ export async function exportLaporanCsv(
     await c.query("select set_config('statement_timeout', '30s', true)");
     const { rows: raw } = await c.query<Record<string, unknown>>(
       `select to_char(x.occurred_on, 'YYYY-MM-DD') as occurred_on, x.kind, x.role, x.report_class,
-              x.account, x.category, x.subcategory, x.amount, x.note, x.recorded_by
+              x.account, x.category, x.subcategory, x.amount, x.note, x.recorded_by, x.trip
          from api.export_entries(p_space_id => $1, p_from => $2::date, p_to => $3::date) x`,
       [ctx.spaceId, row.from, row.to],
     );
@@ -68,6 +69,7 @@ export async function exportLaporanCsv(
         amount: v.amount,
         note: v.note,
         recordedBy: v.recorded_by,
+        trip: v.trip,
       };
     });
     return {

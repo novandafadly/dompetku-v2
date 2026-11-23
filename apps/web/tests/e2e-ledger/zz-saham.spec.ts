@@ -71,7 +71,10 @@ async function incomeExpense(): Promise<{ inc: number; exp: number }> {
 /** `Kurang Rp …` di kartu Modal trading (0 bila kartu tidak memperingatkan). */
 async function kurang(page: Page): Promise<number> {
   await page.goto('/pribadi/dompet');
-  const status = main(page).getByRole('region', { name: 'Modal trading' }).getByRole('status');
+  const card = main(page).getByRole('region', { name: 'Modal trading' });
+  // Tunggu kartu dirender: tanpa ini count() = 0 sebelum kartu tampil terbaca sebagai 'tanpa Kurang'.
+  await expect(card).toBeVisible();
+  const status = card.getByRole('status');
   if ((await status.count()) === 0) return 0;
   return money(await txt(status.getByText(/^Kurang/)));
 }

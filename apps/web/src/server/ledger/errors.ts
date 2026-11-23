@@ -82,13 +82,22 @@ const RULES = new Set<LedgerErrorCode>([
   'insufficient_shares',
   'trade_not_latest',
   'price_spike_unconfirmed',
+  // S15: trip (0147–0148); DK404 trip_not_found = not_found.
+  'trip_archived',
+  'trip_entry_invalid',
+  'trip_limit',
 ]);
 
 /**
- * Indeks unik nama aktif: kategori (0100) dan dompet (0109). Nama indeks = kontrak; 23505 dari
+ * Indeks unik nama aktif: kategori (0100), dompet (0109), dan trip (0146). Nama indeks = kontrak; 23505 dari
  * indeks lain tetap `unknown`.
  */
-const NAME_INDEXES = new Set(['categories_name_unique', 'accounts_name_unique']);
+const NAME_INDEXES = new Set([
+  'categories_name_unique',
+  'accounts_name_unique',
+  // S15: nama trip aktif unik per ruang (0146).
+  'trips_name_unique',
+]);
 
 const MACHINE_CODE = /^[a-z_]{1,64}$/;
 
@@ -164,7 +173,12 @@ export function toLedgerError(e: unknown): LedgerError | null {
         }
         if (RULES.has(d.message as LedgerErrorCode)) return { code: d.message as LedgerErrorCode };
         // Hapus/pulihkan utang tanpa versi (S11): keadaan sudah berubah di tab lain = muat ulang.
-        if (d.message === 'already_voided' || d.message === 'not_voided') {
+        // S15: entri dibatalkan di tab lain sebelum ditandai/diubah (set_entries_trip, update_entry).
+        if (
+          d.message === 'already_voided' ||
+          d.message === 'not_voided' ||
+          d.message === 'entry_voided'
+        ) {
           return { code: 'conflict' };
         }
         break;

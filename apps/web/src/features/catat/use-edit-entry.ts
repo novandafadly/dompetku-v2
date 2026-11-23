@@ -28,6 +28,8 @@ export interface EditInput {
   occurredOn: IsoDate | null;
   description: string | null;
   reimbursable: boolean;
+  /** Ganti-penuh (S15): trip sekarang; `null` melepas. Wajib dikirim (Zod `updateEntrySchema`). */
+  tripId: string | null;
   allowNegative: boolean;
 }
 
@@ -101,6 +103,7 @@ export function editInput(
     occurredOn: only ? base.occurredOn : d.date,
     description: only ? null : descriptionOf(d),
     reimbursable: base.reimbursable === true,
+    tripId: only ? null : (base.tripId ?? null),
     allowNegative,
   };
 }

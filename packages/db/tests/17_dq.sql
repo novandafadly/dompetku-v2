@@ -12,9 +12,10 @@
 -- DQ17 (S13, 0137): tujuan aktif hanya pada dompet tabungan aktif di ruang yang sama.
 -- DQ19 (S14, 0140): dompet aset tidak negatif, tidak dipakai pemasukan/pengeluaran/reimburse/utang/patungan
 -- atau tagihan rutin, rincian aset 1:1 dengan dompet aset. DQ18 (S14, 0142): saham, diuji positif di 39_saham. DQ08 (S14, 0144, warn): snapshot H−1, diuji positif di 42_kekayaan.
+-- DQ20 (S15, 0146): entri hidup bertrip hanya pengeluaran biasa (bukan talangan/Kantor) dan trip dari ruang entri.
 -- ID: S7, T18, T11
 begin;
-select plan(77);
+select plan(84);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -32,7 +33,7 @@ language sql as $$
   select string_agg(coalesce((select x from unnest(p) x where split_part(x, '=', 1) = c), c || '=0'),
                     ',' order by c)
   from unnest(array['DQ01', 'DQ03', 'DQ04', 'DQ04b', 'DQ05', 'DQ06', 'DQ07', 'DQ08', 'DQ09', 'DQ10', 'DQ11',
-                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17', 'DQ18', 'DQ19']) c
+                    'DQ12', 'DQ13', 'DQ14', 'DQ15', 'DQ16', 'DQ17', 'DQ18', 'DQ19', 'DQ20']) c
 $$;
 create function pg_temp.call(p_uid uuid, p_sql text) returns jsonb
 language sql as $$ select tests.web_val(p_uid, p_sql)::jsonb $$;
@@ -67,8 +68,8 @@ select is((select pg_get_function_result(p.oid) from pg_proc p join pg_namespace
   'TABLE(check_id text, severity text, violations integer)', 'dq_run: hanya check_id, severity, violations');
 select is(tests.worker_val(null, $$select string_agg(check_id || ':' || severity, ',' order by check_id)
                                   from jobs.dq_reconcile()$$),
-  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ08:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error,DQ18:error,DQ19:error',
-  'tepat 19 cek dengan severity masing-masing');
+  'DQ01:error,DQ03:error,DQ04:error,DQ04b:error,DQ05:error,DQ06:warn,DQ07:warn,DQ08:warn,DQ09:error,DQ10:warn,DQ11:error,DQ12:error,DQ13:error,DQ14:error,DQ15:error,DQ16:error,DQ17:error,DQ18:error,DQ19:error,DQ20:error',
+  'tepat 20 cek dengan severity masing-masing');
 select is(pg_temp.dq(), pg_temp.expect(), 'DB bersih (fixture, tanpa dompet): nol temuan');
 select throws_ok($$select tests.web_val(tests.n(), 'select count(*) from jobs.dq_reconcile()')$$, '42501', null,
   'web tidak bisa menjalankan dq_reconcile');
@@ -383,6 +384,34 @@ savepoint s;
 select tests.raw_exec(format($$insert into app.asset_details (account_id, space_id, space_kind, asset_kind, created_by)
   values (%L, %L, 'personal', 'emas', %L)$$, :'tab', :'np', tests.n()));
 select is(pg_temp.dq(), pg_temp.expect('DQ19=1'), 'DQ19: rincian aset pada dompet tabungan');
+rollback to savepoint s;
+
+-- ===== DQ20: entri bertrip = pengeluaran biasa di ruangnya (S15, 0146) =====
+select tests.api_val(tests.n(), format($$insert into app.trips (space_id, space_kind, name, starts_on, ends_on, created_by,
+  updated_by) values (%L, 'personal', 'Bali', '2026-03-12', '2026-03-19', %L, %L) returning id$$, :'np', tests.n(), tests.n())) as dq_trip \gset
+select tests.api_val(tests.n(), format($$insert into app.trips (space_id, space_kind, name, starts_on, ends_on, created_by,
+  updated_by) values (%L, 'shared', 'Bali', '2026-03-12', '2026-03-19', %L, %L) returning id$$, :'sh', tests.n(), tests.n())) as dq_strip \gset
+select pg_temp.entry(tests.n(), :'kan', 'expense', 10000, '2026-03-15') as dq_kan \gset
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_trip', :'e_ex'));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ20: pengeluaran biasa bertrip = nol temuan');
+savepoint s;
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_trip', :'dq_kan'));
+select is(pg_temp.dq(), pg_temp.expect('DQ20=1'), 'DQ20: pengeluaran dompet Kantor bertrip (lolos CHECK)');
+select tests.raw_exec(format($$update app.entries set voided_at = now(), voided_by = created_by where id = %L$$, :'dq_kan'));
+select is(pg_temp.dq(), pg_temp.expect(), 'DQ20: entri batal tidak dihitung');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_strip', :'e_ex'));
+select is(pg_temp.dq(), pg_temp.expect('DQ20=1'), 'DQ20: trip dari ruang lain (FK dilewati)');
+rollback to savepoint s;
+savepoint s;
+select tests.raw_exec($$alter table app.entries drop constraint entries_trip_check$$);
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_trip', :'e_in'));
+select is(pg_temp.dq(), pg_temp.expect('DQ20=1'), 'DQ20: pemasukan bertrip');
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_trip', :'t1'));
+select is(pg_temp.dq(), pg_temp.expect('DQ20=2'), 'DQ20: + talangan bertrip');
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'dq_trip', :'tr'));
+select is(pg_temp.dq(), pg_temp.expect('DQ20=3'), 'DQ20: + transfer bertrip');
 rollback to savepoint s;
 
 -- Sesudah semua rollback: kembali nol temuan.

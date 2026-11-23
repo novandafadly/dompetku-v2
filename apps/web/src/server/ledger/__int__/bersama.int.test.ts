@@ -293,6 +293,7 @@ describe('feed dan Kontribusi Bersama, N dan F bergabung', () => {
       occurredOn: null,
       description: 'Makan siang',
       reimbursable: false,
+      tripId: null,
     };
     const e = await createEntry(nBersama, {
       clientId: randomUUID(),

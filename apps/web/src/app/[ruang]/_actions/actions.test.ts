@@ -41,6 +41,7 @@ const m = vi.hoisted(() => ({
   markNoSpendDay: vi.fn(),
   listAccounts: vi.fn(),
   listCategories: vi.fn(),
+  listTripChoices: vi.fn(),
   suggestCategories: vi.fn(),
   getEntry: vi.fn(),
   recordProductEvent: vi.fn(),
@@ -126,6 +127,7 @@ vi.mock('@/server/ledger/read', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/read')>()),
   listAccounts: m.listAccounts,
   listCategories: m.listCategories,
+  listTripChoices: m.listTripChoices,
   suggestCategories: m.suggestCategories,
   getEntry: m.getEntry,
   loadRuangShell: m.loadRuangShell,
@@ -186,6 +188,7 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
       occurredOn: null,
       description: null,
       reimbursable: false,
+      tripId: null,
     },
     wrapper: 'updateEntry',
     mutation: true,
@@ -349,6 +352,14 @@ const TUJUAN_ACTIONS = [
   'archiveGoalAction',
   'restoreGoalAction',
 ];
+// Trip (S15): kedua ruang; gerbang dan pemetaan diuji di `trip.test.ts`.
+const TRIP_ACTIONS = [
+  'createTripAction',
+  'updateTripAction',
+  'archiveTripAction',
+  'restoreTripAction',
+  'setEntriesTripAction',
+];
 // Aset (S14): kedua ruang; gerbang dan pemetaan diuji di `aset.test.ts`.
 const ASET_ACTIONS = ['createAssetAction', 'revalueAssetAction'];
 // Saham (S14 Task 10): hanya Pribadi di DB; gerbang dan pemetaan diuji di `saham.test.ts`.
@@ -374,6 +385,7 @@ const WRAPPERS = [
   'markNoSpendDay',
   'listAccounts',
   'listCategories',
+  'listTripChoices',
   'suggestCategories',
   'getEntry',
   'recordProductEvent',
@@ -428,6 +440,7 @@ beforeEach(() => {
   m.markNoSpendDay.mockResolvedValue({ created: true });
   m.listAccounts.mockResolvedValue([]);
   m.listCategories.mockResolvedValue([]);
+  m.listTripChoices.mockResolvedValue([]);
   m.suggestCategories.mockResolvedValue([A, B]);
   m.getEntry.mockResolvedValue({ entry: { id: B, version: 2 }, history: [] });
   m.recordProductEvent.mockResolvedValue(undefined);
@@ -531,7 +544,7 @@ describe('gerbang (Review Focus 5)', () => {
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
     // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
-    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`.
+    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`. Trip (S15): `trip.test.ts`.
     expect(seen.sort()).toEqual(
       [
         ...NAMES,
@@ -539,6 +552,7 @@ describe('gerbang (Review Focus 5)', () => {
         ...TUJUAN_ACTIONS,
         ...ASET_ACTIONS,
         ...SAHAM_ACTIONS,
+        ...TRIP_ACTIONS,
         'createLinkCode',
         'unlinkWa',
       ].sort(),

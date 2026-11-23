@@ -17,7 +17,7 @@ import type {
 import { partnerOf, rosterTx } from './bersama';
 import { withLedger } from './retry';
 import { SpaceNotFoundError } from './space';
-import { callApi, type LedgerCtx } from './write';
+import { assertInSpace, callApi, type LedgerCtx } from './write';
 
 /**
  * Bagi tagihan Bersama / patungan (S12 Task 7; API DB `0136_patungan_api.sql`). Pola `utang.ts`:
@@ -79,6 +79,8 @@ export const createSplitSchema = z.object({
     .max(2)
     .optional(),
   allowNegative: z.boolean().optional(),
+  /** Trip Bersama (S15-K6): ditandai ke pengeluaran Bersama; terkunci sesudah dibagi (`split_locked`). */
+  tripId: id.nullable().optional(),
 });
 
 export const splitActionSchema = z.object({
@@ -485,13 +487,14 @@ export async function createSplit(
   i: z.input<typeof createSplitSchema>,
 ): Promise<CreateSplitResultVM> {
   const v = createSplitSchema.parse(i);
+  const tripId = v.tripId ?? null;
   const r = await callApi(
     ctx,
-    null,
+    tripId === null ? null : (c) => assertInSpace(c, 'trips', [tripId], ctx.spaceId),
     `select api.create_split(
        p_client_id => $1, p_space_id => $2, p_account_id => $3, p_amount => $4::bigint,
        p_category_id => $5, p_occurred_on => $6::date, p_description => $7,
-       p_shares => $8::jsonb, p_allow_negative => $9) as r`,
+       p_shares => $8::jsonb, p_allow_negative => $9, p_trip_id => $10::uuid) as r`,
     [
       v.clientId,
       ctx.spaceId,
@@ -504,6 +507,7 @@ export async function createSplit(
         ? null
         : JSON.stringify(v.shares.map((s) => ({ user_id: s.userId, amount: s.amount }))),
       v.allowNegative ?? false,
+      tripId,
     ],
     createSplitResult,
   );
