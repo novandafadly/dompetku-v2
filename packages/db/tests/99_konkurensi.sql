@@ -26,6 +26,9 @@
 -- Trip (0147): dua update_trip paralel, arsip paralel update (kedua urutan), arsip paralel pulihkan, create_trip kembar
 -- (client_id sama = putar ulang; nama sama beda client_id = 23505 trips_name_unique), pulihkan paralel create_trip
 -- bernama sama (kedua urutan): tidak pernah dua trip aktif bernama sama.
+-- Penanda trip (0148): arsip trip paralel update_entry/set_entries_trip (kedua urutan, kunci trip FOR SHARE vs FOR NO KEY
+-- UPDATE), dua set_entries_trip paralel entri yang sama dengan urutan larik terbalik, batal paralel penanda (kedua urutan),
+-- update_entry paralel set_entries_trip pada trip yang sama: tanpa deadlock, tanpa tanda ke trip terarsip.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
@@ -37,7 +40,7 @@
 -- entri, sehingga void generik paralel void_stock_trade tidak deadlock; archive_account paralel buy_stock (kedua urutan).
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(188);
+select plan(215);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -918,6 +921,149 @@ select matches(tests.peer_result('b'), '^ERROR: .*trips_name_unique', 'trip baru
 select tests.peer_exec('b', 'rollback');
 select is(tests.owner_val(null, $$select count(*) from app.trips where name = 'T Dua' and archived_at is null$$), '1',
   'tidak pernah dua trip aktif bernama sama');
+
+-- ===== Trip (0148): penanda entri di bawah kunci trip (FOR SHARE) -> entri -> dompet =====
+-- archive_trip memakai FOR NO KEY UPDATE yang bentrok dengan FOR SHARE: arsip dan penanda saling menunggu (kedua urutan),
+-- tanpa siklus karena jalur trip tidak pernah mengunci entri. Dua penanda paralel atas entri yang sama (urutan id berbeda),
+-- batal paralel penanda (kedua urutan), update_entry paralel set_entries_trip pada trip yang sama: tanpa deadlock.
+create function pg_temp.k_entry_sql(p_space uuid, p_acc uuid) returns text
+language sql as $$
+  select format($q$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000, null, null) ->> 'entry_id'$q$, p_space, p_acc)
+$$;
+create function pg_temp.k_tag_sql(p_trip uuid, p_ids uuid[]) returns text
+language sql as $$
+  select format($q$select api.set_entries_trip(gen_random_uuid(), %L, %L::uuid[]) ->> 'changed'$q$, p_trip, p_ids)
+$$;
+create function pg_temp.k_upd_sql(p_entry uuid, p_ver int, p_acc uuid, p_trip uuid) returns text
+language sql as $$
+  select format($q$select api.update_entry(gen_random_uuid(), %L, %s, %L, 1000, null, null, null, false, false,
+    p_trip_id => %L) ->> 'version'$q$, p_entry, p_ver, p_acc, p_trip)
+$$;
+create function pg_temp.k_state(p_ids uuid[]) returns text
+language sql as $$
+  select tests.owner_val(null, format($q$select string_agg(coalesce((select t.name from app.trips t where t.id = e.trip_id), '-')
+      || '|' || e.version || '|' || (e.voided_at is not null), ',' order by x.ord)
+    from unnest(%L::uuid[]) with ordinality x (id, ord) join app.entries e on e.id = x.id$q$, p_ids))
+$$;
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'Kas Trip', 'operasional', 1000000)$$, :'np')) as acc_k \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Satu'))) as k1 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Dua'))) as k2 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Tiga'))) as k3 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Empat'))) as k4 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Lima'))) as k5 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Enam'))) as k6 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke1 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke2 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke3 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke4 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke5 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke6 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke7 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke8 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke9 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as ke10 \gset
+-- archive_trip (a, belum commit) lalu update_entry menandai trip itu (b): b menunggu, lalu trip_archived.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_trip(%L) ->> 'status'$$, :'k1'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_upd_sql(:'ke1', 1, :'acc_k', :'k1'));
+select ok(tests.peer_blocked('b'), 'update_entry + trip menunggu arsip trip paralel (FOR SHARE vs FOR NO KEY UPDATE)');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'penanda sesudah arsip commit = trip_archived');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'ke1']::uuid[]), '-|1|false', 'entri tidak ditandai ke trip yang terarsip duluan');
+-- update_entry menandai (a, belum commit) lalu archive_trip (b): arsip menunggu, lalu sukses; entri tetap bertanda.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_upd_sql(:'ke2', 1, :'acc_k', :'k2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.archive_trip(%L) ->> 'status'$$, :'k2'));
+select ok(tests.peer_blocked('b'), 'archive_trip menunggu penanda update_entry paralel pada trip yang sama');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'archived', 'arsip sesudah penanda commit = sukses');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.k_state(array[:'ke2']::uuid[]) || ' ' || pg_temp.tstate(:'k2'), 'K Dua|2|false K Dua/true',
+  'entri bertanda trip yang terarsip sesudahnya (diperbolehkan), tanpa deadlock');
+-- set_entries_trip (a, belum commit) lalu archive_trip (b).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_tag_sql(:'k3', array[:'ke3']::uuid[]));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.archive_trip(%L) ->> 'status'$$, :'k3'));
+select ok(tests.peer_blocked('b'), 'archive_trip menunggu set_entries_trip paralel');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'archived', 'arsip sesudah set_entries_trip commit = sukses');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.k_state(array[:'ke3']::uuid[]) || ' ' || pg_temp.tstate(:'k3'), 'K Tiga|2|false K Tiga/true', 'entri bertanda, trip terarsip');
+-- archive_trip (a, belum commit) lalu set_entries_trip (b).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_trip(%L) ->> 'status'$$, :'k4'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k4', array[:'ke4']::uuid[]));
+select ok(tests.peer_blocked('b'), 'set_entries_trip menunggu arsip trip paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'set_entries_trip sesudah arsip commit = trip_archived');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'ke4']::uuid[]), '-|1|false', 'entri tidak ditandai ke trip terarsip');
+-- Dua set_entries_trip paralel atas entri yang sama dengan urutan larik terbalik (urut id di dalam fungsi): tanpa deadlock.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_tag_sql(:'k5', array[:'ke5', :'ke6']::uuid[]));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k6', array[:'ke6', :'ke5']::uuid[]));
+select ok(tests.peer_blocked('b'), 'dua set_entries_trip paralel pada entri yang sama: yang kedua menunggu kunci entri');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '2', 'yang kedua membaca keadaan terbaru: mengganti kedua entri dari K Lima ke K Enam');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.k_state(array[:'ke5', :'ke6']::uuid[]), 'K Enam|3|false,K Enam|3|false', 'tanda akhir = yang terakhir, versi naik dua kali, tanpa deadlock');
+-- set_entries_trip (a) lalu void_entry (b): batal menunggu lalu sukses (entri tetap bertanda, tidak dihitung lagi).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_tag_sql(:'k5', array[:'ke7']::uuid[]));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.void_entry(gen_random_uuid(), %L, 2) ->> 'version'$$, :'ke7'));
+select ok(tests.peer_blocked('b'), 'void_entry menunggu set_entries_trip paralel pada entri yang sama');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '3', 'batal sesudah penanda commit = sukses');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.k_state(array[:'ke7']::uuid[]), 'K Lima|3|true', 'entri batal tetap bertanda trip');
+-- void_entry (a) lalu set_entries_trip (b): penanda menunggu lalu entry_voided.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.void_entry(gen_random_uuid(), %L, 1) ->> 'version'$$, :'ke8'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k5', array[:'ke8']::uuid[]));
+select ok(tests.peer_blocked('b'), 'set_entries_trip menunggu void_entry paralel pada entri yang sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*entry_voided', 'penanda sesudah batal commit = entry_voided');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'ke8']::uuid[]), '-|2|true', 'entri batal tidak ditandai');
+-- update_entry (a) lalu set_entries_trip (b) pada trip yang sama: b mengunci trip bersama (FOR SHARE kompatibel) lalu menunggu entri.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_upd_sql(:'ke9', 1, :'acc_k', :'k5'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k5', array[:'ke9', :'ke10']::uuid[]));
+select ok(tests.peer_blocked('b'), 'set_entries_trip menunggu kunci entri update_entry paralel (trip yang sama tidak saling menghalangi)');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), '1', 'hanya entri yang belum bertanda berubah (changed 1)');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.k_state(array[:'ke9', :'ke10']::uuid[]), 'K Lima|2|false,K Lima|2|false', 'kedua entri bertanda K Lima, tanpa deadlock');
+-- create_entry + trip (b) menunggu arsip trip (a, belum commit): kunci FOR SHARE, lalu archived_at dibaca ulang = trip_archived.
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Tujuh'))) as k7 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_trip(%L) ->> 'status'$$, :'k7'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.create_entry(gen_random_uuid(), %L, %L, 'expense', 1000, null, null, null, false, false,
+  p_trip_id => %L) ->> 'entry_id'$$, :'np', :'acc_k', :'k7'));
+select ok(tests.peer_blocked('b'), 'create_entry + trip menunggu arsip trip paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'create_entry sesudah arsip commit membaca ulang archived_at = trip_archived');
+select tests.peer_exec('b', 'rollback');
+select is(tests.worker_val(null, $q$select violations from jobs.dq_reconcile() where check_id = 'DQ20'$q$), '0', 'DQ20 nol sesudah semua skenario paralel');
 
 -- ===== Aset (0141): Perbarui nilai paralel dan transfer keluar paralel di bawah kunci dompet =====
 select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Emas Konkuren', 'aset', 'cash', null, 1000, 'emas')

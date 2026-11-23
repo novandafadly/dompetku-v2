@@ -65,8 +65,8 @@ select set_eq($$
         'receive_settlement', 'void_receipt', 'create_goal', 'update_goal', 'complete_goal', 'archive_goal',
         'restore_goal', 'revalue_asset', 'buy_stock', 'sell_stock', 'open_stock_holding', 'void_stock_trade',
         'restore_stock_trade', 'set_stock_price', 'preview_sell', 'create_trip', 'update_trip', 'archive_trip',
-        'restore_trip'],
-  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14, trip S15)');
+        'restore_trip', 'set_entries_trip'],
+  'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14, trip S15 + penanda entri)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -412,7 +412,7 @@ select set_eq($$
                                    'archive_goal', 'restore_goal', 'revalue_asset', 'buy_stock',
                                    'sell_stock', 'open_stock_holding', 'void_stock_trade',
                                    'restore_stock_trade', 'set_stock_price', 'preview_sell',
-                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip']) f
+                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip', 'set_entries_trip']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -438,7 +438,8 @@ select set_eq($$
                       'lock_settlement', 'split_entry_ids', 'split_set_void', 'split_pair', 'lock_goal',
                       'check_goal', 'stock_cost_removed', 'price_verdict', 'stock_check',
                       'stock_account', 'stock_cash_account', 'stock_entry', 'stock_assert_after',
-                      'stock_holding', 'lock_stock_trade', 'lock_trip', 'check_trip']) f
+                      'stock_holding', 'lock_stock_trade', 'lock_trip', 'check_trip', 'lock_trip_share',
+                      'assert_trip_taggable']) f
 
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f

@@ -52,7 +52,7 @@ select is((select pg_get_function_result(p.oid) || ' ' || p.prosecdef || ' ' || 
            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'api' and p.proname = 'export_entries'),
   'TABLE(occurred_on date, kind text, role text, report_class text, account text, category text, '
-  || 'subcategory text, amount bigint, note text, recorded_by text) false v dompetku_owner',
+  || 'subcategory text, amount bigint, note text, recorded_by text, trip text) false v dompetku_owner',
   'INVOKER, VOLATILE (menulis audit), milik owner; kolom ekspor tanpa id internal');
 select is(tests.owner_val(null, $$select count(*) from audit.events where event = 'export'$$), '0', 'belum ada event export');
 
