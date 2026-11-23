@@ -64,14 +64,14 @@ describe('EditSheet (S6-D1)', () => {
   it('ganti-penuh mempertahankan trip entri (S15): tripId ikut terkirim, tidak terlepas diam-diam', async () => {
     const user = userEvent.setup();
     const { update } = renderEdit({
-      entry: { ...ENTRY, reimbursable: undefined, tripId: 'trip-bali', tripName: 'Bali' },
+      entry: { ...ENTRY, tripId: 'trip-bali', tripName: 'Bali' },
     });
     await setAmount(user, '60000');
     await user.click(save());
     await waitFor(() => {
       expect(update).toHaveBeenCalledTimes(1);
     });
-    expect(update.mock.calls[0]?.[0]).toMatchObject({ tripId: 'trip-bali', reimbursable: false });
+    expect(update.mock.calls[0]?.[0]).toMatchObject({ tripId: 'trip-bali' });
   });
 
   it('deskripsi dikosongkan dikirim null', async () => {

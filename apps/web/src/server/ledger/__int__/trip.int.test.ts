@@ -5,7 +5,7 @@ import { loadAktivitas } from '../bersama';
 import { exportLaporanCsv } from '../ekspor';
 import { toLedgerError } from '../errors';
 import { createSplit } from '../patungan';
-import { listTripChoices, monthSummary, safeToSpend } from '../read';
+import { listTripChoices, loadRuangShell, monthSummary, safeToSpend } from '../read';
 import { resolveSpace } from '../space';
 import {
   archiveTrip,
@@ -541,6 +541,18 @@ describe('trip (S15 Task 6)', () => {
       await trip(nPribadi, `Massal ${String(i).padStart(2, '0')}`);
     }
     expect(await listTripChoices(nPribadi)).toHaveLength(20);
+  });
+
+  it('opsi Catat layout memuat trip ruang ini saja; tanpa trip = tanpa kolom', async () => {
+    expect((await loadRuangShell(nPribadi)).trips).toBeUndefined();
+    await trip(nBersama, CANARY);
+    const { tripId } = await trip(nPribadi, 'Bali');
+    const shell = await loadRuangShell(nPribadi);
+    expect(shell.trips).toEqual([
+      { id: tripId, name: 'Bali', startsOn: range.startsOn, endsOn: range.endsOn },
+    ]);
+    expect(JSON.stringify(shell)).not.toContain(CANARY);
+    expect((await loadRuangShell(nBersama)).trips?.map((t) => t.name)).toEqual([CANARY]);
   });
 
   it('bagi tagihan ke trip Bersama (K6): pengeluaran patungan masuk total; dilepas = split_locked', async () => {
