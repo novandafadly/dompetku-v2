@@ -53,11 +53,25 @@ describe('EditSheet (S6-D1)', () => {
       occurredOn: '2026-10-30',
       description: 'Vitamin',
       reimbursable: true,
+      tripId: null,
       allowNegative: false,
     });
     await waitFor(() => {
       expect(onSaved).toHaveBeenCalledWith(3);
     });
+  });
+
+  it('ganti-penuh mempertahankan trip entri (S15): tripId ikut terkirim, tidak terlepas diam-diam', async () => {
+    const user = userEvent.setup();
+    const { update } = renderEdit({
+      entry: { ...ENTRY, reimbursable: undefined, tripId: 'trip-bali', tripName: 'Bali' },
+    });
+    await setAmount(user, '60000');
+    await user.click(save());
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+    expect(update.mock.calls[0]?.[0]).toMatchObject({ tripId: 'trip-bali', reimbursable: false });
   });
 
   it('deskripsi dikosongkan dikirim null', async () => {
