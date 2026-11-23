@@ -39,7 +39,15 @@
 --   dalam rentang, bukan dompet Kantor/patungan (K4, bingkai TR9); trip terarsip = nol baris. Baris tampilan:
 --   entry_id, occurred_on, description, category_name, account_name, amount (positif). p_limit 1..500
 --   (UI memakai 101 sebagai penanda "masih ada"). Urut tanggal turun, lalu id.
--- Kode galat baru dipakai di sini: DK404 trip_not_found, DK422 trip_archived. Pesan/detail tanpa nama dan nominal.
+-- - Batas 200 trip per ruang termasuk arsip (api.create_trip: DK422 trip_limit, diserialkan advisory lock per ruang) supaya
+--   list_trips (maks 200) tidak menyembunyikan trip. restore_trip tidak perlu batas: memulihkan tidak menambah jumlah.
+-- - Hasil create_trip hanya {trip_id}; tanpa status karena putar ulang (client_id sama) sesudah arsip akan membawa status
+--   basi. Web memakai trip_id dari putar ulang saja dan membaca keadaan trip dari list_trips/trip_overview.
+-- - Dua update_trip yang saling bertukar nama (A -> nama B, B -> nama A) bisa saling menunggu indeks nama unik:
+--   Postgres memutus salah satu dengan 40P01 (deteksi deadlock). Web memetakan 40P01 sebagai galat sementara (coba lagi, Task 6).
+-- - Kinerja: total per trip membaca app.report_lines dengan r.entry_id = any (array(entri trip itu)) supaya kualifikasi
+--   turun ke view security_barrier (uuid = leakproof); tanpa itu tiap trip memindai seluruh baris laporan ruang.
+-- Kode galat baru dipakai di sini: DK404 trip_not_found, DK422 trip_archived, DK422 trip_limit. Pesan/detail tanpa nama dan nominal.
 
 -- Trip terlihat (RLS pemanggil), dikunci. Tidak terlihat atau hilang sebelum kunci didapat = DK404.
 create function private.lock_trip(p_trip_id uuid) returns app.trips
@@ -61,8 +69,10 @@ begin
   -- btrim hanya membuang spasi ASCII: karakter kontrol (\n, \t, DEL, C1) di mana pun dan spasi Unicode
   -- (NBSP, spasi lebar, pemisah baris/paragraf, BOM) di tepi ditolak, bukan dibuang, supaya nama yang
   -- disimpan = nama yang diketik dan indeks nama unik tidak bisa dikelabui dengan spasi tak terlihat.
+  -- Karakter tak terlihat (soft hyphen, zero-width/ZWNJ/ZWJ, tanda arah bidi, BOM) ditolak di mana pun: 'Bali' dan
+  -- 'Bali' + LRM tidak boleh menjadi dua nama aktif. NBSP di tengah nama tetap diterima.
   if v is null or length(v) > 60
-     or v ~ '[\x01-\x1f\x7f-\x9f]'
+     or v ~ '[\x01-\x1f\x7f-\x9f\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]'
      or v ~ '^[\u00a0\u1680\u2000-\u200b\u2028\u2029\u202f\u205f\u3000\ufeff]'
      or v ~ '[\u00a0\u1680\u2000-\u200b\u2028\u2029\u202f\u205f\u3000\ufeff]$' then
     raise exception using errcode = 'DK400', message = 'invalid_argument', detail = 'name';
@@ -102,12 +112,16 @@ begin
   end if;
   perform app.assert_member(p_space_id);
   v_name := private.check_trip(v_name, p_starts_on, p_ends_on, p_budget_amount);
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('dompetku.trip_cap:' || p_space_id));
+  if (select count(*) from app.trips t where t.space_id = p_space_id) >= 200 then
+    raise exception using errcode = 'DK422', message = 'trip_limit';
+  end if;
   insert into app.trips (space_id, space_kind, name, starts_on, ends_on, budget_amount,
                          created_by, created_at, updated_by, updated_at)
   select p_space_id, s.kind, v_name, p_starts_on, p_ends_on, p_budget_amount, v_uid, app.now(), v_uid, app.now()
     from app.spaces s where s.id = p_space_id
   returning id into v_id;
-  return private.idem_finish(v_uid, p_client_id, jsonb_build_object('trip_id', v_id, 'status', 'active'));
+  return private.idem_finish(v_uid, p_client_id, jsonb_build_object('trip_id', v_id));
 end $$;
 
 create function api.update_trip(p_trip_id uuid, p_name text, p_starts_on date, p_ends_on date, p_budget_amount bigint)
@@ -174,9 +188,9 @@ begin
     cross join lateral (
       select least(coalesce(sum(-r.amount), 0), 9000000000000000000::numeric)::bigint as spent,
              count(distinct r.entry_id)::int as n
-        from app.entries e
-        join app.report_lines r on r.space_id = e.space_id and r.entry_id = e.id
-       where e.space_id = t.space_id and e.trip_id = t.id and r.report_class = 'expense'
+        from app.report_lines r
+       where r.space_id = t.space_id and r.report_class = 'expense'
+         and r.entry_id = any (array(select e.id from app.entries e where e.space_id = t.space_id and e.trip_id = t.id))
     ) s
    where t.space_id = p_space_id
    order by t.archived_at is not null, t.starts_on desc, t.name collate "C", t.id
@@ -215,9 +229,9 @@ begin
     cross join lateral (
       select least(coalesce(sum(-r.amount), 0), 9000000000000000000::numeric)::bigint as spent,
              count(distinct r.entry_id)::int as n, min(r.occurred_on) as first_on, max(r.occurred_on) as last_on
-        from app.entries e
-        join app.report_lines r on r.space_id = e.space_id and r.entry_id = e.id
-       where e.space_id = v_t.space_id and e.trip_id = v_t.id and r.report_class = 'expense'
+        from app.report_lines r
+       where r.space_id = v_t.space_id and r.report_class = 'expense'
+         and r.entry_id = any (array(select e.id from app.entries e where e.space_id = v_t.space_id and e.trip_id = v_t.id))
     ) s;
 end $$;
 
@@ -236,9 +250,9 @@ begin
   return query
   with b as (
     select r.entry_id, -r.amount as amt, r.occurred_on, r.root_category_id, r.created_by
-      from app.entries e
-      join app.report_lines r on r.space_id = e.space_id and r.entry_id = e.id
-     where e.space_id = v_t.space_id and e.trip_id = v_t.id and r.report_class = 'expense'
+      from app.report_lines r
+     where r.space_id = v_t.space_id and r.report_class = 'expense'
+       and r.entry_id = any (array(select e.id from app.entries e where e.space_id = v_t.space_id and e.trip_id = v_t.id))
   ), x as (
     select 'category'::text as dim, coalesce(g.root_category_id::text, 'none') as key,
            coalesce(c.name, 'Tanpa kategori') as label, g.amount, g.n

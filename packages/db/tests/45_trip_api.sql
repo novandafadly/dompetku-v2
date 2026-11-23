@@ -11,7 +11,7 @@
 -- Tanpa urutan uuid/created_at identik dan tanpa locale (COLLATE "C").
 -- ID: B25, I6, B1
 begin;
-select plan(138);
+select plan(150);
 select tests.fixture();
 select tests.clock_at('2026-03-20 10:00+07');
 
@@ -176,7 +176,7 @@ select is(tests.owner_val(null, $q$select prorows::text from pg_proc where oid =
 select pg_temp.n_trips() as n_0 \gset
 select pg_temp.call(tests.n(), pg_temp.ct_sql(:'np', '  Bali  ', '2026-03-12', '2026-03-19', 1000000,
   'aaaaaaaa-0000-0000-0000-000000000001')) as r1 \gset
-select is((:'r1')::jsonb - 'trip_id', '{"status": "active", "replayed": false}'::jsonb, 'create_trip: hasil');
+select is((:'r1')::jsonb - 'trip_id', '{"replayed": false}'::jsonb, 'create_trip: hasil hanya trip_id (tanpa status yang bisa basi pada putar ulang)');
 select :'r1'::jsonb ->> 'trip_id' as t1 \gset
 select is(pg_temp.t(:'t1'), 'Bali|2026-03-12|2026-03-19|1000000|false|N|N|personal', 'create_trip: nama di-trim, pembuat tercatat');
 select is(tests.owner_val(null, format($$select (created_at = app.now()) || '/' || (updated_at = app.now()) from app.trips where id = %L$$, :'t1')),
@@ -286,6 +286,14 @@ select is(pg_temp.err(null, pg_temp.ut_sql(:'t1', 'X', '2026-03-01', '2026-03-02
 select pg_temp.ct(tests.n(), :'np', 'Jogja', '2026-02-01', '2026-02-03') as t2 \gset
 select is(pg_temp.op(tests.n(), 'archive_trip', :'t2'), jsonb_build_object('trip_id', :'t2', 'status', 'archived'), 'archive_trip: hasil');
 select is(pg_temp.t(:'t2'), 'Jogja|2026-02-01|2026-02-03|-|true|N|N|personal', 'arsip dari aktif');
+-- Putar ulang create_trip sesudah trip diarsipkan: hasil tersimpan tidak membawa status (bisa basi); web memakai trip_id saja.
+savepoint putar;
+select pg_temp.call(tests.n(), pg_temp.ct_sql(:'np', 'Putar', '2026-07-01', '2026-07-02', null, 'aaaaaaaa-0000-0000-0000-0000000000a1'))
+  ->> 'trip_id' as trp \gset
+select pg_temp.op(tests.n(), 'archive_trip', :'trp');
+select is(pg_temp.call(tests.n(), pg_temp.ct_sql(:'np', 'Putar', '2026-07-01', '2026-07-02', null, 'aaaaaaaa-0000-0000-0000-0000000000a1')),
+  jsonb_build_object('trip_id', :'trp', 'replayed', true), 'putar ulang create_trip sesudah arsip: trip_id sama, tanpa status basi');
+rollback to savepoint putar;
 select is(pg_temp.err(tests.n(), pg_temp.op_sql('archive_trip', :'t2')) || ' ' || pg_temp.t(:'t2'),
   'ok Jogja|2026-02-01|2026-02-03|-|true|N|N|personal', 'arsip ulang = idempoten');
 select is(pg_temp.err(tests.n(), pg_temp.ut_sql(:'t2', 'Jogja', '2026-02-01', '2026-02-03')), 'DK422:trip_archived:',
@@ -398,6 +406,15 @@ select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', U&'\00A0', '2026-03-01', 
   || 'DK400:invalid_argument:name', 'NBSP dan spasi Unicode di tepi nama ditolak (btrim tidak membuangnya)');
 select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', 'Pantai' || E' ' || 'Indah', '2026-03-01', '2026-03-02')), 'ok',
   'NBSP di tengah nama (bukan tepi) diterima apa adanya');
+-- Karakter tak terlihat (zero-width, bidi, soft hyphen, BOM) ditolak di MANA PUN: 'Bali' dan 'Bali' + LRM bukan dua nama aktif.
+select is((select count(*) filter (where pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', 'Ba' || chr(c) || 'li', '2026-03-01',
+                     '2026-03-02')) = 'DK400:invalid_argument:name') || '/' || count(*)
+  from (select 173 c union all select 6158 union all select generate_series(8203, 8207) union all select generate_series(8234, 8238)
+        union all select generate_series(8288, 8292) union all select generate_series(8294, 8297) union all select 65279) k),
+  '22/22', 'U+00AD, U+180E, U+200B-200F, U+202A-202E, U+2060-2064, U+2066-2069, U+FEFF di tengah nama ditolak');
+select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', 'Bali' || chr(8206), '2026-03-01', '2026-03-02')) || ' '
+          || pg_temp.err(tests.n(), pg_temp.ut_sql(:'t1', 'Ba' || chr(8205) || 'li', '2026-03-12', '2026-03-19', 900000)),
+  'DK400:invalid_argument:name DK400:invalid_argument:name', 'LRM di ujung dan ZWJ di tengah ditolak di create dan update');
 select is(pg_temp.err(tests.n(), pg_temp.ut_sql(:'t1', E'Bali\n', '2026-03-12', '2026-03-19', 900000)) || ' '
           || pg_temp.err(tests.n(), pg_temp.ut_sql(:'t1', U&'\00A0Bali', '2026-03-12', '2026-03-19', 900000)) || ' '
           || pg_temp.err(tests.n(), pg_temp.ut_sql(:'t1', repeat('a', 61), '2026-03-12', '2026-03-19', 900000)) || ' '
@@ -446,6 +463,12 @@ select is(pg_temp.bd(tests.f(), :'ts', 'member'),
   tests.n() || ':' || :'nama_n' || ':80000:1,' || tests.f() || ':' || :'nama_f' || ':20000:1',
   'Bersama: dicatat oleh Novanda dan Farida, urut jumlah turun (K1)');
 select is(pg_temp.bd(tests.n(), :'ts', 'member'), pg_temp.bd(tests.f(), :'ts', 'member'), 'rincian Bersama sama untuk kedua anggota');
+-- Pencatat yang bukan anggota lagi: label kosong, kunci = uuid, jumlah tetap ikut.
+savepoint keluar;
+select tests.raw_exec(format($$delete from app.space_members where space_id = %L and user_id = %L$$, :'sh', tests.f()));
+select is(pg_temp.bd(tests.n(), :'ts', 'member'), tests.n() || ':' || :'nama_n' || ':80000:1,' || tests.f() || ':-:20000:1',
+  'pencatat yang bukan anggota lagi: label kosong (NULL), kunci = uuid, jumlah tetap');
+rollback to savepoint keluar;
 select is(pg_temp.err(tests.x(), format($$select * from api.trip_breakdown(%L)$$, :'t1')) || ' '
           || pg_temp.err(tests.f(), format($$select * from api.trip_breakdown(%L)$$, :'t1')) || ' '
           || pg_temp.err(tests.n(), format($$select * from api.trip_breakdown(%L)$$, gen_random_uuid())) || ' '
@@ -496,10 +519,21 @@ select is(pg_temp.err(tests.x(), format($$select * from api.trip_candidates(%L)$
 select pg_temp.tag(tests.n(), :'s1', null) + pg_temp.tag(tests.f(), :'s2', null) as ts_untag \gset
 select (pg_temp.call(tests.n(), format($$select api.create_split(gen_random_uuid(), %L, %L, 40000, %L, '2026-03-15',
   'Patungan', null, false)$$, :'sh', :'bca', :'sbelanja')) ->> 'expense_entry_id')::uuid as sp_exp \gset
-select is(tests.web_val(tests.f(), format($$select string_agg(entry_id::text, ',' order by entry_id) from api.trip_candidates(%L)$$, :'ts')),
-  (select string_agg(i, ',' order by i) from (values (:'s1'), (:'s2')) v (i)),
+select is(tests.web_val(tests.f(), format($$select string_agg(entry_id::text, ',' order by entry_id::text collate "C")
+    from api.trip_candidates(%L)$$, :'ts')),
+  (select string_agg(i, ',' order by i collate "C") from (values (:'s1'), (:'s2')) v (i)),
   'kandidat Bersama: pengeluaran biasa kedua anggota; pengeluaran patungan (dompet sistem) tidak ikut');
 select pg_temp.tag(tests.n(), :'s1', :'ts') + pg_temp.tag(tests.f(), :'s2', :'ts') as ts_retag \gset
+-- K6: pengeluaran patungan (dompet sistem) yang ditandai ke trip Bersama ikut total, sama dengan Laporan Bersama.
+-- Penanda lewat jalur api yang sah = 0148 (tes 46); di sini tanda disuntik dengan pengaman patungan dimatikan.
+savepoint patungan;
+select tests.raw_exec('alter table app.entries disable trigger user');
+select tests.raw_exec(format($$update app.entries set trip_id = %L where id = %L$$, :'ts', :'sp_exp'));
+select is(tests.web_val(tests.n(), format($$select (select spent from api.trip_overview(%2$L)) = 140000
+    and (select spent from api.trip_overview(%2$L)) = (select outflow from api.period_summary(%1$L, '2026-03-14', '2026-03-17')
+                                                        where report_class = 'expense')$$, :'sh', :'ts')),
+  'true', 'pengeluaran patungan bertag ikut total trip Bersama = period_summary Bersama (K6)');
+rollback to savepoint patungan;
 
 -- ===== list_trips =====
 select is(tests.web_val(tests.n(), format($$select count(*) || '/' || count(*) filter (where archived_at is not null) || '/'
@@ -536,6 +570,44 @@ select tests.owner_exec(null, format($$insert into app.trips (space_id, space_ki
 select is(tests.web_val(tests.n(), format($$select count(*) || '/' || count(*) filter (where archived_at is not null)
     from api.list_trips(%L)$$, :'np')), '200/0', 'daftar dibatasi 200 baris, aktif lebih dulu dari arsip');
 rollback to savepoint banyak;
+-- Batas 200 trip per ruang (termasuk arsip) supaya list_trips (maks 200) tidak menyembunyikan trip.
+savepoint batas;
+select tests.owner_exec(null, format($$insert into app.trips (space_id, space_kind, name, starts_on, ends_on, created_by, updated_by)
+  select %1$L, 'personal', 'Batas ' || i, '2026-06-01', '2026-06-02', %2$L, %2$L
+    from generate_series(1, 199 - (select count(*) from app.trips where space_id = %1$L)::int) i$$, :'np', tests.n()));
+select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', 'Ke-200', '2026-06-01', '2026-06-02')), 'ok', 'trip ke-200 diterima');
+select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'np', 'Ke-201', '2026-06-01', '2026-06-02')), 'DK422:trip_limit:',
+  'trip ke-201 ditolak (DK422 trip_limit, tanpa nama)');
+select is(pg_temp.err(tests.n(), pg_temp.ct_sql(:'sh', 'Ke-201 Bersama', '2026-06-01', '2026-06-02')), 'ok',
+  'batas per ruang: ruang Bersama tidak terpengaruh');
+select is(tests.owner_val(null, format($$select count(*) from app.trips where space_id = %L$$, :'np')), '200', 'ditolak = nol efek');
+select is(tests.web_val(tests.n(), format($$select count(*) from api.list_trips(%L)$$, :'np')), '200', 'daftar memuat semua 200 trip');
+rollback to savepoint batas;
+
+-- ===== Kinerja: list_trips tidak memindai seluruh report_lines ruang per trip =====
+-- Ruang ±20 rb entri + 40 trip: sebelum perbaikan tiap trip memindai semua baris laporan ruang (puluhan detik);
+-- sesudahnya hanya entri trip itu (statement_timeout web 5 s).
+savepoint beban;
+select tests.raw_exec(format($$insert into app.trips (space_id, space_kind, name, starts_on, ends_on, created_by, updated_by)
+  select %L, 'personal', 'Beban ' || i, '2026-06-01', '2026-06-02', %L, %L from generate_series(1, 40) i$$, :'np', tests.n(), tests.n()));
+select tests.raw_exec(format($$with e as (
+    insert into app.entries (space_id, space_kind, kind, occurred_on, created_by, updated_by, trip_id)
+    select %1$L, 'personal', 'expense', date '2026-01-01' + (g %% 200), %3$L, %3$L, t.id
+      from generate_series(1, 20000) g
+      left join app.trips t on t.space_id = %1$L and g %% 2 = 0 and t.name = 'Beban ' || (g %% 40 + 1)
+    returning id)
+  insert into app.entry_lines (entry_id, space_id, role, account_id, amount) select e.id, %1$L, 'main', %2$L, -1000 from e$$,
+  :'np', :'bca', tests.n()));
+-- Statistik segar (di produksi autovacuum/analyze yang melakukannya), seperti 42_kekayaan.
+select tests.raw_exec('analyze app.entries, app.entry_lines, app.trips, app.accounts');
+select clock_timestamp() as tm0 \gset
+select tests.web_val(tests.n(), format($$select count(*) from api.list_trips(%L)$$, :'np')) as n_list \gset
+select clock_timestamp() as tm1 \gset
+select diag('list_trips 40+ trip, 20 rb entri: ' || (:'tm1'::timestamptz - :'tm0'::timestamptz)::text);
+select ok(:'tm1'::timestamptz - :'tm0'::timestamptz < interval '2 seconds', 'list_trips di bawah 2 s pada ruang 20 rb entri dan 40 trip');
+select is(tests.web_val(tests.n(), format($$select spent || '/' || entry_count from api.list_trips(%L) where name = 'Beban 1'$$, :'np')),
+  '500000/500', 'angka baris daftar benar pada data besar (500 entri bertrip x 1.000)');
+rollback to savepoint beban;
 
 -- ===== Bigint tidak overflow (10^13 x banyak baris) =====
 savepoint besar;
