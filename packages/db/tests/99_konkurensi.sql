@@ -23,6 +23,9 @@
 -- Tujuan (0138): dua create_goal paralel pada dompet sama = satu goal_exists, restore_goal paralel
 -- create_goal (kedua urutan) = goal_exists, archive_account paralel create_goal (kedua urutan) =
 -- account_archived / account_has_goal; tidak pernah dua tujuan aktif atau tujuan aktif di dompet terarsip.
+-- Trip (0147): dua update_trip paralel, arsip paralel update (kedua urutan), arsip paralel pulihkan, create_trip kembar
+-- (client_id sama = putar ulang; nama sama beda client_id = 23505 trips_name_unique), pulihkan paralel create_trip
+-- bernama sama (kedua urutan): tidak pernah dua trip aktif bernama sama.
 -- Koneksi a dan b = dompetku_web (READ COMMITTED); ka dan kb = dompetku_test yang memanggil
 -- tests.api_exec (menulis sebagai dompetku_api, belum ada api.create_bill/set_budget di 0117);
 -- adm = superuser untuk fixture ter-commit.
@@ -34,7 +37,7 @@
 -- entri, sehingga void generik paralel void_stock_trade tidak deadlock; archive_account paralel buy_stock (kedua urutan).
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(165);
+select plan(188);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -814,6 +817,107 @@ select is(tests.owner_val(null, $$select count(*) from app.goals g join app.acco
     where g.status = 'active' and a.archived_at is not null$$) || ' '
     || tests.worker_val(null, $$select violations from jobs.dq_reconcile() where check_id = 'DQ17'$$), '0 0',
   'tanpa tujuan aktif di dompet terarsip; DQ17 nol');
+
+-- ===== Trip (0147): kunci baris trip, nama aktif unik, idempotensi client_id di bawah paralel =====
+create function pg_temp.trip_sql(p_name text, p_client uuid default null) returns text
+language sql as $$
+  select format($q$select api.create_trip(%L, %L, %L, '2026-03-01', '2026-03-07') ->> 'trip_id'$q$,
+    coalesce(p_client, gen_random_uuid()), tests.space_id(tests.n(), 'personal'), p_name)
+$$;
+create function pg_temp.upd_sql(p_trip uuid, p_name text) returns text
+language sql as $$
+  select format($q$select api.update_trip(%L, %L, '2026-03-01', '2026-03-07', null) ->> 'status'$q$, p_trip, p_name)
+$$;
+create function pg_temp.tstate(p_trip uuid) returns text
+language sql as $$
+  select tests.owner_val(null, format($q$select name || '/' || (archived_at is not null) from app.trips where id = %L$q$, p_trip))
+$$;
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Satu'))) as tr1 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Dua'))) as tr2 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Tiga'))) as tr3 \gset
+-- Dua update_trip paralel: yang kedua menunggu kunci baris, lalu menulis sesudahnya (nilai akhir = yang terakhir).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.upd_sql(:'tr1', 'T Satu A'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.upd_sql(:'tr1', 'T Satu B'));
+select ok(tests.peer_blocked('b'), 'update_trip kedua menunggu kunci baris trip');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'active', 'update_trip kedua selesai sesudah yang pertama commit');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.tstate(:'tr1'), 'T Satu B/false', 'dua update_trip paralel: nilai akhir = yang terakhir, tanpa kehilangan baris');
+-- archive_trip paralel update_trip (kedua urutan): update sesudah arsip = trip_archived; arsip sesudah update = sukses.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_trip(%L) ->> 'status'$$, :'tr1'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.upd_sql(:'tr1', 'T Telat'));
+select ok(tests.peer_blocked('b'), 'update_trip menunggu arsip paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'update_trip sesudah arsip commit = trip_archived');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.tstate(:'tr1'), 'T Satu B/true', 'trip terarsip, nama tidak berubah');
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, format($q$select api.restore_trip(%L) ->> 'status'$q$, :'tr1')));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.upd_sql(:'tr1', 'T Satu C'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_trip(%L) ->> 'status'$$, :'tr1'));
+select ok(tests.peer_blocked('b'), 'arsip menunggu update_trip paralel');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'archived', 'arsip sesudah update commit = sukses');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.tstate(:'tr1'), 'T Satu C/true', 'perubahan nama tetap, trip terarsip');
+-- archive_trip paralel restore_trip: diserialkan kunci baris; hasil akhir = urutan commit (aktif).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.restore_trip(%L) ->> 'status'$$, :'tr1'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.archive_trip(%L) ->> 'status'$$, :'tr1'));
+select ok(tests.peer_blocked('b'), 'arsip menunggu pulihkan paralel pada trip yang sama');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'archived', 'arsip sesudah pulihkan commit = sukses (tanpa deadlock)');
+select tests.peer_exec('b', 'commit');
+select is(pg_temp.tstate(:'tr1'), 'T Satu C/true', 'urutan pulihkan lalu arsip = terarsip');
+-- Dua create_trip paralel dengan client_id sama: yang kedua menunggu kunci idempotensi, lalu memutar ulang hasil yang sama.
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.trip_sql('Kembar', 'bbbbbbbb-0000-0000-0000-000000000001')) as kembar \gset
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.create_trip('bbbbbbbb-0000-0000-0000-000000000001', %L, 'Kembar', '2026-03-01',
+  '2026-03-07') ->> 'trip_id'$$, tests.space_id(tests.n(), 'personal')));
+select ok(tests.peer_blocked('b'), 'create_trip kembar (client_id sama) menunggu kunci idempotensi');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), :'kembar', 'client_id sama paralel = putar ulang, trip_id sama');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, $$select count(*) from app.trips where name = 'Kembar'$$), '1', 'tepat satu trip Kembar');
+-- Nama sama, client_id beda: yang kedua menunggu indeks unik, lalu 23505 (name_taken).
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.trip_sql('Nama Sama'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.trip_sql('nama sama'));
+select ok(tests.peer_blocked('b'), 'create_trip nama sama (client_id beda) menunggu indeks nama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trips_name_unique', 'nama sama beda client_id = 23505 trips_name_unique (name_taken)');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, $$select count(*) from app.trips where lower(name) = 'nama sama'$$), '1', 'tepat satu trip bernama itu');
+-- restore_trip paralel create_trip nama sama (kedua urutan): tidak pernah dua trip aktif bernama sama.
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, format($q$select api.archive_trip(%L) ->> 'status'$q$, :'tr2')));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.trip_sql('T Dua'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', format($$select api.restore_trip(%L) ->> 'status'$$, :'tr2'));
+select ok(tests.peer_blocked('b'), 'pulihkan menunggu create_trip paralel bernama sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trips_name_unique', 'pulihkan sesudah trip baru commit = 23505 (name_taken)');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, format($q$select api.archive_trip(%L) ->> 'status'$q$,
+  (select tests.owner_val(null, $$select id from app.trips where name = 'T Dua' and archived_at is null$$)))));
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.restore_trip(%L) ->> 'status'$$, :'tr2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_send('b', pg_temp.trip_sql('T Dua'));
+select ok(tests.peer_blocked('b'), 'create_trip menunggu pulihkan paralel bernama sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trips_name_unique', 'trip baru sesudah pulihkan commit = 23505 (name_taken)');
+select tests.peer_exec('b', 'rollback');
+select is(tests.owner_val(null, $$select count(*) from app.trips where name = 'T Dua' and archived_at is null$$), '1',
+  'tidak pernah dua trip aktif bernama sama');
 
 -- ===== Aset (0141): Perbarui nilai paralel dan transfer keluar paralel di bawah kunci dompet =====
 select tests.peer_val('a', format($$select api.create_account(gen_random_uuid(), %L, 'Emas Konkuren', 'aset', 'cash', null, 1000, 'emas')
