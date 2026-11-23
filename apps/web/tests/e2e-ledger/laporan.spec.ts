@@ -280,6 +280,7 @@ test('Ekspor CSV Pribadi: unduhan = angka Laporan di layar (T17), nama berkas ta
     'Nominal',
     'Catatan',
     'Pencatat',
+    'Trip',
   ]);
   expect(sumClass(csv.rows, ['income'])).toBe(t.pemasukan);
   expect(-sumClass(csv.rows, ['expense', 'expense_fee'])).toBe(t.pengeluaran);

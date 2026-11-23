@@ -54,6 +54,7 @@ describe('toCsv', () => {
     amount: -45_000,
     note: null,
     recordedBy: 'Novanda',
+    trip: null,
     ...over,
   });
 
@@ -61,10 +62,10 @@ describe('toCsv', () => {
     const csv = toCsv([row()]);
     expect(
       csv.startsWith(
-        '﻿Tanggal,Jenis,Peran,Kelas laporan,Dompet,Kategori,Subkategori,Nominal,Catatan,Pencatat\r\n',
+        '﻿Tanggal,Jenis,Peran,Kelas laporan,Dompet,Kategori,Subkategori,Nominal,Catatan,Pencatat,Trip\r\n',
       ),
     ).toBe(true);
-    expect(csv.endsWith('Transportasi,Ojek,-45000,,Novanda\r\n')).toBe(true);
+    expect(csv.endsWith('Transportasi,Ojek,-45000,,Novanda,\r\n')).toBe(true);
     expect(csv.split('\r\n')).toHaveLength(3);
   });
   it('tanpa baris = hanya judul', () => {
@@ -81,7 +82,14 @@ describe('toCsv', () => {
         amount: -1,
       }),
     ]);
-    expect(csv).toContain(`,'@x,'+y,'-z,-1,'=1+1,'=A1\r\n`);
+    expect(csv).toContain(`,'@x,'+y,'-z,-1,'=1+1,'=A1,\r\n`);
+  });
+  it('nama trip (S15) di kolom akhir dinetralkan seperti sel teks lain', () => {
+    expect(toCsv([row({ trip: 'Bali, Des 2026' })]).endsWith(',Novanda,"Bali, Des 2026"\r\n')).toBe(
+      true,
+    );
+    expect(toCsv([row({ trip: '=cmd|x' })]).endsWith(`,Novanda,'=cmd|x\r\n`)).toBe(true);
+    expect(toCsv([row({ trip: 'x;@y' })]).endsWith(`,Novanda,x;'@y\r\n`)).toBe(true);
   });
   it('catatan dengan koma, kutip, dan baris baru tetap satu sel', () => {
     const csv = toCsv([row({ note: 'a,"b"\nc' })]);

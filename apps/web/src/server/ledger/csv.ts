@@ -16,6 +16,8 @@ export interface ExportRow {
   amount: number;
   note: string | null;
   recordedBy: string | null;
+  /** Nama trip pengeluaran ini (S15, K11); `null` bila tidak bertrip. */
+  trip: string | null;
 }
 
 export const CSV_HEADER = [
@@ -29,6 +31,7 @@ export const CSV_HEADER = [
   'Nominal',
   'Catatan',
   'Pencatat',
+  'Trip',
 ] as const;
 
 /** BOM UTF-8 (U+FEFF); ditulis sebagai escape agar tidak jadi spasi tak terlihat di sumber. */
@@ -68,6 +71,7 @@ export function toCsv(rows: readonly ExportRow[]): string {
         csvAmount(r.amount),
         csvText(r.note),
         csvText(r.recordedBy),
+        csvText(r.trip),
       ].join(','),
     );
   }

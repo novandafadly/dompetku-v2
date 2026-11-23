@@ -41,6 +41,7 @@ const m = vi.hoisted(() => ({
   markNoSpendDay: vi.fn(),
   listAccounts: vi.fn(),
   listCategories: vi.fn(),
+  listTripChoices: vi.fn(),
   suggestCategories: vi.fn(),
   getEntry: vi.fn(),
   recordProductEvent: vi.fn(),
@@ -126,6 +127,7 @@ vi.mock('@/server/ledger/read', async (orig) => ({
   ...(await orig<typeof import('@/server/ledger/read')>()),
   listAccounts: m.listAccounts,
   listCategories: m.listCategories,
+  listTripChoices: m.listTripChoices,
   suggestCategories: m.suggestCategories,
   getEntry: m.getEntry,
   loadRuangShell: m.loadRuangShell,
@@ -186,6 +188,7 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
       occurredOn: null,
       description: null,
       reimbursable: false,
+      tripId: null,
     },
     wrapper: 'updateEntry',
     mutation: true,
@@ -374,6 +377,7 @@ const WRAPPERS = [
   'markNoSpendDay',
   'listAccounts',
   'listCategories',
+  'listTripChoices',
   'suggestCategories',
   'getEntry',
   'recordProductEvent',
@@ -428,6 +432,7 @@ beforeEach(() => {
   m.markNoSpendDay.mockResolvedValue({ created: true });
   m.listAccounts.mockResolvedValue([]);
   m.listCategories.mockResolvedValue([]);
+  m.listTripChoices.mockResolvedValue([]);
   m.suggestCategories.mockResolvedValue([A, B]);
   m.getEntry.mockResolvedValue({ entry: { id: B, version: 2 }, history: [] });
   m.recordProductEvent.mockResolvedValue(undefined);

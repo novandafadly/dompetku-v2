@@ -219,6 +219,37 @@ describe('toLedgerError: galat domain api.* (BSD §9.2)', () => {
     }
   });
 
+  it('S15: aturan trip DK422 = kode sama; trip_not_found = not_found; entry_voided = conflict; kolom tanggal/nama = invalid', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    for (const rule of ['trip_archived', 'trip_entry_invalid', 'trip_limit', 'split_locked'] as const) {
+      expect(toLedgerError({ code: 'DK422', message: rule })).toEqual({ code: rule });
+    }
+    expect(toLedgerError(pgError('DK404', 'trip_not_found'))).toEqual({ code: 'not_found' });
+    expect(toLedgerError(pgError('DK422', 'entry_voided'))).toEqual({ code: 'conflict' });
+    for (const field of ['name', 'starts_on', 'ends_on', 'budget_amount', 'entry_ids']) {
+      expect(toLedgerError(pgError('DK400', 'invalid_argument', field))).toEqual({
+        code: 'invalid',
+        field,
+      });
+    }
+    // Pesan galat dan log tidak pernah memuat nama trip (detail konstrain 23505 disembunyikan).
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('S15: nama trip aktif ganda (trips_name_unique) = name_taken, log tidak memuat nama', () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const dup = Object.assign(
+      pgError('23505', 'duplicate key value violates unique constraint', 'Key (lower(btrim(name)))=(bali rahasia)'),
+      { constraint: 'trips_name_unique' },
+    );
+    expect(toLedgerError(dup)).toEqual({ code: 'name_taken' });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('S15: deadlock 40P01 bukan galat domain (null): withLedger yang mengulang, bukan pemetaan', () => {
+    expect(toLedgerError(pgError('40P01', 'deadlock detected'))).toBeNull();
+  });
+
   it('S11: DebtPersonalOnlyError (action, sebelum DB) = debt_personal_only', () => {
     expect(toLedgerError(new DebtPersonalOnlyError())).toEqual({ code: 'debt_personal_only' });
   });

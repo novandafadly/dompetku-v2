@@ -2,6 +2,7 @@ import type { IsoDate } from '@dompetku/domain';
 import type { ReactNode } from 'react';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
+import type { TripChoiceVM } from '@/features/trip/types';
 import { RuangShell } from '../ruang-shell';
 // Action entri didaftarkan untuk setiap page `[ruang]`: toast "Urungkan" hidup lebih lama daripada
 // page yang membuatnya (Batalkan di Detail → toast di daftar Transaksi → `restoreEntryAction`).
@@ -21,6 +22,7 @@ export function RuangShellReal({
   accounts,
   categories,
   split,
+  trips,
   today,
   children,
 }: {
@@ -29,6 +31,8 @@ export function RuangShellReal({
   categories: CategoryVM[];
   /** Bersama dua anggota (S12-CT1); tidak ada di Pribadi atau Bersama solo. */
   split?: SplitContextVM | undefined;
+  /** Trip aktif ruang ini untuk pemilih Catat (S15); tidak ada bila tidak ada yang bisa dipilih. */
+  trips?: TripChoiceVM[] | undefined;
   today: IsoDate;
   children: ReactNode;
 }) {
@@ -36,7 +40,12 @@ export function RuangShellReal({
     <RuangShell
       ruang={ruang}
       real={{
-        options: split === undefined ? { accounts, categories } : { accounts, categories, split },
+        options: {
+          accounts,
+          categories,
+          ...(split === undefined ? {} : { split }),
+          ...(trips === undefined ? {} : { trips }),
+        },
         today,
       }}
     >

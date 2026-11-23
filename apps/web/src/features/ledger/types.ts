@@ -173,6 +173,14 @@ export interface EntryVM {
     deleted?: true;
     voidedWithDebt?: true;
   };
+  /**
+   * Trip pengeluaran ini (S15, `app.entries.trip_id`; hanya pengeluaran biasa). Ubah = ganti-penuh:
+   * `tripId` sekarang harus ikut terkirim (`null` melepas). `tripArchived` = trip sudah diarsipkan
+   * (tetap bertag; hanya bisa dilepas atau dipertahankan).
+   */
+  tripId?: string;
+  tripName?: string;
+  tripArchived?: true;
 }
 
 /** Satu reimburse hidup pada sebuah talangan (daftar di Detail talangan, S7-D3). */
@@ -348,6 +356,10 @@ export type LedgerErrorCode =
   | 'insufficient_shares'
   | 'trade_not_latest'
   | 'price_spike_unconfirmed'
+  // S15: trip (0146–0148; bingkai S15 "Salinan galat S15"); DK404 trip_not_found = not_found.
+  | 'trip_archived'
+  | 'trip_entry_invalid'
+  | 'trip_limit'
   | 'not_found'
   | 'invalid'
   | 'network'

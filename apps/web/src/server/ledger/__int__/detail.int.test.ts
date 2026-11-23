@@ -99,6 +99,7 @@ describe('loadDetail (persona N, F bergabung)', () => {
       occurredOn: null,
       description: KANARI_DESC,
       reimbursable: true,
+      tripId: null,
     });
 
     const got = await loadDetail(pribadi, created.entryId);

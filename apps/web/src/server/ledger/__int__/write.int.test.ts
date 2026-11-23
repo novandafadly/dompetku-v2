@@ -234,6 +234,7 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
         occurredOn: null,
         description: 'tab pertama',
         reimbursable: false,
+        tripId: null,
       };
 
       // Tab pertama menyimpan v1 → v2.
@@ -399,6 +400,7 @@ describe('wrapper tulis api.* (N dan F bergabung)', () => {
             occurredOn: null,
             description: null,
             reimbursable: false,
+            tripId: null,
           }),
         ),
       ).toEqual({ code: 'not_found' });
@@ -1064,6 +1066,7 @@ describe('wrapper S7 (N, F bergabung, Luar)', () => {
             occurredOn: null,
             description: 'hotel dinas',
             reimbursable: false,
+            tripId: null,
           }),
         ),
       ).toEqual({ code: 'reimbursement_exists' });

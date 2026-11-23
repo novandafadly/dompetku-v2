@@ -492,6 +492,7 @@ describe('handleInbound (Postgres sungguhan)', () => {
       occurredOn: null,
       description: 'diubah',
       reimbursable: false,
+      tripId: null,
     });
     await handleInbound(r.deps, msg('batal'));
     const [e] = await entries();

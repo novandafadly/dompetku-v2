@@ -146,6 +146,7 @@ describe('aset non-saham (S14 Task 9)', () => {
             occurredOn: null,
             description: null,
             reimbursable: false,
+            tripId: null,
           }),
         ),
       ),
