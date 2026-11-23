@@ -835,6 +835,8 @@ create function pg_temp.tstate(p_trip uuid) returns text
 language sql as $$
   select tests.owner_val(null, format($q$select name || '/' || (archived_at is not null) from app.trips where id = %L$q$, p_trip))
 $$;
+-- Peer b yang menunggu kunci tidak boleh menggantung suite bila kunci tak pernah lepas.
+select tests.peer_exec('b', $$set lock_timeout = '30s'$$);
 select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Satu'))) as tr1 \gset
 select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Dua'))) as tr2 \gset
 select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('T Tiga'))) as tr3 \gset
