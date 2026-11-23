@@ -439,7 +439,7 @@ select set_eq($$
                       'check_goal', 'stock_cost_removed', 'price_verdict', 'stock_check',
                       'stock_account', 'stock_cash_account', 'stock_entry', 'stock_assert_after',
                       'stock_holding', 'lock_stock_trade', 'lock_trip', 'check_trip', 'lock_trip_share',
-                      'assert_trip_taggable']) f
+                      'assert_trip_taggable', 'assert_entries_trip']) f
 
      union all
      select 'dompetku_auditor', f from unnest(array['private.dq_run', 'jobs.dq_reconcile']) f

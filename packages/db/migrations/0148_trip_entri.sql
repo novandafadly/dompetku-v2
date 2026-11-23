@@ -22,10 +22,15 @@
 -- - api.set_entries_trip(client, trip, entri[]) (null = lepas; 1..100 id unik): kunci trip, lalu entri urut id, lalu
 --   validasi seluruhnya (atomik: satu tidak layak = seluruh panggilan gagal, nol efek); hanya baris yang benar-benar
 --   berubah naik versi + write_history; hasil {changed: n} (0 bila tidak ada yang berubah = idempoten alami).
+--   Validasi entri (private.assert_entries_trip) berjalan dua kali: tanpa kunci entri (entri tidak layak, termasuk trade
+--   saham dan utang, ditolak tanpa menunggu transaksi lain) dan lagi di bawah kunci entri (menutup balapan).
 --   Entri batal = entry_voided; ruang entri beda dengan trip = space_mismatch; entri patungan: menandai ke trip lain atau
 --   melepas = split_locked dari penjaga yang ada. Melepas dari trip terarsip boleh.
 -- - api.export_entries + kolom akhir `trip` (nama trip, null bila tidak bertrip; K11); jumlah baris, urutan, dan Σ per
 --   kelas tidak berubah (join kiri satu baris per entri). api.shared_activity + filter K16 (lihat badan).
+-- - Biaya filter K16 (diterima, tanpa indeks baru): linear terhadap blok baris riwayat tag-saja BERURUTAN di kepala feed
+--   (tiap baris tersaring ikut dipindai sebelum halaman terisi; ≈17 µs per baris). Kasus terburuk 20 rb baris tersaring
+--   berurutan ≈ 0,5 s; realistis (puluhan baris) ≈ 8 ms.
 -- - api.move_entry_to_space tidak diubah (K15): entri baru tanpa trip_id (kolom eksplisit), baris lama yang batal tetap
 --   bertag.
 -- Kode galat: memakai DK404 trip_not_found, DK422 trip_archived, DK422 trip_entry_invalid, DK422 space_mismatch,
@@ -525,13 +530,43 @@ begin
   order by h.changed_at desc, h.entry_id desc, h.version desc;
 end $function$;
 
+-- Validasi entri untuk set_entries_trip (urutan galat tetap: entry_not_found seragam, entry_voided, space_mismatch,
+-- trip_archived, trip_entry_invalid). Tanpa kunci; dipanggil sebelum dan sesudah kunci entri. Entri trade saham,
+-- utang, dan non-expense = trip_entry_invalid (sama dengan penolakan update_entry atas trade sebelum kunci).
+create function private.assert_entries_trip(p_ids uuid[], p_trip app.trips, p_trip_id uuid) returns void
+language plpgsql set search_path = '' as $$
+begin
+  if (select count(*) from app.entries e where e.id = any (p_ids)) <> cardinality(p_ids) then
+    raise exception using errcode = 'DK404', message = 'entry_not_found';
+  end if;
+  if exists (select 1 from app.entries e where e.id = any (p_ids) and e.voided_at is not null) then
+    raise exception using errcode = 'DK422', message = 'entry_voided';
+  end if;
+  if p_trip_id is not null then
+    if exists (select 1 from app.entries e where e.id = any (p_ids) and e.space_id <> p_trip.space_id) then
+      raise exception using errcode = 'DK422', message = 'space_mismatch';
+    end if;
+    if p_trip.archived_at is not null
+       and exists (select 1 from app.entries e where e.id = any (p_ids) and e.trip_id is distinct from p_trip_id) then
+      raise exception using errcode = 'DK422', message = 'trip_archived';
+    end if;
+    if exists (select 1 from app.entries e
+                 left join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
+                 left join app.accounts a on a.space_id = l.space_id and a.id = l.account_id
+                where e.id = any (p_ids)
+                  and (e.kind <> 'expense' or e.reimbursable or a.pocket = 'kantor'
+                       or e.stock_trade_id is not null or e.debt_id is not null)) then
+      raise exception using errcode = 'DK422', message = 'trip_entry_invalid';
+    end if;
+  end if;
+end $$;
+
 create function api.set_entries_trip(p_client_id uuid, p_trip_id uuid, p_entry_ids uuid[]) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
   v_uid     uuid := private.require_user();
   v_ids     uuid[] := (select array_agg(x order by x) from unnest(p_entry_ids) x);
   v_trip    app.trips%rowtype;
-  v_n       int;
   v_changed uuid[];
   v_id      uuid;
   v_r       jsonb;
@@ -548,34 +583,15 @@ begin
   end if;
 
   -- Urutan kunci: trip (FOR SHARE) -> entri (urut id) -> (dompet tidak berubah: saldo tidak tersentuh).
+  -- Validasi dua kali: pertama TANPA kunci entri (entri tidak layak ditolak tanpa menunggu transaksi lain, seperti
+  -- update_entry yang menolak trade saham sebelum kunci), lalu di bawah kunci entri (menutup balapan: jenis, Kantor,
+  -- talangan, batal, ruang bisa berubah antara cek pertama dan kunci).
   if p_trip_id is not null then
     v_trip := private.lock_trip_share(p_trip_id);
   end if;
-  select count(*)::int into v_n
-    from (select e.id from app.entries e where e.id = any (v_ids) order by e.id for update) l;
-  if v_n <> cardinality(v_ids) then
-    raise exception using errcode = 'DK404', message = 'entry_not_found';
-  end if;
-
-  if exists (select 1 from app.entries e where e.id = any (v_ids) and e.voided_at is not null) then
-    raise exception using errcode = 'DK422', message = 'entry_voided';
-  end if;
-  if p_trip_id is not null then
-    if exists (select 1 from app.entries e where e.id = any (v_ids) and e.space_id <> v_trip.space_id) then
-      raise exception using errcode = 'DK422', message = 'space_mismatch';
-    end if;
-    if v_trip.archived_at is not null
-       and exists (select 1 from app.entries e where e.id = any (v_ids) and e.trip_id is distinct from p_trip_id) then
-      raise exception using errcode = 'DK422', message = 'trip_archived';
-    end if;
-    if exists (select 1 from app.entries e
-                 left join app.entry_lines l on l.entry_id = e.id and l.role = 'main'
-                 left join app.accounts a on a.space_id = l.space_id and a.id = l.account_id
-                where e.id = any (v_ids)
-                  and (e.kind <> 'expense' or e.reimbursable or a.pocket = 'kantor')) then
-      raise exception using errcode = 'DK422', message = 'trip_entry_invalid';
-    end if;
-  end if;
+  perform private.assert_entries_trip(v_ids, v_trip, p_trip_id);
+  perform e.id from app.entries e where e.id = any (v_ids) order by e.id for update;
+  perform private.assert_entries_trip(v_ids, v_trip, p_trip_id);
 
   with u as (
     update app.entries e
@@ -593,7 +609,8 @@ end $$;
 
 -- ===== Hak =====
 grant execute on function private.lock_trip_share(uuid, uuid),
-  private.assert_trip_taggable(app.trips, app.entry_kind, boolean, text, boolean) to dompetku_api;
+  private.assert_trip_taggable(app.trips, app.entry_kind, boolean, text, boolean),
+  private.assert_entries_trip(uuid[], app.trips, uuid) to dompetku_api;
 
 select private.own_api_functions();
 
@@ -611,6 +628,7 @@ drop function api.create_entry(uuid, uuid, uuid, app.entry_kind, bigint, uuid, d
 drop function api.update_entry(uuid, uuid, integer, uuid, bigint, uuid, date, text, boolean, boolean, uuid);
 drop function api.create_split(uuid, uuid, uuid, bigint, uuid, date, text, jsonb, boolean, uuid);
 drop function api.export_entries(uuid, date, date);
+drop function private.assert_entries_trip(uuid[], app.trips, uuid);
 drop function private.assert_trip_taggable(app.trips, app.entry_kind, boolean, text, boolean);
 drop function private.lock_trip_share(uuid, uuid);
 

@@ -40,7 +40,7 @@
 -- entri, sehingga void generik paralel void_stock_trade tidak deadlock; archive_account paralel buy_stock (kedua urutan).
 -- ID: B8, C2, C3, C4, C6, C9, T11, T15
 begin;
-select plan(215);
+select plan(230);
 
 select tests.peer_open('adm', 'postgres');
 select tests.peer_val('adm', 'select tests.wipe()');
@@ -1065,6 +1065,86 @@ select ok(tests.peer_blocked('b'), 'create_entry + trip menunggu arsip trip para
 select tests.peer_exec('a', 'commit');
 select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'create_entry sesudah arsip commit membaca ulang archived_at = trip_archived');
 select tests.peer_exec('b', 'rollback');
+-- Pra-penyaringan tanpa kunci (0148): entri tidak layak (pemasukan) yang sedang dikunci transaksi lain ditolak
+-- trip_entry_invalid tanpa menunggu kunci entri itu.
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.trip_sql('K Delapan'))) as k8 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$,
+  format($q$select api.create_entry(gen_random_uuid(), %L, %L, 'income', 1000) ->> 'entry_id'$q$, :'np', :'acc_k'))) as kinc \gset
+select tests.peer_exec('adm', 'begin');
+select tests.peer_val('adm', format($$select id from app.entries where id = %L for update$$, :'kinc'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '3s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k8', array[:'kinc']::uuid[]));
+select matches(tests.peer_result('b'), '^ERROR: .*trip_entry_invalid', 'pemasukan terkunci transaksi lain ditolak trip_entry_invalid tanpa menunggu kunci entri');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('adm', 'commit');
+-- create_split + trip (b) paralel archive_trip (a), kedua urutan: trip Bersama dikunci FOR SHARE vs FOR NO KEY UPDATE.
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, format($q$select api.create_trip(gen_random_uuid(), %L, 'KS Satu',
+  '2026-03-01', '2026-03-07') ->> 'trip_id'$q$, :'sh'))) as ks1 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, format($q$select api.create_trip(gen_random_uuid(), %L, 'KS Dua',
+  '2026-03-01', '2026-03-07') ->> 'trip_id'$q$, :'sh'))) as ks2 \gset
+create function pg_temp.k_split_sql(p_space uuid, p_acc uuid, p_trip uuid) returns text
+language sql as $$
+  select format($q$select api.create_split(gen_random_uuid(), %L, %L, 100, p_trip_id => %L) ->> 'split_id'$q$, p_space, p_acc, p_trip)
+$$;
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.archive_trip(%L) ->> 'status'$$, :'ks1'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_split_sql(:'sh', :'acc_p', :'ks1'));
+select ok(tests.peer_blocked('b'), 'create_split + trip menunggu arsip trip paralel');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_archived', 'create_split sesudah arsip commit = trip_archived');
+select tests.peer_exec('b', 'rollback');
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_split_sql(:'sh', :'acc_p', :'ks2'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.archive_trip(%L) ->> 'status'$$, :'ks2'));
+select ok(tests.peer_blocked('b'), 'archive_trip menunggu create_split + trip paralel');
+select tests.peer_exec('a', 'commit');
+select is(tests.peer_result('b'), 'archived', 'arsip sesudah create_split commit = sukses');
+select tests.peer_exec('b', 'commit');
+select is(tests.owner_val(null, format($$select (select count(*) from app.entries where trip_id = %L) || ' ' || (select archived_at is not null from app.trips where id = %L)$$,
+  :'ks2', :'ks2')), '1 true', 'pengeluaran patungan bertanda, trip terarsip sesudahnya');
+-- set_entries_trip vs move_entry_to_space atas entri yang sama (kedua urutan).
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as km1 \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as km2 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_tag_sql(:'k5', array[:'km1']::uuid[]));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null, false, true) ->> 'version'$$,
+  :'km1', :'sh', :'acc_s'));
+select ok(tests.peer_blocked('b'), 'pindah ruang menunggu set_entries_trip paralel pada entri yang sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*version_conflict', 'pindah ruang sesudah penanda commit = version_conflict');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'km1']::uuid[]), 'K Lima|2|false', 'entri tetap di ruang asal, bertanda');
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', format($$select api.move_entry_to_space(gen_random_uuid(), %L, 1, %L, %L, null, false, true) ->> 'version'$$,
+  :'km2', :'sh', :'acc_s'));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k5', array[:'km2']::uuid[]));
+select ok(tests.peer_blocked('b'), 'set_entries_trip menunggu pindah ruang paralel pada entri yang sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*entry_voided', 'penanda sesudah pindah ruang commit = entry_voided (entri asal batal)');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'km2']::uuid[]), '-|2|true', 'entri asal batal, tidak bertanda');
+-- TOCTOU K4: update_entry ke dompet Kantor (a, belum commit) lalu set_entries_trip (b) atas entri yang sama.
+select tests.peer_val('adm', format($$select tests.account(tests.n(), %L, 'Kas Kantor K', 'kantor', 1000000)$$, :'np')) as acc_kan \gset
+select tests.peer_val('adm', format($$select tests.web_val(tests.n(), %L)$$, pg_temp.k_entry_sql(:'np', :'acc_k'))) as kt1 \gset
+select tests.peer_exec('a', 'begin');
+select tests.peer_val('a', pg_temp.k_upd_sql(:'kt1', 1, :'acc_kan', null));
+select tests.peer_exec('b', 'begin');
+select tests.peer_exec('b', $$set local lock_timeout = '10s'$$);
+select tests.peer_send('b', pg_temp.k_tag_sql(:'k5', array[:'kt1']::uuid[]));
+select ok(tests.peer_blocked('b'), 'set_entries_trip menunggu update_entry ke Kantor paralel pada entri yang sama');
+select tests.peer_exec('a', 'commit');
+select matches(tests.peer_result('b'), '^ERROR: .*trip_entry_invalid', 'penanda sesudah entri jadi Kantor commit = trip_entry_invalid');
+select tests.peer_exec('b', 'rollback');
+select is(pg_temp.k_state(array[:'kt1']::uuid[]), '-|2|false', 'entri Kantor tidak bertanda');
 select is(tests.worker_val(null, $q$select violations from jobs.dq_reconcile() where check_id = 'DQ20'$q$), '0', 'DQ20 nol sesudah semua skenario paralel');
 
 -- ===== Aset (0141): Perbarui nilai paralel dan transfer keluar paralel di bawah kunci dompet =====

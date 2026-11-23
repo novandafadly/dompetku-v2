@@ -109,6 +109,9 @@ language sql as $$
       || '|' || (select coalesce(string_agg(account_id || ':' || balance, ',' order by account_id), '')
          from app.account_balances where space_id = %1$L)
       || '|' || (select s::text from api.safe_to_spend(%1$L, '2026-03-20') s)
+      || '|' || (select s::text from api.spend_pace(%1$L, '2026-03-20') s)
+      || '|' || (select coalesce(string_agg(c::text, ',' order by c.user_id), '')
+         from api.member_contributions(%1$L, '2026-03-01', '2026-03-31') c)
       || '|' || (select w::text from api.net_worth(%1$L) w)
       || '|' || (select w::text from app.net_worth_at(%1$L, '2026-03-20') w)$q$, p_space))
 $$;
