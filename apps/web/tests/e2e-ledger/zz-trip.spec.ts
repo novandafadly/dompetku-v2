@@ -175,6 +175,25 @@ test('Talangan dan dompet Kantor menyembunyikan pemilih Trip; Masukkan kandidat 
   ).toBeVisible();
   await expect(catatSheet(page)).toHaveCount(0);
 
+  const sid = await spaceId('personal');
+  const [pre] = await adminQuery<{ n: string; total: string }>(
+    `with c as (
+       select (-l.amount)::bigint as amount
+         from app.entries e
+         join app.entry_lines l on l.space_id = e.space_id and l.entry_id = e.id and l.role = 'main'
+         join app.accounts a on a.space_id = l.space_id and a.id = l.account_id
+        where e.space_id = $1 and e.kind = 'expense' and not e.reimbursable and e.voided_at is null
+          and e.trip_id is null and e.occurred_on between $2::date and $3::date
+          and a.pocket not in ('kantor', 'patungan')
+        order by e.occurred_on desc, e.id
+        limit 100
+     )
+     select count(*)::text as n, coalesce(sum(amount), 0)::text as total from c`,
+    [sid, STARTS, ENDS],
+  );
+  const preCount = Number(pre?.n ?? '0');
+  const preSum = Number(pre?.total ?? '0');
+
   // Catat pengeluaran biasa tanpa trip (Lepas) → jadi kandidat Masukkan.
   await openCatat(page);
   const sheet2 = catatSheet(page);
@@ -191,27 +210,34 @@ test('Talangan dan dompet Kantor menyembunyikan pemilih Trip; Masukkan kandidat 
   ).toBeVisible();
   await expect(catatSheet(page)).toHaveCount(0);
 
+  const wantCount = preCount + 1;
+  const importLabel = `Masukkan ${String(wantCount)} pengeluaran`;
   await page.goto(tripHref);
-  // Hanya Hotel E2E yang menjadi kandidat (bukan Parkir Kantor E2E).
+  // Hotel E2E menjadi kandidat, Parkir Kantor E2E tidak.
   await expect(main(page)).toContainText('Pengeluaran tanggal trip yang belum masuk');
   const importSheet = page.getByRole('dialog', { name: new RegExp(`Masukkan ke ${TRIP}`) });
   await expect(async () => {
     if ((await importSheet.count()) === 0) {
-      await main(page).getByRole('button', { name: 'Masukkan 1 pengeluaran' }).click();
+      await main(page).getByRole('button', { name: importLabel }).click();
     }
-    await expect(importSheet.getByRole('button', { name: 'Masukkan 1 pengeluaran' })).toBeVisible({
+    await expect(importSheet.getByRole('button', { name: importLabel })).toBeVisible({
       timeout: 2_000,
     });
   }).toPass();
   await expect(importSheet).toContainText('Hotel E2E');
   await expect(importSheet).not.toContainText('Parkir Kantor E2E');
-  await importSheet.getByRole('button', { name: 'Masukkan 1 pengeluaran' }).click();
-  await expect(toasts(page).getByText(`1 pengeluaran dimasukkan ke ${TRIP}`)).toBeVisible();
+  await importSheet.getByRole('button', { name: importLabel }).click();
+  await expect(
+    toasts(page).getByText(`${String(wantCount)} pengeluaran dimasukkan ke ${TRIP}`),
+  ).toBeVisible();
 
-  // Total 600.000 > anggaran 500.000 → Lebih Rp 100.000 (120%).
-  await expect(main(page).getByTestId('trip-total')).toContainText(rp(600_000));
-  await expect(main(page)).toContainText(`Lebih ${rp(100_000)}`);
-  await expect(main(page)).toContainText('120%');
+  // Total 600.000 + preSum > anggaran 500.000 → Lebih Rp (100.000 + preSum).
+  const expectedTotal = 600_000 + preSum;
+  const expectedOver = expectedTotal - 500_000;
+  const expectedPct = Math.floor((expectedTotal * 100) / 500_000);
+  await expect(main(page).getByTestId('trip-total')).toContainText(rp(expectedTotal));
+  await expect(main(page)).toContainText(`Lebih ${rp(expectedOver)}`);
+  await expect(main(page)).toContainText(`${String(expectedPct)}%`);
   await expect(main(page).getByRole('progressbar', { name: 'Anggaran trip' })).toHaveAttribute(
     'aria-valuenow',
     '100',
@@ -220,9 +246,9 @@ test('Talangan dan dompet Kantor menyembunyikan pemilih Trip; Masukkan kandidat 
   // Keluarkan satu lalu Urungkan.
   await main(page).getByRole('button', { name: 'Keluarkan dari trip: Hotel E2E' }).click();
   await expect(toasts(page).getByText(`Hotel E2E dikeluarkan dari ${TRIP}`)).toBeVisible();
-  await expect(main(page).getByTestId('trip-total')).toContainText(rp(200_000));
+  await expect(main(page).getByTestId('trip-total')).toContainText(rp(200_000 + preSum));
   await toasts(page).getByRole('button', { name: 'Urungkan' }).last().click();
-  await expect(main(page).getByTestId('trip-total')).toContainText(rp(600_000));
+  await expect(main(page).getByTestId('trip-total')).toContainText(rp(expectedTotal));
 });
 
 test(

@@ -190,7 +190,8 @@ test('tagihan lewat jatuh tempo: Hati-hati dengan sebab, tampil di Tagihan 7 har
   // Baris per hari tetap di luar kotak status.
   await expect(amanCard(page).getByText(/per hari untuk \d+ hari/)).toBeVisible();
   const card = billsCard(page);
-  const row = card.locator('li').filter({ hasText: BILL_LATE });
+  // Pada 7 hari terakhir bulan, jatuh tempo tanggal 1 bulan depan ikut masuk jendela 7 hari; urutan pertama = yang lewat.
+  const row = card.locator('li').filter({ hasText: BILL_LATE }).first();
   await expect(row).toContainText(`Lewat ${String(t.day - 1)} hari`);
   await expect(row).toContainText('Rp 120.000');
   await expect(card.getByRole('button')).toHaveCount(0);

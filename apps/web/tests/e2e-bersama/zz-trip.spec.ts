@@ -118,6 +118,17 @@ test('Bagi tagihan ke trip Bersama (K6) menaikkan total & Dicatat oleh; feed Akt
   page,
   partnerPage,
 }) => {
+  const tripId = sharedTripHref.split('/').pop() ?? '';
+  const bersama = await spaceOf(OWNER, 'shared');
+  const [pre] = await asUser<{ n: string; total: string }>(
+    bersama.uid,
+    `select count(*)::text as n, coalesce(sum(amount), 0)::text as total
+       from api.trip_candidates(p_trip_id => $1, p_limit => 100)`,
+    [tripId],
+  );
+  const preCount = Number(pre?.n ?? '0');
+  const preSum = Number(pre?.total ?? '0');
+
   // Catat pengeluaran Bersama oleh Farida (tanpa trip dulu), lalu cek feed sebelum/sesudah Masukkan.
   await partnerPage.goto('/bersama/beranda');
   await openCatat(partnerPage);
@@ -136,25 +147,30 @@ test('Bagi tagihan ke trip Bersama (K6) menaikkan total & Dicatat oleh; feed Akt
 
   await partnerPage.goto('/bersama/aktivitas');
   const feedBefore = await main(partnerPage).getByRole('listitem').count();
+  const topBefore = await main(partnerPage).getByRole('listitem').first().innerText();
 
-  // Masukkan pengeluaran Farida ke trip (tag-saja → tidak menambah baris feed K16).
+  // Masukkan pengeluaran kandidat (termasuk Farida) ke trip (tag-saja → tidak menambah baris feed K16).
+  const wantCount = preCount + 1;
+  const importLabel = `Masukkan ${String(wantCount)} pengeluaran`;
   await page.goto(sharedTripHref);
   const imp = page.getByRole('dialog', { name: new RegExp(`Masukkan ke ${TRIP_B_EDIT}`) });
   await expect(async () => {
     if ((await imp.count()) === 0) {
-      await main(page)
-        .getByRole('button', { name: /Masukkan 1 pengeluaran/ })
-        .click();
+      await main(page).getByRole('button', { name: importLabel }).click();
     }
-    await expect(imp.getByRole('button', { name: 'Masukkan 1 pengeluaran' })).toBeVisible({
+    await expect(imp.getByRole('button', { name: importLabel })).toBeVisible({
       timeout: 2_000,
     });
   }).toPass();
-  await imp.getByRole('button', { name: 'Masukkan 1 pengeluaran' }).click();
-  await expect(toasts(page).getByText(`1 pengeluaran dimasukkan ke ${TRIP_B_EDIT}`)).toBeVisible();
+  await expect(imp).toContainText('Snorkeling F');
+  await imp.getByRole('button', { name: importLabel }).click();
+  await expect(
+    toasts(page).getByText(`${String(wantCount)} pengeluaran dimasukkan ke ${TRIP_B_EDIT}`),
+  ).toBeVisible();
 
   await partnerPage.goto('/bersama/aktivitas');
   expect(await main(partnerPage).getByRole('listitem').count()).toBe(feedBefore);
+  expect(await main(partnerPage).getByRole('listitem').first().innerText()).toBe(topBefore);
 
   // Novanda mencatat patungan (Bagi tagihan) ke trip Bersama (K6).
   await page.goto('/bersama/beranda');
@@ -178,9 +194,9 @@ test('Bagi tagihan ke trip Bersama (K6) menaikkan total & Dicatat oleh; feed Akt
   ).toBeVisible();
   await expect(catatSheet(page)).toHaveCount(0);
 
-  // Detail trip: total 350.000, Dicatat oleh menampilkan kedua anggota, baris patungan tanpa Keluarkan.
+  // Detail trip: total preSum + 350.000, Dicatat oleh menampilkan kedua anggota, baris patungan tanpa Keluarkan.
   await page.goto(sharedTripHref);
-  await expect(main(page).getByTestId('trip-total')).toContainText(rp(350_000));
+  await expect(main(page).getByTestId('trip-total')).toContainText(rp(preSum + 350_000));
   await expect(main(page)).toContainText('Dicatat oleh');
   await expect(main(page)).toContainText('Kamu');
   await expect(main(page)).toContainText('Farida');
