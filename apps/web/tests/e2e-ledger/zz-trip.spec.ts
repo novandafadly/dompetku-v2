@@ -38,6 +38,7 @@ const ENDS = offsetDate(5);
 
 let tripHref = '';
 let entryHref = '';
+let importedTotal = 600_000;
 
 async function openAddTrip(page: Page) {
   const sheet = page.getByRole('dialog', { name: /^Tambah trip/ });
@@ -233,6 +234,7 @@ test('Talangan dan dompet Kantor menyembunyikan pemilih Trip; Masukkan kandidat 
 
   // Total 600.000 + preSum > anggaran 500.000 → Lebih Rp (100.000 + preSum).
   const expectedTotal = 600_000 + preSum;
+  importedTotal = expectedTotal;
   const expectedOver = expectedTotal - 500_000;
   const expectedPct = Math.floor((expectedTotal * 100) / 500_000);
   await expect(main(page).getByTestId('trip-total')).toContainText(rp(expectedTotal));
@@ -275,7 +277,7 @@ test(
     await dlg.getByRole('button', { name: 'Arsipkan' }).click();
     await expect(toasts(page).getByText(`Trip ${TRIP} diarsipkan`)).toBeVisible();
     await expect(main(page)).toContainText('Trip ini diarsipkan.');
-    await expect(main(page).getByTestId('trip-total')).toContainText(rp(600_000));
+    await expect(main(page).getByTestId('trip-total')).toContainText(rp(importedTotal));
 
     // Di Catat: trip terarsip tidak ditawarkan.
     await page.goto('/pribadi/beranda');
