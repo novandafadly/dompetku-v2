@@ -26,8 +26,8 @@ describe('MenuSheet: Kategori', () => {
       'href',
       '/bersama/kategori',
     );
-    // Butir lain yang belum ada tetap "Segera"; Kontak tidak dirender di Bersama (S11-MN1).
-    expect(screen.getAllByText('Segera')).toHaveLength(3);
+    // Butir lain yang belum ada tetap "Segera" (Export, Pengaturan); Kontak tidak dirender di Bersama (S11-MN1).
+    expect(screen.getAllByText('Segera')).toHaveLength(2);
     expect(screen.queryByText('Kontak')).toBeNull();
     // Analisis diganti Laporan (S9 K8).
     expect(screen.getByRole('link', { name: 'Laporan' })).toHaveAttribute(
@@ -51,6 +51,30 @@ describe('MenuSheet: Kategori', () => {
   });
 });
 
+describe('MenuSheet: Trip (S15)', () => {
+  it('mode nyata Pribadi dan Bersama: tautan ke /{ruang}/trip, tanpa "Segera"', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const bersamaLink = screen.getByRole('link', { name: 'Trip' });
+    expect(bersamaLink).toHaveAttribute('href', '/bersama/trip');
+    expect(bersamaLink).not.toHaveTextContent('Segera');
+    cleanup();
+    ruangNow = 'pribadi';
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const pribadiLink = screen.getByRole('link', { name: 'Trip' });
+    expect(pribadiLink).toHaveAttribute('href', '/pribadi/trip');
+    expect(pribadiLink).not.toHaveTextContent('Segera');
+  });
+
+  it('prototipe (bawaan): Trip tetap nonaktif dengan "Segera"', () => {
+    ruangNow = 'pribadi';
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: 'Trip' })).toBeNull();
+    const btn = screen.getByRole('button', { name: /Trip/ });
+    expect(btn).toHaveAttribute('aria-disabled', 'true');
+    expect(btn).toHaveTextContent('Segera');
+  });
+});
+
 describe('MenuSheet: Kontak (S11)', () => {
   it('mode nyata Pribadi: tautan ke /pribadi/kontak, bukan "Segera"', () => {
     ruangNow = 'pribadi';
@@ -58,7 +82,7 @@ describe('MenuSheet: Kontak (S11)', () => {
     const link = screen.getByRole('link', { name: 'Kontak' });
     expect(link).toHaveAttribute('href', '/pribadi/kontak');
     expect(link).not.toHaveTextContent('Segera');
-    expect(screen.getAllByText('Segera')).toHaveLength(3);
+    expect(screen.getAllByText('Segera')).toHaveLength(2);
   });
 
   it('mode nyata Bersama: butir Kontak tidak dirender sama sekali', () => {

@@ -23,6 +23,7 @@ import { signOutAction } from '@/server/auth/actions';
 import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
 import { buildPatunganHref } from './patungan-hrefs';
+import { buildTripListHref } from './trip-hrefs';
 import { buildKontakHref } from './utang-hrefs';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
 
@@ -78,7 +79,7 @@ export function MenuSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * Mode nyata: Kategori aktif (tautan ke /{ruang}/kategori), Kontak hanya di Pribadi. Prototipe:
+   * Mode nyata: Trip dan Kategori aktif di kedua ruang, Kontak hanya di Pribadi. Prototipe:
    * tetap "Segera".
    */
   real?: boolean;
@@ -116,7 +117,14 @@ export function MenuSheet({
         ) : null}
         {items.map(({ name, Icon }) => (
           <li key={name} className={rowDivider}>
-            {real && name === 'Kategori' ? (
+            {real && name === 'Trip' ? (
+              <MenuLink
+                href={buildTripListHref(ruang, query)}
+                name={name}
+                Icon={Icon}
+                onOpenChange={onOpenChange}
+              />
+            ) : real && name === 'Kategori' ? (
               <MenuLink
                 href={kategoriHref(ruang)}
                 name={name}
