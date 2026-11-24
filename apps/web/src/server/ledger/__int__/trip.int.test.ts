@@ -618,4 +618,51 @@ describe('trip (S15 Task 6)', () => {
     expect((err as { code?: string; message?: string }).message).toBe('space_mismatch');
     expect((err as { code?: string }).code).toBe('DK422');
   });
+
+  it('Task 10: CSV kolom Trip cocok, Σ nominal = Laporan, tanpa nama trip ruang lain; pulih Sampah menjaga tripId', async () => {
+    const { loadDetail } = await import('../detail');
+    const { loadLaporan } = await import('../laporan');
+    const { restoreEntry } = await import('../write');
+    const { toCsv } = await import('../csv');
+
+    const { tripId } = await trip(nPribadi, '=Bali, Des');
+    await trip(nBersama, CANARY);
+    const e1 = await spend(nPribadi, bca, 120_000, { tripId, description: 'hotel' });
+    const e2 = await spend(nPribadi, bca, 30_000, { description: 'kopi' });
+
+    const det = await loadDetail(nPribadi, e1.entryId);
+    expect(det?.entry.tripId).toBe(tripId);
+    expect(det?.entry.tripName).toBe('=Bali, Des');
+    expect(det?.trips?.map((t) => t.id)).toEqual([tripId]);
+    expect(JSON.stringify(det)).not.toContain(CANARY);
+
+    const exp = await exportLaporanCsv({ ...nPribadi, kind: 'personal' });
+    const lap = await loadLaporan({ ...nPribadi, kind: 'personal' });
+    const csvExpense = exp.rows
+      .filter((r) => r.reportClass === 'expense')
+      .reduce((sum, r) => sum + -r.amount, 0);
+    expect(csvExpense).toBe(lap.summary.pengeluaran);
+    expect(csvExpense).toBe(150_000);
+    expect(exp.rows.find((r) => r.note === 'hotel')?.trip).toBe('=Bali, Des');
+    expect(exp.rows.find((r) => r.note === 'kopi')?.trip).toBeNull();
+    const csvTextOut = toCsv(exp.rows);
+    expect(csvTextOut).toContain(`"'=Bali, Des"\r\n`);
+    expect(csvTextOut).not.toContain(CANARY);
+
+    const v = await voidEntry(nPribadi, {
+      clientId: randomUUID(),
+      entryId: e1.entryId,
+      expectedVersion: 1,
+    });
+    await archiveTrip(nPribadi, { tripId });
+    await restoreEntry(nPribadi, {
+      clientId: randomUUID(),
+      entryId: e1.entryId,
+      expectedVersion: v.version,
+    });
+    const afterRestore = await loadDetail(nPribadi, e1.entryId);
+    expect(afterRestore?.entry.tripId).toBe(tripId);
+    expect(afterRestore?.entry.tripArchived).toBe(true);
+    expect(e2.entryId).toBeTruthy();
+  });
 });
