@@ -181,7 +181,7 @@ const excludedRow = z.object({
   entry_count: z.number().int(),
 });
 
-async function excludedTx(
+export async function excludedTx(
   c: pg.PoolClient,
   ctx: LedgerCtx,
   from: IsoDate,

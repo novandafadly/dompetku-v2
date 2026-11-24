@@ -2,7 +2,7 @@
 
 import { formatRupiah, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { useRouter } from 'next/navigation';
-import { createContext, lazy, Suspense, useContext, useState, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useContext, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { PlusIcon } from '@/components/ui/icons/plus';
@@ -12,15 +12,15 @@ import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { newClientId } from '@/features/ledger/client-id';
 import { undoOrNotify } from '@/features/catat/saved-toast';
 import type { AccountVM, ActionResult, CategoryVM, Ruang } from '@/features/ledger/types';
-import { TAGIHAN_COPY } from '@/features/rencana/copy';
-import { RENCANA_COPY } from '@/features/rencana/copy';
+import { LANGGANAN_COPY, RENCANA_COPY, TAGIHAN_COPY } from '@/features/rencana/copy';
 import type { BudgetResult, BudgetSubmit } from '@/features/rencana/budget-sheet';
 import type { BillItem } from '@/features/rencana/bills';
-import type { BillResult } from '@/features/rencana/bill-sheet';
+import type { BillPrefill, BillResult } from '@/features/rencana/bill-sheet';
 import type { PayResult } from '@/features/rencana/pay-bill-sheet';
 import type { BillDueVM, BillListVM, BudgetOverviewVM } from '@/features/rencana/types';
 import { restoreFocus } from './focus-title';
 import { voidEntryAction } from '../_actions/entri';
+import { dismissSubscriptionAction } from '../_actions/langganan';
 import {
   archiveBillAction,
   copyBudgetsAction,
@@ -64,6 +64,7 @@ interface HostApi {
   /** Sheet rincian baru untuk satu induk (S10). */
   openSub: (parentId: string) => void;
   openBill: (billId: string | null, occurrenceId?: string) => void;
+  openBillPrefill: (prefill: BillPrefill) => void;
   openPay: (occurrenceId: string) => void;
   unskip: (occurrenceId: string, name: string) => void;
   conflict: number;
@@ -196,6 +197,7 @@ export function RencanaHost({
   const [open, setOpen] = useState(false);
   const [billOpen, setBillOpen] = useState(false);
   const [billTarget, setBillTarget] = useState<string | null>(null);
+  const [billPrefill, setBillPrefill] = useState<BillPrefill | null>(null);
   // Baris kemunculan yang diketuk: fokus kembali ke sana (bukan baris pertama tagihan itu).
   const [billOcc, setBillOcc] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
@@ -222,7 +224,14 @@ export function RencanaHost({
     },
     openBill: (billId, occurrenceId) => {
       setBillTarget(billId);
+      setBillPrefill(null);
       setBillOcc(occurrenceId ?? null);
+      setBillOpen(true);
+    },
+    openBillPrefill: (prefill) => {
+      setBillTarget(null);
+      setBillPrefill(prefill);
+      setBillOcc(null);
       setBillOpen(true);
     },
     openPay: (occurrenceId) => {
@@ -282,6 +291,7 @@ export function RencanaHost({
             onOpenChange={setBillOpen}
             ruang={ruang}
             bill={editing}
+            prefill={editing === null ? billPrefill : null}
             accounts={bill.accounts}
             categories={bill.categories}
             today={bill.today}
@@ -620,6 +630,67 @@ export function UnskipButton({
       }}
     >
       {TAGIHAN_COPY.unskip}
+    </Button>
+  );
+}
+
+/** `Jadikan tagihan`: membuka `BillSheet` terisi awal dari saran langganan (S16-LG2). */
+export function PromoteSubscriptionButton({ prefill }: { prefill: BillPrefill }) {
+  const { openBillPrefill } = useHost();
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      aria-label={`${LANGGANAN_COPY.promote} ${prefill.name}`}
+      onPointerEnter={preloadBill}
+      onFocus={preloadBill}
+      onClick={() => {
+        openBillPrefill(prefill);
+      }}
+    >
+      {LANGGANAN_COPY.promote}
+    </Button>
+  );
+}
+
+/** `Abaikan`: menyembunyikan saran (per nama ternormalisasi + nominal) dengan kunci klik ganda (S16-LG3). */
+export function DismissSubscriptionButton({ name, amount }: { name: string; amount: Rupiah }) {
+  const { ruang } = useHost();
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+
+  async function onDismiss() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    let ok = false;
+    try {
+      ok = (await dismissSubscriptionAction(ruang, { name, amount })).ok;
+    } catch {
+      ok = false;
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+    if (ok) {
+      toast({ message: LANGGANAN_COPY.dismissed(name) });
+    } else {
+      toast({ message: LANGGANAN_COPY.dismissFailed, tone: 'info' });
+    }
+  }
+
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      aria-label={`${LANGGANAN_COPY.dismiss} ${name}`}
+      aria-disabled={busy || undefined}
+      aria-busy={busy || undefined}
+      onClick={() => {
+        void onDismiss();
+      }}
+    >
+      {busy ? LANGGANAN_COPY.dismissing : LANGGANAN_COPY.dismiss}
     </Button>
   );
 }

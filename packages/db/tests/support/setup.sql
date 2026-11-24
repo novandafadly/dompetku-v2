@@ -237,6 +237,7 @@ begin
   -- Tagihan dan anggaran (0117) lebih dulu: FK ke entries, categories, accounts.
   delete from app.bill_occurrences;
   delete from app.bills;
+  delete from app.subscription_dismissals;
   delete from app.budgets;
   delete from app.goals;
   delete from app.entries;

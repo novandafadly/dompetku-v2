@@ -121,6 +121,7 @@ const data = (over: Partial<RencanaData> = {}): RencanaData => ({
   bills: [],
   due: [],
   upcoming: [],
+  subscriptions: [],
   today: '2026-11-05',
   accounts: [],
   categories: [],

@@ -271,6 +271,16 @@ Rincian dan tes (T6 sampai T15) ada di `docs/team/round1/qa.md`. Sprint M3 sampa
   - **Angka & budget JS:** pgTAP 3817 (49 berkas), unit web 3564 (173 berkas), `test:int` web 411 (31 berkas), worker unit 63, domain 97 (+28×2 tz), demo-data 40, e2e `zz-trip` ledger 5 + bersama 4 (+3 bergabung), prototipe `budget.spec` 9/9; budget JS nyata `/pribadi/trip` **148,3 kB**, `/pribadi/trip/[id]` **148,7 kB**, Beranda **157,4 kB**, Transaksi **157,4 kB**, Detail transaksi **153,4 kB** (batas 162 kB).
 - **Keputusan terbuka (default agen dipakai, bisa diubah tanpa migrasi destruktif):** K2 (tag eksplisit, menyimpang dari S-47), K4 (hanya pengeluaran biasa), K9 (saran otomatis Catat), K12 (definisi T14/T15). Opsi saham S14 (K1/K7/K13) tetap ditunda sesuai arahan pemilik 2026-11-22.
 
+### S16: status (kalender arus kas, deteksi langganan, ekspor PDF; gerbang M5)
+
+- **Status (2026-11-24).** Selesai penuh di branch `feat/s16-kalender-langganan-pdf`: DB `0149`, penyusun PDF murni TS (`pdf.ts`), route `/[ruang]/laporan/ekspor-pdf`, halaman Server Component `/[ruang]/rencana/kalender`, kartu `Saran langganan` + `BillPrefill` di `Rencana > Tagihan`, tombol `Ekspor PDF` di Laporan, tes pgTAP/int/unit/e2e, Delivery Gate visual (`docs/design/s16-critique.md`), dan dokumentasi. **Merge = deploy + migrasi `0149` otomatis** tanpa langkah VM baru. Serah-terima: `docs/superpowers/handoff/s16.md`; catatan teknis: BSD §16 "Catatan S16"; desain: `docs/design/s16-bingkai.md`; keputusan agen: `docs/m0a-keputusan.md`.
+- **Bukti gerbang M5 (T14, T15, K9, B13 — semuanya `aktif` di `packages/db/tests/REGISTRY.md`):**
+  - **Kalender arus kas & tagihan tanggal 31 (T14, T15):** `48_kalender_langganan.sql` (proyeksi 30/90 hari, clamp tanggal 31 -> 30 Apr/31 Mei tanpa occurrence ganda, lewat jatuh tempo di hari ini, saldo operasional = `api.safe_to_spend`, tanda `short`/`Kurang`, dompet aset tidak masuk), `s16.int`, e2e `e2e-ledger/zz-s16.spec` (`@T14`, `@T15`).
+  - **Deteksi langganan:** `48_kalender_langganan.sql` (>= 3 bulan berbeda, nominal sama, terakhir <= 45 hari, menyaring tagihan aktif/talangan/abaikan), `s16.int`, unit `langganan-client.test.tsx` + `_actions/langganan.test.ts`, e2e `zz-s16.spec` (Jadikan tagihan prefill `BillSheet` + Abaikan idempoten).
+  - **Ekspor PDF (K9, B13, paritas Laporan):** `pdf.test.ts` (escape `\`, `(`, `)`, kontrol/NBSP, muatan injeksi jadi teks literal mati, validasi offset `xref`), `ekspor-pdf/route.test.ts` (`no-store`, `nosniff`, `attachment`, `429`, prototipe `404`), `s16.int` (paritas angka PDF = `loadLaporan`, B13 kanari, K9), e2e `zz-s16.spec` (`@K9`) dan `e2e-bersama/zz-s16.spec` (`@B13`, `@K9`).
+  - **Budget JS (muat dingin nyata, batas 162 kB):** Tagihan **150,9 kB**, Kalender **148,9 kB**, Laporan **151,6 kB**; prototipe `budget.spec` 9/9 lulus.
+- **Berikutnya:** M6 (S17+: AI/LLM Catat teks bebas, analisis AI, penyimpanan struk, offline-baca) menunggu keputusan pemilik sebelum dimulai.
+
 ## 7. Risiko lintas milestone
 
 | Risiko                                     | Mitigasi                                                                       |

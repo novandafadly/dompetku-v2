@@ -88,6 +88,7 @@ export async function resetData(adminUrl: string, ownerEmail: string): Promise<v
     delete from app.entry_history;
     delete from app.entries;
     delete from app.trips;
+    delete from app.subscription_dismissals;
     delete from app.stock_trades;
     delete from app.stock_holdings;
     delete from app.stock_prices;

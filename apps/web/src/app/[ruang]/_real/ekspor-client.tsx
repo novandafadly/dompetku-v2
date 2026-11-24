@@ -19,6 +19,7 @@ export function ExportButton({
   filename,
   periodTitle,
   describedBy,
+  format = 'csv',
 }: {
   ruang: Ruang;
   href: string;
@@ -26,8 +27,11 @@ export function ExportButton({
   /** `Oktober 2026`. */
   periodTitle: string;
   describedBy: string;
+  format?: 'csv' | 'pdf';
 }) {
   const [busy, setBusy] = useState(false);
+  const expectedMime = format === 'pdf' ? 'application/pdf' : 'text/csv';
+  const label = format === 'pdf' ? EKSPOR_COPY.buttonPdf : EKSPOR_COPY.button;
 
   async function download() {
     if (busy) return;
@@ -46,8 +50,8 @@ export function ExportButton({
         });
         return;
       }
-      // Sesi habis: fetch mengikuti redirect ke halaman masuk (200 HTML); jangan diunduh sebagai .csv.
-      if (res.redirected || !(res.headers.get('content-type') ?? '').startsWith('text/csv')) {
+      // Sesi habis: fetch mengikuti redirect ke halaman masuk (200 HTML); jangan diunduh.
+      if (res.redirected || !(res.headers.get('content-type') ?? '').startsWith(expectedMime)) {
         toast({ message: EKSPOR_COPY.errSession, tone: 'info' });
         return;
       }
@@ -60,7 +64,12 @@ export function ExportButton({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast({ message: EKSPOR_COPY.done(periodTitle, ruang) });
+      toast({
+        message:
+          format === 'pdf'
+            ? EKSPOR_COPY.donePdf(periodTitle, ruang)
+            : EKSPOR_COPY.done(periodTitle, ruang),
+      });
     } catch {
       toast({ message: EKSPOR_COPY.errGeneric, tone: 'info' });
     } finally {
@@ -76,7 +85,7 @@ export function ExportButton({
       aria-describedby={describedBy}
       aria-disabled={busy || undefined}
       aria-busy={busy || undefined}
-      className={`${buttonClass('secondary')} w-full laptop:w-auto`}
+      className={`${buttonClass('secondary')} flex-1 laptop:flex-none`}
       onClick={(e) => {
         e.preventDefault();
         void download();
@@ -90,7 +99,7 @@ export function ExportButton({
       ) : (
         <>
           <ExportIcon size={18} weight="bold" />
-          {EKSPOR_COPY.button}
+          {label}
         </>
       )}
     </a>

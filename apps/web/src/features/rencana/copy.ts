@@ -272,3 +272,16 @@ export function accountArchivedBillText(dompet: string): string {
 export function saldoKurangBayarText(dompet: string, balance: string, after: string): string {
   return `Saldo ${dompet} tinggal ${balance}. Kalau dibayar, saldonya jadi ${after}.`;
 }
+
+/** Salinan final saran langganan (bingkai `docs/design/s16-bingkai.md`, S16-LG*). */
+export const LANGGANAN_COPY = {
+  title: 'Saran langganan',
+  subtitle: 'Pengeluaran berulang yang belum masuk daftar tagihan.',
+  meta: (months: number, day: number) =>
+    `${String(months)} bulan berulang · sekitar tgl ${String(day)}`,
+  promote: 'Jadikan tagihan',
+  dismiss: 'Abaikan',
+  dismissing: 'Mengabaikan…',
+  dismissed: (name: string) => `Saran ${name} diabaikan`,
+  dismissFailed: 'Belum berhasil mengabaikan saran. Coba lagi.',
+} as const;

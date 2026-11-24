@@ -4,7 +4,13 @@ import { buttonClass } from '@/components/ui/button';
 import { CategoryChartView } from '@/features/laporan/category-chart-view';
 import { ClassBreakdownView } from '@/features/laporan/class-breakdown-view';
 import { ContributionReportView } from '@/features/laporan/contribution-report-view';
-import { eksporFilename, eksporHref, laporanHref } from '@/features/laporan/href';
+import {
+  eksporFilename,
+  eksporHref,
+  eksporPdfFilename,
+  eksporPdfHref,
+  laporanHref,
+} from '@/features/laporan/href';
 import {
   LaporanEmptyCard,
   LaporanFailedCard,
@@ -64,13 +70,23 @@ export function LaporanReal({
         </p>
         <PeriodPicker ruang={ruang} period={period} query={query} />
         <div className="flex flex-col gap-1.5">
-          <ExportIsland
-            ruang={ruang}
-            href={eksporHref(ruang, { periode: viewed, basis: period.basis })}
-            filename={eksporFilename(ruang, viewed, period.basis)}
-            periodTitle={title}
-            describedBy="lp-ekspor-hint"
-          />
+          <div className="flex flex-wrap gap-2">
+            <ExportIsland
+              ruang={ruang}
+              href={eksporHref(ruang, { periode: viewed, basis: period.basis })}
+              filename={eksporFilename(ruang, viewed, period.basis)}
+              periodTitle={title}
+              describedBy="lp-ekspor-hint"
+            />
+            <ExportIsland
+              ruang={ruang}
+              format="pdf"
+              href={eksporPdfHref(ruang, { periode: viewed, basis: period.basis })}
+              filename={eksporPdfFilename(ruang, viewed, period.basis)}
+              periodTitle={title}
+              describedBy="lp-ekspor-hint"
+            />
+          </div>
           <p id="lp-ekspor-hint" className="text-caption font-medium text-text-muted">
             {EKSPOR_COPY.hint(title, ruang)}
           </p>
