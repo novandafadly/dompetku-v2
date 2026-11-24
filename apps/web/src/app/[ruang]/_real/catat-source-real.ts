@@ -2,10 +2,16 @@
 
 import { newClientId } from '@/features/catat/client-id';
 import { savedToast } from '@/features/catat/saved-toast';
-import type { CatatOptions, CatatSource, SaveOutcome } from '@/features/catat/source';
+import type {
+  CatatOptions,
+  CatatSource,
+  FreeTextOutcome,
+  SaveOutcome,
+} from '@/features/catat/source';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SaveCatatInput } from '../_actions/inputs';
 import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
+import { parseFreeTextAction } from '../_actions/catat-ai';
 import { moveTargetsAction, voidEntryAction } from '../_actions/entri';
 import { createSplitAction, voidSplitAction } from '../_actions/patungan';
 import { savedToast as splitSavedToast } from '@/features/ledger/patungan-copy';
@@ -173,6 +179,19 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
         });
       }
       return got;
+    },
+    async parseFreeText(r, text): Promise<FreeTextOutcome> {
+      try {
+        const res = await parseFreeTextAction(r, { text });
+        if (!res.ok) {
+          return res.error.code === 'invalid'
+            ? { ok: false, code: 'empty' }
+            : { ok: false, code: 'network' };
+        }
+        return res.value;
+      } catch {
+        return { ok: false, code: 'network' };
+      }
     },
     async save(d): Promise<SaveOutcome> {
       if (d.amount === null) return { ok: false, code: 'invalid', field: 'amount' };

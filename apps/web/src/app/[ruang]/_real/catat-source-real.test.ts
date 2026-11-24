@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   saveCatat: vi.fn(),
   catatOptions: vi.fn(),
   suggestFor: vi.fn(),
+  parseFreeTextAction: vi.fn(),
   voidEntryAction: vi.fn(),
   moveTargetsAction: vi.fn(),
   createSplitAction: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock('../_actions/catat', () => ({
   saveCatat: m.saveCatat,
   catatOptions: m.catatOptions,
   suggestFor: m.suggestFor,
+}));
+vi.mock('../_actions/catat-ai', () => ({
+  parseFreeTextAction: m.parseFreeTextAction,
 }));
 vi.mock('../_actions/entri', () => ({
   voidEntryAction: m.voidEntryAction,
@@ -267,7 +271,7 @@ describe('realCatatSource', () => {
       (x) => x[1],
     );
     for (const p of valueImports) {
-      if (p?.includes('_actions')) expect(p).toMatch(/_actions\/(catat|entri|patungan)$/);
+      if (p?.includes('_actions')) expect(p).toMatch(/_actions\/(catat|catat-ai|entri|patungan)$/);
     }
     expect(src).not.toMatch(/^import (?!type )[^;]*_actions\/inputs/m);
   });
@@ -476,6 +480,49 @@ describe('realCatatSource', () => {
         draft({ type: 'transfer', counterAccountId: RUMAH, toRuang: 'bersama' }),
       );
       expect(out).toEqual({ ok: false, code: 'cross_space_kantor' });
+    });
+  });
+
+  describe('parseFreeText (S17)', () => {
+    it('meneruskan hasil pratinjau sukses dan memetakan invalid/exception dengan aman', async () => {
+      const s = source();
+      m.parseFreeTextAction.mockResolvedValueOnce({
+        ok: true,
+        value: {
+          ok: true,
+          preview: {
+            type: 'expense',
+            amount: 35_000,
+            description: 'makan siang',
+            accountId: BCA,
+            categoryId: null,
+            occurredOn: null,
+            source: 'rules',
+          },
+        },
+      });
+      await expect(s.parseFreeText?.('pribadi', 'makan siang 35rb bca')).resolves.toMatchObject({
+        ok: true,
+        preview: { amount: 35_000, accountId: BCA, source: 'rules' },
+      });
+      expect(m.parseFreeTextAction).toHaveBeenCalledWith('pribadi', {
+        text: 'makan siang 35rb bca',
+      });
+
+      m.parseFreeTextAction.mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'invalid', field: 'text' },
+      });
+      await expect(s.parseFreeText?.('pribadi', '')).resolves.toEqual({
+        ok: false,
+        code: 'empty',
+      });
+
+      m.parseFreeTextAction.mockRejectedValueOnce(new Error('offline'));
+      await expect(s.parseFreeText?.('pribadi', 'kopi 20rb')).resolves.toEqual({
+        ok: false,
+        code: 'network',
+      });
     });
   });
 });

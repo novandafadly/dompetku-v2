@@ -13,6 +13,7 @@ import {
   type CatatSource,
   type CatatStatus,
   type CatatType,
+  type FreeTextPreview,
   type SaveOutcome,
 } from './source';
 
@@ -628,6 +629,80 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   };
 
   /**
+   * Isi draf dari hasil pratinjau Catat teks bebas (S17). Tidak pernah menyimpan otomatis:
+   * hanya memperbarui kolom yang sah untuk ruang aktif agar pengguna meninjau lalu menekan Simpan.
+   */
+  const applyParsed = (preview: FreeTextPreview) => {
+    if (busy.current || preset !== undefined) return;
+    const prevType = typeRef.current;
+    typeRef.current = preview.type;
+    const nextDate = preview.occurredOn ?? dateRef.current;
+    if (preview.occurredOn !== null) {
+      dateRef.current = preview.occurredOn;
+    }
+
+    const validAccount =
+      preview.accountId !== null
+        ? accounts.find((a) => a.id === preview.accountId && spendable(a))
+        : undefined;
+    const validCategory =
+      preview.categoryId !== null
+        ? (opts?.categories ?? []).find(
+            (cat) =>
+              cat.id === preview.categoryId &&
+              !cat.archived &&
+              !hiddenCategories.has(cat.id) &&
+              cat.type === preview.type,
+          )
+        : undefined;
+
+    const targetAccountId = validAccount?.id ?? draft.accountId;
+    const targetAccount = opts?.accounts.find((a) => a.id === targetAccountId);
+    const eligibleTrip = preview.type === 'expense' && targetAccount?.pocket !== 'kantor';
+    const suggested =
+      !tripTouched.current && eligibleTrip && opts !== null
+        ? suggestTrip(tripOptions, nextDate)
+        : null;
+    if (!tripTouched.current) setTripSuggested(suggested !== null);
+
+    update((d) => {
+      const base = clear(
+        {
+          ...d,
+          type: preview.type,
+          amount: preview.amount,
+          accountId:
+            validAccount !== undefined
+              ? validAccount.id
+              : opts !== null && targetAccount !== undefined && !spendable(targetAccount)
+                ? defaultAccountId(opts)
+                : d.accountId,
+          ...(preview.occurredOn !== null ? { date: preview.occurredOn, dateChosen: true } : {}),
+        },
+        {
+          counter: true,
+          reimbursable: true,
+          split: true,
+          category: prevType !== preview.type || validCategory !== undefined,
+          description: preview.description !== '',
+          trip: !eligibleTrip || (!tripTouched.current && suggested === null),
+        },
+      );
+      return {
+        ...base,
+        ...(validCategory !== undefined ? { categoryId: validCategory.id } : {}),
+        ...(preview.description !== '' ? { description: preview.description } : {}),
+        ...(suggested !== null ? { tripId: suggested.id } : {}),
+      };
+    });
+
+    if (status !== 'idle' && galatKind !== 'not_found') toIdle();
+    if (prevType !== preview.type) {
+      requestChips(draft.ruang, preview.type);
+    }
+  };
+
+  /**
    * Dompet dan kategori ruang lama tidak sah di ruang baru; nominal tetap. Ruang baru = niat baru,
    * jadi clientId baru. Opsi ruang tujuan diminta dari sumber (mode nyata: action, data ruang itu saja).
    */
@@ -849,6 +924,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     setDate,
     setDescription,
     setType,
+    applyParsed,
     switchRuang,
     save,
     retry,

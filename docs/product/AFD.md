@@ -276,6 +276,22 @@ flowchart TD
 
 **Aturan.** Trip hanya pengelompokan pengeluaran biasa (`report_class = 'expense'`, bukan dompet Kantor, bukan talangan; I6: Laporan, anggaran bulanan, dan "aman dipakai" tidak berubah). Keanggotaan = tag eksplisit `entries.trip_id` (K2); rentang tanggal hanya untuk saran Catat dan daftar `Masukkan`. Pindah ruang tidak membawa tag (`Trip tidak ikut`). Tag trip patungan terkunci sesudah tagihan dibagi (`split_locked`).
 
+## 12. Catat teks bebas (M6, S17)
+
+```mermaid
+flowchart TD
+  A["CatatSheet mode nyata: ketik di bilah Ketik cepat"] --> B["parseFreeTextAction (baca-saja pada entries)"]
+  B --> C{"Parser aturan yakin?"}
+  C -- "ya (0 kuota)" --> F["Isi draf Catat + banner Periksa sebelum simpan"]
+  C -- "tidak & ada LLM" --> D["api.consume_ai_quota('parse') (15/hari WIB)"]
+  D -- "diizinkan" --> E["LlmProvider (Gemini / Claude, failover otomatis)"]
+  E --> F
+  D -- "kuota habis" --> G["Fallback parser aturan atau tampilkan peringatan kuota"]
+  F --> H["Pengguna meninjau lalu klik Simpan (api.create_entry)"]
+```
+
+**Aturan.** `parseFreeTextAction` 100% baca-saja pada `app.entries` dan tidak pernah auto-simpan (K6). Prompt LLM hanya memuat tanggal WIB, daftar nama dompet aktif spendable ruang ini, daftar nama kategori aktif ruang ini, dan 1 teks input maks 300 huruf (B13). Saat kuota AI habis atau kunci LLM belum diisi, parser aturan tetap berjalan. Mode prototipe tidak menampilkan bilah `Ketik cepat`.
+
 ## Pertanyaan terbuka
 
 Ditutup keputusan pemilik 2026-10-31: aturan faktor kuat, pendaftaran pemilik pertama dan lupa kata sandi, cara kirim undangan dan email salah, layar Sampah.
