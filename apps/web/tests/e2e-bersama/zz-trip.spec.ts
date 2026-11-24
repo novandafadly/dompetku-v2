@@ -146,8 +146,10 @@ test('Bagi tagihan ke trip Bersama (K6) menaikkan total & Dicatat oleh; feed Akt
   await expect(catatSheet(partnerPage)).toHaveCount(0);
 
   await partnerPage.goto('/bersama/aktivitas');
-  const feedBefore = await main(partnerPage).getByRole('listitem').count();
-  const topBefore = await main(partnerPage).getByRole('listitem').first().innerText();
+  const feedItems = main(partnerPage).getByRole('listitem');
+  await expect(feedItems.first()).toBeVisible();
+  const feedBefore = await feedItems.count();
+  const topBefore = await feedItems.first().innerText();
 
   // Masukkan pengeluaran kandidat (termasuk Farida) ke trip (tag-saja → tidak menambah baris feed K16).
   const wantCount = preCount + 1;
@@ -168,9 +170,9 @@ test('Bagi tagihan ke trip Bersama (K6) menaikkan total & Dicatat oleh; feed Akt
     toasts(page).getByText(`${String(wantCount)} pengeluaran dimasukkan ke ${TRIP_B_EDIT}`),
   ).toBeVisible();
 
-  await partnerPage.goto('/bersama/aktivitas');
-  expect(await main(partnerPage).getByRole('listitem').count()).toBe(feedBefore);
-  expect(await main(partnerPage).getByRole('listitem').first().innerText()).toBe(topBefore);
+  await partnerPage.reload();
+  await expect(feedItems).toHaveCount(feedBefore);
+  expect(await feedItems.first().innerText()).toBe(topBefore);
 
   // Novanda mencatat patungan (Bagi tagihan) ke trip Bersama (K6).
   await page.goto('/bersama/beranda');
