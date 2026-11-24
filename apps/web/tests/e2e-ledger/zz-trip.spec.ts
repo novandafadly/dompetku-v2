@@ -287,12 +287,13 @@ test(
 
     // Pulihkan dari Detail trip.
     await page.goto(tripHref);
+    // Toast "aktif lagi" diuji di unit test; di e2e bukti pulih = banner arsip hilang
+    // (toast bisa kedaluwarsa sebelum refresh RSC selesai, jadi tidak diandalkan).
     await expect(async () => {
       const btn = main(page).getByRole('button', { name: `Pulihkan trip ${TRIP}` });
       if ((await btn.count()) > 0) await btn.click();
       await expect(main(page)).not.toContainText('Trip ini diarsipkan.', { timeout: 2_000 });
     }).toPass();
-    await expect(toasts(page).getByText(`Trip ${TRIP} aktif lagi`)).toBeVisible();
 
     // I6: total pengeluaran tidak berubah oleh arsip/pulih.
     expect(await totalPengeluaranSql()).toBe(beforeSql);
