@@ -89,6 +89,7 @@ export async function wipe(admin: pg.Pool): Promise<void> {
     delete from app.bill_occurrences;
     delete from app.bills;
     delete from app.subscription_dismissals;
+    delete from app.ai_usage;
     delete from app.budgets;
     delete from app.goals;
     delete from app.accounts;
