@@ -264,6 +264,8 @@ const C = 'Uji Undo N';
 
 test('Urungkan bayar: entri batal, baris kembali punya tombol Bayar', async ({ page }) => {
   await addBill(page, C, 50_000, KAT_A);
+  const initial = await payBtn(page, C).count();
+  expect(initial).toBeGreaterThanOrEqual(1);
   const sheet = paySheet(page);
   await openUntil(
     () => payBtn(page, C).first(),
@@ -273,16 +275,10 @@ test('Urungkan bayar: entri batal, baris kembali punya tombol Bayar', async ({ p
   await sheet.getByRole('combobox', { name: 'Dompet' }).selectOption({ label: WALLET });
   await sheet.getByRole('button', { name: /^Bayar Rp/ }).click();
   await expect(toasts(page).getByText(new RegExp(`^Tagihan ${C} dibayar`))).toBeVisible();
-  await expect(
-    main(page)
-      .getByText(/^Lunas · /)
-      .first(),
-  ).toBeVisible();
-  const before = await payBtn(page, C).count();
-  await toasts(page).getByRole('button', { name: 'Urungkan' }).first().click();
-  await expect(async () => {
-    expect(await payBtn(page, C).count()).toBe(before + 1);
-  }).toPass();
+  // Tunggu refresh RSC benar-benar menurunkan tombol Bayar milik C (bukan Lunas milik tagihan B sebelumnya).
+  await expect(payBtn(page, C)).toHaveCount(initial - 1);
+  await toasts(page).getByRole('button', { name: 'Urungkan' }).last().click();
+  await expect(payBtn(page, C)).toHaveCount(initial);
   const n = await adminQuery<{ n: number }>(
     `select count(*)::int as n from app.entries where description = $1 and voided_at is null`,
     [C],
