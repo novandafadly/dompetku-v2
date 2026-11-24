@@ -1,5 +1,6 @@
 'use server';
 
+import type { CatatSafe } from '@/features/catat/source';
 import type { AccountVM, ActionResult, CategoryVM } from '@/features/ledger/types';
 import type { SplitContextVM } from '@/features/ledger/patungan-types';
 import type { TripChoiceVM } from '@/features/ledger/trip-types';
@@ -10,6 +11,7 @@ import {
   listAccounts,
   listCategories,
   listTripChoices,
+  safeToSpend,
   suggestCategories,
 } from '@/server/ledger/read';
 import { createEntry, createSpaceTransfer, createTransfer } from '@/server/ledger/write';
@@ -114,6 +116,17 @@ export async function catatOptions(ruang: unknown): Promise<ActionResult<CatatOp
       splitContextTx(c, ledger(ctx)),
     );
     return split === null ? base : { ...base, split };
+  });
+}
+
+/**
+ * Aman dipakai ruang ini (`api.safe_to_spend`, angka SQL) untuk baris konteks sheet Catat. Hanya
+ * membaca; angka yang sama dengan kartu Beranda.
+ */
+export async function catatSafe(ruang: unknown): Promise<ActionResult<CatatSafe>> {
+  return query('catatSafe', actionContext(ruang), async (ctx) => {
+    const r = await safeToSpend(ledger(ctx));
+    return { aman: r.aman, perDay: r.perDay, daysLeft: r.daysLeft };
   });
 }
 

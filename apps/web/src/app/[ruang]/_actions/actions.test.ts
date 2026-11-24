@@ -43,6 +43,7 @@ const m = vi.hoisted(() => ({
   listCategories: vi.fn(),
   listTripChoices: vi.fn(),
   suggestCategories: vi.fn(),
+  safeToSpend: vi.fn(),
   getEntry: vi.fn(),
   recordProductEvent: vi.fn(),
   createSpaceTransfer: vi.fn(),
@@ -129,6 +130,7 @@ vi.mock('@/server/ledger/read', async (orig) => ({
   listCategories: m.listCategories,
   listTripChoices: m.listTripChoices,
   suggestCategories: m.suggestCategories,
+  safeToSpend: m.safeToSpend,
   getEntry: m.getEntry,
   loadRuangShell: m.loadRuangShell,
 }));
@@ -167,6 +169,7 @@ const CASES: Record<string, { input?: unknown; wrapper: keyof typeof m; mutation
     mutation: true,
   },
   catatOptions: { wrapper: 'listAccounts', mutation: false },
+  catatSafe: { wrapper: 'safeToSpend', mutation: false },
   suggestFor: {
     input: { type: 'expense', hour: 9 },
     wrapper: 'suggestCategories',
@@ -387,6 +390,7 @@ const WRAPPERS = [
   'listCategories',
   'listTripChoices',
   'suggestCategories',
+  'safeToSpend',
   'getEntry',
   'recordProductEvent',
   'createSpaceTransfer',
@@ -442,6 +446,15 @@ beforeEach(() => {
   m.listCategories.mockResolvedValue([]);
   m.listTripChoices.mockResolvedValue([]);
   m.suggestCategories.mockResolvedValue([A, B]);
+  m.safeToSpend.mockResolvedValue({
+    aman: 1_395_000,
+    perDay: 199_285,
+    daysLeft: 7,
+    operasional: 1_421_000,
+    billsUntilEom: 0,
+    budgetWajibRemaining: 26_000,
+    until: '2026-10-31',
+  });
   m.getEntry.mockResolvedValue({ entry: { id: B, version: 2 }, history: [] });
   m.recordProductEvent.mockResolvedValue(undefined);
   m.createSpaceTransfer.mockResolvedValue({
@@ -1040,6 +1053,18 @@ describe('catat', () => {
       value: { accounts: [{ id: A }], categories: [{ id: B }] },
     });
     expect(m.listCategories).toHaveBeenCalledWith({
+      pools: POOLS,
+      userId: USER_ID,
+      spaceId: SPACE_ID,
+    });
+  });
+
+  it('catatSafe: hanya aman, per hari, sisa hari dari SQL; tanpa rincian lain', async () => {
+    await expect(call('catatSafe', 'pribadi')).resolves.toEqual({
+      ok: true,
+      value: { aman: 1_395_000, perDay: 199_285, daysLeft: 7 },
+    });
+    expect(m.safeToSpend).toHaveBeenCalledWith({
       pools: POOLS,
       userId: USER_ID,
       spaceId: SPACE_ID,

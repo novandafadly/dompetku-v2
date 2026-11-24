@@ -2,10 +2,10 @@
 
 import { newClientId } from '@/features/catat/client-id';
 import { savedToast } from '@/features/catat/saved-toast';
-import type { CatatOptions, CatatSource, SaveOutcome } from '@/features/catat/source';
+import type { CatatOptions, CatatSafe, CatatSource, SaveOutcome } from '@/features/catat/source';
 import type { AccountVM, CategoryVM, Ruang } from '@/features/ledger/types';
 import type { SaveCatatInput } from '../_actions/inputs';
-import { catatOptions, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
+import { catatOptions, catatSafe, logCatatEvent, saveCatat, suggestFor } from '../_actions/catat';
 import { moveTargetsAction, voidEntryAction } from '../_actions/entri';
 import { createSplitAction, voidSplitAction } from '../_actions/patungan';
 import { savedToast as splitSavedToast } from '@/features/ledger/patungan-copy';
@@ -133,8 +133,19 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
     }
   };
 
+  // Aman dipakai per ruang, satu kali per sesi sheet (angka SQL; sheet menutup sesudah simpan).
+  const safe = new Map<Ruang, Promise<CatatSafe | null>>();
+
   return {
     ruangLabel,
+    safeToSpend(r) {
+      let have = safe.get(r);
+      if (have === undefined) {
+        have = catatSafe(r).then((res) => (res.ok ? res.value : null));
+        safe.set(r, have);
+      }
+      return have;
+    },
     options(r) {
       return loaded.get(r) ?? optionsOf(r);
     },

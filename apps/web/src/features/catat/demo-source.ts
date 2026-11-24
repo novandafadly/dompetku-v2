@@ -1,4 +1,4 @@
-import { balances, suggestCategories } from '@dompetku/demo-data';
+import { balances, safeToSpend, suggestCategories } from '@dompetku/demo-data';
 import type { Account, Category, DemoState, DemoStore, Entry, Ruang } from '@dompetku/demo-data';
 import type { AccountVM, CategoryVM } from '@/features/ledger/types';
 import { savedToast } from './saved-toast';
@@ -116,6 +116,10 @@ export function demoCatatSource(state: DemoState, store: DemoStore): CatatSource
     },
     chips(ruang, type, hour) {
       return suggestCategories(state, ruang, { hourWIB: hour, type }).map(categoryVM);
+    },
+    safeToSpend(ruang, today) {
+      const r = safeToSpend(state, ruang, today);
+      return { aman: r.total, perDay: r.perDay, daysLeft: r.daysLeft };
     },
     spaceTransferTargets(toRuang) {
       const bal = balances(state, toRuang);

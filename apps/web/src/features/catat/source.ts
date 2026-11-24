@@ -104,8 +104,24 @@ export type CatatTrackEvent =
       durationMs: number;
     };
 
+/**
+ * "Aman dipakai" ruang saat ini (angka SQL; prototipe dari store demo). Konteks di sheet, bukan
+ * perkiraan sesudah simpan: belanja kategori anggaran wajib menurunkan kas dan sisa wajib sekaligus,
+ * jadi angka sesudah simpan tidak bisa diturunkan dengan pengurangan di klien.
+ */
+export interface CatatSafe {
+  aman: Rupiah;
+  perDay: Rupiah;
+  daysLeft: number;
+}
+
 export interface CatatSource {
   ruangLabel: Record<Ruang, string>;
+  /**
+   * Aman dipakai ruang `ruang` untuk baris konteks di bawah nominal. Opsional: tidak ada atau
+   * `null` = tanpa baris. Gagal (lemparan/ditolak) = tanpa baris, Catat tidak terhalang.
+   */
+  safeToSpend?(ruang: Ruang, today: IsoDate): CatatSafe | null | Promise<CatatSafe | null>;
   options(ruang: Ruang): CatatOptions | Promise<CatatOptions>;
   /** 6 kategori saran; dipanggil sekali per (ruang, jenis) selama sheet terbuka. */
   chips(

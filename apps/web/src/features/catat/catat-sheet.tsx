@@ -32,6 +32,7 @@ import { focusRing } from '@/components/ui/styles';
 import { toast } from '@/components/ui/toast';
 import type { Ruang } from '@/features/ledger/types';
 import { PATUNGAN_COPY, shareNote } from '@/features/ledger/patungan-copy';
+import { AmanLine } from './aman-line';
 import { AppKeypad } from './app-keypad';
 import {
   accountArchivedText,
@@ -54,6 +55,7 @@ import { TRIP_PICKER_COPY, TripPickerRow } from './trip-picker';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
 import { useKeyboardMode } from './use-keyboard-mode';
+import { useSafeToSpend } from './use-safe-to-spend';
 import { CROSS_COPY, DestinationChips, MetaSelect } from './wallet-picker';
 
 // Halaman "Ruang lain…" (S7-C1) dimuat malas saat diketuk pertama kali: tidak ikut JS muat awal.
@@ -169,6 +171,9 @@ function CatatSession({
   });
   const { draft, status } = c;
   const { ruangLabel } = source;
+  // Konteks sebelum belanja: Aman dipakai ruang tujuan (angka sumber, bukan perkiraan sesudah simpan).
+  const showAman = preset === undefined && draft.type === 'expense';
+  const safe = useSafeToSpend(source, draft.ruang, today, showAman);
 
   // Telemetri: satu alur per sheet dibuka. Sesi yang lahir tertutup (sebelum dibuka pertama kali)
   // tidak pernah menjadi alur. Event lewat `source.track` (kirim-dan-lupakan).
@@ -842,6 +847,9 @@ function CatatSession({
             onChange={c.setAmount}
             readOnly={saving}
           />
+          {showAman && !compact && source.safeToSpend !== undefined ? (
+            <AmanLine safe={safe} />
+          ) : null}
           {preset === undefined ? null : (
             <div className="flex flex-col gap-0.5 text-caption font-medium text-text-muted">
               <p>{PRESET_COPY[preset.kind].note}</p>
