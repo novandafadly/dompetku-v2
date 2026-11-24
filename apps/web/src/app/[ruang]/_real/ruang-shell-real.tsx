@@ -10,6 +10,7 @@ import { RuangShell } from '../ruang-shell';
 // page lain diteruskan (forward) tanpa menyegarkan UI, dan gagal untuk rute dinamis `[ruang]`.
 // Impor dari graf server layout mendaftarkan semua export modul `'use server'` ini.
 import '../_actions/entri';
+import '../_actions/trip';
 
 /**
  * Shell mode nyata (Server Component): tanpa DemoProvider, sheet Catat nyata (`realCatatSource`)

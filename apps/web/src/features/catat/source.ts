@@ -51,6 +51,8 @@ export interface CatatDraft {
    */
   dateChosen: boolean;
   description?: string;
+  /** Trip tujuan pengeluaran ini (S15-TR14): hanya pengeluaran biasa non-Kantor non-talangan. */
+  tripId?: string;
   ruang: Ruang;
   /** Kunci idempoten (UUID v4): lahir saat sheet dibuka, tetap sama saat "Coba lagi". */
   clientId: string;

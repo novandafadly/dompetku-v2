@@ -377,4 +377,4 @@ Daftar periksa Task 7 (daftar, sheet), Task 8 (Detail), Task 9 (Catat/Ubah/Detai
 
 ## Hasil Delivery Gate
 
-Belum dijalankan (Task 12). Hasil dan bukti ditulis di bagian ini dan di `docs/design/s15-critique.md` sesudah screenshot 320/390/1280 terang/gelap tersedia.
+**Lulus (2026-11-23, `docs/design/s15-critique.md`).** 84 tangkapan (14 layar × 320/390/1280 × gelap/terang) dari `screens-s15-trip.spec.ts`: overflow 0, kata terlarang 0, `Rp 0` = 0; 1 temuan Penting (`S15-C1`: judul baris `Pengeluaran` terhimpit di 390 px saat nominal 12,34 M) diperbaiki di `trip-detail-views.tsx` (`flex-wrap` + `min-w-36`) dan diverifikasi ulang, 1 Minor (`S15-C2`) ditunda, 0 Blocker. Budget JS: `/pribadi/trip` 148,3 kB, `/pribadi/trip/[id]` 148,7 kB, Beranda 157,4 kB, Transaksi 157,4 kB, Detail transaksi 153,4 kB (batas 162 kB); prototipe tidak berubah (9/9 `budget.spec.ts` lulus).

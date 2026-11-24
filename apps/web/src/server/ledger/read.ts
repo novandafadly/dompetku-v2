@@ -645,6 +645,25 @@ export async function listTripChoices(ctx: LedgerCtx): Promise<TripChoiceVM[]> {
   return withLedger(ctx.pools, ctx.userId, ctx.spaceId, (c) => tripChoicesTx(c, ctx));
 }
 
+/**
+ * Semua trip AKTIF ruang ini untuk pemilih sheet Ubah (Kendala 7 bingkai S15: pengeluaran lama di
+ * luar jendela 30 hari Catat tetap bisa dimasukkan lewat Ubah). Dibatasi ruang konteks.
+ */
+export async function activeTripChoicesTx(
+  c: pg.PoolClient,
+  ctx: LedgerCtx,
+): Promise<TripChoiceVM[]> {
+  const { rows } = await c.query<{ id: string; name: string; starts_on: string; ends_on: string }>(
+    `select t.id, t.name, t.starts_on, t.ends_on
+       from app.trips t
+      where t.space_id = $1 and t.archived_at is null
+      order by t.starts_on desc, t.name collate "C", t.id
+      limit 200`,
+    [ctx.spaceId],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, startsOn: r.starts_on, endsOn: r.ends_on }));
+}
+
 /** Opsi Catat layout `[ruang]`: dompet + kategori aktif ruang ini dalam SATU transaksi. */
 export interface RuangShellData {
   accounts: AccountVM[];

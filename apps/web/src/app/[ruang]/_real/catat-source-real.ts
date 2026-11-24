@@ -104,6 +104,7 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
         ...(d.dateChosen ? { occurredOn: d.date } : {}),
         ...(d.description === undefined ? {} : { description: d.description }),
         ...(shares === undefined ? {} : { shares }),
+        ...(d.tripId === undefined ? {} : { tripId: d.tripId }),
         allowNegative: d.allowNegative,
       });
       if (!res.ok) {
@@ -210,6 +211,7 @@ export function realCatatSource({ ruang, options, ruangLabel }: RealCatatSourceA
                 accountId: d.accountId,
                 categoryId: d.categoryId ?? '',
                 ...(d.type === 'expense' && d.reimbursable === true ? { reimbursable: true } : {}),
+                ...(d.type === 'expense' && d.tripId !== undefined ? { tripId: d.tripId } : {}),
                 ...common,
               };
       try {

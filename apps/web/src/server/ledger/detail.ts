@@ -1,4 +1,5 @@
 import 'server-only';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import type {
   AccountVM,
   CategoryVM,
@@ -8,7 +9,7 @@ import type {
 } from '@/features/ledger/types';
 import type pg from 'pg';
 import { z } from 'zod';
-import { getEntryTx, listAccountsTx, listCategoriesTx } from './read';
+import { activeTripChoicesTx, getEntryTx, listAccountsTx, listCategoriesTx } from './read';
 import { withLedger } from './retry';
 import type { LedgerCtx } from './write';
 
@@ -23,6 +24,8 @@ export interface DetailData {
   history: HistoryVM[];
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Trip aktif ruang ini untuk pemilih di sheet Ubah (S15-TR15); kosong untuk selain pengeluaran biasa. */
+  trips?: TripChoiceVM[];
   /** Entri batal yang sudah lewat 90 hari (`restore_window_closed`, jam DB `app.now()`). */
   restoreClosed: boolean;
   /**
@@ -82,9 +85,23 @@ export async function loadDetail(ctx: LedgerCtx, entryId: string): Promise<Detai
     if (found === null) return null;
     const accounts = await listAccountsTx(c, ctx);
     const categories = await listCategoriesTx(c, ctx);
+    const trips =
+      found.entry.kind === 'expense' &&
+      found.entry.reimbursable !== true &&
+      found.entry.split === undefined
+        ? await activeTripChoicesTx(c, ctx)
+        : [];
     const restoreClosed = await windowClosedTx(c, ctx, found.entry.id);
     const spaceCount = await spaceCountTx(c);
     const talangan = await talanganTx(c, ctx, found.entry);
-    return { ...found, accounts, categories, restoreClosed, spaceCount, talangan };
+    return {
+      ...found,
+      accounts,
+      categories,
+      ...(trips.length === 0 ? {} : { trips }),
+      restoreClosed,
+      spaceCount,
+      talangan,
+    };
   });
 }

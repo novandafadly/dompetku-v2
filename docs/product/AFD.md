@@ -261,7 +261,20 @@ flowchart TD
   E --> F["Bayar kedua kali ditolak: already_posted"]
 ```
 
-**Aturan.** Satu kewajiban satu sumber: tagihan atau anggaran wajib, tidak keduanya (`obligation_double`). Tagihan lanjutan (tanggal 31, trip, deteksi langganan) di M5.
+**Aturan.** Satu kewajiban satu sumber: tagihan atau anggaran wajib, tidak keduanya (`obligation_double`). Tagihan lanjutan tanggal 31 (Z4/Z5/B14) selesai diuji di S15; deteksi langganan dan kalender arus kas di S16 (M5).
+
+## 11. Trip (M5, S15)
+
+```mermaid
+flowchart TD
+  A["Menu → Trip (/{ruang}/trip)"] --> B["Tambah trip (api.create_trip): nama, rentang ≤ 366 hari, anggaran opsional"]
+  B --> C["Catat pengeluaran biasa: saran otomatis K9 bila 1 trip aktif memuat tanggal"]
+  C --> D["Detail trip (/{ruang}/trip/{id}): total & rincian SQL, anggaran, kandidat Masukkan"]
+  D --> E["Masukkan (≤ 100 atomik) / Keluarkan + Urungkan (api.set_entries_trip)"]
+  D --> F["Arsipkan / Pulihkan: pengeluaran tetap tercatat dan bertanda; hilang dari Catat"]
+```
+
+**Aturan.** Trip hanya pengelompokan pengeluaran biasa (`report_class = 'expense'`, bukan dompet Kantor, bukan talangan; I6: Laporan, anggaran bulanan, dan "aman dipakai" tidak berubah). Keanggotaan = tag eksplisit `entries.trip_id` (K2); rentang tanggal hanya untuk saran Catat dan daftar `Masukkan`. Pindah ruang tidak membawa tag (`Trip tidak ikut`). Tag trip patungan terkunci sesudah tagihan dibagi (`split_locked`).
 
 ## Pertanyaan terbuka
 
