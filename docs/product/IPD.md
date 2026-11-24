@@ -279,7 +279,16 @@ Rincian dan tes (T6 sampai T15) ada di `docs/team/round1/qa.md`. Sprint M3 sampa
   - **Deteksi langganan:** `48_kalender_langganan.sql` (>= 3 bulan berbeda, nominal sama, terakhir <= 45 hari, menyaring tagihan aktif/talangan/abaikan), `s16.int`, unit `langganan-client.test.tsx` + `_actions/langganan.test.ts`, e2e `zz-s16.spec` (Jadikan tagihan prefill `BillSheet` + Abaikan idempoten).
   - **Ekspor PDF (K9, B13, paritas Laporan):** `pdf.test.ts` (escape `\`, `(`, `)`, kontrol/NBSP, muatan injeksi jadi teks literal mati, validasi offset `xref`), `ekspor-pdf/route.test.ts` (`no-store`, `nosniff`, `attachment`, `429`, prototipe `404`), `s16.int` (paritas angka PDF = `loadLaporan`, B13 kanari, K9), e2e `zz-s16.spec` (`@K9`) dan `e2e-bersama/zz-s16.spec` (`@B13`, `@K9`).
   - **Budget JS (muat dingin nyata, batas 162 kB):** Tagihan **150,9 kB**, Kalender **148,9 kB**, Laporan **151,6 kB**; prototipe `budget.spec` 9/9 lulus.
-- **Berikutnya:** M6 (S17+: AI/LLM Catat teks bebas, analisis AI, penyimpanan struk, offline-baca) menunggu keputusan pemilik sebelum dimulai.
+
+### S17: status (Catat teks bebas `LlmProvider` Claude & Gemini, kuota harian DB, eval set; M6)
+
+- **Status (2026-11-24).** Selesai penuh di branch `feat/s17-catat-teks-bebas-ai`: DB `0150_ai_kuota.sql` (`app.ai_usage` RLS FORCE, `api.ai_quota`, `api.consume_ai_quota` 15 parse / 5 analysis per hari WIB), `LlmProvider` multi-penyedia tanpa SDK (**Google Gemini** `gemini-2.5-flash` & **Anthropic Claude** `claude-haiku-4-5-20251001` dengan failover otomatis primer → cadangan via `LLM_PROVIDER`/`LLM_FALLBACK_PROVIDER`), parser hibrida aturan-dulu (`rules.ts` + `parse-entry.ts`), Eval Set 60 kasus Bahasa Indonesia >= 90% (`eval.test.ts`), Server Action baca-saja `parseFreeTextAction`, bilah `Ketik cepat` + banner pratinjau wajib konfirmasi di `CatatSheet` mode nyata (anti auto-simpan, prototipe tidak berubah), tes pgTAP/int/unit/e2e, Delivery Gate visual 18 PNG (`docs/design/s17-critique.md`), dan dokumentasi. **Merge = deploy + migrasi `0150` otomatis** tanpa langkah VM baru (API key opsional diisi di `web.env` saat ingin menyalakan bantuan LLM; tanpa kunci, parser aturan tetap berjalan 100%).
+- **Bukti gerbang M6 (bagian S17):**
+  - **Eval Set >= 90%:** `eval.test.ts` (60 kasus nyata Bahasa Indonesia: nominal, jenis, dompet dengan/tanpa `@` termasuk dompet berangka, tanggal relatif/absolut, kategori aktif ruang, kasus tolak/injeksi).
+  - **Anti auto-simpan & kuota:** `parseFreeTextAction` 100% baca-saja pada `app.entries`; `s17.int.test.ts` memverifikasi 15/hari kuota parse + fallback aturan saat habis + failover Gemini → Claude; `e2e-ledger/zz-s17.spec` memverifikasi baris `app.entries` tidak bertambah sebelum klik `Simpan`.
+  - **Privasi prompt (B13):** `provider.test.ts`, `s17.int.test.ts`, `e2e-bersama/zz-s17.spec` (`@B13`), dan `REGISTRY.md` diperbarui.
+  - **Budget JS & prototipe:** `CatatSheet` dimuat malas → 0 byte tambahan pada cold-load rute (`/pribadi/beranda` & `/bersama/beranda` <= 162 kB); prototipe `budget.spec` 9/9 lulus.
+- **Berikutnya:** **S18 (M6):** Analisis AI (memakai kuota `analysis` 5/hari yang sudah disiapkan di `0150_ai_kuota.sql` dan `LlmProvider` Claude/Gemini), PWA offline-baca, dan foto struk terenkripsi tanpa OCR (menunggu konfirmasi penyimpanan lampiran & kunci).
 
 ## 7. Risiko lintas milestone
 
