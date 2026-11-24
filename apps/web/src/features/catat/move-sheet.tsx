@@ -356,6 +356,9 @@ function MoveSession({
     `Saldo ${entry.accountName} dan ${target?.name ?? 'dompet tujuan'} ikut berubah.`,
     `Yang sudah dipindah tidak bisa dipulihkan dari Sampah ${asal}.`,
     ...(canKeep ? [keep ? 'Keterangan ikut dipindah.' : 'Keterangan tidak ikut dipindah.'] : []),
+    ...(entry.tripId !== undefined && entry.tripName !== undefined
+      ? [`Trip tidak ikut. Pengeluaran ini keluar dari trip ${entry.tripName}.`]
+      : []),
   ];
 
   return (

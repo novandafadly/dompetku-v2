@@ -2,6 +2,7 @@
 
 import { nowTimeWIB, type IsoDate, type Rupiah } from '@dompetku/domain';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { suggestTrip } from '@/features/ledger/trip-present';
 import type { AccountVM, CategoryVM, LedgerErrorCode, Ruang } from '@/features/ledger/types';
 import { newClientId } from './client-id';
 import {
@@ -29,14 +30,23 @@ export interface UseCatatArgs {
   preset?: CatatPreset | undefined;
 }
 
-/** Galat yang terikat ke satu kolom (S6-C5): kode → nama kolom server. */
-const FIELD_OF: Partial<Record<LedgerErrorCode, 'occurred_on' | 'account_id' | 'category_id'>> = {
+/** Galat yang terikat ke satu kolom (S6-C5, S15-TR15): kode → nama kolom server. */
+const FIELD_OF: Partial<
+  Record<LedgerErrorCode, 'occurred_on' | 'account_id' | 'category_id' | 'trip_id'>
+> = {
   before_opening: 'occurred_on',
   account_archived: 'account_id',
   category_archived: 'category_id',
+  trip_archived: 'trip_id',
+  trip_entry_invalid: 'trip_id',
 };
 
-export type FieldCode = 'before_opening' | 'account_archived' | 'category_archived';
+export type FieldCode =
+  | 'before_opening'
+  | 'account_archived'
+  | 'category_archived'
+  | 'trip_archived'
+  | 'trip_entry_invalid';
 
 /**
  * Jenis galat simpan tanpa bingkai sendiri (keputusan controller, s6-bingkai.md "Tambahan
@@ -131,6 +141,8 @@ function clear(
     sharedNote?: boolean;
     /** Bagi tagihan (S12-CT1). */
     split?: boolean;
+    /** Trip (S15-TR14). */
+    trip?: boolean;
   },
 ): CatatDraft {
   const next = { ...d };
@@ -144,6 +156,7 @@ function clear(
   if (fields.reimbursable === true) delete next.reimbursable;
   if (fields.sharedNote === true) delete next.sharedNote;
   if (fields.split === true) delete next.split;
+  if (fields.trip === true) delete next.tripId;
   return next;
 }
 
@@ -176,7 +189,10 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const [hiddenCategories, setHiddenCategories] = useState<ReadonlySet<string>>(() => new Set());
+  const [hiddenTrips, setHiddenTrips] = useState<ReadonlySet<string>>(() => new Set());
   const [archivedCategoryId, setArchivedCategoryId] = useState<string | null>(null);
+  const [archivedTripName, setArchivedTripName] = useState<string | null>(null);
+  const [tripSuggested, setTripSuggested] = useState(false);
   const [galatKind, setGalatKind] = useState<CatatGalatKind | null>(null);
   const [switchFailed, setSwitchFailed] = useState<Ruang | null>(null);
   // Dompet tujuan antar ruang: dimuat malas, dibuang saat ruang sumber berganti.
@@ -195,8 +211,11 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const allowNegative = useRef(false);
   const optsSeq = useRef(0);
   const chipsSeq = useRef(0);
-  // Jenis terbaru untuk jawaban opsi yang tiba terlambat (state di closure bisa basi).
+  // Jenis & tanggal terbaru untuk jawaban opsi yang tiba terlambat (state di closure bisa basi).
   const typeRef = useRef<CatatType>(preset === undefined ? 'expense' : 'transfer');
+  const dateRef = useRef<IsoDate>(today);
+  // Saran awal K9 berhenti setelah pengguna menyentuh pemilih Trip (memilih, mengganti, atau Lepas).
+  const tripTouched = useRef(false);
 
   const requestChips = (r: Ruang, type: CatatType) => {
     const seq = ++chipsSeq.current;
@@ -220,17 +239,25 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     );
   };
 
-  /** Opsi ruang tiba (Promise): dompet bawaan ruang itu, lalu chip. */
+  /** Opsi ruang tiba (Promise atau sinkron): dompet bawaan, saran trip K9, lalu chip. */
   const receive = (r: Ruang, o: CatatOptions) => {
     setOpts(o);
-    setDraft((d) =>
-      d.ruang === r
-        ? {
-            ...d,
-            ...(preset === undefined ? { accountId: defaultAccountId(o) } : presetDraft(o, preset)),
-          }
-        : d,
-    );
+    const picked = preset === undefined ? defaultAccountId(o) : presetDraft(o, preset).accountId;
+    const pickedAccount = o.accounts.find((a) => a.id === picked);
+    const eligibleTrip =
+      typeRef.current === 'expense' && preset === undefined && pickedAccount?.pocket !== 'kantor';
+    const suggested =
+      !tripTouched.current && eligibleTrip ? suggestTrip(o.trips ?? [], dateRef.current) : null;
+    setTripSuggested(suggested !== null);
+    setDraft((d) => {
+      if (d.ruang !== r) return d;
+      const base = {
+        ...d,
+        ...(preset === undefined ? { accountId: picked } : presetDraft(o, preset)),
+      };
+      if (suggested !== null) return { ...base, tripId: suggested.id };
+      return tripTouched.current ? base : clear(base, { trip: true });
+    });
     requestChips(r, typeRef.current);
   };
 
@@ -299,6 +326,15 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   // Talangan (S7-C2): hanya pengeluaran Pribadi dari dompet bukan Kantor (Kantor sudah x_kantor).
   const canReimburse =
     draft.type === 'expense' && draft.ruang === 'pribadi' && selectedAccount?.pocket !== 'kantor';
+  // Pemilih Trip (S15-TR14): hanya pengeluaran biasa non-Kantor non-talangan (patungan Bersama boleh, K6).
+  const canTrip =
+    draft.type === 'expense' &&
+    draft.reimbursable !== true &&
+    preset === undefined &&
+    (draft.split !== undefined || selectedAccount?.pocket !== 'kantor');
+  const tripOptions = (opts?.trips ?? []).filter((t) => !hiddenTrips.has(t.id));
+  const selectedTrip =
+    draft.tripId === undefined ? null : (opts?.trips?.find((t) => t.id === draft.tripId) ?? null);
   const allCategories = (opts?.categories ?? [])
     .filter(
       (c) =>
@@ -360,21 +396,30 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   const setAccount = (accountId: string) => {
     if (busy.current) return;
     const next = opts?.accounts.find((a) => a.id === accountId);
+    const isKantor = next?.pocket === 'kantor';
     update((d) =>
       clear(
         { ...d, accountId },
         {
-          // Tujuan satu ruang yang sama dengan sumber baru gugur; Kantor memutus antar ruang.
+          // Tujuan satu ruang yang sama dengan sumber baru gugur; Kantor memutus antar ruang dan trip.
           counter:
             (d.toRuang === undefined && d.counterAccountId === accountId) ||
             (d.toRuang !== undefined &&
-              (next?.pocket === 'kantor' || next?.pocket === 'trading' || next?.pocket === 'aset')),
-          reimbursable: next?.pocket === 'kantor',
+              (isKantor || next?.pocket === 'trading' || next?.pocket === 'aset')),
+          reimbursable: isKantor,
+          trip: isKantor,
         },
       ),
     );
+    if (isKantor) setTripSuggested(false);
     if (galatKind === 'cross_space_kantor') toIdle();
-    if (status === 'field' && fieldCode === 'account_archived') toIdle();
+    if (
+      status === 'field' &&
+      (fieldCode === 'account_archived' ||
+        (isKantor && (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid')))
+    ) {
+      toIdle();
+    }
     if (status === 'saldo_kurang' && draft.split === undefined && enough(draft, next)) toIdle();
   };
   const dropCrossError = () => {
@@ -431,8 +476,18 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         d.type === 'expense' &&
         d.ruang === 'pribadi' &&
         opts?.accounts.find((a) => a.id === d.accountId)?.pocket !== 'kantor';
-      return on && allowed ? { ...d, reimbursable: true } : clear(d, { reimbursable: true });
+      if (on && allowed) return { ...clear(d, { trip: true }), reimbursable: true };
+      return clear(d, { reimbursable: true });
     });
+    if (on) {
+      setTripSuggested(false);
+      if (
+        status === 'field' &&
+        (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid')
+      ) {
+        toIdle();
+      }
+    }
   };
   /** Muat dompet Pribadi (sekali; ulang setelah galat) dan isi dompet bawaan toggle. */
   const loadPersonal = () => {
@@ -512,8 +567,28 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
   };
   const setDate = (date: IsoDate) => {
     if (busy.current) return;
-    update((d) => ({ ...d, date, dateChosen: true }));
+    dateRef.current = date;
+    const shouldSuggest = !tripTouched.current && canTrip && opts !== null;
+    const suggested = shouldSuggest ? suggestTrip(tripOptions, date) : null;
+    if (shouldSuggest) setTripSuggested(suggested !== null);
+    update((d) => {
+      const next = { ...d, date, dateChosen: true };
+      if (!shouldSuggest) return next;
+      return suggested === null ? clear(next, { trip: true }) : { ...next, tripId: suggested.id };
+    });
     if (status === 'field' && fieldCode === 'before_opening') toIdle();
+  };
+  const setTrip = (tripId: string | null) => {
+    if (busy.current) return;
+    tripTouched.current = true;
+    setTripSuggested(false);
+    update((d) => (tripId === null ? clear(d, { trip: true }) : { ...d, tripId }));
+    if (
+      status === 'field' &&
+      (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid')
+    ) {
+      toIdle();
+    }
   };
   const setDescription = (description: string) => {
     update((d) => (description === '' ? clear(d, { description: true }) : { ...d, description }));
@@ -524,7 +599,13 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     update((d) => {
       const next = clear(
         { ...d, type },
-        { category: true, counter: true, reimbursable: true, split: true },
+        {
+          category: true,
+          counter: true,
+          reimbursable: true,
+          split: true,
+          trip: type !== 'expense',
+        },
       );
       // Trading dan aset hanya sumber/tujuan transfer: jenis lain memindahkan dompet ke bawaan.
       const current = opts?.accounts.find((a) => a.id === d.accountId);
@@ -532,8 +613,15 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         ? { ...next, accountId: defaultAccountId(opts) }
         : next;
     });
+    if (type !== 'expense') setTripSuggested(false);
     dropCrossError();
-    if (status === 'saldo_kurang' || (status === 'field' && fieldCode === 'category_archived')) {
+    if (
+      status === 'saldo_kurang' ||
+      (status === 'field' &&
+        (fieldCode === 'category_archived' ||
+          (type !== 'expense' &&
+            (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid'))))
+    ) {
       toIdle();
     }
     requestChips(draft.ruang, type);
@@ -548,10 +636,14 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     const prev = {
       ruang: draft.ruang,
       accountId: draft.accountId,
+      tripId: draft.tripId,
+      tripTouched: tripTouched.current,
+      tripSuggested,
       clientId: draft.clientId,
       opts,
       hidden,
       hiddenCategories,
+      hiddenTrips,
     };
     const seq = ++optsSeq.current;
     // `not_found` bertahan sampai sheet ditutup: pindah ruang tidak membuka Simpan diam-diam.
@@ -559,21 +651,32 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     setSwitchFailed(null);
     setHidden(new Set());
     setHiddenCategories(new Set());
+    setHiddenTrips(new Set());
+    setArchivedTripName(null);
+    tripTouched.current = false;
+    setTripSuggested(false);
     const got = source.options(next);
     // Tujuan antar ruang dihitung dari ruang sumber: dibuang, dimuat ulang bila dibuka lagi.
     crossSeq.current++;
     setCross({ target: otherRuang(next), status: 'idle', accounts: [] });
-    const reset = (accountId: string) => {
-      setDraft((d) =>
-        clear(
+    const reset = (accountId: string, suggestedTripId?: string) => {
+      setDraft((d) => {
+        const cleaned = clear(
           { ...d, ruang: next, accountId, clientId: newClientId() },
-          { category: true, counter: true, reimbursable: true, split: true },
-        ),
-      );
+          { category: true, counter: true, reimbursable: true, split: true, trip: true },
+        );
+        return suggestedTripId === undefined ? cleaned : { ...cleaned, tripId: suggestedTripId };
+      });
     };
     if (!isPromise(got)) {
       setOpts(got);
-      reset(defaultAccountId(got));
+      const picked = defaultAccountId(got);
+      const pickedAccount = got.accounts.find((a) => a.id === picked);
+      const eligible =
+        typeRef.current === 'expense' && preset === undefined && pickedAccount?.pocket !== 'kantor';
+      const suggested = eligible ? suggestTrip(got.trips ?? [], dateRef.current) : null;
+      setTripSuggested(suggested !== null);
+      reset(picked, suggested?.id);
       requestChips(next, typeRef.current);
       return;
     }
@@ -591,12 +694,20 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         setCross({ target: otherRuang(prev.ruang), status: 'idle', accounts: [] });
         setHidden(prev.hidden);
         setHiddenCategories(prev.hiddenCategories);
-        setDraft((d) => ({
-          ...d,
-          ruang: prev.ruang,
-          accountId: prev.accountId,
-          clientId: prev.clientId,
-        }));
+        setHiddenTrips(prev.hiddenTrips);
+        tripTouched.current = prev.tripTouched;
+        setTripSuggested(prev.tripSuggested);
+        setDraft((d) => {
+          const restored = {
+            ...d,
+            ruang: prev.ruang,
+            accountId: prev.accountId,
+            clientId: prev.clientId,
+          };
+          return prev.tripId === undefined
+            ? clear(restored, { trip: true })
+            : { ...restored, tripId: prev.tripId };
+        });
         requestChips(prev.ruang, typeRef.current);
         setSwitchFailed(next);
       },
@@ -640,6 +751,13 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
         setHiddenCategories((h) => new Set([...h, archived]));
         setChips((c) => c.filter((x) => x.id !== archived));
         setDraft((d) => clear(d, { category: true }));
+      }
+      if (out.code === 'trip_archived' && draft.tripId !== undefined) {
+        const archivedId = draft.tripId;
+        const found = opts.trips?.find((t) => t.id === archivedId);
+        setArchivedTripName(found?.name ?? null);
+        setHiddenTrips((h) => new Set([...h, archivedId]));
+        setTripSuggested(false);
       }
     } else {
       setStatus('galat');
@@ -699,6 +817,11 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     crossBlocked,
     sharedNoteVisible,
     canReimburse,
+    canTrip,
+    tripOptions,
+    selectedTrip,
+    tripSuggested,
+    archivedTripName,
     splitAvailable,
     splitPeople: opts?.split,
     personal: { ...personal, accounts: personalAccounts },
@@ -711,6 +834,7 @@ export function useCatat({ source, today, ruang, hourWIB, initialAmount, preset 
     setCrossTarget,
     setSharedNote,
     setReimbursable,
+    setTrip,
     canSave,
     assetShort,
     loading,

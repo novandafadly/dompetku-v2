@@ -1,7 +1,7 @@
 'use client';
 
 import { addDays, dayLabel, type IsoDate } from '@dompetku/domain';
-import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { CategoryIcon } from '@/components/ui/category-icon';
 import { Combobox } from '@/components/ui/combobox';
@@ -14,6 +14,7 @@ import { MoneyInput } from '@/components/ui/money-input';
 import { Sheet } from '@/components/ui/sheet';
 import { SpaceTag } from '@/components/ui/space-tag';
 import { toast } from '@/components/ui/toast';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import type { AccountVM, CategoryVM, EntryVM, Ruang } from '@/features/ledger/types';
 import {
   accountArchivedText,
@@ -30,8 +31,11 @@ import {
 import { InfoIcon } from '@/components/ui/icons/info';
 import { CategoryChips } from './category-chips';
 import { ConflictNotice } from './conflict-notice';
+import { TRIP_PICKER_COPY, TripPickerRow } from './trip-picker';
 import { amountOnly, useEditEntry, type EditGalat, type EditSource } from './use-edit-entry';
 import { MetaSelect } from './wallet-picker';
+
+const TripChoicePage = lazy(() => import('./trip-choice-page'));
 
 export type { EditInput, EditSource } from './use-edit-entry';
 
@@ -76,6 +80,8 @@ export interface EditSheetProps {
   /** Dompet dan kategori ruang ini. */
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Trip aktif ruang ini untuk pemilih Ubah (S15-TR15); tidak ada = tidak ditawarkan. */
+  trips?: readonly TripChoiceVM[] | undefined;
   /** Hari ini WIB dari server. */
   today: IsoDate;
   /** Id pengguna sekarang (konflik dari tab sendiri = `Kamu`). */
@@ -106,6 +112,7 @@ function EditSession({
   entry,
   accounts,
   categories,
+  trips,
   today,
   me,
   source,
@@ -113,7 +120,7 @@ function EditSession({
   returnFocus,
   now = () => new Date(),
 }: EditSheetProps) {
-  const e = useEditEntry({ entry, accounts, categories, me, source });
+  const e = useEditEntry({ entry, accounts, categories, trips, me, source });
   const { draft, status, base } = e;
   const only = amountOnly(base);
   const saving = e.saving;
@@ -123,6 +130,7 @@ function EditSession({
   const accountRef = useRef<HTMLSelectElement>(null);
   const dateRef = useRef<HTMLSelectElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const tripChipRef = useRef<HTMLButtonElement>(null);
   const chipsRef = useRef<HTMLDivElement>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
   const formId = useId();
@@ -131,8 +139,8 @@ function EditSession({
   const fieldErrorId = useId();
   const noteId = useId();
   const overwriteHintId = useId();
-  const [page, setPage] = useState<'form' | 'kategori'>('form');
-  const refocus = useRef<'chosen' | 'more' | 'amount' | null>(null);
+  const [page, setPage] = useState<'form' | 'kategori' | 'trip'>('form');
+  const refocus = useRef<'chosen' | 'more' | 'amount' | 'trip' | null>(null);
   const [clock, setClock] = useState<Date>(now);
 
   useEffect(() => {
@@ -141,6 +149,7 @@ function EditSession({
     refocus.current = null;
     if (where === 'more') moreRef.current?.focus();
     else if (where === 'amount') amountRef.current?.focus();
+    else if (where === 'trip') tripChipRef.current?.focus();
     else chipsRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
 
@@ -156,6 +165,11 @@ function EditSession({
       primaryRef.current?.focus();
     } else if (status === 'field' && e.fieldCode === 'category_archived') {
       chipsRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    } else if (
+      status === 'field' &&
+      (e.fieldCode === 'trip_archived' || e.fieldCode === 'trip_entry_invalid')
+    ) {
+      tripChipRef.current?.focus();
     } else if (status === 'field') {
       (e.fieldCode === 'before_opening' ? dateRef : accountRef).current?.focus();
     } else if (status === 'galat' && (e.galat === 'not_found' || e.galat === 'voided')) {
@@ -240,6 +254,68 @@ function EditSession({
             refocus.current = 'more';
           }}
         />
+      </Sheet>
+    );
+  }
+
+  if (page === 'trip') {
+    const back = () => {
+      setPage('form');
+      refocus.current = 'trip';
+    };
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={onSheetOpenChange}
+        title={EDIT_COPY.title}
+        titleHidden
+        tint={ruang}
+        headerStart={
+          <>
+            <IconButton
+              label="Kembali ke Ubah transaksi"
+              icon={<ArrowLeftIcon size={20} />}
+              onClick={back}
+            />
+            <h3 className="min-w-0 truncate text-subheading font-extrabold">
+              {TRIP_PICKER_COPY.chooseTitle(label)}
+            </h3>
+          </>
+        }
+        returnFocus={returnFocus}
+        fill
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape dari fokus di dalam halaman */}
+        <div
+          data-own-escape=""
+          onKeyDown={(ev) => {
+            if (ev.key !== 'Escape') return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            back();
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <Suspense
+            fallback={
+              <p role="status" className="px-1 py-3 text-label font-semibold text-text-muted">
+                {TRIP_PICKER_COPY.loadingChoices}
+              </p>
+            }
+          >
+            <TripChoicePage
+              trips={e.tripOptions}
+              value={draft.tripId}
+              date={draft.date}
+              today={today}
+              ownArchived={e.ownArchivedTrip}
+              onSelect={(tripId) => {
+                e.setTrip(tripId);
+                back();
+              }}
+            />
+          </Suspense>
+        </div>
       </Sheet>
     );
   }
@@ -346,12 +422,26 @@ function EditSession({
     status === 'field' && e.fieldCode === 'category_archived' && e.archivedCategory !== null
       ? categoryArchivedText(e.archivedCategory.name)
       : null;
+  const tripError =
+    status !== 'field'
+      ? null
+      : e.fieldCode === 'trip_archived'
+        ? TRIP_PICKER_COPY.archivedError(e.archivedTripName ?? e.selectedTrip?.name ?? 'ini')
+        : e.fieldCode === 'trip_entry_invalid'
+          ? TRIP_PICKER_COPY.invalidError
+          : null;
   const fieldError =
-    status !== 'field' || e.selectedAccount === undefined || e.fieldCode === 'category_archived'
+    status !== 'field' ||
+    e.selectedAccount === undefined ||
+    e.fieldCode === 'category_archived' ||
+    e.fieldCode === 'trip_archived' ||
+    e.fieldCode === 'trip_entry_invalid'
       ? null
       : e.fieldCode === 'before_opening'
         ? beforeOpeningText(e.selectedAccount.name, e.selectedAccount.openedOn)
         : accountArchivedText(e.selectedAccount.name);
+  const showTripRow =
+    e.canTrip && (e.tripOptions.length > 0 || e.selectedTrip !== null || tripError !== null);
   const kind = KIND_NAME[base.kind as keyof typeof KIND_NAME];
 
   return (
@@ -449,6 +539,29 @@ function EditSession({
             {fieldError === null ? null : (
               <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
             )}
+            {e.tripAutoDetached ? (
+              <p
+                role="status"
+                className="flex items-start gap-1.5 text-meta font-semibold text-text-soft"
+              >
+                <InfoIcon size={14} className="mt-0.5 shrink-0" />
+                <span className="text-pretty">{TRIP_PICKER_COPY.autoDetachedNote}</span>
+              </p>
+            ) : showTripRow ? (
+              <TripPickerRow
+                selected={e.selectedTrip}
+                busy={saving}
+                error={tripError}
+                errorId={fieldErrorId}
+                chipRef={tripChipRef}
+                onOpenPicker={() => {
+                  setPage('trip');
+                }}
+                onClear={() => {
+                  e.setTrip(null);
+                }}
+              />
+            ) : null}
           </>
         )}
         {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}

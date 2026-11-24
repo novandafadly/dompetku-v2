@@ -2,6 +2,7 @@
 
 import type { IsoDate, Rupiah } from '@dompetku/domain';
 import { useRef, useState } from 'react';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import type {
   AccountVM,
   ActionResult,
@@ -45,6 +46,8 @@ export interface EditDraft {
   accountId: string;
   date: IsoDate;
   description: string;
+  /** Trip entri sekarang (S15-TR15); `null` = tidak masuk trip. */
+  tripId: string | null;
 }
 
 export type EditStatus = 'idle' | 'menyimpan' | 'galat' | 'saldo_kurang' | 'field' | 'konflik';
@@ -65,6 +68,8 @@ const FIELD_CODES = new Set<LedgerErrorCode>([
   'before_opening',
   'account_archived',
   'category_archived',
+  'trip_archived',
+  'trip_entry_invalid',
 ]);
 
 export function draftOf(e: EntryVM): EditDraft {
@@ -73,6 +78,7 @@ export function draftOf(e: EntryVM): EditDraft {
     accountId: e.accountId,
     date: e.occurredOn,
     description: e.description ?? '',
+    tripId: e.tripId ?? null,
   };
   if (e.categoryId !== undefined) d.categoryId = e.categoryId;
   return d;
@@ -103,7 +109,7 @@ export function editInput(
     occurredOn: only ? base.occurredOn : d.date,
     description: only ? null : descriptionOf(d),
     reimbursable: base.reimbursable === true,
-    tripId: only ? null : (base.tripId ?? null),
+    tripId: only ? null : d.tripId,
     allowNegative,
   };
 }
@@ -115,7 +121,8 @@ function changed(base: EntryVM, d: EditDraft): boolean {
     d.accountId !== base.accountId ||
     d.categoryId !== base.categoryId ||
     d.date !== base.occurredOn ||
-    descriptionOf(d) !== (base.description ?? null)
+    descriptionOf(d) !== (base.description ?? null) ||
+    d.tripId !== (base.tripId ?? null)
   );
 }
 
@@ -137,12 +144,15 @@ export function useEditEntry({
   entry,
   accounts,
   categories,
+  trips = [],
   me,
   source,
 }: {
   entry: EntryVM;
   accounts: AccountVM[];
   categories: CategoryVM[];
+  /** Trip aktif ruang ini untuk pemilih Ubah (S15-TR15); bawaan kosong. */
+  trips?: readonly TripChoiceVM[] | undefined;
   /** Id pengguna sekarang (konflik dari tab sendiri = `Kamu`). */
   me: string;
   source: EditSource;
@@ -156,7 +166,10 @@ export function useEditEntry({
   const [fieldCode, setFieldCode] = useState<FieldCode | null>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [hiddenAccounts, setHiddenAccounts] = useState<ReadonlySet<string>>(() => new Set());
+  const [hiddenTrips, setHiddenTrips] = useState<ReadonlySet<string>>(() => new Set());
   const [archivedCategory, setArchivedCategory] = useState<CategoryVM | null>(null);
+  const [archivedTripName, setArchivedTripName] = useState<string | null>(null);
+  const [tripAutoDetached, setTripAutoDetached] = useState(false);
   // Ref: klik ganda dalam satu tick tetap satu permintaan.
   const busy = useRef(false);
   const allowNegative = useRef(false);
@@ -202,6 +215,25 @@ export function useEditEntry({
   const selectedAccount =
     accounts.find((a) => a.id === draft.accountId) ??
     (draft.accountId === base.accountId ? ownAccount : undefined);
+
+  const canTrip =
+    base.kind === 'expense' && base.reimbursable !== true && selectedAccount?.pocket !== 'kantor';
+  const tripOptions = trips.filter((t) => !hiddenTrips.has(t.id));
+  const ownArchivedTrip =
+    base.tripId !== undefined && base.tripName !== undefined && base.tripArchived === true
+      ? { id: base.tripId, name: base.tripName, archived: true as const }
+      : null;
+  const selectedTrip =
+    draft.tripId === null
+      ? null
+      : (trips.find((t) => t.id === draft.tripId) ??
+        (base.tripId === draft.tripId && base.tripName !== undefined
+          ? {
+              id: base.tripId,
+              name: base.tripName,
+              ...(base.tripArchived === true ? { archived: true } : {}),
+            }
+          : null));
 
   const saving = status === 'menyimpan';
   const hasAmount = draft.amount !== null && draft.amount > 0;
@@ -302,6 +334,12 @@ export function useEditEntry({
             return next;
           });
         }
+        if (code === 'trip_archived' && draft.tripId !== null) {
+          const id = draft.tripId;
+          const found = trips.find((t) => t.id === id);
+          setArchivedTripName(found?.name ?? (base.tripId === id ? (base.tripName ?? null) : null));
+          setHiddenTrips((h) => new Set([...h, id]));
+        }
       } else {
         setStatus('galat');
         setGalat(code === 'network' ? 'network' : code === 'not_found' ? 'not_found' : 'server');
@@ -346,7 +384,10 @@ export function useEditEntry({
     setClientId(newClientId());
     setConflict(null);
     setHiddenAccounts(new Set());
+    setHiddenTrips(new Set());
     setArchivedCategory(null);
+    setArchivedTripName(null);
+    setTripAutoDetached(false);
     toIdle();
   };
 
@@ -367,6 +408,12 @@ export function useEditEntry({
     archivedCategory,
     accountOptions,
     selectedAccount,
+    canTrip,
+    tripOptions,
+    ownArchivedTrip,
+    selectedTrip,
+    archivedTripName,
+    tripAutoDetached,
     saldo,
     canSave,
     /** "Timpa dengan perubahan saya" hanya dengan draf yang valid. */
@@ -379,14 +426,40 @@ export function useEditEntry({
       update({ categoryId }, 'category_archived');
     },
     setAccount: (accountId: string) => {
-      update({ accountId }, 'account_archived');
-      if (status === 'saldo_kurang') toIdle();
+      const nextAcc = accounts.find((a) => a.id === accountId);
+      const isKantor = nextAcc?.pocket === 'kantor';
+      if (isKantor && draft.tripId !== null) {
+        // Pelepasan otomatis (S15-TR15): pengeluaran Kantor tidak bisa masuk trip.
+        setTripAutoDetached(true);
+        update({ accountId, tripId: null }, 'account_archived');
+      } else {
+        if (!isKantor) setTripAutoDetached(false);
+        update({ accountId }, 'account_archived');
+      }
+      if (
+        status === 'saldo_kurang' ||
+        (isKantor &&
+          status === 'field' &&
+          (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid'))
+      ) {
+        toIdle();
+      }
     },
     setDate: (date: IsoDate) => {
       update({ date }, 'before_opening');
     },
     setDescription: (description: string) => {
       update({ description });
+    },
+    setTrip: (tripId: string | null) => {
+      setTripAutoDetached(false);
+      update({ tripId });
+      if (
+        status === 'field' &&
+        (fieldCode === 'trip_archived' || fieldCode === 'trip_entry_invalid')
+      ) {
+        toIdle();
+      }
     },
     save,
     retry,

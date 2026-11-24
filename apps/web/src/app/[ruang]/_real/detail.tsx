@@ -22,6 +22,7 @@ import {
   RUANG_LABEL,
 } from '@/features/shell/hrefs';
 import { buildPatunganHref } from '@/features/shell/patungan-hrefs';
+import { buildTripHref } from '@/features/shell/trip-hrefs';
 import { buildDebtHref, buildDebtListHref } from '@/features/shell/utang-hrefs';
 import { debtHeading } from '@/features/utang/copy';
 import { DetailRow, EntryDetailView } from '@/features/transaksi/entry-detail-view';
@@ -337,6 +338,19 @@ export function DetailReal({
       }
       rows={
         <>
+          {entry.tripId !== undefined && entry.tripName !== undefined ? (
+            <DetailRow term="Trip">
+              <Link
+                href={buildTripHref(ruang, entry.tripId, '')}
+                className={`inline-flex min-h-11 items-center justify-end gap-1 rounded-md text-body font-semibold text-accent-text hover-pointer:underline ${focusRing}`}
+              >
+                <span className="min-w-0 break-words">
+                  {entry.tripArchived === true ? `${entry.tripName} · Diarsipkan` : entry.tripName}
+                </span>
+                <CaretRightIcon size={16} weight="bold" className="shrink-0 text-text-muted" />
+              </Link>
+            </DetailRow>
+          ) : null}
           {entry.reimbursable === true ? <DetailRow term="Talangan">Ya, kantor</DetailRow> : null}
           {debt === undefined ? null : <DetailRow term="Kontak">{debt.contactName}</DetailRow>}
           {debt?.title === undefined ? null : <DetailRow term="Untuk apa">{debt.title}</DetailRow>}
@@ -391,6 +405,7 @@ export function DetailReal({
                 entry={entry}
                 accounts={accounts}
                 categories={categories}
+                {...(data.trips === undefined ? {} : { trips: data.trips })}
                 today={today}
                 me={me}
                 listHref={listHref}

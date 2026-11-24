@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/toast';
 import { useOpenedOnce } from '@/components/ui/use-opened-once';
 import { newClientId } from '@/features/catat/client-id';
 import { undoVoidOnce } from '@/features/catat/saved-toast';
+import type { TripChoiceVM } from '@/features/ledger/trip-types';
 import type {
   AccountVM,
   CategoryVM,
@@ -92,6 +93,7 @@ export interface DetailActionsProps {
   entry: EntryVM;
   accounts: AccountVM[];
   categories: CategoryVM[];
+  trips?: TripChoiceVM[] | undefined;
   today: IsoDate;
   me: string;
   listHref: Route;
@@ -110,6 +112,7 @@ export function DetailActions({
   entry,
   accounts,
   categories,
+  trips,
   today,
   me,
   listHref,
@@ -255,6 +258,7 @@ export function DetailActions({
             entry={entry}
             accounts={accounts}
             categories={categories}
+            {...(trips === undefined ? {} : { trips })}
             today={today}
             me={me}
           />

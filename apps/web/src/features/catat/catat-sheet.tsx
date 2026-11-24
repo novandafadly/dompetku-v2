@@ -50,6 +50,7 @@ import { CategoryChips } from './category-chips';
 import { assetMoveToast, modalToast, undoOrNotify } from './saved-toast';
 import type { CatatPreset, CatatSource, CatatType, SaveOutcome } from './source';
 import { createCatatFlow } from './telemetry';
+import { TRIP_PICKER_COPY, TripPickerRow } from './trip-picker';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
 import { useCatat } from './use-catat';
 import { useKeyboardMode } from './use-keyboard-mode';
@@ -59,6 +60,8 @@ import { CROSS_COPY, DestinationChips, MetaSelect } from './wallet-picker';
 const SpaceTargetPage = lazy(() => import('./space-target-page'));
 // Halaman `Pembagian · Bersama` (S12-CT2): dimuat malas saat `Ubah pembagian` diketuk.
 const SplitSharesPage = lazy(() => import('./split-shares-page'));
+// Halaman `Pilih trip · {Ruang}` (S15-TR14): dimuat malas saat baris Trip diketuk.
+const TripChoicePage = lazy(() => import('./trip-choice-page'));
 
 /** Salinan tetap S7-C2. */
 const TALANGAN_COPY = {
@@ -223,12 +226,13 @@ function CatatSession({
   const noteId = useId();
   const hintId = useId();
   const typeHintId = useId();
-  const [page, setPage] = useState<'form' | 'kategori' | 'ruang' | 'bagi'>('form');
+  const [page, setPage] = useState<'form' | 'kategori' | 'ruang' | 'bagi' | 'trip'>('form');
   const [menuOpen, setMenuOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
-  // Setelah halaman kategori ditutup: fokus ke chip terpilih (pilih) atau "Kategori lain…" (kembali).
-  const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | 'bagi' | null>(null);
+  // Setelah halaman kategori/trip ditutup: fokus kembali ke pemicu yang membukanya.
+  const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | 'bagi' | 'trip' | null>(null);
   const bagiRef = useRef<HTMLButtonElement>(null);
+  const tripChipRef = useRef<HTMLButtonElement>(null);
   const splitHintId = useId();
   const crossMoreRef = useRef<HTMLButtonElement>(null);
   const crossSelectedRef = useRef<HTMLButtonElement>(null);
@@ -253,6 +257,7 @@ function CatatSession({
     else if (where === 'cross') (crossSelectedRef.current ?? crossMoreRef.current)?.focus();
     else if (where === 'note') noteRef.current?.focus();
     else if (where === 'bagi') bagiRef.current?.focus();
+    else if (where === 'trip') tripChipRef.current?.focus();
     else chipsRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
   });
 
@@ -265,6 +270,8 @@ function CatatSession({
     if (status === 'field' && c.field === 'category_id') {
       // Kategori dilepas: fokus ke chip pertama (titik masuk roving tabindex).
       chipsRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+    } else if (status === 'field' && c.field === 'trip_id') {
+      tripChipRef.current?.focus();
     } else if (status === 'galat' && c.galatKind === 'cross_space_not_allowed') {
       (crossSelectedRef.current ?? crossMoreRef.current)?.focus();
     } else if (status === 'galat' && c.galatKind === 'cross_space_kantor') {
@@ -523,6 +530,68 @@ function CatatSession({
     );
   }
 
+  if (page === 'trip') {
+    const back = () => {
+      setPage('form');
+      refocus.current = 'trip';
+    };
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={onSheetOpenChange}
+        title={title}
+        titleHidden
+        tint={draft.ruang}
+        headerStart={
+          <>
+            <IconButton
+              label="Kembali ke Catat"
+              icon={<ArrowLeftIcon size={20} />}
+              onClick={back}
+            />
+            <h3 className="min-w-0 truncate text-subheading font-extrabold">
+              {TRIP_PICKER_COPY.chooseTitle(label)}
+            </h3>
+          </>
+        }
+        returnFocus={returnFocus}
+        onClickCapture={countTap}
+        fill
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape dari fokus di dalam halaman */}
+        <div
+          data-own-escape=""
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            back();
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <Suspense
+            fallback={
+              <p role="status" className="px-1 py-3 text-label font-semibold text-text-muted">
+                {TRIP_PICKER_COPY.loadingChoices}
+              </p>
+            }
+          >
+            <TripChoicePage
+              trips={c.tripOptions}
+              value={draft.tripId ?? null}
+              date={draft.date}
+              today={today}
+              onSelect={(tripId) => {
+                c.setTrip(tripId);
+                back();
+              }}
+            />
+          </Suspense>
+        </div>
+      </Sheet>
+    );
+  }
+
   const primaryLabel =
     status === 'galat' && (c.galatKind === 'network' || c.galatKind === 'server')
       ? CATAT_COPY.cobaLagi
@@ -645,12 +714,44 @@ function CatatSession({
     status === 'field' && c.archivedCategory !== undefined
       ? categoryArchivedText(c.archivedCategory.name)
       : null;
+  const tripError =
+    status !== 'field'
+      ? null
+      : c.fieldCode === 'trip_archived'
+        ? TRIP_PICKER_COPY.archivedError(c.archivedTripName ?? c.selectedTrip?.name ?? 'ini')
+        : c.fieldCode === 'trip_entry_invalid'
+          ? TRIP_PICKER_COPY.invalidError
+          : null;
   const fieldError =
-    status !== 'field' || c.payerAccount === undefined || c.fieldCode === 'category_archived'
+    status !== 'field' ||
+    c.payerAccount === undefined ||
+    c.fieldCode === 'category_archived' ||
+    c.fieldCode === 'trip_archived' ||
+    c.fieldCode === 'trip_entry_invalid'
       ? null
       : c.fieldCode === 'before_opening'
         ? beforeOpeningText(c.payerAccount.name, c.payerAccount.openedOn)
         : accountArchivedText(c.payerAccount.name);
+  const showTripRow =
+    c.canTrip && (c.tripOptions.length > 0 || c.selectedTrip !== null || tripError !== null);
+  const tripPicker = showTripRow ? (
+    <TripPickerRow
+      selected={c.selectedTrip}
+      suggested={c.tripSuggested}
+      splitting={splitting}
+      compact={compact}
+      busy={saving}
+      error={tripError}
+      errorId={fieldErrorId}
+      chipRef={tripChipRef}
+      onOpenPicker={() => {
+        setPage('trip');
+      }}
+      onClear={() => {
+        c.setTrip(null);
+      }}
+    />
+  ) : null;
   const account = c.payerAccount;
   const saldoText =
     saldoShown && account !== undefined && draft.amount !== null
@@ -983,6 +1084,7 @@ function CatatSession({
             <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
           )}
           {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}
+          {compact ? null : tripPicker}
           <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
             <FieldLabel htmlFor={noteId} optional>
               {c.sharedNoteVisible ? CROSS_COPY.keterangan : 'Keterangan'}
@@ -1002,6 +1104,7 @@ function CatatSession({
               className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
             />
           </div>
+          {compact ? tripPicker : null}
           {c.sharedNoteVisible ? (
             <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
               <FieldLabel htmlFor={sharedNoteId} optional>
