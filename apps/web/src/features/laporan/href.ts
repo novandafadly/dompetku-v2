@@ -26,7 +26,18 @@ export function eksporHref(ruang: Ruang, opts: { periode: string; basis: Laporan
   return `/${ruang}/laporan/ekspor?${params.toString()}` as Route;
 }
 
-/** Nama berkas ekspor: ruang dan periode saja (tanpa nama orang). */
+/** Nama berkas ekspor CSV: ruang dan periode saja (tanpa nama orang). */
 export function eksporFilename(ruang: Ruang, periode: string, basis: LaporanBasis): string {
   return `dompetku-${ruang}-${periode}${basis === 'kalender' ? '-kalender' : ''}.csv`;
+}
+
+/** Alamat unduhan PDF periode yang sedang dilihat (`/{ruang}/laporan/ekspor-pdf`, S16-PD1). */
+export function eksporPdfHref(ruang: Ruang, opts: { periode: string; basis: LaporanBasis }): Route {
+  const params = new URLSearchParams({ periode: opts.periode, basis: opts.basis });
+  return `/${ruang}/laporan/ekspor-pdf?${params.toString()}` as Route;
+}
+
+/** Nama berkas ekspor PDF: ruang dan periode saja (tanpa nama orang). */
+export function eksporPdfFilename(ruang: Ruang, periode: string, basis: LaporanBasis): string {
+  return `dompetku-${ruang}-${periode}${basis === 'kalender' ? '-kalender' : ''}.pdf`;
 }

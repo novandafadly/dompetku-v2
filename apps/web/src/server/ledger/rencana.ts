@@ -11,6 +11,7 @@ import type {
   PreviousBudgetsVM,
   RencanaData,
 } from '@/features/rencana/types';
+import { detectSubscriptionsTx } from './langganan';
 import { listAccountsTx, listCategoriesTx, payPeriodTx, type RuangShellData } from './read';
 import { withLedger } from './retry';
 import { callApi, NotInSpaceError, type LedgerCtx } from './write';
@@ -402,6 +403,7 @@ export async function loadRencana(
       const bills = await billListTx(c, ctx);
       const due = await billsDueTx(c, ctx);
       const upcoming = await billsUpcomingTx(c, ctx);
+      const subscriptions = await detectSubscriptionsTx(c, ctx);
       const today = await todayTx(c);
       let own: { accounts: AccountVM[]; categories: CategoryVM[] } | null = null;
       if (given === undefined) {
@@ -410,7 +412,19 @@ export async function loadRencana(
           categories: await listCategoriesTx(c, ctx),
         };
       }
-      return { period, budgets, subBudgets, totals, previous, bills, due, upcoming, today, own };
+      return {
+        period,
+        budgets,
+        subBudgets,
+        totals,
+        previous,
+        bills,
+        due,
+        upcoming,
+        subscriptions,
+        today,
+        own,
+      };
     }),
     given ?? null,
   ]);

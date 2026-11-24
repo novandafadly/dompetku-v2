@@ -91,6 +91,53 @@ export interface PreviousBudgetsVM {
   amounts: Record<string, Rupiah>;
 }
 
+/** Satu saran langganan dari `api.detect_subscriptions` (S16-LG1). */
+export interface SubscriptionSuggestionVM {
+  name: string;
+  amount: Rupiah;
+  months: number;
+  lastOn: IsoDate;
+  dayOfMonth: number;
+  categoryId: string | null;
+  accountId: string | null;
+}
+
+export type KalenderDays = 30 | 60 | 90;
+
+/** Satu tagihan jatuh tempo (materialisasi atau proyeksi) pada satu hari di kalender arus kas. */
+export interface KalenderBillVM {
+  billId: string;
+  name: string;
+  amount: Rupiah;
+  dueOn: IsoDate;
+  overdue: boolean;
+  projected: boolean;
+}
+
+/** Satu hari dari `api.cashflow_calendar` (S16-KL2); seluruh nominal dari SQL. */
+export interface KalenderDayVM {
+  day: IsoDate;
+  opening: Rupiah;
+  billsAmount: Rupiah;
+  billsCount: number;
+  overdueCount: number;
+  closing: Rupiah;
+  short: boolean;
+  bills: KalenderBillVM[];
+}
+
+export interface KalenderData {
+  daysWindow: KalenderDays;
+  today: IsoDate;
+  startBalance: Rupiah;
+  lowestBalance: Rupiah;
+  lowestDay: IsoDate;
+  firstShortDay: IsoDate | null;
+  totalBillsCount: number;
+  totalBillsAmount: Rupiah;
+  days: KalenderDayVM[];
+}
+
 export interface RencanaData {
   /** Periode berjalan (anggaran berlabel `period.labelMonth`). */
   period: PeriodVM;
@@ -106,6 +153,8 @@ export interface RencanaData {
   due: BillDueVM[];
   /** Kemunculan sesudah akhir periode berjalan yang sudah dimaterialisasi (kelompok Berikutnya). */
   upcoming: BillDueVM[];
+  /** Saran tagihan rutin dari pola berulang (`api.detect_subscriptions`, S16-LG1). */
+  subscriptions: SubscriptionSuggestionVM[];
   /** Hari ini WIB dari server (`app.today()`): bawaan tanggal Mulai/Bayar, bukan jam Node. */
   today: IsoDate;
   /** Dompet ruang ini (sheet Bayar/Tagihan): Bersama tanpa dompet Pribadi. */
