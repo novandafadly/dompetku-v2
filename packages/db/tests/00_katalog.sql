@@ -65,7 +65,7 @@ select set_eq($$
         'receive_settlement', 'void_receipt', 'create_goal', 'update_goal', 'complete_goal', 'archive_goal',
         'restore_goal', 'revalue_asset', 'buy_stock', 'sell_stock', 'open_stock_holding', 'void_stock_trade',
         'restore_stock_trade', 'set_stock_price', 'preview_sell', 'create_trip', 'update_trip', 'archive_trip',
-        'restore_trip', 'set_entries_trip'],
+        'restore_trip', 'set_entries_trip', 'dismiss_subscription'],
   'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14, trip S15 + penanda entri)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
@@ -77,7 +77,8 @@ select set_eq($$
         'budget_overview', 'spend_pace', 'category_summary', 'period_trend', 'excluded_summary',
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
         'debt_totals', 'trading_overview', 'shared_balances', 'split_history', 'list_goals', 'goal_for_account',
-        'asset_overview', 'stock_overview', 'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates'],
+        'asset_overview', 'stock_overview', 'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates',
+        'cashflow_calendar', 'detect_subscriptions'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12, tujuan S13, aset S14, trip S15)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -352,6 +353,11 @@ select set_eq($$
     ('dompetku_api', 'app.trips', 'INSERT'),
     ('dompetku_api', 'app.trips', 'UPDATE'),
     ('dompetku_auditor', 'app.trips', 'SELECT'),
+    -- S16 (0149): abaikan saran langganan (web/api baca anggota, api tulis lewat fungsi, tanpa UPDATE/DELETE).
+    ('dompetku_web', 'app.subscription_dismissals', 'SELECT'),
+    ('dompetku_api', 'app.subscription_dismissals', 'SELECT'),
+    ('dompetku_api', 'app.subscription_dismissals', 'INSERT'),
+    ('dompetku_auditor', 'app.subscription_dismissals', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -384,7 +390,7 @@ select set_eq($$
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api', 'dompetku_auditor']) r,
                       unnest(array['app.my_space_ids', 'app.space_roster', 'app.assert_member',
-                                   'app.report_class', 'app.category_keywords']) f
+                                   'app.report_class', 'app.category_keywords', 'app.subscription_key']) f
      union all
      select r, f from unnest(array['dompetku_web', 'dompetku_api']) r,
                       unnest(array['app.effective_payday', 'app.pay_period',
@@ -412,7 +418,7 @@ select set_eq($$
                                    'archive_goal', 'restore_goal', 'revalue_asset', 'buy_stock',
                                    'sell_stock', 'open_stock_holding', 'void_stock_trade',
                                    'restore_stock_trade', 'set_stock_price', 'preview_sell',
-                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip', 'set_entries_trip']) f
+                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip', 'set_entries_trip', 'dismiss_subscription']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -424,7 +430,8 @@ select set_eq($$
                       'export_entries', 'list_contacts', 'list_debts', 'debt_detail',
                       'debt_totals', 'trading_overview', 'shared_balances', 'split_history',
                       'list_goals', 'goal_for_account', 'asset_overview', 'stock_overview',
-                      'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates']) f
+                      'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates',
+                      'cashflow_calendar', 'detect_subscriptions']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
