@@ -8,6 +8,7 @@ import { CaretDownIcon } from '@/components/ui/icons/caret-down';
 import { InfoIcon } from '@/components/ui/icons/info';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { EmptyLine, ListCard } from '@/components/ui/list-card';
+import { MoneyText } from '@/components/ui/money-text';
 import { EmptyState, ErrorState } from '@/components/ui/state';
 import { segmentItemDense, segmentTrack } from '@/components/ui/segment-styles';
 import { card, focusRing, rowDivider } from '@/components/ui/styles';
@@ -25,13 +26,15 @@ import {
   budgetedRows,
   budgetedSubs,
   candidateSubs,
+  LANGGANAN_COPY,
   periodSubtitle,
   RENCANA_COPY,
   splitPeriodLabel,
   TAGIHAN_COPY,
   unbudgetedRows,
 } from '@/features/rencana/copy';
-import type { RencanaData } from '@/features/rencana/types';
+import { KALENDER_COPY } from '@/features/rencana/kalender-copy';
+import type { RencanaData, SubscriptionSuggestionVM } from '@/features/rencana/types';
 import { TUJUAN_COPY } from '@/features/tujuan/copy';
 import { UTANG_COPY } from '@/features/utang/copy';
 import { REVIEW_COPY } from './review-copy';
@@ -44,6 +47,8 @@ import {
   BudgetRowIsland,
   CopyBudgetsIsland,
   CopyConflictIsland,
+  DismissSubscriptionIsland,
+  PromoteSubscriptionIsland,
   RencanaHostIsland,
   SetBudgetIsland,
 } from './rencana-islands';
@@ -91,6 +96,13 @@ function reviewLink(ruang: Ruang, query: string): Route {
   params.delete('bagian');
   const q = params.toString();
   return `/${ruang}/rencana/review${q === '' ? '' : `?${q}`}` as Route;
+}
+
+function kalenderLink(ruang: Ruang, query: string): Route {
+  const params = new URLSearchParams(query);
+  params.delete('bagian');
+  const q = params.toString();
+  return `/${ruang}/rencana/kalender${q === '' ? '' : `?${q}`}` as Route;
 }
 
 /** Segmen Anggaran | Tagihan | Tujuan, dan Utang di Pribadi saja (di Bersama tidak ada tautan mati, ui-ux:20). */
@@ -292,11 +304,54 @@ function BillGroup({
   );
 }
 
-function Tagihan({ data }: { data: RencanaData }) {
+function SaranLangganan({ items }: { items: readonly SubscriptionSuggestionVM[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ListCard title={LANGGANAN_COPY.title} icon={<CalendarDotsIcon size={18} />}>
+      <p className="pb-2 text-caption font-medium text-text-muted">{LANGGANAN_COPY.subtitle}</p>
+      <ul>
+        {items.map((s) => (
+          <li key={`${s.name.toLowerCase()}-${String(s.amount)}`} className={`${rowDivider} py-3`}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-40 flex-1">
+                <p className="text-label font-bold text-text">{s.name}</p>
+                <p className="text-caption font-medium text-text-muted">
+                  {LANGGANAN_COPY.meta(s.months, s.dayOfMonth)}
+                </p>
+              </div>
+              <MoneyText value={s.amount} kind="neutral" size="list" />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <PromoteSubscriptionIsland
+                prefill={{
+                  name: s.name,
+                  amount: s.amount,
+                  dayOfMonth: s.dayOfMonth,
+                  categoryId: s.categoryId,
+                  accountId: s.accountId,
+                }}
+              />
+              <DismissSubscriptionIsland name={s.name} amount={s.amount} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </ListCard>
+  );
+}
+
+function Tagihan({ data, ruang, query }: { data: RencanaData; ruang: Ruang; query: string }) {
   const g = groupBills(data);
   const active = g.overdue.length + g.period.length + g.next.length;
   return (
     <>
+      <Link
+        href={kalenderLink(ruang, query)}
+        className={`flex min-h-11 items-center gap-2 self-start text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+      >
+        <CalendarDotsIcon size={18} />
+        {KALENDER_COPY.link}
+      </Link>
       {active === 0 ? (
         <EmptyState
           tone="accent"
@@ -307,6 +362,7 @@ function Tagihan({ data }: { data: RencanaData }) {
           action={<AddBillIsland label={TAGIHAN_COPY.add} variant="primary" />}
         />
       ) : null}
+      <SaranLangganan items={data.subscriptions} />
       <BillGroup
         title={TAGIHAN_COPY.overdue}
         icon={<WarningCircleIcon size={18} weight="fill" className="text-danger" />}
@@ -361,7 +417,8 @@ export function RencanaReal({
 }) {
   const hasBudgets = data.budgets.some((b) => b.budget !== null);
   const hasBills = data.bills.some((b) => !b.archived);
-  const empty = !hasBudgets && !hasBills && data.previous.budgetCount === 0;
+  const empty =
+    !hasBudgets && !hasBills && data.previous.budgetCount === 0 && data.subscriptions.length === 0;
   const billNameByRoot: Record<string, string> = {};
   for (const b of data.bills) if (!b.archived) billNameByRoot[b.rootCategoryId] = b.name;
   const wajibRoots: Record<string, true> = {};
@@ -413,7 +470,7 @@ export function RencanaReal({
         ) : bagian === 'anggaran' ? (
           <Anggaran data={data} ruang={ruang} query={query} />
         ) : (
-          <Tagihan data={data} />
+          <Tagihan data={data} ruang={ruang} query={query} />
         )}
       </div>
     </RencanaHostIsland>

@@ -119,4 +119,30 @@ describe('ExportButton (S10-EX1)', () => {
       expect(toastSpy).toHaveBeenCalled();
     });
   });
+
+  it('format pdf: label Ekspor PDF, terima application/pdf, toast PDF selesai', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('%PDF-1.4', { status: 200, headers: { 'content-type': 'application/pdf' } }),
+    );
+    const user = userEvent.setup();
+    render(
+      <>
+        <p id="hint-pdf">Laporan</p>
+        <ExportButton
+          ruang="bersama"
+          format="pdf"
+          href="/bersama/laporan/ekspor-pdf?periode=2026-11&basis=gajian"
+          filename="dompetku-bersama-2026-11.pdf"
+          periodTitle="November 2026"
+          describedBy="hint-pdf"
+        />
+      </>,
+    );
+    const btn = screen.getByRole('link', { name: 'Ekspor PDF' });
+    await user.click(btn);
+    await waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith({ message: 'PDF November 2026 · Bersama selesai' });
+    });
+    expect(clicked).toEqual([{ download: 'dompetku-bersama-2026-11.pdf', href: 'blob:x' }]);
+  });
 });

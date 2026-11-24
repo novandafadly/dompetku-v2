@@ -19,6 +19,8 @@ const BillBodyLazy = lazy(() => load().then((m) => ({ default: m.BillBodyTrigger
 const AddBillLazy = lazy(() => load().then((m) => ({ default: m.AddBillButton })));
 const PayLazy = lazy(() => load().then((m) => ({ default: m.PayButton })));
 const UnskipLazy = lazy(() => load().then((m) => ({ default: m.UnskipButton })));
+const PromoteSubLazy = lazy(() => load().then((m) => ({ default: m.PromoteSubscriptionButton })));
+const DismissSubLazy = lazy(() => load().then((m) => ({ default: m.DismissSubscriptionButton })));
 
 export function RencanaHostIsland(props: ComponentProps<typeof HostLazy>) {
   return (
@@ -96,6 +98,22 @@ export function UnskipIsland(props: ComponentProps<typeof UnskipLazy>) {
   return (
     <Suspense fallback={null}>
       <UnskipLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function PromoteSubscriptionIsland(props: ComponentProps<typeof PromoteSubLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <PromoteSubLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function DismissSubscriptionIsland(props: ComponentProps<typeof DismissSubLazy>) {
+  return (
+    <Suspense fallback={null}>
+      <DismissSubLazy {...props} />
     </Suspense>
   );
 }

@@ -169,9 +169,19 @@ const rootOf = (categories: readonly CategoryVM[], id: string): CategoryVM | nul
   return c.parentId === null ? c : (categories.find((x) => x.id === c.parentId) ?? c);
 };
 
+/** Nilai awal opsional saat menambah tagihan baru dari saran langganan (S16-LG2). */
+export interface BillPrefill {
+  name: string;
+  amount: Rupiah;
+  dayOfMonth: number;
+  categoryId?: string | null | undefined;
+  accountId?: string | null | undefined;
+}
+
 interface FormProps {
   ruang: Ruang;
   bill: BillListVM | null;
+  prefill?: BillPrefill | null | undefined;
   accounts: readonly AccountVM[];
   categories: readonly CategoryVM[];
   today: IsoDate;
@@ -189,17 +199,25 @@ interface FormProps {
 }
 
 function Form(p: FormProps) {
-  const { bill } = p;
+  const { bill, prefill } = p;
   const editing = bill !== null;
   const payable = payableAccounts(p.accounts);
+  const initCat =
+    bill?.categoryId ??
+    (prefill?.categoryId != null &&
+    p.categories.some((c) => c.id === prefill.categoryId && c.type === 'expense' && !c.archived)
+      ? prefill.categoryId
+      : '');
+  const initAccId = bill?.accountId ?? prefill?.accountId ?? null;
+  const initDay = bill?.dayOfMonth ?? (prefill ? Math.min(31, Math.max(1, prefill.dayOfMonth)) : 1);
   const [clientId] = useState(newClientId);
-  const [name, setName] = useState(bill?.name ?? '');
-  const [amount, setAmount] = useState<Rupiah | null>(bill?.amount ?? null);
-  const [categoryId, setCategoryId] = useState(bill?.categoryId ?? '');
+  const [name, setName] = useState(bill?.name ?? prefill?.name.slice(0, NAME_MAX) ?? '');
+  const [amount, setAmount] = useState<Rupiah | null>(bill?.amount ?? prefill?.amount ?? null);
+  const [categoryId, setCategoryId] = useState(initCat);
   const [accountId, setAccountId] = useState(
-    bill?.accountId != null && payable.some((a) => a.id === bill.accountId) ? bill.accountId : '',
+    initAccId !== null && payable.some((a) => a.id === initAccId) ? initAccId : '',
   );
-  const [day, setDay] = useState(String(bill?.dayOfMonth ?? 1));
+  const [day, setDay] = useState(String(initDay));
   const [startsOn, setStartsOn] = useState<string>(bill?.startsOn ?? p.today);
   const [endsOn, setEndsOn] = useState<string>(bill?.endsOn ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -552,6 +570,8 @@ export interface BillSheetProps {
   ruang: Ruang;
   /** Tagihan yang diubah; `null` = tambah. */
   bill: BillListVM | null;
+  /** Nilai awal opsional saat tambah dari saran langganan (S16-LG2). */
+  prefill?: BillPrefill | null | undefined;
   accounts: readonly AccountVM[];
   categories: readonly CategoryVM[];
   today: IsoDate;
@@ -585,6 +605,7 @@ function BillSession({
   onOpenChange,
   ruang,
   bill,
+  prefill,
   accounts,
   categories,
   today,
@@ -674,6 +695,7 @@ function BillSession({
         <Form
           ruang={ruang}
           bill={bill}
+          prefill={prefill}
           accounts={accounts}
           categories={categories}
           today={today}
