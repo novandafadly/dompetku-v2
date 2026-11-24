@@ -104,6 +104,40 @@ export type CatatTrackEvent =
       durationMs: number;
     };
 
+export type FreeTextSourceKind = 'rules' | 'gemini' | 'anthropic';
+
+export interface FreeTextQuotaVM {
+  used: number;
+  limit: number;
+  remaining: number;
+  exhausted: boolean;
+}
+
+export interface FreeTextPreview {
+  type: 'income' | 'expense';
+  amount: Rupiah;
+  description: string;
+  accountId: string | null;
+  categoryId: string | null;
+  occurredOn: IsoDate | null;
+  source: FreeTextSourceKind;
+  quota?: FreeTextQuotaVM;
+}
+
+export type FreeTextErrorCode =
+  | 'empty'
+  | 'no_amount'
+  | 'too_large'
+  | 'future_date'
+  | 'too_old_date'
+  | 'bad_date'
+  | 'quota_exceeded'
+  | 'network';
+
+export type FreeTextOutcome =
+  | { ok: true; preview: FreeTextPreview }
+  | { ok: false; code: FreeTextErrorCode; quota?: FreeTextQuotaVM };
+
 export interface CatatSource {
   ruangLabel: Record<Ruang, string>;
   options(ruang: Ruang): CatatOptions | Promise<CatatOptions>;
@@ -123,6 +157,11 @@ export interface CatatSource {
    * `Terlihat oleh anggota Bersama`.
    */
   sharedAudience?(): string | undefined;
+  /**
+   * Catat teks bebas (S17, mode nyata saja): baca-saja, hanya mengisi pratinjau draf Catat.
+   * Tidak ada di prototipe sehingga perilaku prototipe 100% tidak berubah.
+   */
+  parseFreeText?(ruang: Ruang, text: string): Promise<FreeTextOutcome>;
   save(draft: CatatDraft & { allowNegative: boolean }): Promise<SaveOutcome>;
   undo(saved: {
     entryId: string;

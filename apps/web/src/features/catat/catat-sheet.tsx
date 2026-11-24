@@ -47,8 +47,16 @@ import {
   saldoKurangText,
 } from './catat-status';
 import { CategoryChips } from './category-chips';
+import { FREE_TEXT_COPY } from './free-text-copy';
 import { assetMoveToast, modalToast, undoOrNotify } from './saved-toast';
-import type { CatatPreset, CatatSource, CatatType, SaveOutcome } from './source';
+import type {
+  CatatPreset,
+  CatatSource,
+  CatatType,
+  FreeTextErrorCode,
+  FreeTextPreview,
+  SaveOutcome,
+} from './source';
 import { createCatatFlow } from './telemetry';
 import { TRIP_PICKER_COPY, TripPickerRow } from './trip-picker';
 import { TYPE_TITLE, TypeMenu, TypeMenuButton } from './type-menu';
@@ -229,6 +237,12 @@ function CatatSession({
   const [page, setPage] = useState<'form' | 'kategori' | 'ruang' | 'bagi' | 'trip'>('form');
   const [menuOpen, setMenuOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const freeTextId = useId();
+  const [freeText, setFreeText] = useState('');
+  const [freeTextBusy, setFreeTextBusy] = useState(false);
+  const [freeTextPreview, setFreeTextPreview] = useState<FreeTextPreview | null>(null);
+  const [freeTextError, setFreeTextError] = useState<FreeTextErrorCode | null>(null);
+  const parseSeq = useRef(0);
   // Setelah halaman kategori/trip ditutup: fokus kembali ke pemicu yang membukanya.
   const refocus = useRef<'chosen' | 'more' | 'note' | 'cross' | 'bagi' | 'trip' | null>(null);
   const bagiRef = useRef<HTMLButtonElement>(null);
@@ -291,6 +305,40 @@ function CatatSession({
   const onSheetOpenChange = (next: boolean) => {
     if (!next && saving) return;
     onOpenChange(next);
+  };
+
+  const runFreeText = () => {
+    if (saving || freeTextBusy || c.loading) return;
+    const trimmed = freeText.trim();
+    if (trimmed === '') {
+      setFreeTextError('empty');
+      setFreeTextPreview(null);
+      return;
+    }
+    if (!source.parseFreeText) return;
+    const seq = ++parseSeq.current;
+    setFreeTextBusy(true);
+    setFreeTextError(null);
+    void source.parseFreeText(draft.ruang, trimmed).then(
+      (out) => {
+        if (seq !== parseSeq.current) return;
+        setFreeTextBusy(false);
+        if (!out.ok) {
+          setFreeTextPreview(null);
+          setFreeTextError(out.code);
+          return;
+        }
+        c.applyParsed(out.preview);
+        if (out.preview.description !== '') setNoteOpen(true);
+        setFreeTextPreview(out.preview);
+      },
+      () => {
+        if (seq !== parseSeq.current) return;
+        setFreeTextBusy(false);
+        setFreeTextPreview(null);
+        setFreeTextError('network');
+      },
+    );
   };
 
   async function submit(e: SyntheticEvent) {
@@ -649,6 +697,10 @@ function CatatSession({
             className="px-2.5"
             aria-disabled={saving || undefined}
             onClick={() => {
+              parseSeq.current += 1;
+              setFreeTextBusy(false);
+              setFreeTextPreview(null);
+              setFreeTextError(null);
               c.switchRuang(target);
             }}
           >
@@ -691,9 +743,10 @@ function CatatSession({
 
   const opened = c.payerAccount?.openedOn;
   // Tanggal sebelum dompet dibuka tidak ditawarkan (S6-C5); nilai sekarang tetap ada agar Select jujur.
-  const dates = Array.from({ length: DATE_CHOICES }, (_, i) => addDays(today, -i)).filter(
+  const baseDates = Array.from({ length: DATE_CHOICES }, (_, i) => addDays(today, -i)).filter(
     (d) => opened === undefined || d >= opened || d === draft.date,
   );
+  const dates = baseDates.includes(draft.date) ? baseDates : [...baseDates, draft.date];
   const splitting = draft.split !== undefined;
   const personalOptions =
     c.personal.status === 'ready'
@@ -803,6 +856,10 @@ function CatatSession({
               <TypeMenu
                 value={draft.type}
                 onChange={(t: CatatType) => {
+                  parseSeq.current += 1;
+                  setFreeTextBusy(false);
+                  setFreeTextPreview(null);
+                  setFreeTextError(null);
                   c.setType(t);
                 }}
                 onClose={() => {
@@ -825,318 +882,400 @@ function CatatSession({
       describedBy={hasAccounts ? undefined : emptyId}
     >
       {hasAccounts ? (
-        <form
-          id={formId}
-          onSubmit={(e) => {
-            void submit(e);
-          }}
-          className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}
-        >
-          <MoneyInput
-            label="Nominal"
-            labelHidden
-            size={compact ? 'compact' : 'hero'}
-            inputMode={keypad === 'app' ? 'none' : 'numeric'}
-            inputRef={amountRef}
-            value={draft.amount}
-            onChange={c.setAmount}
-            readOnly={saving}
-          />
-          {preset === undefined ? null : (
-            <div className="flex flex-col gap-0.5 text-caption font-medium text-text-muted">
-              <p>{PRESET_COPY[preset.kind].note}</p>
-              {preset.kind === 'tarik' &&
-              draft.amount !== null &&
-              draft.amount > preset.capitalLeft ? (
-                <p>{`${formatRupiah(draft.amount - preset.capitalLeft)} di atas sisa modal dicatat sebagai hasil ditarik.`}</p>
+        <div className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
+          {source.parseFreeText !== undefined && preset === undefined && !isTransfer ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={freeTextId} className="text-caption font-semibold text-text-muted">
+                {FREE_TEXT_COPY.label}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id={freeTextId}
+                  type="text"
+                  autoComplete="off"
+                  maxLength={300}
+                  placeholder={FREE_TEXT_COPY.placeholder}
+                  value={freeText}
+                  readOnly={saving || freeTextBusy || undefined}
+                  aria-disabled={saving || freeTextBusy || undefined}
+                  onChange={(e) => {
+                    setFreeText(e.target.value);
+                    if (freeTextError !== null) setFreeTextError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    runFreeText();
+                  }}
+                  className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  aria-disabled={saving || freeTextBusy || c.loading || undefined}
+                  aria-busy={freeTextBusy || undefined}
+                  className="min-h-11 shrink-0 px-3.5"
+                  onClick={runFreeText}
+                >
+                  {freeTextBusy ? FREE_TEXT_COPY.loading : FREE_TEXT_COPY.action}
+                </Button>
+              </div>
+              {freeTextPreview !== null ? (
+                <div
+                  role="status"
+                  data-testid="free-text-preview"
+                  className="flex items-start gap-2 rounded-lg border border-accent-text/25 bg-accent-tint px-3 py-2 text-meta font-semibold text-accent-text"
+                >
+                  <InfoIcon size={16} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0 space-y-0.5 text-pretty">
+                    <p>{FREE_TEXT_COPY.previewBanner(freeTextPreview.source)}</p>
+                    {freeTextPreview.quota?.exhausted === true ? (
+                      <p className="text-caption font-medium text-text-soft">
+                        {FREE_TEXT_COPY.quotaExhaustedNote}
+                      </p>
+                    ) : freeTextPreview.quota !== undefined ? (
+                      <p className="text-caption font-medium text-text-soft">
+                        {FREE_TEXT_COPY.quotaRemaining(
+                          freeTextPreview.quota.remaining,
+                          freeTextPreview.quota.limit,
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
-            </div>
-          )}
-          {c.assetShort === undefined ? null : (
-            <p
-              role="alert"
-              className="flex items-start gap-1.5 text-meta font-semibold text-danger"
-            >
-              <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
-              <span className="min-w-0 text-pretty">
-                {`Nilai ${c.assetShort.name} tidak cukup. Aset tidak bisa minus.`}
-              </span>
-            </p>
-          )}
-          {isTransfer ? (
-            <DestinationChips
-              accounts={c.destinations.map((a) => ({ id: a.id, name: walletLabel(a) }))}
-              value={draft.counterAccountId}
-              onChange={c.setCounterAccount}
-              busy={saving}
-              crossEnabled={
-                preset === undefined &&
-                c.selectedAccount?.pocket !== 'trading' &&
-                c.selectedAccount?.pocket !== 'aset'
-              }
-              crossLabel={
-                draft.toRuang === undefined || toLabel === undefined
-                  ? undefined
-                  : `${c.crossAccount?.name ?? ''}${c.crossAccount === undefined ? '' : ' · '}${toLabel}`
-              }
-              crossBlocked={c.crossBlocked}
-              crossMoreRef={crossMoreRef}
-              crossSelectedRef={crossSelectedRef}
-              onOpenCross={() => {
-                c.loadCrossTargets();
-                setPage('ruang');
-              }}
-            />
-          ) : (
-            <div ref={chipsRef}>
-              <CategoryChips
-                chips={c.chips}
-                all={c.allCategories}
-                value={draft.categoryId}
-                onChange={c.setCategory}
-                moreRef={moreRef}
-                busy={saving}
-                invalid={categoryError !== null}
-                describedBy={categoryError === null ? undefined : fieldErrorId}
-                onMore={() => {
-                  setPage('kategori');
-                }}
-              />
-            </div>
-          )}
-          {categoryError === null ? null : (
-            <FieldErrorText id={fieldErrorId}>{categoryError}</FieldErrorText>
-          )}
-          {showHint ? (
-            <p
-              id={hintId}
-              className="flex items-center gap-1.5 text-caption font-medium text-text-muted"
-            >
-              <InfoIcon size={14} className="shrink-0" />
-              {isTransfer
-                ? 'Pilih dompet tujuan untuk menyimpan'
-                : 'Pilih kategori untuk menyimpan'}
-            </p>
-          ) : null}
-          {draft.reimbursable === true ? (
-            <p
-              id={reimbId}
-              // Slot petunjuk yang sama dengan petunjuk simpan: tidak ada baris tambahan (S7-C2).
-              className={
-                showHint
-                  ? 'sr-only'
-                  : `flex gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`
-              }
-            >
-              <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
-              {/* Mode keyboard: satu baris (tinggi sheet); selain itu teks utuh boleh membungkus. */}
-              {compact ? (
-                <>
-                  <span aria-hidden="true" data-testid="talangan-hint" className="min-w-0 truncate">
-                    {TALANGAN_COPY.hintShort}
-                  </span>
-                  <span className="sr-only">{TALANGAN_COPY.hint}</span>
-                </>
-              ) : (
-                <span className="min-w-0 text-pretty">{TALANGAN_COPY.hint}</span>
-              )}
-            </p>
-          ) : null}
-          {draft.split === undefined || c.splitPeople === undefined ? null : (
-            <div className="flex items-center gap-2">
-              <p
-                id={splitHintId}
-                className={`flex min-w-0 flex-1 gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`}
-              >
-                <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
-                {compact ? (
-                  <>
-                    <span aria-hidden="true" className="min-w-0 truncate">
-                      {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
-                    </span>
-                    <span className="sr-only">
-                      {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
-                    </span>
-                  </>
-                ) : (
+              {freeTextError !== null ? (
+                <p
+                  role="alert"
+                  data-testid="free-text-error"
+                  className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger-tint px-3 py-2 text-meta font-semibold text-danger"
+                >
+                  <WarningCircleIcon size={16} weight="fill" className="mt-0.5 shrink-0" />
                   <span className="min-w-0 text-pretty">
-                    {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                    {FREE_TEXT_COPY.errorMessage(freeTextError)}
                   </span>
-                )}
-              </p>
-              <button
-                ref={bagiRef}
-                type="button"
-                aria-disabled={saving || undefined}
-                onClick={() => {
-                  if (saving) return;
-                  setPage('bagi');
-                }}
-                className={`inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
-              >
-                {PATUNGAN_COPY.editShares}
-              </button>
-            </div>
-          )}
-          {splitting && c.personal.status === 'ready' && c.personal.accounts.length === 0 ? (
-            <p className="flex items-center gap-1.5 text-meta font-semibold text-text-soft">
-              <InfoIcon size={14} className="shrink-0" />
-              {PATUNGAN_COPY.noPersonalWallet}
-            </p>
-          ) : null}
-          <div className={preset === undefined ? 'flex gap-2' : 'flex gap-2 max-narrow:flex-col'}>
-            <MetaSelect
-              stacked={preset !== undefined}
-              label={
-                splitting
-                  ? PATUNGAN_COPY.fromPersonal
-                  : draft.type === 'income'
-                    ? 'Ke dompet'
-                    : 'Dari dompet'
-              }
-              icon={<WalletIcon size={18} />}
-              value={draft.split === undefined ? draft.accountId : draft.split.accountId}
-              onChange={splitting ? c.setSplitAccount : c.setAccount}
-              options={
-                splitting
-                  ? personalOptions
-                  : accountOptions.map((a) => ({ value: a.id, label: walletLabel(a) }))
-              }
-              selectRef={accountRef}
-              tight={c.canReimburse || c.splitAvailable}
-              busy={saving}
-              invalid={c.field === 'account_id'}
-              describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
-            />
-            <MetaSelect
-              stacked={preset !== undefined}
-              label="Tanggal"
-              icon={<CalendarBlankIcon size={18} />}
-              value={draft.date}
-              dataDate={draft.date}
-              onChange={c.setDate}
-              options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
-              selectRef={dateRef}
-              tight={c.canReimburse || c.splitAvailable}
-              busy={saving}
-              invalid={c.field === 'occurred_on'}
-              describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
-            />
-            <IconButton
-              label="Tambah keterangan"
-              icon={<NotePencilIcon size={20} />}
-              aria-expanded={noteOpen}
-              aria-controls={noteId}
-              className={
-                preset === undefined ? 'tablet:hidden' : 'tablet:hidden max-narrow:self-start'
-              }
-              onClick={() => {
-                setNoteOpen((o) => !o);
-                refocus.current = noteOpen ? null : 'note';
-              }}
-            />
-            {c.canReimburse ? (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={draft.reimbursable === true}
-                aria-label={TALANGAN_COPY.label}
-                aria-describedby={draft.reimbursable === true ? reimbId : undefined}
-                aria-disabled={saving || undefined}
-                onClick={() => {
-                  if (!saving) c.setReimbursable(draft.reimbursable !== true);
-                }}
-                // Mati: ubin surface-2; aktif: tint aksen + garis 1 px (aktif juga lewat aria-checked
-                // dan petunjuk, bukan warna saja).
-                className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
-                  draft.reimbursable === true
-                    ? 'border-accent-text bg-accent-tint text-accent-text'
-                    : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
-                } aria-disabled:text-text-muted`}
-              >
-                <BriefcaseIcon size={20} />
-              </button>
-            ) : null}
-            {c.splitAvailable ? (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={splitting}
-                aria-label={PATUNGAN_COPY.toggle}
-                aria-describedby={splitting ? splitHintId : undefined}
-                aria-disabled={saving || undefined}
-                onClick={() => {
-                  if (!saving) c.setSplit(!splitting);
-                }}
-                // Sama dengan Talangan: mati = ubin surface-2; menyala = tint aksen + garis 1 px
-                // (menyala juga lewat aria-checked dan baris petunjuk, bukan warna saja).
-                className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
-                  splitting
-                    ? 'border-accent-text bg-accent-tint text-accent-text'
-                    : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
-                } aria-disabled:text-text-muted`}
-              >
-                <UserIcon size={20} />
-              </button>
-            ) : null}
-          </div>
-          {fieldError === null ? null : (
-            <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
-          )}
-          {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}
-          {compact ? null : tripPicker}
-          <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
-            <FieldLabel htmlFor={noteId} optional>
-              {c.sharedNoteVisible ? CROSS_COPY.keterangan : 'Keterangan'}
-            </FieldLabel>
-            <input
-              id={noteId}
-              ref={noteRef}
-              type="text"
-              autoComplete="off"
-              placeholder="Contoh: kopi sore"
-              value={draft.description ?? ''}
-              readOnly={saving || undefined}
-              aria-disabled={saving || undefined}
-              onChange={(e) => {
-                c.setDescription(e.target.value);
-              }}
-              className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
-            />
-          </div>
-          {compact ? tripPicker : null}
-          {c.sharedNoteVisible ? (
-            <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
-              <FieldLabel htmlFor={sharedNoteId} optional>
-                {CROSS_COPY.catatan}
-              </FieldLabel>
-              <input
-                id={sharedNoteId}
-                type="text"
-                autoComplete="off"
-                maxLength={NOTE_MAX}
-                placeholder={
-                  audience === undefined ? CROSS_COPY.audienceUmum : CROSS_COPY.audience(audience)
-                }
-                value={draft.sharedNote ?? ''}
-                readOnly={saving || undefined}
-                aria-disabled={saving || undefined}
-                aria-describedby={
-                  (draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? sharedCountId : undefined
-                }
-                onChange={(e) => {
-                  c.setSharedNote(e.target.value);
-                }}
-                className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
-              />
-              {(draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? (
-                <p id={sharedCountId} className="text-caption font-medium text-text-muted">
-                  {`${String(draft.sharedNote?.length ?? 0)} / ${String(NOTE_MAX)}`}
                 </p>
               ) : null}
             </div>
           ) : null}
-        </form>
+          <form
+            id={formId}
+            onSubmit={(e) => {
+              void submit(e);
+            }}
+            className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}
+          >
+            <MoneyInput
+              label="Nominal"
+              labelHidden
+              size={compact ? 'compact' : 'hero'}
+              inputMode={keypad === 'app' ? 'none' : 'numeric'}
+              inputRef={amountRef}
+              value={draft.amount}
+              onChange={c.setAmount}
+              readOnly={saving}
+            />
+            {preset === undefined ? null : (
+              <div className="flex flex-col gap-0.5 text-caption font-medium text-text-muted">
+                <p>{PRESET_COPY[preset.kind].note}</p>
+                {preset.kind === 'tarik' &&
+                draft.amount !== null &&
+                draft.amount > preset.capitalLeft ? (
+                  <p>{`${formatRupiah(draft.amount - preset.capitalLeft)} di atas sisa modal dicatat sebagai hasil ditarik.`}</p>
+                ) : null}
+              </div>
+            )}
+            {c.assetShort === undefined ? null : (
+              <p
+                role="alert"
+                className="flex items-start gap-1.5 text-meta font-semibold text-danger"
+              >
+                <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0" />
+                <span className="min-w-0 text-pretty">
+                  {`Nilai ${c.assetShort.name} tidak cukup. Aset tidak bisa minus.`}
+                </span>
+              </p>
+            )}
+            {isTransfer ? (
+              <DestinationChips
+                accounts={c.destinations.map((a) => ({ id: a.id, name: walletLabel(a) }))}
+                value={draft.counterAccountId}
+                onChange={c.setCounterAccount}
+                busy={saving}
+                crossEnabled={
+                  preset === undefined &&
+                  c.selectedAccount?.pocket !== 'trading' &&
+                  c.selectedAccount?.pocket !== 'aset'
+                }
+                crossLabel={
+                  draft.toRuang === undefined || toLabel === undefined
+                    ? undefined
+                    : `${c.crossAccount?.name ?? ''}${c.crossAccount === undefined ? '' : ' · '}${toLabel}`
+                }
+                crossBlocked={c.crossBlocked}
+                crossMoreRef={crossMoreRef}
+                crossSelectedRef={crossSelectedRef}
+                onOpenCross={() => {
+                  c.loadCrossTargets();
+                  setPage('ruang');
+                }}
+              />
+            ) : (
+              <div ref={chipsRef}>
+                <CategoryChips
+                  chips={c.chips}
+                  all={c.allCategories}
+                  value={draft.categoryId}
+                  onChange={c.setCategory}
+                  moreRef={moreRef}
+                  busy={saving}
+                  invalid={categoryError !== null}
+                  describedBy={categoryError === null ? undefined : fieldErrorId}
+                  onMore={() => {
+                    setPage('kategori');
+                  }}
+                />
+              </div>
+            )}
+            {categoryError === null ? null : (
+              <FieldErrorText id={fieldErrorId}>{categoryError}</FieldErrorText>
+            )}
+            {showHint ? (
+              <p
+                id={hintId}
+                className="flex items-center gap-1.5 text-caption font-medium text-text-muted"
+              >
+                <InfoIcon size={14} className="shrink-0" />
+                {isTransfer
+                  ? 'Pilih dompet tujuan untuk menyimpan'
+                  : 'Pilih kategori untuk menyimpan'}
+              </p>
+            ) : null}
+            {draft.reimbursable === true ? (
+              <p
+                id={reimbId}
+                // Slot petunjuk yang sama dengan petunjuk simpan: tidak ada baris tambahan (S7-C2).
+                className={
+                  showHint
+                    ? 'sr-only'
+                    : `flex gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`
+                }
+              >
+                <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
+                {/* Mode keyboard: satu baris (tinggi sheet); selain itu teks utuh boleh membungkus. */}
+                {compact ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      data-testid="talangan-hint"
+                      className="min-w-0 truncate"
+                    >
+                      {TALANGAN_COPY.hintShort}
+                    </span>
+                    <span className="sr-only">{TALANGAN_COPY.hint}</span>
+                  </>
+                ) : (
+                  <span className="min-w-0 text-pretty">{TALANGAN_COPY.hint}</span>
+                )}
+              </p>
+            ) : null}
+            {draft.split === undefined || c.splitPeople === undefined ? null : (
+              <div className="flex items-center gap-2">
+                <p
+                  id={splitHintId}
+                  className={`flex min-w-0 flex-1 gap-1.5 text-meta font-semibold text-text-soft ${compact ? 'items-center' : 'items-start'}`}
+                >
+                  <InfoIcon size={14} className={`shrink-0 ${compact ? '' : 'mt-0.5'}`} />
+                  {compact ? (
+                    <>
+                      <span aria-hidden="true" className="min-w-0 truncate">
+                        {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                      </span>
+                      <span className="sr-only">
+                        {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="min-w-0 text-pretty">
+                      {splitHint(draft.split.partnerShare, c.splitPeople.partner.name)}
+                    </span>
+                  )}
+                </p>
+                <button
+                  ref={bagiRef}
+                  type="button"
+                  aria-disabled={saving || undefined}
+                  onClick={() => {
+                    if (saving) return;
+                    setPage('bagi');
+                  }}
+                  className={`inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-meta font-bold text-accent-text hover-pointer:underline ${focusRing}`}
+                >
+                  {PATUNGAN_COPY.editShares}
+                </button>
+              </div>
+            )}
+            {splitting && c.personal.status === 'ready' && c.personal.accounts.length === 0 ? (
+              <p className="flex items-center gap-1.5 text-meta font-semibold text-text-soft">
+                <InfoIcon size={14} className="shrink-0" />
+                {PATUNGAN_COPY.noPersonalWallet}
+              </p>
+            ) : null}
+            <div className={preset === undefined ? 'flex gap-2' : 'flex gap-2 max-narrow:flex-col'}>
+              <MetaSelect
+                stacked={preset !== undefined}
+                label={
+                  splitting
+                    ? PATUNGAN_COPY.fromPersonal
+                    : draft.type === 'income'
+                      ? 'Ke dompet'
+                      : 'Dari dompet'
+                }
+                icon={<WalletIcon size={18} />}
+                value={draft.split === undefined ? draft.accountId : draft.split.accountId}
+                onChange={splitting ? c.setSplitAccount : c.setAccount}
+                options={
+                  splitting
+                    ? personalOptions
+                    : accountOptions.map((a) => ({ value: a.id, label: walletLabel(a) }))
+                }
+                selectRef={accountRef}
+                tight={c.canReimburse || c.splitAvailable}
+                busy={saving}
+                invalid={c.field === 'account_id'}
+                describedBy={c.field === 'account_id' ? fieldErrorId : undefined}
+              />
+              <MetaSelect
+                stacked={preset !== undefined}
+                label="Tanggal"
+                icon={<CalendarBlankIcon size={18} />}
+                value={draft.date}
+                dataDate={draft.date}
+                onChange={c.setDate}
+                options={dates.map((d) => ({ value: d, label: dayLabel(d, today) }))}
+                selectRef={dateRef}
+                tight={c.canReimburse || c.splitAvailable}
+                busy={saving}
+                invalid={c.field === 'occurred_on'}
+                describedBy={c.field === 'occurred_on' ? fieldErrorId : undefined}
+              />
+              <IconButton
+                label="Tambah keterangan"
+                icon={<NotePencilIcon size={20} />}
+                aria-expanded={noteOpen}
+                aria-controls={noteId}
+                className={
+                  preset === undefined ? 'tablet:hidden' : 'tablet:hidden max-narrow:self-start'
+                }
+                onClick={() => {
+                  setNoteOpen((o) => !o);
+                  refocus.current = noteOpen ? null : 'note';
+                }}
+              />
+              {c.canReimburse ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={draft.reimbursable === true}
+                  aria-label={TALANGAN_COPY.label}
+                  aria-describedby={draft.reimbursable === true ? reimbId : undefined}
+                  aria-disabled={saving || undefined}
+                  onClick={() => {
+                    if (!saving) c.setReimbursable(draft.reimbursable !== true);
+                  }}
+                  // Mati: ubin surface-2; aktif: tint aksen + garis 1 px (aktif juga lewat aria-checked
+                  // dan petunjuk, bukan warna saja).
+                  className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
+                    draft.reimbursable === true
+                      ? 'border-accent-text bg-accent-tint text-accent-text'
+                      : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
+                  } aria-disabled:text-text-muted`}
+                >
+                  <BriefcaseIcon size={20} />
+                </button>
+              ) : null}
+              {c.splitAvailable ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={splitting}
+                  aria-label={PATUNGAN_COPY.toggle}
+                  aria-describedby={splitting ? splitHintId : undefined}
+                  aria-disabled={saving || undefined}
+                  onClick={() => {
+                    if (!saving) c.setSplit(!splitting);
+                  }}
+                  // Sama dengan Talangan: mati = ubin surface-2; menyala = tint aksen + garis 1 px
+                  // (menyala juga lewat aria-checked dan baris petunjuk, bukan warna saja).
+                  className={`inline-flex size-11 shrink-0 items-center justify-center rounded-lg border ${focusRing} ${
+                    splitting
+                      ? 'border-accent-text bg-accent-tint text-accent-text'
+                      : 'border-hairline bg-surface-2 text-text-soft hover-pointer:bg-hover'
+                  } aria-disabled:text-text-muted`}
+                >
+                  <UserIcon size={20} />
+                </button>
+              ) : null}
+            </div>
+            {fieldError === null ? null : (
+              <FieldErrorText id={fieldErrorId}>{fieldError}</FieldErrorText>
+            )}
+            {saldoText === null ? null : <SaldoKurangRow id={saldoId}>{saldoText}</SaldoKurangRow>}
+            {compact ? null : tripPicker}
+            <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
+              <FieldLabel htmlFor={noteId} optional>
+                {c.sharedNoteVisible ? CROSS_COPY.keterangan : 'Keterangan'}
+              </FieldLabel>
+              <input
+                id={noteId}
+                ref={noteRef}
+                type="text"
+                autoComplete="off"
+                placeholder="Contoh: kopi sore"
+                value={draft.description ?? ''}
+                readOnly={saving || undefined}
+                aria-disabled={saving || undefined}
+                onChange={(e) => {
+                  c.setDescription(e.target.value);
+                }}
+                className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
+              />
+            </div>
+            {compact ? tripPicker : null}
+            {c.sharedNoteVisible ? (
+              <div className={`flex-col gap-1.5 ${noteOpen ? 'flex' : 'hidden tablet:flex'}`}>
+                <FieldLabel htmlFor={sharedNoteId} optional>
+                  {CROSS_COPY.catatan}
+                </FieldLabel>
+                <input
+                  id={sharedNoteId}
+                  type="text"
+                  autoComplete="off"
+                  maxLength={NOTE_MAX}
+                  placeholder={
+                    audience === undefined ? CROSS_COPY.audienceUmum : CROSS_COPY.audience(audience)
+                  }
+                  value={draft.sharedNote ?? ''}
+                  readOnly={saving || undefined}
+                  aria-disabled={saving || undefined}
+                  aria-describedby={
+                    (draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? sharedCountId : undefined
+                  }
+                  onChange={(e) => {
+                    c.setSharedNote(e.target.value);
+                  }}
+                  className="min-h-12 w-full min-w-0 rounded-lg border border-border bg-bg px-3.5 text-body font-medium text-text outline-none placeholder:text-text-muted focus:border-2 focus:border-focus aria-disabled:border-hairline aria-disabled:text-text-muted"
+                />
+                {(draft.sharedNote?.length ?? 0) >= NOTE_COUNT_FROM ? (
+                  <p id={sharedCountId} className="text-caption font-medium text-text-muted">
+                    {`${String(draft.sharedNote?.length ?? 0)} / ${String(NOTE_MAX)}`}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </form>
+        </div>
       ) : (
         <NoAccountState
           id={emptyId}
