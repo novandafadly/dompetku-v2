@@ -261,7 +261,7 @@ flowchart TD
   E --> F["Bayar kedua kali ditolak: already_posted"]
 ```
 
-**Aturan.** Satu kewajiban satu sumber: tagihan atau anggaran wajib, tidak keduanya (`obligation_double`). Tagihan lanjutan tanggal 31 (Z4/Z5/B14) selesai diuji di S15; deteksi langganan dan kalender arus kas di S16 (M5).
+**Aturan.** Satu kewajiban satu sumber: tagihan atau anggaran wajib, tidak keduanya (`obligation_double`). Tagihan lanjutan tanggal 31 (Z4/Z5/B14) selesai diuji di S15; deteksi langganan (`api.detect_subscriptions` + `api.dismiss_subscription`), kalender arus kas (`/[ruang]/rencana/kalender` via `api.cashflow_calendar`), dan ekspor PDF (`/[ruang]/laporan/ekspor-pdf`) selesai di S16 (M5, T14/T15/K9/B13 aktif).
 
 ## 11. Trip (M5, S15)
 
