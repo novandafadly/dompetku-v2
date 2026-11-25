@@ -14,7 +14,8 @@
     "test:int": "vitest run --config vitest.integration.config.ts",
     "e2e:auth": "playwright test -c playwright.auth.config.ts",
     "e2e:ledger": "playwright test -c playwright.ledger.config.ts",
-    "e2e:bersama": "playwright test -c playwright.bersama.config.ts"
+    "e2e:bersama": "playwright test -c playwright.bersama.config.ts",
+    "e2e:portfolio": "playwright test -c playwright.portfolio.config.ts"
   },
   "dependencies": {
     "@better-auth/passkey": "1.7.12",

@@ -16,6 +16,7 @@
     "build": "pnpm -r --if-present build",
     "e2e": "pnpm --filter @dompetku/web e2e",
     "e2e:screens": "pnpm --filter @dompetku/web e2e:screens",
+    "e2e:portfolio": "pnpm --filter @dompetku/web e2e:portfolio",
     "test:registry": "node --test scripts/check-test-registry.test.ts && node scripts/check-test-registry.ts"
   },
   "devDependencies": {
