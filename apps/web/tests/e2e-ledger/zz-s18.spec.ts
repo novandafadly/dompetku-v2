@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expectNoSeriousViolations } from '../e2e/axe';
 import { asUser, noHorizontalScroll, spaceOf } from '../e2e-auth/helpers';
-import { expect, test } from './fixtures';
+import { adminQuery, expect, test } from './fixtures';
 import { OWNER } from './global-setup';
 import { expectRouteBudget } from './helpers';
 
@@ -174,18 +174,62 @@ test('PWA offline-baca & pembersihan cache wajib saat Keluar', async ({ page, co
   await expect(page.getByRole('status').filter({ hasText: 'Sedang offline' })).toBeVisible();
 
   // 4. Kembali online lalu Keluar → seluruh cache dompetku-pages-* WAJIB kosong.
-  await context.setOffline(false);
-  await page.reload();
-  await page.getByRole('button', { name: 'Menu', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Keluar', exact: true }).click();
-  await expect(page).toHaveURL(/\/masuk\?status=keluar/);
+  // Simpan sesi ownerState dulu lalu pulihkan di finally agar spec sesudahnya (zz-saham, zz-trip)
+  // tetap memiliki sesi valid di Postgres.
+  const { uid } = await spaceOf(OWNER, 'personal');
+  const [savedSession] = await adminQuery<{
+    id: string;
+    expiresAt: Date;
+    token: string;
+    createdAt: Date;
+    updatedAt: Date;
+    ipAddress: string | null;
+    userAgent: string | null;
+    userId: string;
+    amr: string | null;
+  }>(
+    `select id, "expiresAt", token, "createdAt", "updatedAt", "ipAddress", "userAgent", "userId", amr
+       from auth.session
+      where "userId" = $1
+      order by "createdAt" desc
+      limit 1`,
+    [uid],
+  );
+  expect(savedSession).toBeTruthy();
 
-  await expect
-    .poll(async () => {
-      return page.evaluate(async () => {
-        const keys = await caches.keys();
-        return keys.filter((k) => k.startsWith('dompetku-pages-'));
-      });
-    })
-    .toEqual([]);
+  try {
+    await context.setOffline(false);
+    await page.reload();
+    await page.getByRole('button', { name: 'Menu', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Keluar', exact: true }).click();
+    await expect(page).toHaveURL(/\/masuk\?status=keluar/);
+
+    await expect
+      .poll(async () => {
+        return page.evaluate(async () => {
+          const keys = await caches.keys();
+          return keys.filter((k) => k.startsWith('dompetku-pages-'));
+        });
+      })
+      .toEqual([]);
+  } finally {
+    if (savedSession) {
+      await adminQuery(
+        `insert into auth.session (id, "expiresAt", token, "createdAt", "updatedAt", "ipAddress", "userAgent", "userId", amr)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         on conflict (id) do nothing`,
+        [
+          savedSession.id,
+          savedSession.expiresAt,
+          savedSession.token,
+          savedSession.createdAt,
+          savedSession.updatedAt,
+          savedSession.ipAddress,
+          savedSession.userAgent,
+          savedSession.userId,
+          savedSession.amr,
+        ],
+      );
+    }
+  }
 });
