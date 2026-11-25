@@ -18,5 +18,6 @@ export default async function MasukPage({ searchParams }: { searchParams: Search
   const state = await currentSession();
   if (state?.access.kind === 'full') redirect('/pribadi/beranda' as Route);
   if (state?.access.kind === 'securing') redirect('/amankan');
-  return <MasukReal notice={NOTICE[await param(searchParams, 'status')] ?? null} />;
+  const status = await param(searchParams, 'status');
+  return <MasukReal notice={NOTICE[status] ?? null} clearCaches />;
 }

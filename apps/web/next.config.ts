@@ -15,7 +15,16 @@ const config: NextConfig = {
   transpilePackages: ['@dompetku/domain', '@dompetku/demo-data'],
   // CSP bernonce dipasang src/proxy.ts per request; di sini header yang sama untuk semua respons.
   headers() {
-    return Promise.resolve([{ source: '/:path*', headers: [...staticSecurityHeaders] }]);
+    return Promise.resolve([
+      { source: '/:path*', headers: [...staticSecurityHeaders] },
+      {
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
+    ]);
   },
 };
 

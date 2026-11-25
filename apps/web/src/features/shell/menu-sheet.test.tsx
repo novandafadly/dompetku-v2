@@ -150,3 +150,17 @@ describe('MenuSheet: WhatsApp', () => {
     expect(screen.queryByRole('link', { name: 'WhatsApp' })).toBeNull();
   });
 });
+
+describe('MenuSheet: Analisis AI (S18)', () => {
+  it('mode nyata: tautan ke /{ruang}/analisis, bukan "Segera"', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} real />);
+    const link = screen.getByRole('link', { name: 'Analisis AI' });
+    expect(link).toHaveAttribute('href', '/bersama/analisis');
+    expect(link).not.toHaveTextContent('Segera');
+  });
+
+  it('prototipe (bawaan): tidak ada butir Analisis AI', () => {
+    render(<MenuSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: 'Analisis AI' })).toBeNull();
+  });
+});

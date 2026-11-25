@@ -11,6 +11,7 @@ import { RuangShell } from '../ruang-shell';
 // Impor dari graf server layout mendaftarkan semua export modul `'use server'` ini.
 import '../_actions/entri';
 import '../_actions/trip';
+import { PwaBridge } from './pwa-bridge';
 
 /**
  * Shell mode nyata (Server Component): tanpa DemoProvider, sheet Catat nyata (`realCatatSource`)
@@ -50,6 +51,7 @@ export function RuangShellReal({
         today,
       }}
     >
+      <PwaBridge />
       {children}
     </RuangShell>
   );
