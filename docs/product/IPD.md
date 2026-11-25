@@ -288,7 +288,15 @@ Rincian dan tes (T6 sampai T15) ada di `docs/team/round1/qa.md`. Sprint M3 sampa
   - **Anti auto-simpan & kuota:** `parseFreeTextAction` 100% baca-saja pada `app.entries`; `s17.int.test.ts` memverifikasi 15/hari kuota parse + fallback aturan saat habis + failover Gemini → Claude; `e2e-ledger/zz-s17.spec` memverifikasi baris `app.entries` tidak bertambah sebelum klik `Simpan`.
   - **Privasi prompt (B13):** `provider.test.ts`, `s17.int.test.ts`, `e2e-bersama/zz-s17.spec` (`@B13`), dan `REGISTRY.md` diperbarui.
   - **Budget JS & prototipe:** `CatatSheet` dimuat malas → 0 byte tambahan pada cold-load rute (`/pribadi/beranda` & `/bersama/beranda` <= 162 kB); prototipe `budget.spec` 9/9 lulus.
-- **Berikutnya:** **S18 (M6):** Analisis AI (memakai kuota `analysis` 5/hari yang sudah disiapkan di `0150_ai_kuota.sql` dan `LlmProvider` Claude/Gemini), PWA offline-baca, dan foto struk terenkripsi tanpa OCR (menunggu konfirmasi penyimpanan lampiran & kunci).
+
+### S18: status (Analisis AI, PWA offline-baca & bersih cache logout, Foto struk terenkripsi; penutup M6)
+
+- **Status (2026-11-25).** Selesai penuh dan di-merge ke `main` lewat PR #46 (`3968e67`; 12/12 CI hijau, review task + keamanan SIAP MERGE): DB `0151_foto_struk.sql`, enkripsi AES-256-GCM + AAD (`struk-crypto.ts`), route foto struk (`nosniff`, `private, no-store`), pulau malas `DetailStrukIsland`, halaman `/[ruang]/analisis` (agregat SQL B13, kuota `analysis` 5/hari WIB, failover Gemini ↔ Claude), Service Worker `public/sw.js` + `PwaBridge` Server Component bernonce CSP 0 byte JS klien + pembersihan cache wajib saat logout (`MenuSheet` + `/masuk`), Delivery Gate visual 18 PNG (`docs/design/s18-critique.md`), dan serah-terima `docs/superpowers/handoff/s18.md`.
+
+### S19: status (Portofolio otomatis, README, & Runbook Arsip v1; M7)
+
+- **Status (2026-11-25).** Bagian non-destruktif selesai di branch `feat/s19-portofolio-arsip-v1`: generator Playwright terisolasi `pnpm e2e:portfolio` (`apps/web/playwright.portfolio.config.ts` + `apps/web/tests/e2e-portfolio/portfolio.spec.ts`) menghasilkan **40 PNG** (10 layar hero × `390` & `1280` × `dark` & `light`, data 100% fiktif Raka & Nadia, terverifikasi bebas gulir horizontal & bebas nama asli) ke `docs/screenshots/portfolio/` beserta galeri `docs/screenshots/portfolio/README.md`; `README.md` diperbarui penuh; runbook arsip v1, matikan v1, pembongkaran Vercel (ADR 0003), dan daftar periksa M7 ditulis di `docs/ops/runbook-s19-arsip-v1.md`. Serah-terima: `docs/superpowers/handoff/s19.md`.
+- **Menunggu pemilik (gerbang M7 PRD §6.1):** gerbang M2 (7 hari WIB dua akun di produksi, `dompetku-dq = 0`, `BR5` uji restore hijau), ekspor + verifikasi arsip v1 (`yvapmbjtuhqvsunkmkxw`), lalu mematikan v1 dan membongkar proyek pratinjau Vercel `dompetku-v2`.
 
 ## 7. Risiko lintas milestone
 
