@@ -1,4 +1,8 @@
 # Pengecualian Trivy (job CI `image`). Alasan, cakupan, dan tinjauan: docs/ops/ci-keamanan.md.
 # Entri gugur otomatis pada `expired_at`; sesudah itu CVE kembali menggagalkan CI.
-# Kosong sejak 2026-11-22: image dasar distroless sudah memuat zlib1g +deb13u1.
-vulnerabilities: []
+vulnerabilities:
+  - id: CVE-2026-124851
+    purls:
+      - pkg:deb/debian/libzstd1
+    expired_at: 2026-12-09
+    statement: 'libzstd1 1.5.7+dfsg-1 di image dasar distroless nodejs24-debian13; tambalan Debian 1.5.7+dfsg-1+deb13u1 belum masuk build distroless terbaru (sha256:39b04073…, diperiksa 2026-11-25). Tidak bisa di-apt di distroless; aplikasi tidak memanggil libzstd1 langsung. Dicabut segera setelah distroless memuat +deb13u1 (maks 14 hari). Delegasi pemilik ("best practices"/"lanjut sampai selesai"); keputusan terbuka untuk dicabut.'
