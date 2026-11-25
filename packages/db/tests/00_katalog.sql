@@ -65,7 +65,8 @@ select set_eq($$
         'receive_settlement', 'void_receipt', 'create_goal', 'update_goal', 'complete_goal', 'archive_goal',
         'restore_goal', 'revalue_asset', 'buy_stock', 'sell_stock', 'open_stock_holding', 'void_stock_trade',
         'restore_stock_trade', 'set_stock_price', 'preview_sell', 'create_trip', 'update_trip', 'archive_trip',
-        'restore_trip', 'set_entries_trip', 'dismiss_subscription', 'consume_ai_quota'],
+        'restore_trip', 'set_entries_trip', 'dismiss_subscription', 'consume_ai_quota',
+        'add_entry_attachment', 'delete_entry_attachment'],
   'daftar fungsi api DEFINER (tulis S4 + S5 + S6 + S7 + S9 tagihan + anggaran, invitation_peek, list_invitations, WA, utang S11, patungan S12, tujuan S13, aset dan saham S14, trip S15 + penanda entri)');
 -- Fungsi baca api.* INVOKER (RLS tetap berlaku), milik owner, EXECUTE untuk web.
 select set_eq($$
@@ -78,7 +79,8 @@ select set_eq($$
         'wa_default_account', 'wa_last_cancellable', 'list_contacts', 'list_debts', 'debt_detail',
         'debt_totals', 'trading_overview', 'shared_balances', 'split_history', 'list_goals', 'goal_for_account',
         'asset_overview', 'stock_overview', 'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates',
-        'cashflow_calendar', 'detect_subscriptions', 'ai_quota'],
+        'cashflow_calendar', 'detect_subscriptions', 'ai_quota',
+        'list_entry_attachments', 'get_entry_attachment'],
   'daftar fungsi baca api INVOKER (S5, S6, S7, S8, S9 termasuk Laporan, WA, utang S11, kartu utang, modal trading, patungan S12, tujuan S13, aset S14, trip S15)');
 select is_empty($$
   select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -364,6 +366,12 @@ select set_eq($$
     ('dompetku_api', 'app.ai_usage', 'INSERT'),
     ('dompetku_api', 'app.ai_usage', 'UPDATE'),
     ('dompetku_auditor', 'app.ai_usage', 'SELECT'),
+    -- S18 (0151): lampiran foto struk terenkripsi (web/api baca anggota, api tulis & hapus permanen lewat fungsi).
+    ('dompetku_web', 'app.entry_attachments', 'SELECT'),
+    ('dompetku_api', 'app.entry_attachments', 'SELECT'),
+    ('dompetku_api', 'app.entry_attachments', 'INSERT'),
+    ('dompetku_api', 'app.entry_attachments', 'DELETE'),
+    ('dompetku_auditor', 'app.entry_attachments', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'SELECT'),
     ('dompetku_worker', 'jobs.job_runs', 'INSERT'),
     ('dompetku_worker', 'jobs.job_runs', 'UPDATE') $$,
@@ -424,7 +432,9 @@ select set_eq($$
                                    'archive_goal', 'restore_goal', 'revalue_asset', 'buy_stock',
                                    'sell_stock', 'open_stock_holding', 'void_stock_trade',
                                    'restore_stock_trade', 'set_stock_price', 'preview_sell',
-                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip', 'set_entries_trip', 'dismiss_subscription', 'consume_ai_quota']) f
+                                   'create_trip', 'update_trip', 'archive_trip', 'restore_trip', 'set_entries_trip',
+                                   'dismiss_subscription', 'consume_ai_quota',
+                                   'add_entry_attachment', 'delete_entry_attachment']) f
      union all
      select 'dompetku_web', 'api.' || f from unnest(array['period_summary', 'month_summary',
                       'safe_to_spend', 'net_worth', 'activity_feed', 'trash_list',
@@ -437,7 +447,8 @@ select set_eq($$
                       'debt_totals', 'trading_overview', 'shared_balances', 'split_history',
                       'list_goals', 'goal_for_account', 'asset_overview', 'stock_overview',
                       'list_trips', 'trip_overview', 'trip_breakdown', 'trip_candidates',
-                      'cashflow_calendar', 'detect_subscriptions', 'ai_quota']) f
+                      'cashflow_calendar', 'detect_subscriptions', 'ai_quota',
+                      'list_entry_attachments', 'get_entry_attachment']) f
      union all
      select 'dompetku_api', 'private.' || f from unnest(array['require_read_committed',
                       'require_user', 'provision_user', 'req_hash', 'idem_begin', 'idem_finish',
