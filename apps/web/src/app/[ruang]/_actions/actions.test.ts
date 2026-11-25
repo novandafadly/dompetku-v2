@@ -544,7 +544,7 @@ describe('gerbang (Review Focus 5)', () => {
     }
     // WhatsApp = tingkat akun (`accountContext()`, tanpa ruang); perilakunya diuji di `wa.test.ts`.
     // Patungan (S12) hanya Bersama: gerbang dan penolakan Pribadi diuji di `patungan.test.ts`.
-    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`. Trip (S15): `trip.test.ts`. Langganan (S16): `langganan.test.ts`. Catat teks bebas (S17): `catat-ai.test.ts`.
+    // Tujuan (S13): `tujuan.test.ts`. Aset (S14): `aset.test.ts`. Saham (S14): `saham.test.ts`. Trip (S15): `trip.test.ts`. Langganan (S16): `langganan.test.ts`. Catat teks bebas (S17): `catat-ai.test.ts`. Analisis AI (S18): `analisis.test.ts`.
     expect(seen.sort()).toEqual(
       [
         ...NAMES,
@@ -555,6 +555,7 @@ describe('gerbang (Review Focus 5)', () => {
         ...TRIP_ACTIONS,
         'dismissSubscriptionAction',
         'parseFreeTextAction',
+        'runAnalysisAction',
         'createLinkCode',
         'unlinkWa',
       ].sort(),

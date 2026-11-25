@@ -1,8 +1,12 @@
 import 'server-only';
 import {
+  buildAnalysisPrompt,
   buildParsePrompt,
   LlmProviderError,
+  parseAnalysisOutput,
   parseLlmOutput,
+  type LlmAnalysisRaw,
+  type LlmAnalysisRequest,
   type LlmParseRaw,
   type LlmParseRequest,
   type LlmProvider,
@@ -38,67 +42,77 @@ export function createClaudeProvider(opts: ClaudeProviderOptions): LlmProvider {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `${baseUrl}/v1/messages`;
 
+  async function generateText(system: string, user: string, maxTokens: number): Promise<string> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+    let payload: ClaudeResponse;
+    try {
+      let res: Response;
+      try {
+        res = await fetchImpl(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': opts.apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            temperature: 0,
+            system,
+            messages: [{ role: 'user', content: user }],
+          }),
+          signal: controller.signal,
+        });
+      } catch (e) {
+        if ((e as { name?: unknown } | null)?.name === 'AbortError') {
+          throw new LlmProviderError('anthropic', 'timeout');
+        }
+        throw new LlmProviderError('anthropic', 'network');
+      }
+
+      if (!res.ok) {
+        void res.body?.cancel().catch(() => undefined);
+        throw new LlmProviderError('anthropic', 'http', res.status);
+      }
+
+      try {
+        payload = (await res.json()) as ClaudeResponse;
+      } catch (e) {
+        if ((e as { name?: unknown } | null)?.name === 'AbortError') {
+          throw new LlmProviderError('anthropic', 'timeout');
+        }
+        throw new LlmProviderError('anthropic', 'invalid_response');
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const text = payload.content
+      ?.filter((b) => b.type === 'text' && typeof b.text === 'string')
+      .map((b) => b.text as string)
+      .join('')
+      .trim();
+    if (!text) {
+      throw new LlmProviderError('anthropic', 'invalid_response');
+    }
+    return text;
+  }
+
   return {
     name: 'anthropic',
     async parseEntry(req: LlmParseRequest): Promise<LlmParseRaw | null> {
       const { system, user } = buildParsePrompt(req);
-      const controller = new AbortController();
-      const timer = setTimeout(() => {
-        controller.abort();
-      }, timeoutMs);
-      let payload: ClaudeResponse;
-      try {
-        let res: Response;
-        try {
-          res = await fetchImpl(url, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-api-key': opts.apiKey,
-              'anthropic-version': ANTHROPIC_VERSION,
-            },
-            body: JSON.stringify({
-              model,
-              max_tokens: 512,
-              temperature: 0,
-              system,
-              messages: [{ role: 'user', content: user }],
-            }),
-            signal: controller.signal,
-          });
-        } catch (e) {
-          if ((e as { name?: unknown } | null)?.name === 'AbortError') {
-            throw new LlmProviderError('anthropic', 'timeout');
-          }
-          throw new LlmProviderError('anthropic', 'network');
-        }
-
-        if (!res.ok) {
-          void res.body?.cancel().catch(() => undefined);
-          throw new LlmProviderError('anthropic', 'http', res.status);
-        }
-
-        try {
-          payload = (await res.json()) as ClaudeResponse;
-        } catch (e) {
-          if ((e as { name?: unknown } | null)?.name === 'AbortError') {
-            throw new LlmProviderError('anthropic', 'timeout');
-          }
-          throw new LlmProviderError('anthropic', 'invalid_response');
-        }
-      } finally {
-        clearTimeout(timer);
-      }
-
-      const text = payload.content
-        ?.filter((b) => b.type === 'text' && typeof b.text === 'string')
-        .map((b) => b.text as string)
-        .join('')
-        .trim();
-      if (!text) {
-        throw new LlmProviderError('anthropic', 'invalid_response');
-      }
+      const text = await generateText(system, user, 512);
       return parseLlmOutput('anthropic', text);
+    },
+    async analyzeSpending(req: LlmAnalysisRequest): Promise<LlmAnalysisRaw> {
+      const { system, user } = buildAnalysisPrompt(req);
+      const text = await generateText(system, user, 768);
+      return parseAnalysisOutput('anthropic', text);
     },
   };
 }
