@@ -292,6 +292,23 @@ flowchart TD
 
 **Aturan.** `parseFreeTextAction` 100% baca-saja pada `app.entries` dan tidak pernah auto-simpan (K6). Prompt LLM hanya memuat tanggal WIB, daftar nama dompet aktif spendable ruang ini, daftar nama kategori aktif ruang ini, dan 1 teks input maks 300 huruf (B13). Saat kuota AI habis atau kunci LLM belum diisi, parser aturan tetap berjalan. Mode prototipe tidak menampilkan bilah `Ketik cepat`.
 
+## 13. Analisis AI, foto struk terenkripsi, dan PWA offline-baca (M6, S18)
+
+```mermaid
+flowchart TD
+  A["Menu → Analisis AI (/[ruang]/analisis)"] --> B["Muat ringkasan SQL ruang aktif + kuota analysis (5/hari WIB)"]
+  B --> C{"Ada data & klik Buat analisis AI?"}
+  C -- "ya" --> D["runAnalysisAction: potong kuota atomik → kirim agregat saja (B13) ke Gemini/Claude"]
+  D --> E["Tampilkan Ringkasan, Sorotan, Saran praktis + disclaimer"]
+  F["Detail transaksi → Foto struk"] --> G["POST /[ruang]/transaksi/[id]/struk: cek magic bytes + AES-256-GCM + AAD"]
+  G --> H["Simpan ciphertext di app.entry_attachments (maks 3, RLS FORCE)"]
+  H --> I["GET /[ruang]/transaksi/[id]/struk/[attId]: dekripsi server, nosniff + private, no-store"]
+  J["Mode nyata (PwaBridge + /sw.js)"] --> K["Navigasi halaman ruang: network-first + fallback cache dompetku-pages-v1"]
+  K --> L["Keluar / /masuk?status=keluar: hapus seluruh dompetku-pages-* + sessionStorage"]
+```
+
+**Aturan.** Analisis AI tidak pernah mengirim deskripsi transaksi mentah, nama dompet, kontak, atau ruang lain (B13). Foto struk terenkripsi tidak pernah di-cache oleh Service Worker maupun browser (`private, no-store`), dan penghapusan bersifat permanen.
+
 ## Pertanyaan terbuka
 
 Ditutup keputusan pemilik 2026-10-31: aturan faktor kuat, pendaftaran pemilik pertama dan lupa kata sandi, cara kirim undangan dan email salah, layar Sampah.
