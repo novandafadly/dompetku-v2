@@ -7,10 +7,12 @@ import type {
   HistoryVM,
   TalanganVM,
 } from '@/features/ledger/types';
+import type { AttachmentVM } from '@/features/transaksi/struk-types';
 import type pg from 'pg';
 import { z } from 'zod';
 import { activeTripChoicesTx, getEntryTx, listAccountsTx, listCategoriesTx } from './read';
 import { withLedger } from './retry';
+import { isReceiptUploadEnabled, listEntryAttachmentsTx } from './struk';
 import type { LedgerCtx } from './write';
 
 /**
@@ -35,6 +37,10 @@ export interface DetailData {
   spaceCount: number;
   /** Talangan hidup (`reimbursable`): reimburse hidup dan sisanya; `null` untuk entri lain. */
   talangan: TalanganVM | null;
+  /** Metadata lampiran foto struk ruang ini (S18, tanpa ciphertext). */
+  attachments?: AttachmentVM[];
+  /** True bila RECEIPT_ENCRYPTION_KEY terpasang valid di server. */
+  receiptUploadEnabled?: boolean;
 }
 
 /** Batas pulihkan sama dengan `api.restore_entry`: dibatalkan sebelum `app.now() - 90 hari`. */
@@ -94,6 +100,7 @@ export async function loadDetail(ctx: LedgerCtx, entryId: string): Promise<Detai
     const restoreClosed = await windowClosedTx(c, ctx, found.entry.id);
     const spaceCount = await spaceCountTx(c);
     const talangan = await talanganTx(c, ctx, found.entry);
+    const attachments = await listEntryAttachmentsTx(c, ctx, found.entry.id);
     return {
       ...found,
       accounts,
@@ -102,6 +109,8 @@ export async function loadDetail(ctx: LedgerCtx, entryId: string): Promise<Detai
       restoreClosed,
       spaceCount,
       talangan,
+      attachments,
+      receiptUploadEnabled: isReceiptUploadEnabled(),
     };
   });
 }

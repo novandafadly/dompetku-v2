@@ -28,7 +28,7 @@ import { debtHeading } from '@/features/utang/copy';
 import { DetailRow, EntryDetailView } from '@/features/transaksi/entry-detail-view';
 import { MovedBanner, VOIDED_COPY, VoidedBanner } from '@/features/transaksi/voided-banner';
 import type { DetailData } from '@/server/ledger/detail';
-import { DetailActionsIsland, RestoreIsland } from './detail-islands';
+import { DetailActionsIsland, DetailStrukIsland, RestoreIsland } from './detail-islands';
 import { RetryIsland } from './transaksi-islands';
 
 /** Hasil `detailAbilities`: apa yang dirender di bawah rincian (S6 + S7). */
@@ -393,6 +393,15 @@ export function DetailReal({
             >
               Lihat talangan
             </Link>
+          ) : null}
+          {data.attachments !== undefined ? (
+            <DetailStrukIsland
+              ruang={ruang}
+              entryId={entry.id}
+              initialAttachments={data.attachments}
+              uploadEnabled={data.receiptUploadEnabled === true}
+              readOnly={!live || moved}
+            />
           ) : null}
         </>
       }
