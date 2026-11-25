@@ -41,6 +41,7 @@ const DATA_SPECS = [
   /[\\/]zz-trip\.spec\.ts$/,
   /[\\/]zz-s16\.spec\.ts$/,
   /[\\/]zz-s17\.spec\.ts$/,
+  /[\\/]zz-s18\.spec\.ts$/,
 ];
 
 export default defineConfig({
@@ -83,6 +84,7 @@ export default defineConfig({
       BETTER_AUTH_URL: `http://localhost:${String(port)}`,
       AUTH_EMAIL_FILE: LEDGER_MAIL_FILE,
       AUTH_CHECK_PWNED: '0',
+      RECEIPT_ENCRYPTION_KEY: '11'.repeat(32),
     },
     url: `http://localhost:${String(port)}/api/health`,
     reuseExistingServer: false,

@@ -170,4 +170,9 @@ export default tseslint.config(
     files: ['**/*.mjs', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    files: ['apps/web/public/sw.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: { globals: globals.serviceworker },
+  },
 );

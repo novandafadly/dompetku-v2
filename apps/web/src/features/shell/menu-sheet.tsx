@@ -14,15 +14,18 @@ import { ExportIcon } from '@/components/ui/icons/export';
 import { GearSixIcon } from '@/components/ui/icons/gear-six';
 import { CaretRightIcon } from '@/components/ui/icons/caret-right';
 import { HourglassMediumIcon } from '@/components/ui/icons/hourglass-medium';
+import { LightningIcon } from '@/components/ui/icons/lightning';
 import { TagIcon } from '@/components/ui/icons/tag';
 import { TrashIcon } from '@/components/ui/icons/trash';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Sheet } from '@/components/ui/sheet';
 import { focusRing, rowDivider, tile } from '@/components/ui/styles';
 import { signOutAction } from '@/server/auth/actions';
+import { buildAnalisisHref } from './analisis-hrefs';
 import { buildSectionHref } from './hrefs';
 import { useNav } from './nav-provider';
 import { buildPatunganHref } from './patungan-hrefs';
+import { clearClientCaches } from './pwa-cache';
 import { buildTripListHref } from './trip-hrefs';
 import { buildKontakHref } from './utang-hrefs';
 import { applyTheme, currentTheme, isThemeChoice, type ThemeChoice } from './theme';
@@ -166,6 +169,17 @@ export function MenuSheet({
         ))}
         {real ? (
           <li className={rowDivider}>
+            {/* Analisis AI (S18): hanya mode nyata, memakai angka agregat ruang ini (B13). */}
+            <MenuLink
+              href={buildAnalisisHref(ruang, query)}
+              name="Analisis AI"
+              Icon={LightningIcon}
+              onOpenChange={onOpenChange}
+            />
+          </li>
+        ) : null}
+        {real ? (
+          <li className={rowDivider}>
             {/* Catat lewat WhatsApp: hanya mode nyata; halamannya sendiri menangani fitur yang mati. */}
             <MenuLink
               href={buildSectionHref(ruang, 'whatsapp', query)}
@@ -181,6 +195,9 @@ export function MenuSheet({
             <form action={signOutAction}>
               <button
                 type="submit"
+                onClick={() => {
+                  void clearClientCaches();
+                }}
                 className={`flex min-h-13 w-full items-center gap-3 rounded-lg text-left text-body font-semibold text-text hover-pointer:bg-hover ${focusRing}`}
               >
                 <span aria-hidden="true" className={`size-9 ${tile}`}>

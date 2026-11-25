@@ -61,7 +61,7 @@ export const config = {
       // JSON): proxy membuat Next menyalin dan menahan seluruh body (sampai 10 MiB) sebelum batas
       // 64 KiB di route berlaku.
       source:
-        '/((?!_next/static|_next/image|api/health|api/wa/|favicon.ico|icon.svg|apple-icon.png|icons/|manifest.webmanifest).*)',
+        '/((?!_next/static|_next/image|api/health|api/wa/|favicon.ico|icon.svg|apple-icon.png|icons/|manifest.webmanifest|sw.js).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },

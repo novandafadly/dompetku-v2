@@ -66,6 +66,7 @@ export default defineConfig({
       BETTER_AUTH_URL: `http://localhost:${String(port)}`,
       AUTH_EMAIL_FILE: BERSAMA_MAIL_FILE,
       AUTH_CHECK_PWNED: '0',
+      RECEIPT_ENCRYPTION_KEY: '11'.repeat(32),
     },
     url: `http://localhost:${String(port)}/api/health`,
     reuseExistingServer: false,

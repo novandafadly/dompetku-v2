@@ -325,6 +325,6 @@ Ditutup keputusan pemilik 2026-10-31: urutan sprint, definisi "7 hari berturut-t
 1. Panjang sprint aktual dan kapasitas kerja pemilik per minggu: Belum diputuskan.
 2. Subdomain akhir: Belum diputuskan (usulan `dompet.novandafadly.com`).
 3. Akses VM dan SSH: tersedia 2026-10-31 (sesi Claude Code di VM App, SSH ke VM DB); S1 selesai (`docs/ops/runbook-s1.md`).
-4. Model LLM dan target eval set M6: Belum diputuskan.
-5. Penyimpanan lampiran foto struk (bucket atau DB) dan kuncinya: diputuskan sebelum S18.
+4. Model LLM dan target eval set M6: selesai S17 (`LlmProvider` Google Gemini `gemini-2.5-flash` & Anthropic Claude `claude-haiku-4-5-20251001` failover otomatis; Eval Set 60 kasus >= 90%, K4 menunggu konfirmasi pemilik).
+5. Penyimpanan lampiran foto struk (bucket atau DB) dan kuncinya: selesai S18 (ciphertext AES-256-GCM `bytea` di `app.entry_attachments` dengan RLS FORCE + AAD terikat `(space_id, entry_id, attachment_id)` dan kunci `RECEIPT_ENCRYPTION_KEY` di `web.env`, 0 langkah VM baru, otomatis ikut backup WAL-G; K1–K4 menunggu konfirmasi pemilik).
 6. Konflik: Spec §7a (self-hosted runner) sudah digantikan §9.2 dan §9.5 (pull-based, disetujui). Spec §6 (M8 Telegram) digantikan §9.6.

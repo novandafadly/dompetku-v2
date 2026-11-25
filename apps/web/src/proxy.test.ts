@@ -17,12 +17,15 @@ describe('matcher proxy', () => {
     },
   );
 
-  it.each(['/api/health', '/_next/static/chunks/a.js', '/favicon.ico', '/manifest.webmanifest'])(
-    '%s tidak lewat proxy (aset, health)',
-    (url) => {
-      expect(matches(url)).toBe(false);
-    },
-  );
+  it.each([
+    '/api/health',
+    '/_next/static/chunks/a.js',
+    '/favicon.ico',
+    '/manifest.webmanifest',
+    '/sw.js',
+  ])('%s tidak lewat proxy (aset, health, sw)', (url) => {
+    expect(matches(url)).toBe(false);
+  });
 
   it.each([
     '/',

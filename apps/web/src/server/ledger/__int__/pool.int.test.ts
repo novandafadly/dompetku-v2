@@ -300,6 +300,8 @@ describe('satu transaksi baca per page', () => {
       restoreClosed: false,
       spaceCount: 2,
       talangan: null,
+      attachments: [],
+      receiptUploadEnabled: false,
     });
     const tidakAda = await peakDuring(() => loadDetail(pribadi, randomUUID()));
     expect(tidakAda).toEqual({ peak: 1, result: null });

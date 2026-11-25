@@ -271,3 +271,95 @@ describe('getConfiguredProviders (multi-provider Claude & Gemini)', () => {
     ).toEqual(['anthropic']);
   });
 });
+
+describe('analyzeSpending (Gemini & Claude, S18)', () => {
+  const ANALYSIS_REQ = {
+    spaceKind: 'personal' as const,
+    periodLabel: 'November 2026 · 25 Okt – 24 Nov',
+    income: 12_000_000,
+    expense: 5_000_000,
+    net: 7_000_000,
+    previousExpense: 4_500_000,
+    safeToSpend: 4_200_000,
+    daysLeft: 10,
+    topCategories: [{ name: 'Makan & Minum', amount: 2_500_000, pct: 50 }],
+  };
+
+  it('Gemini analyzeSpending memakai thinkingBudget 0 dan memvalidasi skema ketat', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      ringkasan:
+                        'Pengeluaran periode ini masih terkendali di bawah setengah pemasukan.',
+                      sorotan: ['Makan & Minum menyumbang 50 persen dari total pengeluaran.'],
+                      saran: ['Jaga pengeluaran harian di bawah Rp 420.000 hingga akhir periode.'],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const provider = createGeminiProvider({
+      apiKey: 'secret-gemini',
+      fetchImpl: fetchMock,
+    });
+    const out = await provider.analyzeSpending?.(ANALYSIS_REQ);
+    expect(out?.ringkasan).toContain('Pengeluaran');
+    expect(out?.sorotan).toHaveLength(1);
+    expect(out?.saran).toHaveLength(1);
+    const init = fetchMock.mock.calls[0]?.[1];
+    const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
+      generationConfig?: { maxOutputTokens?: number; thinkingConfig?: { thinkingBudget?: number } };
+    };
+    expect(body.generationConfig?.maxOutputTokens).toBe(768);
+    expect(body.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+  });
+
+  it('Claude analyzeSpending mengembalikan hasil terstruktur dan menolak payload rusak', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  ringkasan: 'Selisih bersih periode ini positif Rp 7.000.000.',
+                  sorotan: ['Pengeluaran naik Rp 500.000 dibanding periode lalu.'],
+                  saran: ['Sisihkan sebagian selisih ke tabungan atau tujuan prioritas.'],
+                }),
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            content: [{ type: 'text', text: '{"ringkasan":"pendek"}' }],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    const provider = createClaudeProvider({
+      apiKey: 'secret-claude',
+      fetchImpl: fetchMock,
+    });
+    const ok = await provider.analyzeSpending?.(ANALYSIS_REQ);
+    expect(ok?.sorotan).toHaveLength(1);
+    await expect(provider.analyzeSpending?.(ANALYSIS_REQ)).rejects.toThrow(LlmProviderError);
+  });
+});

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState, useTransition } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { CaretLeftIcon } from '@/components/ui/icons/caret-left';
 import { FingerprintIcon } from '@/components/ui/icons/fingerprint';
@@ -9,6 +9,7 @@ import { focusRing } from '@/components/ui/styles';
 import { TextField } from '@/components/ui/text-field';
 import { AuthText, AuthTitle } from '@/features/auth/auth-frame';
 import { PasswordField } from '@/features/auth/password-field';
+import { clearClientCaches } from '@/features/shell/pwa-cache';
 import { Wordmark } from '@/features/shell/sidebar';
 import {
   passkeySignInAction,
@@ -107,7 +108,13 @@ function RecoveryStep({ onBack, initialEmail }: { onBack: () => void; initialEma
 
 type Step = 'awal' | 'totp' | 'pemulihan';
 
-export function MasukReal({ notice }: { notice: string | null }) {
+export function MasukReal({
+  notice,
+  clearCaches = false,
+}: {
+  notice: string | null;
+  clearCaches?: boolean;
+}) {
   const [step, setStep] = useState<Step>('awal');
   const [state, action, pending] = useActionState(async (prev: SignInState, form: FormData) => {
     const next = await signInPasswordAction(prev, form);
@@ -118,6 +125,10 @@ export function MasukReal({ notice }: { notice: string | null }) {
   const [password, setPassword] = useState('');
   const [passkeyError, setPasskeyError] = useState<keyof typeof PASSKEY_ERROR | null>(null);
   const [passkeyPending, startPasskey] = useTransition();
+
+  useEffect(() => {
+    if (clearCaches) void clearClientCaches();
+  }, [clearCaches]);
 
   if (step === 'totp')
     return (
