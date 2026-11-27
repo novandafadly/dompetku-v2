@@ -22,7 +22,7 @@ import {
   REPEAT_OPTIONS,
   TAGIHAN_COPY as C,
 } from './copy';
-import { repeatLabel, weekdayLong } from './bills';
+import { firstDueMonth, repeatLabel, weekdayLong } from './bills';
 import { Alert, SelectField } from '@/components/ui/form-parts';
 import { payableAccounts } from '@/features/ledger/accounts';
 import type { BillListVM } from './types';
@@ -494,7 +494,10 @@ function Form(p: FormProps) {
                   : weekly
                     ? C.weeklyHint(weekdayLong(startsOn))
                     : picked.every > 1
-                      ? C.cycleHint(monthName(startsOn.slice(0, 7)), picked.every)
+                      ? C.cycleHint(
+                          monthName(firstDueMonth(startsOn, Number(day), picked.every)),
+                          picked.every,
+                        )
                       : undefined
             }
             busy={p.saving}

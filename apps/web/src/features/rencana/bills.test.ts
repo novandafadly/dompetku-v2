@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { payableAccounts } from './bill-sheet';
-import { dueSub, groupBills, isDefaultRepeat, repeatLabel, rowAction, weekdayLong } from './bills';
+import {
+  dueSub,
+  firstDueMonth,
+  groupBills,
+  isDefaultRepeat,
+  repeatLabel,
+  rowAction,
+  weekdayLong,
+} from './bills';
 import type { BillDueVM, BillListVM } from './types';
 
 const bill = (over: Partial<BillListVM> = {}): BillListVM => ({
@@ -147,6 +155,15 @@ describe('periode tagihan (0152)', () => {
     expect(isDefaultRepeat(b({}))).toBe(true);
     expect(isDefaultRepeat(b({ repeatEvery: 2 }))).toBe(false);
     expect(isDefaultRepeat(b({ repeatUnit: 'week' }))).toBe(false);
+  });
+
+  it('firstDueMonth: bulan Mulai bila tanggalnya belum lewat, selain itu N bulan kemudian', () => {
+    expect(firstDueMonth('2026-11-06', 15, 2)).toBe('2026-11');
+    expect(firstDueMonth('2026-11-06', 6, 2)).toBe('2026-11');
+    expect(firstDueMonth('2026-11-06', 1, 2)).toBe('2027-01');
+    expect(firstDueMonth('2026-11-27', 5, 12)).toBe('2027-11');
+    // Tanggal 31 terpotong ke 30 Nov: belum lewat dari Mulai 29 Nov.
+    expect(firstDueMonth('2026-11-29', 31, 3)).toBe('2026-11');
   });
 
   it('weekdayLong: nama hari lengkap', () => {

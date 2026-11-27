@@ -1,5 +1,7 @@
 import {
+  addMonths,
   dayOfMonth,
+  endOfMonth,
   monthName,
   shortDateLabel,
   weekdayShort,
@@ -100,6 +102,17 @@ type BillRepeat = Pick<BillListVM, 'repeatUnit' | 'repeatEvery' | 'dayOfMonth' |
 /** Bulanan tiap 1 bulan = bentuk bawaan: baris tidak perlu menyebut periodenya di samping status. */
 export const isDefaultRepeat = (b: Pick<BillListVM, 'repeatUnit' | 'repeatEvery'>): boolean =>
   b.repeatUnit === 'month' && b.repeatEvery === 1;
+
+/**
+ * Bulan jatuh tempo pertama (`YYYY-MM`) tagihan tiap N bulan, sama dengan `app.bill_dues`: bulan
+ * `startsOn` bila tanggal jatuh tempo (terpotong ke hari terakhir bulan) belum lewat dari `startsOn`,
+ * selain itu N bulan sesudahnya.
+ */
+export function firstDueMonth(startsOn: IsoDate, day: number, every: number): string {
+  const ym = startsOn.slice(0, 7);
+  const due = Math.min(day, dayOfMonth(endOfMonth(`${ym}-01`)));
+  return due >= dayOfMonth(startsOn) ? ym : addMonths(ym, every);
+}
 
 /** Label periode: `Tiap tanggal 15`, `Tiap 2 bulan · tgl 15`, `Tiap tahun · tgl 10 Maret`, `Tiap 2 minggu · Rabu`. */
 export function repeatLabel(b: BillRepeat): string {

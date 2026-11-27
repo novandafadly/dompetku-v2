@@ -633,8 +633,10 @@ describe('RencanaHost: Tagihan', () => {
     setupBill();
     await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Ulangi' }), 'month:2');
-    expect(screen.getByText('Jatuh tempo mulai bulan November, lalu tiap 2 bulan.')).toBeTruthy();
+    // Mulai 6 Nov, tanggal bawaan 1: 1 Nov sudah lewat dari Mulai, jadi jatuh tempo pertama 1 Jan.
+    expect(screen.getByText('Jatuh tempo pertama bulan Januari, lalu tiap 2 bulan.')).toBeTruthy();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Tanggal tiap bulan' }), '15');
+    expect(screen.getByText('Jatuh tempo pertama bulan November, lalu tiap 2 bulan.')).toBeTruthy();
     await user.type(screen.getByRole('textbox', { name: 'Nama' }), 'PBB');
     await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '700000');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');

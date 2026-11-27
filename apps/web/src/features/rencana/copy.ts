@@ -193,7 +193,7 @@ export const TAGIHAN_COPY = {
     'Tidak bisa diubah sesudah dibuat. Untuk mengganti, arsipkan tagihan ini lalu buat yang baru.',
   weeklyHint: (hari: string) => `Jatuh tempo tiap ${hari}, mengikuti hari tanggal Mulai.`,
   cycleHint: (bulan: string, n: number) =>
-    `Jatuh tempo mulai bulan ${bulan}, lalu tiap ${String(n)} bulan.`,
+    `Jatuh tempo pertama bulan ${bulan}, lalu ${n === 12 ? 'tiap tahun' : `tiap ${String(n)} bulan`}.`,
   // Sheet Tambah/Ubah (TG2)
   sheetTitle: (ruang: Ruang) => `Tambah tagihan · ${RUANG_NAME[ruang]}`,
   sheetEditTitle: (ruang: Ruang) => `Ubah tagihan · ${RUANG_NAME[ruang]}`,
