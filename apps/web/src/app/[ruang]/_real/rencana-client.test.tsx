@@ -351,6 +351,8 @@ describe('RencanaHost: Tagihan', () => {
     archived: false,
     nextDueOn: '2026-11-10',
     nextOccurrenceId: 'o1',
+    repeatUnit: 'month',
+    repeatEvery: 1,
   };
   const DATA: BillHostData = {
     bills: [BILL],
@@ -600,6 +602,79 @@ describe('RencanaHost: Tagihan', () => {
         clientId: expect.any(String) as string,
       }),
     );
+  });
+
+  it('Tambah tagihan: periode bawaan bulanan; Tiap 2 minggu dikirim sebagai week/2 tanpa kolom tanggal', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    const ulangi = await screen.findByRole('combobox', { name: 'Ulangi' });
+    expect((ulangi as HTMLSelectElement).value).toBe('month:1');
+    expect(screen.getByRole('combobox', { name: 'Tanggal tiap bulan' })).toBeTruthy();
+    await user.selectOptions(ulangi, 'week:2');
+    // Mingguan: hari mengikuti tanggal Mulai (6 Nov 2026 = Jumat); kolom tanggal tiap bulan hilang.
+    expect(screen.queryByRole('combobox', { name: 'Tanggal tiap bulan' })).toBeNull();
+    expect(screen.getByText('Jatuh tempo tiap Jumat, mengikuti hari tanggal Mulai.')).toBeTruthy();
+    await user.type(screen.getByRole('textbox', { name: 'Nama' }), 'Arisan');
+    await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '50000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    await waitFor(() => {
+      expect(actions.createBillAction).toHaveBeenCalledTimes(1);
+    });
+    expect(actions.createBillAction).toHaveBeenCalledWith(
+      'pribadi',
+      expect.objectContaining({ name: 'Arisan', repeatUnit: 'week', repeatEvery: 2 }),
+    );
+  });
+
+  it('Tambah tagihan tiap 2 bulan: petunjuk bulan mulai; payload month/2 dengan tanggal terpilih', async () => {
+    const user = userEvent.setup();
+    setupBill();
+    await user.click(screen.getByRole('button', { name: 'Tambah tagihan' }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Ulangi' }), 'month:2');
+    expect(screen.getByText('Jatuh tempo mulai bulan November, lalu tiap 2 bulan.')).toBeTruthy();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Tanggal tiap bulan' }), '15');
+    await user.type(screen.getByRole('textbox', { name: 'Nama' }), 'PBB');
+    await user.type(screen.getByRole('textbox', { name: 'Perkiraan nominal' }), '700000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Kategori' }), 'k-listrik');
+    await user.click(screen.getByRole('button', { name: 'Simpan tagihan' }));
+    await waitFor(() => {
+      expect(actions.createBillAction).toHaveBeenCalledTimes(1);
+    });
+    expect(actions.createBillAction).toHaveBeenCalledWith(
+      'pribadi',
+      expect.objectContaining({ dayOfMonth: 15, repeatUnit: 'month', repeatEvery: 2 }),
+    );
+  });
+
+  it('Ubah tagihan tiap 2 minggu: periode hanya teks (tidak bisa diganti), tanpa kolom tanggal', async () => {
+    const user = userEvent.setup();
+    render(
+      <RencanaHost
+        ruang="pribadi"
+        month="2026-11"
+        range="23 Okt – 24 Nov"
+        rows={[]}
+        previous={{}}
+        billNameByRoot={{}}
+        bill={{
+          ...DATA,
+          bills: [{ ...BILL, repeatUnit: 'week', repeatEvery: 2, startsOn: '2026-01-07' }],
+        }}
+      >
+        <h1>Rencana</h1>
+        <BillBodyTrigger billId="b1" className="flex">
+          Baris Listrik
+        </BillBodyTrigger>
+      </RencanaHost>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
+    await screen.findByRole('textbox', { name: 'Perkiraan nominal' });
+    expect(screen.getByText('Tiap 2 minggu · Rabu')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Ulangi' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Tanggal tiap bulan' })).toBeNull();
+    expect(screen.getByText(/Tidak bisa diubah sesudah dibuat/)).toBeTruthy();
   });
 
   it('obligation_double di Tagihan: galat di kolom Kategori dengan jalan keluar, fokus ke Kategori', async () => {

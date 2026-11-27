@@ -164,6 +164,8 @@ const bill = (over: Partial<RencanaData['bills'][number]> = {}): RencanaData['bi
   archived: false,
   nextDueOn: '2026-12-05',
   nextOccurrenceId: 'o1',
+  repeatUnit: 'month',
+  repeatEvery: 1,
   ...over,
 });
 

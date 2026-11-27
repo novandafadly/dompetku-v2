@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { payableAccounts } from './bill-sheet';
-import { dueSub, groupBills, rowAction } from './bills';
+import { dueSub, groupBills, isDefaultRepeat, repeatLabel, rowAction, weekdayLong } from './bills';
 import type { BillDueVM, BillListVM } from './types';
 
 const bill = (over: Partial<BillListVM> = {}): BillListVM => ({
@@ -18,6 +18,8 @@ const bill = (over: Partial<BillListVM> = {}): BillListVM => ({
   archived: false,
   nextDueOn: null,
   nextOccurrenceId: null,
+  repeatUnit: 'month',
+  repeatEvery: 1,
   ...over,
 });
 const occ = (over: Partial<BillDueVM> = {}): BillDueVM => ({
@@ -120,5 +122,36 @@ describe('payableAccounts', () => {
       acc({ id: '4', pocket: 'tabungan' }),
     ]);
     expect(r.map((a) => a.id)).toEqual(['1', '4']);
+  });
+});
+
+describe('periode tagihan (0152)', () => {
+  const b = (over: Partial<BillListVM>) => bill(over);
+
+  it('repeatLabel: bulanan, tiap N bulan, tahunan, mingguan, tiap N minggu', () => {
+    expect(repeatLabel(b({ dayOfMonth: 15 }))).toBe('Tiap tanggal 15');
+    expect(repeatLabel(b({ dayOfMonth: 15, repeatEvery: 2 }))).toBe('Tiap 2 bulan · tgl 15');
+    expect(repeatLabel(b({ dayOfMonth: 10, repeatEvery: 12, startsOn: '2027-03-10' }))).toBe(
+      'Tiap tahun · tgl 10 Maret',
+    );
+    // 2027-01-06 = Rabu.
+    expect(repeatLabel(b({ repeatUnit: 'week', startsOn: '2027-01-06' }))).toBe(
+      'Tiap minggu · Rabu',
+    );
+    expect(repeatLabel(b({ repeatUnit: 'week', repeatEvery: 2, startsOn: '2027-01-02' }))).toBe(
+      'Tiap 2 minggu · Sabtu',
+    );
+  });
+
+  it('isDefaultRepeat: hanya bulanan tiap 1 bulan', () => {
+    expect(isDefaultRepeat(b({}))).toBe(true);
+    expect(isDefaultRepeat(b({ repeatEvery: 2 }))).toBe(false);
+    expect(isDefaultRepeat(b({ repeatUnit: 'week' }))).toBe(false);
+  });
+
+  it('weekdayLong: nama hari lengkap', () => {
+    expect(weekdayLong('2027-01-03')).toBe('Minggu');
+    expect(weekdayLong('2027-01-04')).toBe('Senin');
+    expect(weekdayLong('2027-01-09')).toBe('Sabtu');
   });
 });

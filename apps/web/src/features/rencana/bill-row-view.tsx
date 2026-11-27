@@ -5,8 +5,16 @@ import { MinusCircleIcon } from '@/components/ui/icons/minus-circle';
 import { WarningCircleIcon } from '@/components/ui/icons/warning-circle';
 import { MoneyText } from '@/components/ui/money-text';
 import { tile } from '@/components/ui/styles';
-import { dueSub, tileOf, type BillItem, type DueIcon, type DueTone } from './bills';
-import { TAGIHAN_COPY } from './copy';
+import { weekdayShort } from '@dompetku/domain';
+import {
+  dueSub,
+  isDefaultRepeat,
+  repeatLabel,
+  tileOf,
+  type BillItem,
+  type DueIcon,
+  type DueTone,
+} from './bills';
 import type { BillListVM } from './types';
 
 /**
@@ -40,6 +48,7 @@ function SubIcon({ icon }: { icon: DueIcon }) {
 function DateTile({ item }: { item: BillItem }) {
   const overdue = item.occ?.overdue === true;
   const t = item.occ === null ? null : tileOf(item.occ.dueOn);
+  const weekly = item.bill.repeatUnit === 'week';
   return (
     <span
       aria-hidden="true"
@@ -48,12 +57,12 @@ function DateTile({ item }: { item: BillItem }) {
       <span
         className={`text-tiny font-bold tracking-eyebrow uppercase ${overdue ? 'text-danger' : 'text-text-muted'}`}
       >
-        {t === null ? 'Tgl' : t.weekday}
+        {t === null ? (weekly ? 'Tiap' : 'Tgl') : t.weekday}
       </span>
       <span
         className={`text-subheading/none font-extrabold ${overdue ? 'text-danger' : 'text-text'}`}
       >
-        {t === null ? item.bill.dayOfMonth : t.day}
+        {t === null ? (weekly ? weekdayShort(item.bill.startsOn) : item.bill.dayOfMonth) : t.day}
       </span>
     </span>
   );
@@ -67,7 +76,7 @@ export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }
   const sub =
     item.occ === null
       ? {
-          text: TAGIHAN_COPY.everyMonth(item.bill.dayOfMonth),
+          text: repeatLabel(item.bill),
           tone: 'muted' as const,
           icon: 'clock' as const,
         }
@@ -93,6 +102,12 @@ export function BillBodyView({ item, caret }: { item: BillItem; caret: boolean }
         >
           <SubIcon icon={sub.icon} />
           <span>{sub.text}</span>
+          {item.occ !== null && !isDefaultRepeat(item.bill) ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{repeatLabel(item.bill)}</span>
+            </>
+          ) : null}
           {item.occ?.skipped === true ? (
             <>
               <span aria-hidden="true">·</span>
@@ -133,9 +148,7 @@ export function ArchivedBillView({ bill }: { bill: BillListVM }) {
         <span className="line-clamp-2 break-words text-body/tight font-semibold text-text-soft">
           {bill.name}
         </span>
-        <span className="text-meta font-medium text-text-muted">
-          {TAGIHAN_COPY.everyMonth(bill.dayOfMonth)}
-        </span>
+        <span className="text-meta font-medium text-text-muted">{repeatLabel(bill)}</span>
       </span>
       <span className="whitespace-nowrap text-text-soft">
         <MoneyText value={bill.amount} />

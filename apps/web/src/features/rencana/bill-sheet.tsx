@@ -19,8 +19,10 @@ import {
   accountArchivedBillText,
   MAX_AMOUNT,
   obligationDoubleBillText,
+  REPEAT_OPTIONS,
   TAGIHAN_COPY as C,
 } from './copy';
+import { repeatLabel, weekdayLong } from './bills';
 import { Alert, SelectField } from '@/components/ui/form-parts';
 import { payableAccounts } from '@/features/ledger/accounts';
 import type { BillListVM } from './types';
@@ -39,6 +41,9 @@ export interface CreateBillSubmit {
   startsOn: IsoDate;
   endsOn: IsoDate | null;
   accountId: string | null;
+  /** Periode (0152); tidak bisa diubah sesudah dibuat. */
+  repeatUnit: 'week' | 'month';
+  repeatEvery: number;
 }
 export interface UpdateBillSubmit {
   billId: string;
@@ -218,6 +223,9 @@ function Form(p: FormProps) {
     initAccId !== null && payable.some((a) => a.id === initAccId) ? initAccId : '',
   );
   const [day, setDay] = useState(String(initDay));
+  const [repeat, setRepeat] = useState<string>(REPEAT_OPTIONS[0].value);
+  const picked = REPEAT_OPTIONS.find((o) => o.value === repeat) ?? REPEAT_OPTIONS[0];
+  const weekly = (bill?.repeatUnit ?? picked.unit) === 'week';
   const [startsOn, setStartsOn] = useState<string>(bill?.startsOn ?? p.today);
   const [endsOn, setEndsOn] = useState<string>(bill?.endsOn ?? '');
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -227,6 +235,7 @@ function Form(p: FormProps) {
   const accountRef = useRef<HTMLSelectElement>(null);
   const endsRef = useRef<HTMLInputElement>(null);
   const amountHintId = useId();
+  const repeatHintId = useId();
   const amountErrorId = useId();
   const archivedCategory =
     bill !== null && !p.categories.some((c) => c.id === bill.categoryId && !c.archived)
@@ -265,7 +274,13 @@ function Form(p: FormProps) {
     try {
       res = bill
         ? await p.onUpdate({ billId: bill.billId, ...common })
-        : await p.onCreate({ clientId, startsOn, ...common });
+        : await p.onCreate({
+            clientId,
+            startsOn,
+            repeatUnit: picked.unit,
+            repeatEvery: picked.every,
+            ...common,
+          });
     } catch {
       res = { ok: false, code: 'network' };
     } finally {
@@ -434,13 +449,30 @@ function Form(p: FormProps) {
             </option>
           ))}
         </SelectField>
-        <SelectField label={C.day} value={day} onChange={setDay} hint={C.dayHint} busy={p.saving}>
-          {Array.from({ length: 31 }, (_, i) => (
-            <option key={i + 1} value={String(i + 1)} className="bg-surface text-text">
-              {i + 1}
-            </option>
-          ))}
-        </SelectField>
+        {editing ? (
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>{C.repeat}</FieldLabel>
+            <p className="text-body font-medium text-text">{repeatLabel(bill)}</p>
+            <FieldHint id={repeatHintId}>{C.repeatHint}</FieldHint>
+          </div>
+        ) : (
+          <SelectField label={C.repeat} value={repeat} onChange={setRepeat} busy={p.saving}>
+            {REPEAT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value} className="bg-surface text-text">
+                {o.label}
+              </option>
+            ))}
+          </SelectField>
+        )}
+        {weekly ? null : (
+          <SelectField label={C.day} value={day} onChange={setDay} hint={C.dayHint} busy={p.saving}>
+            {Array.from({ length: 31 }, (_, i) => (
+              <option key={i + 1} value={String(i + 1)} className="bg-surface text-text">
+                {i + 1}
+              </option>
+            ))}
+          </SelectField>
+        )}
         {editing ? (
           <div className="flex flex-col gap-1.5">
             <FieldLabel>{C.startsOn}</FieldLabel>
@@ -454,7 +486,17 @@ function Form(p: FormProps) {
               setStartsOn(v);
               setErrors((x) => ({ ...x, endsOn: undefined }));
             }}
-            hint={pastStart ? C.startsOnPast(monthName(p.today.slice(0, 7))) : undefined}
+            hint={
+              pastStart
+                ? C.startsOnPast(monthName(p.today.slice(0, 7)))
+                : startsOn === ''
+                  ? undefined
+                  : weekly
+                    ? C.weeklyHint(weekdayLong(startsOn))
+                    : picked.every > 1
+                      ? C.cycleHint(monthName(startsOn.slice(0, 7)), picked.every)
+                      : undefined
+            }
             busy={p.saving}
           />
         )}
