@@ -144,10 +144,10 @@ describe('periode tagihan (0152)', () => {
     );
     // 2027-01-06 = Rabu.
     expect(repeatLabel(b({ repeatUnit: 'week', startsOn: '2027-01-06' }))).toBe(
-      'Tiap minggu · Rabu',
+      'Tiap minggu · hari Rabu',
     );
     expect(repeatLabel(b({ repeatUnit: 'week', repeatEvery: 2, startsOn: '2027-01-02' }))).toBe(
-      'Tiap 2 minggu · Sabtu',
+      'Tiap 2 minggu · hari Sabtu',
     );
   });
 

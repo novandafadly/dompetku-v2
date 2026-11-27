@@ -673,7 +673,7 @@ describe('RencanaHost: Tagihan', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Baris Listrik' }));
     await screen.findByRole('textbox', { name: 'Perkiraan nominal' });
-    expect(screen.getByText('Tiap 2 minggu · Rabu')).toBeTruthy();
+    expect(screen.getByText('Tiap 2 minggu · hari Rabu')).toBeTruthy();
     expect(screen.queryByRole('combobox', { name: 'Ulangi' })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Tanggal tiap bulan' })).toBeNull();
     expect(screen.getByText(/Tidak bisa diubah sesudah dibuat/)).toBeTruthy();

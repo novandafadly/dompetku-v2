@@ -114,11 +114,11 @@ export function firstDueMonth(startsOn: IsoDate, day: number, every: number): st
   return due >= dayOfMonth(startsOn) ? ym : addMonths(ym, every);
 }
 
-/** Label periode: `Tiap tanggal 15`, `Tiap 2 bulan · tgl 15`, `Tiap tahun · tgl 10 Maret`, `Tiap 2 minggu · Rabu`. */
+/** Label periode: `Tiap tanggal 15`, `Tiap 2 bulan · tgl 15`, `Tiap tahun · tgl 10 Maret`, `Tiap 2 minggu · hari Rabu`. */
 export function repeatLabel(b: BillRepeat): string {
   const n = b.repeatEvery;
   if (b.repeatUnit === 'week') {
-    return `${n === 1 ? 'Tiap minggu' : `Tiap ${String(n)} minggu`} · ${weekdayLong(b.startsOn)}`;
+    return `${n === 1 ? 'Tiap minggu' : `Tiap ${String(n)} minggu`} · hari ${weekdayLong(b.startsOn)}`;
   }
   if (n === 1) return TAGIHAN_COPY.everyMonth(b.dayOfMonth);
   if (n === 12) {
