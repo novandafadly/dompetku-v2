@@ -21,7 +21,7 @@ const billSheet = (p: Page) =>
 const body = (p: Page, name: string) =>
   main(p).locator('[data-bill-row]').filter({ hasText: name }).first();
 
-const LONG = 'Arisan Keluarga Besar Setiap Dua Minggu di Rumah Nenek Kampung';
+const LONG = 'Arisan Keluarga Besar Setiap Dua Minggu di Rumah Nenek';
 const BILLS = [
   { name: 'Listrik PLN', amount: 485_000, unit: 'month:1', day: 10 },
   { name: 'Arisan RT', amount: 50_000, unit: 'week:2', day: 1 },
