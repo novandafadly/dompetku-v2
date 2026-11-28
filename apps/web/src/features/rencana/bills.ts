@@ -1,4 +1,13 @@
-import { dayOfMonth, shortDateLabel, weekdayShort, type IsoDate } from '@dompetku/domain';
+import {
+  addMonths,
+  dayOfMonth,
+  endOfMonth,
+  monthName,
+  shortDateLabel,
+  weekdayShort,
+  type IsoDate,
+} from '@dompetku/domain';
+import { TAGIHAN_COPY } from './copy';
 import type { BillDueVM, BillListVM, RencanaData } from './types';
 
 /**
@@ -70,6 +79,52 @@ export function dueSub(occ: BillDueVM): { text: string; tone: DueTone; icon: Due
 /** Ubin tanggal: hari singkat kapital dan tanggal dari `due_on` (tanpa jam perangkat). */
 export function tileOf(dueOn: IsoDate): { weekday: string; day: number } {
   return { weekday: weekdayShort(dueOn), day: dayOfMonth(dueOn) };
+}
+
+const WEEKDAY_LONG: Record<string, string> = {
+  Min: 'Minggu',
+  Sen: 'Senin',
+  Sel: 'Selasa',
+  Rab: 'Rabu',
+  Kam: 'Kamis',
+  Jum: 'Jumat',
+  Sab: 'Sabtu',
+};
+
+/** "Rabu": nama hari lengkap dari tanggal (jangkar tagihan mingguan = hari `startsOn`). */
+export function weekdayLong(d: IsoDate): string {
+  const short = weekdayShort(d);
+  return WEEKDAY_LONG[short] ?? short;
+}
+
+type BillRepeat = Pick<BillListVM, 'repeatUnit' | 'repeatEvery' | 'dayOfMonth' | 'startsOn'>;
+
+/** Bulanan tiap 1 bulan = bentuk bawaan: baris tidak perlu menyebut periodenya di samping status. */
+export const isDefaultRepeat = (b: Pick<BillListVM, 'repeatUnit' | 'repeatEvery'>): boolean =>
+  b.repeatUnit === 'month' && b.repeatEvery === 1;
+
+/**
+ * Bulan jatuh tempo pertama (`YYYY-MM`) tagihan tiap N bulan, sama dengan `app.bill_dues`: bulan
+ * `startsOn` bila tanggal jatuh tempo (terpotong ke hari terakhir bulan) belum lewat dari `startsOn`,
+ * selain itu N bulan sesudahnya.
+ */
+export function firstDueMonth(startsOn: IsoDate, day: number, every: number): string {
+  const ym = startsOn.slice(0, 7);
+  const due = Math.min(day, dayOfMonth(endOfMonth(`${ym}-01`)));
+  return due >= dayOfMonth(startsOn) ? ym : addMonths(ym, every);
+}
+
+/** Label periode: `Tiap tanggal 15`, `Tiap 2 bulan · tgl 15`, `Tiap tahun · tgl 10 Maret`, `Tiap 2 minggu · hari Rabu`. */
+export function repeatLabel(b: BillRepeat): string {
+  const n = b.repeatEvery;
+  if (b.repeatUnit === 'week') {
+    return `${n === 1 ? 'Tiap minggu' : `Tiap ${String(n)} minggu`} · hari ${weekdayLong(b.startsOn)}`;
+  }
+  if (n === 1) return TAGIHAN_COPY.everyMonth(b.dayOfMonth);
+  if (n === 12) {
+    return `Tiap tahun · tgl ${String(b.dayOfMonth)} ${monthName(b.startsOn.slice(0, 7))}`;
+  }
+  return `Tiap ${String(n)} bulan · tgl ${String(b.dayOfMonth)}`;
 }
 
 /** Ada tombol `Bayar` / `Batalkan lewati` / tidak ada aksi, menurut keadaan kemunculan. */

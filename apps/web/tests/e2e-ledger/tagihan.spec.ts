@@ -445,6 +445,47 @@ test('arsip: dialog dengan fokus awal Kembali; tagihan pindah ke Diarsipkan, bac
   await expect(body(page, B).filter({ has: page.locator('svg') })).toHaveCount(0);
 });
 
+test('periode (S20): tiap 2 minggu dari sheet; baris menyebut ritme; Ubah menampilkannya baca-saja', async ({
+  page,
+}) => {
+  const WEEKLY = 'Arisan Dua Mingguan N';
+  await page.goto('/pribadi/rencana?bagian=tagihan');
+  const sheet = billSheet(page);
+  await openUntil(
+    () => main(page).getByRole('button', { name: 'Tambah tagihan' }).first(),
+    sheet,
+    sheet.getByRole('textbox', { name: 'Nama' }),
+  );
+  await sheet.getByRole('textbox', { name: 'Nama' }).fill(WEEKLY);
+  await sheet.getByRole('textbox', { name: 'Perkiraan nominal' }).fill('50000');
+  await sheet.getByRole('combobox', { name: 'Kategori' }).selectOption({ label: KAT_B });
+  await sheet.getByRole('combobox', { name: 'Ulangi' }).selectOption({ label: 'Tiap 2 minggu' });
+  // Mingguan: hari mengikuti tanggal Mulai, jadi kolom tanggal tiap bulan tidak ada.
+  await expect(sheet.getByRole('combobox', { name: 'Tanggal tiap bulan' })).toHaveCount(0);
+  await sheet.getByLabel('Mulai').fill((await today()).iso);
+  await sheet.getByRole('button', { name: 'Simpan tagihan' }).click();
+  await expect(toasts(page).getByText(`Tagihan ${WEEKLY} disimpan · Pribadi`)).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(body(page, WEEKLY).first()).toBeVisible();
+  await expect(body(page, WEEKLY).first()).toContainText('Tiap 2 minggu');
+  const [r] = await adminQuery<{ unit: string; every: number; n: number }>(
+    `select b.repeat_unit as unit, b.repeat_every as every,
+            (select count(*)::int from app.bill_occurrences o where o.bill_id = b.id) as n
+       from app.bills b where b.name = $1`,
+    [WEEKLY],
+  );
+  expect([r?.unit, r?.every]).toEqual(['week', 2]);
+  expect(r?.n ?? 0).toBeGreaterThanOrEqual(2);
+  // Ubah: periode hanya teks, tidak bisa diganti.
+  await openUntil(
+    () => body(page, WEEKLY).first(),
+    sheet,
+    sheet.getByRole('textbox', { name: 'Perkiraan nominal' }),
+  );
+  await expect(sheet.getByText(/^Tiap 2 minggu · /)).toBeVisible();
+  await expect(sheet.getByRole('combobox', { name: 'Ulangi' })).toHaveCount(0);
+});
+
 test('Bersama: tidak memuat tagihan, kategori, atau dompet Pribadi; axe dan tanpa gulir mendatar', async ({
   page,
 }) => {

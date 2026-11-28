@@ -161,6 +161,18 @@ export function candidateSubs(
   return subs.filter((r) => r.parentId === parentId && r.budget === null && !r.archived);
 }
 
+/** Pilihan periode di sheet Tambah tagihan (0152); API menerima kelipatan 1..12 apa saja. */
+export const REPEAT_OPTIONS = [
+  { value: 'month:1', unit: 'month', every: 1, label: 'Tiap bulan' },
+  { value: 'month:2', unit: 'month', every: 2, label: 'Tiap 2 bulan' },
+  { value: 'month:3', unit: 'month', every: 3, label: 'Tiap 3 bulan' },
+  { value: 'month:6', unit: 'month', every: 6, label: 'Tiap 6 bulan' },
+  { value: 'month:12', unit: 'month', every: 12, label: 'Tiap tahun' },
+  { value: 'week:1', unit: 'week', every: 1, label: 'Tiap minggu' },
+  { value: 'week:2', unit: 'week', every: 2, label: 'Tiap 2 minggu' },
+  { value: 'week:4', unit: 'week', every: 4, label: 'Tiap 4 minggu' },
+] as const;
+
 /**
  * Salinan Tagihan (S9-TG1…TG3; bingkai "Salinan final S9" dan "Salinan galat S9"). Nominal tidak
  * pernah ada di pesan galat; nama tagihan/kategori/dompet berasal dari data ruang itu sendiri.
@@ -175,6 +187,13 @@ export const TAGIHAN_COPY = {
   unskip: 'Batalkan lewati',
   /** Tagihan aktif tanpa kemunculan terlihat: sub baris. */
   everyMonth: (day: number) => `Tiap tanggal ${String(day)}`,
+  // Periode (0152)
+  repeat: 'Ulangi',
+  repeatHint:
+    'Tidak bisa diubah sesudah dibuat. Untuk mengganti, arsipkan tagihan ini lalu buat yang baru.',
+  weeklyHint: (hari: string) => `Jatuh tempo tiap ${hari}, mengikuti hari tanggal Mulai.`,
+  cycleHint: (bulan: string, n: number) =>
+    `Jatuh tempo pertama bulan ${bulan}, lalu ${n === 12 ? 'tiap tahun' : `tiap ${String(n)} bulan`}.`,
   // Sheet Tambah/Ubah (TG2)
   sheetTitle: (ruang: Ruang) => `Tambah tagihan · ${RUANG_NAME[ruang]}`,
   sheetEditTitle: (ruang: Ruang) => `Ubah tagihan · ${RUANG_NAME[ruang]}`,

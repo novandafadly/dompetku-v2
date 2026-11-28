@@ -211,3 +211,11 @@ Format: keputusan — alasan — risiko bila salah. Butir bertanda **[konfirmasi
   - **K3:** PWA offline-baca memakai `public/sw.js` (network-first `dompetku-pages-v1` untuk navigasi HTML ruang, tidak pernah cache `/api/*`, `*/struk*`, `*/ekspor*`, redirect auth, atau RSC; cache-first `dompetku-static-v1` aset statis) + `PwaBridge` Server Component bernonce CSP (0 byte JS klien). Pembersihan cache saat logout dipasang berlapis di tombol `Keluar` (`MenuSheet`) dan `/masuk?status=keluar` (`MasukReal`).
   - **K4:** migrasi `0151_foto_struk.sql` expand-only; `migrate:down` ditolak saat `app.settings env = 'prod'`.
   - **Delivery Gate visual (`docs/design/s18-critique.md`):** 18 PNG (3 layar × 320/390/1280 × gelap/terang), 0 Blocker, 1 Penting (banner offline `PwaBridge` menimpa wordmark `DompetKu` di bilah samping 1280 px) diperbaiki dengan memindahkan `PwaBridge` ke area konten utama + menjadikannya Server Component bernonce CSP (0 byte JS klien); prototipe `budget.spec` 9/9 <= 162 kB lulus.
+
+## S20 (2026-11-27): periode tagihan
+
+- **Arahan pemilik (2026-11-27):** tagihan bisa berulang tiap 1 minggu, 2 minggu, 1 bulan, 2 bulan, dan seterusnya; boleh lanjut setelah rancangan diajukan.
+- **K1 [konfirmasi pemilik]:** periode (satuan + kelipatan) **tidak bisa diubah** sesudah tagihan dibuat; ganti = arsipkan lalu buat baru. Alasan: mengubah ritme di tengah bulan membuat kemunculan terbuka dan yang sudah terjadi tidak punya aturan jelas; `update_bill` jadi tidak berubah. Bila pemilik ingin bisa mengubah, butuh aturan khusus untuk bulan berjalan.
+- **K2:** pilihan di UI dibatasi 8 preset (tiap bulan, 2/3/6 bulan, tahun, minggu, 2/4 minggu); API menerima kelipatan 1..12 apa saja.
+- **K3:** mingguan menyimpan `day_of_month` = hari `starts_on` (kolom tetap `NOT NULL`, tidak dipakai) supaya fungsi lama yang membacanya tidak berubah. Anggaran wajib pada kategori yang sama dengan tagihan mingguan selalu bentrok (`obligation_double`), sama seperti bulanan.
+- **K4:** tiap N bulan berjangkar di bulan `starts_on` (bukan bulan tagihan dibuat), jadi membuat tagihan terlambat tidak menggeser ritme.

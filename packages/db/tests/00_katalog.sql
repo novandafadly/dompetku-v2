@@ -477,6 +477,9 @@ select set_eq($$
      union all
      select 'dompetku_auditor', 'app.stock_last_close'
      union all
+     -- S20 (0152): jatuh tempo tagihan per rentang untuk api.cashflow_calendar (web) dan DQ13 (auditor).
+     select r, 'app.bill_dues' from unnest(array['dompetku_web', 'dompetku_auditor']) r
+     union all
      select 'dompetku_worker', 'jobs.' || f from unnest(array['purge_unfinished_users',
                       'purge_audit', 'purge_voided', 'purge_idempotency', 'dq_reconcile',
                       'materialize_bills', 'purge_wa_messages', 'price_targets', 'price_ingest',

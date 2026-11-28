@@ -47,6 +47,9 @@ const amount = z
 const isoDate = z.iso.date().regex(/^20\d{2}-/);
 const billName = z.string().trim().min(1).max(60);
 const dayOfMonth = z.number().int().min(1).max(31);
+/** Periode tagihan (0152): satuan dan kelipatan 1..12 (12 bulan = tahunan). */
+const repeatUnit = z.enum(['week', 'month']);
+const repeatEvery = z.number().int().min(1).max(12);
 
 export const setBudgetSchema = z.object({
   categoryId: id,
@@ -72,6 +75,9 @@ export const createBillSchema = z
     startsOn: isoDate,
     endsOn: isoDate.nullable().optional(),
     accountId: id.nullable().optional(),
+    /** Bawaan bulanan tiap 1 bulan; tidak bisa diubah sesudah dibuat (arsipkan lalu buat baru). */
+    repeatUnit: repeatUnit.default('month'),
+    repeatEvery: repeatEvery.default(1),
   })
   .refine((v) => v.endsOn == null || v.endsOn >= v.startsOn, { path: ['endsOn'] });
 
@@ -242,6 +248,8 @@ interface BillListRow {
   archived: boolean;
   next_due_on: string | null;
   next_occurrence_id: string | null;
+  repeat_unit: 'week' | 'month';
+  repeat_every: number;
 }
 
 /** `api.bill_list` + nama kategori dan dompet ruang yang sama (urutan fungsi). */
@@ -250,10 +258,10 @@ export async function billListTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<Bill
     `select b.bill_id, b.name, b.amount, b.category_id, cat.name as category_name,
             coalesce(cat.parent_id, cat.id) as root_category_id, b.account_id,
             a.name as account_name, b.day_of_month, b.starts_on, b.ends_on, b.archived,
-            b.next_due_on, b.next_occurrence_id
+            b.next_due_on, b.next_occurrence_id, b.repeat_unit, b.repeat_every
        from api.bill_list(p_space_id => $1) with ordinality
             as b (bill_id, name, amount, category_id, account_id, day_of_month, starts_on,
-                  ends_on, archived, next_due_on, next_occurrence_id, n)
+                  ends_on, archived, next_due_on, next_occurrence_id, repeat_unit, repeat_every, n)
        join app.categories cat on cat.space_id = $1 and cat.id = b.category_id
        left join app.accounts a on a.space_id = $1 and a.id = b.account_id
       order by b.n`,
@@ -274,6 +282,8 @@ export async function billListTx(c: pg.PoolClient, ctx: LedgerCtx): Promise<Bill
     archived: r.archived,
     nextDueOn: r.next_due_on,
     nextOccurrenceId: r.next_occurrence_id,
+    repeatUnit: r.repeat_unit,
+    repeatEvery: r.repeat_every,
   }));
 }
 
@@ -516,6 +526,8 @@ export interface CreateBillInput {
   startsOn: IsoDate;
   endsOn?: IsoDate | null | undefined;
   accountId?: string | null | undefined;
+  repeatUnit?: 'week' | 'month' | undefined;
+  repeatEvery?: number | undefined;
 }
 
 /** `api.create_bill` (idempoten lewat `clientId`; kemunculan dibuat langsung, K3). */
@@ -527,7 +539,8 @@ export async function createBill(ctx: LedgerCtx, i: CreateBillInput): Promise<{ 
     `select api.create_bill(
        p_client_id => $1, p_space_id => $2, p_name => $3, p_amount => $4::bigint,
        p_category_id => $5, p_day_of_month => $6::smallint, p_starts_on => $7::date,
-       p_ends_on => $8::date, p_account_id => $9) as r`,
+       p_ends_on => $8::date, p_account_id => $9, p_repeat_unit => $10,
+       p_repeat_every => $11::smallint) as r`,
     [
       v.clientId,
       ctx.spaceId,
@@ -538,6 +551,8 @@ export async function createBill(ctx: LedgerCtx, i: CreateBillInput): Promise<{ 
       v.startsOn,
       v.endsOn ?? null,
       v.accountId ?? null,
+      v.repeatUnit,
+      v.repeatEvery,
     ],
     billResult,
   );

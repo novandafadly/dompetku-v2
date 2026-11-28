@@ -51,7 +51,13 @@ export interface BillListVM {
   /** Kemunculan terbuka paling awal (termasuk lewat); `null` bila terarsip atau tidak ada. */
   nextDueOn: IsoDate | null;
   nextOccurrenceId: string | null;
+  /** Periode (0152): `week` tiap N minggu dari `startsOn`, `month` tiap N bulan pada `dayOfMonth`. */
+  repeatUnit: BillRepeatUnit;
+  repeatEvery: number;
 }
+
+/** Satuan periode tagihan. */
+export type BillRepeatUnit = 'week' | 'month';
 
 /**
  * Total kartu Anggaran (`budgetTotalsTx`, dijumlah di SQL): hanya kategori beranggaran;

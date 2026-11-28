@@ -328,7 +328,7 @@ language sql as $$
     join app.budgets bu on bu.space_id = b.space_id and bu.wajib and bu.category_id = coalesce(c.parent_id, c.id)
     where b.space_id = %L and b.archived_at is null
       and private.bill_due_in_label(b.space_id, b.day_of_month, private.bill_first_on(b.starts_on, b.created_at),
-                                    b.ends_on, bu.month)$q$, p_space))
+                                    b.ends_on, bu.month, b.repeat_unit, b.repeat_every, b.starts_on)$q$, p_space))
 $$;
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Listrik & Air'$$, :'sh')) as k_listrik \gset
 select tests.peer_val('adm', format($$select id from app.categories where space_id = %L and name = 'Internet'$$, :'sh')) as k_net \gset

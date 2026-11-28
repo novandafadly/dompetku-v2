@@ -7,7 +7,7 @@ import { loadLaporan } from '../laporan';
 import { exportLaporanCsv } from '../ekspor';
 import { loadReview } from '../review';
 import { spendPaceTx } from '../read';
-import { payBill, loadRencana, setBudget, setOccurrenceSkipped } from '../rencana';
+import { createBill, payBill, loadRencana, setBudget, setOccurrenceSkipped } from '../rencana';
 import { withLedger } from '../retry';
 import { createEntry } from '../write';
 import { createLedgerHarness, memuatNominal, resetLedger } from './harness';
@@ -589,5 +589,65 @@ describe('Bersama tanpa data Pribadi [B13]', () => {
     const luar = { ...nP, userId: fx.luar.id };
     expect(toLedgerError(await failure(loadRencana(luar)))).toEqual({ code: 'not_found' });
     expect(toLedgerError(await failure(loadLaporan(luar)))).toEqual({ code: 'not_found' });
+  });
+});
+
+describe('Periode tagihan (S20, 0152)', () => {
+  const dayDiffs = (dates: string[]): number[] =>
+    dates.slice(1).map((d, i) => (Date.parse(d) - Date.parse(dates[i] ?? d)) / 86_400_000);
+
+  it('tiap 2 minggu: bill_list memuat periode; kemunculan tiap 14 hari dari Mulai; bawaan tetap bulanan', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const base = {
+      amount: 50_000,
+      categoryId: fx.ids.makan,
+      accountId: fx.ids.bca,
+    };
+    const { billId: weekly } = await createBill(ctx, {
+      ...base,
+      clientId: randomUUID(),
+      name: 'Arisan',
+      dayOfMonth: 1,
+      startsOn: '2026-11-07',
+      repeatUnit: 'week',
+      repeatEvery: 2,
+    });
+    const { billId: legacy } = await createBill(ctx, {
+      ...base,
+      clientId: randomUUID(),
+      name: 'Biasa',
+      dayOfMonth: 20,
+      startsOn: '2026-11-01',
+    });
+    const r = await loadRencana(ctx);
+    const w = r.bills.find((b) => b.billId === weekly);
+    expect([w?.repeatUnit, w?.repeatEvery]).toEqual(['week', 2]);
+    const l = r.bills.find((b) => b.billId === legacy);
+    expect([l?.repeatUnit, l?.repeatEvery]).toEqual(['month', 1]);
+    const { rows } = await h.admin.query<{ due_on: string }>(
+      'select due_on::text from app.bill_occurrences where bill_id = $1 order by due_on',
+      [weekly],
+    );
+    const dues = rows.map((x) => x.due_on);
+    expect(dues[0]).toBe('2026-11-07');
+    expect(dues.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(dayDiffs(dues))).toEqual(new Set([14]));
+  });
+
+  it('kelipatan di luar 1..12 ditolak sebelum menyentuh DB', async () => {
+    const ctx = await ctxAt(clock.at(TODAY), fx.n, 'pribadi');
+    const bad = (repeatEvery: number) =>
+      createBill(ctx, {
+        clientId: randomUUID(),
+        name: 'Salah',
+        amount: 1_000,
+        categoryId: fx.ids.makan,
+        dayOfMonth: 1,
+        startsOn: '2026-11-07',
+        repeatUnit: 'week',
+        repeatEvery,
+      });
+    await expect(bad(0)).rejects.toThrow();
+    await expect(bad(13)).rejects.toThrow();
   });
 });
